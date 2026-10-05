@@ -1,0 +1,12 @@
+{
+  "name": "verzik-sim",
+  "version": "1.0.0",
+  "description": "Tick-based Monte Carlo simulator for the Verzik room (ToB), 2-5 man",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "sim": "node cli/run.mjs",
+    "serve": "npx --yes serve ."
+  }
+}

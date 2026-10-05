@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verzik Room Simulator</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { --ink:#0b0b0b; --ink2:#52514e; --line:#e2e1dc; --bg:#f6f5f1; --card:#fcfcfb; --accent:#2a78d6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+    header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+    header h1 { margin: 0; font-size: 22px; }
+    header p { margin: 6px 0 0; color: var(--ink2); font-size: 14px; }
+    main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 12px 0; }
+    .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink2); }
+    input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
+    input[type=number] { width: 120px; }
+    button { font: inherit; padding: 9px 18px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
+    button:disabled { opacity: .5; cursor: default; }
+    button.ghost { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+    .muted { color: var(--ink2); font-size: 13px; }
+    .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+    .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+    .err { color: #b3261e; font-size: 14px; white-space: pre-wrap; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Verzik Room Simulator</h1>
+    <p>Fill in the chart template, load it here, and the sim plays the room thousands of times in your browser.
+       Everything runs on your own computer - nothing is uploaded. <a href="verzik_chart_template.xlsx" download>Download the blank chart template</a>.</p>
+  </header>
+  <main>
+    <div class="card">
+      <div class="row">
+        <label>Chart (.xlsx)<input id="file" type="file" accept=".xlsx"></label>
+        <label>Scale
+          <select id="team"><option value="2">2-man (duo)</option><option value="3">3-man</option><option value="4" selected>4-man</option><option value="5">5-man</option></select>
+        </label>
+        <label>Raids per set<input id="runs" type="number" value="20000" min="100" step="1000"></label>
+        <label>Seed (optional)<input id="seed" type="number" placeholder="random"></label>
+        <label>Set A label<input id="labA" placeholder="e.g. Booma P1"></label>
+        <label>Set B label<input id="labB" placeholder="e.g. Horn P1"></label>
+        <button id="go" disabled>Run</button>
+        <button id="dl" class="ghost" disabled>Download report</button>
+      </div>
+      <div id="status" class="muted" style="margin-top:10px">Load a chart to start.</div>
+      <div class="bar"><div id="prog"></div></div>
+      <div id="err" class="err"></div>
+    </div>
+    <div id="out"></div>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
