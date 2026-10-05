@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.2.1';
+export const VERSION = '1.3.0';
 export const CHANGES = [
+  { version: '1.3.0', date: '2026-10-05', items: [
+    'Dark mode: a Dark mode / Light mode switch at the top right. It follows your system setting until you pick one, and remembers your choice.',
+    'P1 chart on the page uses the same code colours as the spreadsheet (Dawn spec purple, Scythe green, surge pink, X dark grey, spec transfers green...), auto-tick columns are tinted, and unknown codes turn red.',
+  ] },
   { version: '1.2.1', date: '2026-10-05', items: ['Video walkthrough: "Watch the video walkthrough" under the intro at the top of the page.'] },
   {
     version: '1.2.0', date: '2026-10-05',

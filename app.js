@@ -10,6 +10,15 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const style = document.createElement('style'); style.textContent = REPORT_CSS; document.head.appendChild(style);
 $('ver').textContent = `v${VERSION}`;
+// light / dark switch (saved in this browser)
+const themeLabel = () => { $('theme').textContent = document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode'; };
+themeLabel();
+$('theme').addEventListener('click', () => {
+  const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('verzikSim.theme', t); } catch { /* ignore */ }
+  themeLabel();
+});
 // the walkthrough video only loads when it's opened
 $('video').addEventListener('toggle', () => { const f = $('vframe'); if ($('video').open && !f.src) f.src = f.dataset.src; });
 

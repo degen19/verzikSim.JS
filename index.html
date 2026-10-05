@@ -5,12 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Verzik Room Simulator</title>
   <link rel="icon" href="data:,">
+  <script>
+    // light / dark: saved choice, else the system setting
+    (function () { var t = null; try { t = localStorage.getItem('verzikSim.theme'); } catch (e) {}
+      if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t; })();
+  </script>
   <style>
-    :root { --ink:#0b0b0b; --ink2:#52514e; --line:#e2e1dc; --bg:#f6f5f1; --card:#fcfcfb; --accent:#2a78d6; --soft:#eef4fc; --bad:#b3261e; --good:#1f7a3a; }
+    :root { --ink:#0b0b0b; --ink2:#52514e; --line:#e2e1dc; --bg:#f6f5f1; --card:#fcfcfb; --accent:#2a78d6; --soft:#eef4fc; --bad:#b3261e; --good:#1f7a3a;
+            --field:#ffffff; --th:#f3f2ee; --rowlab:#faf9f6; --autotick:#fbe3e1; --warn:#9a5b00; color-scheme: light; }
+    :root[data-theme="dark"] { --ink:#ecebe7; --ink2:#a9a7a0; --line:#3a3936; --bg:#141413; --card:#1c1c1b; --accent:#5b9cf0; --soft:#1f2a3a; --bad:#ff8a80; --good:#7dd38f;
+            --field:#262624; --th:#262624; --rowlab:#222220; --autotick:#4a2724; --warn:#f0b35a; color-scheme: dark; }
+    :root[data-theme="dark"] .vz-report { --ink:#ecebe7; --ink2:#a9a7a0; --grid:#3a3936; --surf:#1c1c1b; --th:#262624; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
     header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
     header h1 { margin: 0; font-size: 22px; display: flex; align-items: baseline; gap: 10px; }
+    #theme { margin-left: auto; padding: 5px 10px; font-size: 13px; }
     header h1 .ver { font-size: 12px; font-weight: 500; color: var(--ink2); background: var(--line); border-radius: 999px; padding: 2px 8px; }
     header p { margin: 6px 0 0; color: var(--ink2); font-size: 14px; }
     main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px; }
@@ -19,23 +30,23 @@
     .row.between { justify-content: space-between; align-items: center; }
     .row.wrap { flex-wrap: wrap; }
     label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink2); }
-    input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
+    input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--field); color: var(--ink); }
     input[type=number] { width: 110px; }
     input[type=checkbox] { width: 16px; height: 16px; padding: 0; }
     button, .filebtn { font: inherit; padding: 9px 18px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
     button:disabled { opacity: .5; cursor: default; }
-    .ghost { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+    .ghost { background: var(--field); color: var(--accent); border: 1px solid var(--accent); }
     .sm { padding: 5px 10px; font-size: 13px; }
     .filebtn { display: inline-block; flex-direction: row; }
     .muted { color: var(--ink2); font-size: 13px; }
     .small { font-size: 12px; }
-    .warn { color: #9a5b00; }
+    .warn { color: var(--warn); }
     .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: 10px; }
     .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
     .err { color: var(--bad); font-size: 14px; white-space: pre-wrap; }
     a { color: var(--accent); }
     .seg { display: inline-flex; border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; }
-    .seg button { border-radius: 0; background: #fff; color: var(--accent); padding: 7px 14px; font-weight: 600; }
+    .seg button { border-radius: 0; background: var(--field); color: var(--accent); padding: 7px 14px; font-weight: 600; }
     .seg button.on { background: var(--accent); color: #fff; }
     .tabs { display: flex; gap: 4px; margin-top: 18px; border-bottom: 1px solid var(--line); }
     .tabs button { background: transparent; color: var(--ink2); border-radius: 8px 8px 0 0; padding: 9px 16px; }
@@ -43,13 +54,25 @@
     .scroll { overflow-x: auto; }
     table.bt { border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
     table.bt th, table.bt td { border: 1px solid var(--line); padding: 4px 6px; text-align: center; white-space: nowrap; }
-    table.bt th { background: #f3f2ee; color: var(--ink2); font-weight: 600; }
-    table.bt td.rl { text-align: left; font-weight: 600; background: #faf9f6; }
+    table.bt th { background: var(--th); color: var(--ink2); font-weight: 600; }
+    table.bt td.rl { text-align: left; font-weight: 600; background: var(--rowlab); }
     table.bt input[type=number] { width: 72px; }
     table.bt input[type=text] { width: 110px; }
     table.grid td { padding: 1px; }
     table.grid th { font-size: 11px; padding: 2px 3px; min-width: 34px; }
-    table.grid th.auto, table.grid td.auto { background: #fbe3e1; }
+    table.grid th.auto, table.grid td.auto { background: var(--autotick); }
+    table.grid th.auto { background: #f4a6a6; color: #3a0d0d; }
+    /* P1 chart codes: same colours as the spreadsheet */
+    input.code[data-code="D"] { background:#c9b6e4; } input.code[data-code="A"] { background:#fff2a8; } input.code[data-code="S"] { background:#8fd18f; }
+    input.code[data-code="C"] { background:#f8cbad; } input.code[data-code="H"] { background:#f4b183; } input.code[data-code="B"] { background:#d9a6e0; }
+    input.code[data-code="T"] { background:#8eb4e3; } input.code[data-code="E"] { background:#b4c7e7; } input.code[data-code="SB"] { background:#ffd966; }
+    input.code[data-code="P"] { background:#ff66cc; } input.code[data-code="R"] { background:#ffffff; } input.code[data-code="X"] { background:#595959; color:#fff; }
+    input.code[data-code^="ST>"] { background:#33cc33; }
+    table.grid td.auto input.code:not([data-code]) { background: transparent; }
+    input.code[data-code] { color:#000; font-weight:700; border-color: rgba(0,0,0,.25); }
+    input.code[data-code="X"] { color:#fff; }
+    input.code.badcode { background:#ff0000 !important; color:#fff !important; }
+    .codes-legend span { display:inline-block; padding:1px 6px; margin:2px 3px 2px 0; border-radius:4px; color:#000; font-weight:700; font-size:11px; }
     input.code { width: 34px; padding: 3px 2px; text-align: center; font-size: 12px; text-transform: uppercase; border-radius: 4px; }
     td.chk.ok { color: var(--good); font-weight: 700; } td.chk.bad { color: var(--bad); font-weight: 700; cursor: help; }
     .teamset label { min-width: 150px; }
@@ -72,7 +95,7 @@
 </head>
 <body>
   <header>
-    <h1>Verzik Room Simulator <span class="ver" id="ver"></span></h1>
+    <h1>Verzik Room Simulator <span class="ver" id="ver"></span><button id="theme" class="ghost sm" title="Switch light / dark">Dark mode</button></h1>
     <p>Load a chart (or build one on this page) and the sim plays the room thousands of times in your browser.
        Everything runs on your own computer - nothing is uploaded. <a href="verzik_chart_template.xlsx" download>Download the blank chart template</a>.</p>
     <details class="video" id="video">

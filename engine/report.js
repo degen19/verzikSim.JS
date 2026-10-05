@@ -149,7 +149,7 @@ function cumulativeSvg(res, labels) {
       if (i < 0) continue;
       const s = xs[i], lab = `${qq}% by ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
       const dy = k === 0 ? 18 : -10, anchor = k === 0 ? 'start' : 'end', dx = k === 0 ? 8 : -8;
-      g += `<circle cx="${X(i)}" cy="${Y(cum[i])}" r="5" fill="${COL[k]}" stroke="#fff" stroke-width="2"/>`;
+      g += `<circle cx="${X(i)}" cy="${Y(cum[i])}" r="5" fill="${COL[k]}" style="stroke:var(--surf)" stroke-width="2"/>`;
       g += `<text x="${X(i) + dx}" y="${Y(cum[i]) + dy}" class="tag" fill="${COL[k]}" text-anchor="${anchor}">${lab}</text>`;
     }
   });
@@ -160,14 +160,14 @@ function cumulativeSvg(res, labels) {
 }
 
 export const REPORT_CSS = `
-.vz-report{--ink:#0b0b0b;--ink2:#52514e;--grid:#e6e5e0;--surf:#fcfcfb;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--surf);padding:16px;border-radius:10px}
+.vz-report{--ink:#0b0b0b;--ink2:#52514e;--grid:#e6e5e0;--surf:#fcfcfb;--th:#f3f2ee;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--surf);padding:16px;border-radius:10px}
 .vz-report h2{margin:0 0 4px;font-size:20px}.vz-report .sub{color:var(--ink2);font-size:13px;margin-bottom:12px}
 .vz-report .kpis{display:flex;gap:28px;flex-wrap:wrap;margin:8px 0 14px}.vz-report .kpi b{font-size:30px;display:block}.vz-report .kpi span{color:var(--ink2);font-size:12px}
 .vz-report h3{font-size:15px;margin:18px 0 6px}.vz-report .scroll{overflow-x:auto}
 .vz-report svg.chart{width:100%;min-width:640px;height:auto;background:var(--surf)}
 .vz-report .grid{stroke:var(--grid)}.vz-report .ax{font-size:11px;fill:var(--ink2)}.vz-report .tag{font-size:12px;font-weight:600}
 .vz-report table{border-collapse:collapse;font-size:13px;margin:4px 0 8px}.vz-report th,.vz-report td{border:1px solid var(--grid);padding:5px 10px;text-align:right}
-.vz-report th{color:var(--ink2);background:#f3f2ee}.vz-report td:first-child,.vz-report th:first-child{text-align:left}
+.vz-report th{color:var(--ink2);background:var(--th)}.vz-report td:first-child,.vz-report th:first-child{text-align:left}
 .vz-report .legend span{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:13px}.vz-report .legend i{width:12px;height:12px;border-radius:2px;display:inline-block}
 `;
 

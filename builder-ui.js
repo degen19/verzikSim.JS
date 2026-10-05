@@ -4,6 +4,8 @@ import { describe, readValues, overlaySheet, checkRow, CODES, CODE_HELP, isAutoT
 import { readPlanInputs, plan } from './engine/planner.js';
 
 const STORE = 'verzikSim.builder.v1';
+const CODE_BG = { S: '#8fd18f', D: '#c9b6e4', A: '#fff2a8', C: '#f8cbad', H: '#f4b183', E: '#b4c7e7', SB: '#ffd966', B: '#d9a6e0', T: '#8eb4e3',
+  P: '#ff66cc', R: '#ffffff', X: '#595959', 'ST>n': '#33cc33' };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
 const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: keep in memory */ } };
@@ -68,11 +70,12 @@ export function createBuilder(root, { onChange }) {
     const head = ch.ticks.map(([t]) => `<th class="${isAutoTick(t) ? 'auto' : ''}">${t}</th>`).join('');
     const rows = nm.map((n, k) => `<tr><td class="rl">${esc(n)}</td><td class="chk" id="chk-${k}"></td>${ch.ticks.map(([t]) => {
       const f = tpl[team].descs[block].fields.get(`chart|${t}|${k}`);
-      return `<td class="${isAutoTick(t) ? 'auto' : ''}"><input class="code" list="vz-codes" data-key="${esc(f.key)}" value="${esc(vals()[f.key] ?? '')}"></td>`;
+      const v = String(vals()[f.key] ?? '').toUpperCase();
+      return `<td class="${isAutoTick(t) ? 'auto' : ''}"><input class="code${v && !CODES.includes(v) ? ' badcode' : ''}" list="vz-codes" data-key="${esc(f.key)}" ${v ? `data-code="${esc(v)}"` : ''} value="${esc(v)}"></td>`;
     }).join('')}</tr>`).join('');
     return `<div class="scroll"><table class="bt grid"><tr><th></th><th>Check</th>${head}</tr>${rows}</table></div>
       <datalist id="vz-codes">${CODES.map((c) => `<option value="${c}">`).join('')}</datalist>
-      <div class="muted small">Codes: ${Object.entries(CODE_HELP).map(([c, h]) => `<b>${c}</b> ${esc(h)}`).join(' · ')}. Red columns are Verzik auto ticks.</div>`;
+      <div class="muted small codes-legend">${Object.entries(CODE_HELP).map(([c, h]) => `<span style="background:${CODE_BG[c]};${c === 'X' ? 'color:#fff' : ''}">${c}</span>${esc(h)}`).join(' · ')}. Red columns are Verzik auto ticks.</div>`;
   }
 
   function refreshDerived() {
@@ -122,7 +125,11 @@ export function createBuilder(root, { onChange }) {
   root.addEventListener('input', (e) => {
     const key = e.target.dataset && e.target.dataset.key; if (!key) return;
     let v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    if (e.target.classList.contains('code')) { v = String(v).toUpperCase(); e.target.value = v; }
+    if (e.target.classList.contains('code')) {
+      v = String(v).toUpperCase(); e.target.value = v;
+      if (v) e.target.dataset.code = v; else delete e.target.dataset.code;
+      e.target.classList.toggle('badcode', !!v && !CODES.includes(v));
+    }
     const f = tpl[team].descs[block].fields.get(key);
     if (f && f.type === 'select' && typeof f.choices[0] === 'number') v = Number(v);
     vals()[key] = v;
