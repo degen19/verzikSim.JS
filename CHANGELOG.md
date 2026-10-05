@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.3.2 - 2026-10-05
+- Mechanics & behavior sections are collapsible dropdowns (closed until clicked), with Expand all / Collapse all; a search opens the matching sections. Top toggles restyled as dropdown buttons.
+
 ## v1.3.1 - 2026-10-05
 - "View mechanics & behavior" at the top of the page shows the template's Mechanics & behavior sheet (read from the template, so it always matches), with search and a scale filter.
 

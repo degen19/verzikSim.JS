@@ -34,7 +34,10 @@ export function createMechanics(details, body) {
           <label>Search<input id="m-q" placeholder="e.g. brew, purple, horn" style="width:220px"></label>
           <label>Scale<select id="m-s"><option value="">All scales</option><option value="duo">Duo</option><option value="team">3-5 man</option></select></label>
         </div>
+        <div class="row" style="margin:0 0 6px"><button class="ghost sm" id="m-all">Expand all</button><button class="ghost sm" id="m-none">Collapse all</button></div>
         <div id="m-list"></div>`;
+      body.querySelector('#m-all').addEventListener('click', () => body.querySelectorAll('details.msec').forEach((d) => { d.open = true; }));
+      body.querySelector('#m-none').addEventListener('click', () => body.querySelectorAll('details.msec').forEach((d) => { d.open = false; }));
       body.querySelector('#m-q').addEventListener('input', list);
       body.querySelector('#m-s').addEventListener('input', list);
     }
@@ -53,8 +56,8 @@ export function createMechanics(details, body) {
     const html = data.sections.map((sec) => {
       const rows = sec.rows.filter((r) => scaleOk(r.scales) && hit(r));
       if (!rows.length) return '';
-      return `<h4>${esc(sec.title)}</h4><div class="scroll"><table class="bt mech"><tr><th>Topic</th><th>Scales</th><th>What the sim does</th><th>Set on the chart</th></tr>${
-        rows.map((r) => `<tr><td class="rl">${esc(r.topic)}</td><td>${esc(r.scales)}</td><td class="what">${esc(r.what)}</td><td class="inp">${esc(r.input)}</td></tr>`).join('')}</table></div>`;
+      return `<details class="msec" ${q ? 'open' : ''}><summary>${esc(sec.title)} <span class="muted small">(${rows.length})</span></summary><div class="scroll"><table class="bt mech"><tr><th>Topic</th><th>Scales</th><th>What the sim does</th><th>Set on the chart</th></tr>${
+        rows.map((r) => `<tr><td class="rl">${esc(r.topic)}</td><td>${esc(r.scales)}</td><td class="what">${esc(r.what)}</td><td class="inp">${esc(r.input)}</td></tr>`).join('')}</table></div></details>`;
     }).join('');
     body.querySelector('#m-list').innerHTML = html || '<p class="muted">Nothing matches.</p>';
   }

@@ -1,6 +1,7 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.3.1';
+export const VERSION = '1.3.2';
 export const CHANGES = [
+  { version: '1.3.2', date: '2026-10-05', items: ['Mechanics & behavior: each section is its own dropdown (collapsed until clicked), with Expand all / Collapse all; searching opens the matching sections. The top toggles look like dropdown buttons.'] },
   { version: '1.3.1', date: '2026-10-05', items: ['"View mechanics & behavior" at the top of the page: the full Mechanics & behavior sheet from the chart template, with search and a scale filter.'] },
   { version: '1.3.0', date: '2026-10-05', items: [
     'Dark mode (the default): a Light mode / Dark mode switch at the top right remembers your choice.',
