@@ -89,6 +89,11 @@
     details.video summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 14px; width: fit-content; }
     .vwrap { position: relative; width: 100%; max-width: 860px; aspect-ratio: 16 / 9; margin: 10px 0 6px; border-radius: 10px; overflow: hidden; background: #000; }
     .vwrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    table.mech { width: 100%; }
+    table.mech td { text-align: left; vertical-align: top; }
+    table.mech td.what { white-space: normal; min-width: 420px; max-width: 640px; line-height: 1.4; }
+    table.mech td.inp { white-space: normal; min-width: 160px; max-width: 260px; color: var(--ink2); }
+    table.mech td.rl { white-space: normal; min-width: 130px; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -102,6 +107,10 @@
       <div class="vwrap"><iframe id="vframe" title="Verzik Room Simulator walkthrough" data-src="https://www.youtube-nocookie.com/embed/LmrYOV9LXcM"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
       <a class="small" href="https://www.youtube.com/watch?v=LmrYOV9LXcM" target="_blank" rel="noopener">Open on YouTube</a>
+    </details>
+    <details class="video" id="mech">
+      <summary>View mechanics &amp; behavior</summary>
+      <div id="mechBody" class="card"></div>
     </details>
   </header>
   <main>

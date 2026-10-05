@@ -5,6 +5,7 @@ import { mergeResults, reportHtml, reportPage, REPORT_CSS } from './engine/repor
 import { VERSION, CHANGES } from './engine/version.js';
 import { createBuilder } from './builder-ui.js';
 import { createOptimizer } from './optimizer-ui.js';
+import { createMechanics } from './mechanics-ui.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -19,6 +20,7 @@ $('theme').addEventListener('click', () => {
   try { localStorage.setItem('verzikSim.theme', t); } catch { /* ignore */ }
   themeLabel();
 });
+createMechanics($('mech'), $('mechBody'));
 // the walkthrough video only loads when it's opened
 $('video').addEventListener('toggle', () => { const f = $('vframe'); if ($('video').open && !f.src) f.src = f.dataset.src; });
 

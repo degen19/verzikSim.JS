@@ -126,6 +126,7 @@ All three are free for a site like this. There's no server-side compute, because
 | `index.html`, `app.js` | The browser app (chart source, tabs, running the workers, drawing the report) |
 | `builder-ui.js` | "Build chart on this page" form |
 | `optimizer-ui.js` | Optimizer tab |
+| `mechanics-ui.js` | "View mechanics & behavior" panel (reads the template's sheet) |
 | `worker.js` | Web Worker. Each one runs a share of the raids (report runs and optimizer batches). |
 | `cli/run.mjs`, `cli/worker.mjs` | Command-line runner (Node worker threads) |
 | `engine/` | The simulator: chart reader (`xlsx.js`, `sim.js`), phases (`p2.js`, `reds.js`, `duo_reds.js`, `p3.js`), supplies, gear, horn, RNG, report, optimizer search (`optimize.js`), chart form (`chartform.js`), spec planner (`planner.js`) and version / What's new (`version.js`) |

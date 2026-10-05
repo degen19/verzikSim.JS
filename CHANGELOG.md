@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.3.1 - 2026-10-05
+- "View mechanics & behavior" at the top of the page shows the template's Mechanics & behavior sheet (read from the template, so it always matches), with search and a scale filter.
+
 ## v1.3.0 - 2026-10-05
 - Dark mode is the default; a Light mode / Dark mode switch (top right) remembers your choice.
 - The page's P1 chart uses the spreadsheet's code colours; Verzik auto-tick columns are tinted; unknown codes turn red.
