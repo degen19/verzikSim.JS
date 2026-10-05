@@ -3,6 +3,7 @@
 import { VERSION } from './version.js';
 
 const COL = ['#2a78d6', '#d64545'];
+export const WEBS_TICK = 72;     // 4-5 man: P3 tick (1 = P3 attackable) the 20% proc must land on or before to count as before webs
 const fmt = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).padStart(4, '0')}`;
 const pct = (a, b) => (b ? `${(a / b * 100).toFixed(1)}%` : '-');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -92,6 +93,8 @@ function oddsRows(res, team) {
     ['Avg reds proc depth (Verzik HP %)', res.map((r) => `${mean(r.depth).toFixed(1)}%`)],
     ['Deepest reds proc', res.map((r) => (r.depth.length ? `${Math.min(...r.depth).toFixed(1)}%` : '-'))],
     ['Avg P3 20% tick', res.map((r) => (r.p20.length ? mean(r.p20).toFixed(1) : '-'))],
+    ...(team === 4 || team === 5 ? [[`P3 20% on or before tick ${WEBS_TICK} (before webs, of kills)`,
+      res.map((r) => pct(r.p20.filter((x) => x <= WEBS_TICK).length, r.total.length))]] : []),
   ];
 }
 

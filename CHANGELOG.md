@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.4.0 - 2026-10-05
+- 4 and 5-man reports: "P3 20% on or before tick 72 (before webs, of kills)" - share of successful runs where Verzik drops below 20% in P3 by tick 72 (tick 1 = P3 attackable).
+
 ## v1.3.2 - 2026-10-05
 - Mechanics & behavior sections are collapsible dropdowns (closed until clicked), with Expand all / Collapse all; a search opens the matching sections. Top toggles restyled as dropdown buttons.
 
