@@ -1,6 +1,14 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 export const CHANGES = [
+  {
+    version: '1.2.0', date: '2026-10-05',
+    items: [
+      'East Pattern (3-5 man): a dropdown next to East Boak. A = the standard East boak pattern (no change from before). 0-T = an East Boak player loses no ticks to the purple spawn and keeps attacking at the normal pace. B, C and FLEX are coming later.',
+      'Chart template updated with the East Pattern column (download it again from the link at the top). Older charts still work: a blank East Pattern counts as A.',
+      'Optimizer (3-5 man): can now vary each player\'s Boak side and East Pattern.',
+    ],
+  },
   {
     version: '1.1.0', date: '2026-10-05',
     items: [

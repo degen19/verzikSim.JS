@@ -223,6 +223,7 @@ export class Player {
     this.shadow_lb = dget(cfg, 'shadowLB', false);
     this.east_boak = dget(cfg, 'eastBoak');        // 3-5 man purple movement side (null = not filled in)
     this.west_boak = dget(cfg, 'westBoak');
+    this.east_pattern = dget(cfg, 'eastPattern', null) || 'A';   // East Boak pattern: A (standard) or 0-T (no ticks lost)
     this.shadow_camp = dget(cfg, 'shadowCamp', false);   // duo: shadow every P2 attack until reds
     this.shadow31 = dget(cfg, 'shadow31', false);
     this.purple2_thr = dget(cfg, 'purple2Thr', 40);       // duo 3:1: shadow only on the attack that lines up with Verzik
@@ -439,6 +440,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A') {
       }
       if (isPyNum(get('Phoenix necklaces'))) cfgs[k].pneck = pyint(get('Phoenix necklaces'));
       if (isPyNum(get('hornPriority'))) cfgs[k].hornPriority = pyint(get('hornPriority'));
+      if (get('East Pattern') != null && pystr(get('East Pattern')).trim() !== '') cfgs[k].eastPattern = pystr(get('East Pattern')).trim().toUpperCase();
       for (const [key, h] of [['shadow', 'Shadow'], ['shadowLB', 'Shadow while LB'], ['deepProc', 'Deep proc'],
         ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
         ['horn', 'Horn'], ['hornP2', 'P2 horn'], ['hornP3', 'P3 horn'],

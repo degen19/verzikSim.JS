@@ -12,6 +12,7 @@ const SELECTS = {
   meleePrayer: ['Piety', 'Zeal'], helm: ['Torva full helm', 'Oathplate helm'], body: ['Torva platebody', 'Oathplate chest'],
   legs: ['Torva platelegs', 'Oathplate legs'], amulet: ['Rancour', 'Blood fury', 'Both'], redCrab: ['West', 'East', 'None'],
   has3Tick: ['No', 'Breaker', 'Ayak', 'Swift blade'], 'Number of Purples': [1, 2],
+  'East Pattern': ['A', '0-T'],                    // B, C and FLEX come later
   'mage helm': ['Ancestral', 'Virtus'], 'mage body': ['Ancestral', 'Virtus'], 'mage legs': ['Ancestral', 'Virtus'],
   'mage cape': ['Imbued sara', 'Infernal'],
 };

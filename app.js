@@ -123,9 +123,13 @@ $('go').addEventListener('click', async () => {
     const t0 = performance.now();
     for (let k = 0; k < sets.length; k++) {
       $('runStatus').textContent = `Running ${labels[k]} (${k + 1} of ${sets.length})...`;
-      res.push(await runWorkers(sets[k][1], t, runs, seed, (f) => {
-        $('prog').style.width = `${((k + f) / sets.length * 100).toFixed(1)}%`;
-      }));
+      try {
+        res.push(await runWorkers(sets[k][1], t, runs, seed, (f) => {
+          $('prog').style.width = `${((k + f) / sets.length * 100).toFixed(1)}%`;
+        }));
+      } catch (e) {
+        throw new Error(`Set ${sets[k][0]} (${labels[k]}): ${e.message}`);
+      }
     }
     $('prog').style.width = '100%';
     $('runStatus').textContent = `Done in ${((performance.now() - t0) / 1000).toFixed(1)}s (seed ${seed}).`;

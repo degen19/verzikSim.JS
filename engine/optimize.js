@@ -125,6 +125,13 @@ export function catalog(cfgs, team) {
         current: String(mg.helm || 'Ancestral').startsWith('Virtus') ? 'Virtus' : 'Ancestral',
         apply: (cf, v) => { const [h, b, l] = MAGE_SETS[v]; cf[i].mage = { ...(cf[i].mage || {}), helm: h, body: b, legs: l }; } });
     }
+    if (team > 2) {
+      opts.push({ id: `boak_${i}`, group: g, label: 'Boak side', kind: 'choice', choices: ['East', 'West'],
+        current: c.eastBoak ? 'East' : c.westBoak ? 'West' : '-',
+        apply: (cf, v) => { cf[i].eastBoak = v === 'East'; cf[i].westBoak = v === 'West'; } });
+      opts.push({ id: `epat_${i}`, group: g, label: 'East Pattern (East Boak players)', kind: 'choice', choices: ['A', '0-T'], current: c.eastPattern || 'A',
+        apply: (cf, v) => { cf[i].eastPattern = v; } });
+    }
     for (const [key, label] of TOGGLES) {
       if (!(key in c)) continue;                                  // only toggles the chart actually has
       if ((key.startsWith('shadow')) && !c.shadow) continue;

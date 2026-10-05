@@ -79,10 +79,15 @@ export const BOAK = {
   East: { block: new Set([0, 4, 7, 8, 9, 12, 13, 14]), bp: 16 },
 };
 
+export const EAST_PATTERNS = ['A', '0-T'];   // B, C and FLEX: not added yet
+
 export function boak_side(p) {
   const e = ga(p, 'east_boak', null), w = ga(p, 'west_boak', null);
   if (e == null || w == null || e === w) {
     throw new Error(`${p.name}: set East Boak / West Boak (one TRUE, the other FALSE)`);
+  }
+  if (truthy(e) && !EAST_PATTERNS.includes(ga(p, 'east_pattern', 'A'))) {
+    throw new Error(`${p.name}: East Pattern ${p.east_pattern} isn't available yet (use A or 0-T)`);
   }
   return truthy(e) ? 'East' : 'West';
 }
@@ -320,6 +325,8 @@ export function run_p2(p1, team, rng, log = null) {
             adds.push(`${p.name} none (purple DC with shadow)`);
           } else if (p.mode === 'melee' && shadow_choice(p, hp, mx_hp)[0]) {
             adds.push(`${p.name} none (shadowing)`);       // shadowing at the spawn: no lost ticks
+          } else if (p.boak === 'East' && p.east_pattern === '0-T') {
+            adds.push(`${p.name} none (East 0-T)`);        // East pattern 0-T: keeps attacking, no lost ticks
           } else {
             p.boak_block = new Set([...B_['block']].map((d) => t + d));
             adds.push(`${p.name} ${p.boak} boak`);
