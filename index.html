@@ -63,6 +63,10 @@
     table.res tr.base td { background: var(--soft); }
     .chg b { color: var(--accent); }
     .news li { margin: 4px 0; }
+    details.video { margin-top: 10px; }
+    details.video summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 14px; width: fit-content; }
+    .vwrap { position: relative; width: 100%; max-width: 860px; aspect-ratio: 16 / 9; margin: 10px 0 6px; border-radius: 10px; overflow: hidden; background: #000; }
+    .vwrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -71,6 +75,12 @@
     <h1>Verzik Room Simulator <span class="ver" id="ver"></span></h1>
     <p>Load a chart (or build one on this page) and the sim plays the room thousands of times in your browser.
        Everything runs on your own computer - nothing is uploaded. <a href="verzik_chart_template.xlsx" download>Download the blank chart template</a>.</p>
+    <details class="video" id="video">
+      <summary>Watch the video walkthrough</summary>
+      <div class="vwrap"><iframe id="vframe" title="Verzik Room Simulator walkthrough" data-src="https://www.youtube-nocookie.com/embed/LmrYOV9LXcM"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
+      <a class="small" href="https://www.youtube.com/watch?v=LmrYOV9LXcM" target="_blank" rel="noopener">Open on YouTube</a>
+    </details>
   </header>
   <main>
     <div class="card">

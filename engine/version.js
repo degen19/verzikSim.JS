@@ -1,6 +1,7 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 export const CHANGES = [
+  { version: '1.2.1', date: '2026-10-05', items: ['Video walkthrough: "Watch the video walkthrough" under the intro at the top of the page.'] },
   {
     version: '1.2.0', date: '2026-10-05',
     items: [

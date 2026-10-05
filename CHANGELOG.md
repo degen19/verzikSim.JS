@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.2.1 - 2026-10-05
+- Video walkthrough added to the top of the page ("Watch the video walkthrough").
+
 ## v1.2.0 - 2026-10-05
 - **East Pattern** (3-5 man): new dropdown next to East Boak. **A** = the standard East boak pattern (unchanged behaviour). **0-T** = an East Boak player loses no ticks when a purple spawns and keeps attacking at the normal pace. B, C and FLEX are planned.
 - Chart template updated with the East Pattern column. Older charts still work - a blank East Pattern counts as A.

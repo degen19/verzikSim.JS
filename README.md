@@ -2,6 +2,8 @@
 
 A tick-based Monte Carlo sim of the Verzik room for 2, 3, 4 and 5-man teams. Fill in the chart template (`verzik_chart_template.xlsx`) or build the chart right on the page, and the sim plays the room thousands of times. It gives you success rates, splits, an odds table and room-time charts, and the **Optimizer** searches for the setups that most often beat your target times.
 
+**Video walkthrough:** https://www.youtube.com/watch?v=LmrYOV9LXcM
+
 What's changed between versions is in [CHANGELOG.md](CHANGELOG.md) (and under **What's new** on the page).
 
 This is a straight port of the Python version. It has no dependencies (no `npm install` needed) and gives the same results within noise. There are two ways to use it:
