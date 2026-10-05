@@ -1,6 +1,8 @@
 # Verzik Room Simulator (JavaScript)
 
-A tick-based Monte Carlo sim of the Verzik room for 2, 3, 4 and 5-man teams. Fill in the chart template (`verzik_chart_template.xlsx`), load it, and the sim plays the room thousands of times. It gives you success rates, splits, an odds table and room-time charts.
+A tick-based Monte Carlo sim of the Verzik room for 2, 3, 4 and 5-man teams. Fill in the chart template (`verzik_chart_template.xlsx`) or build the chart right on the page, and the sim plays the room thousands of times. It gives you success rates, splits, an odds table and room-time charts, and the **Optimizer** searches for the setups that most often beat your target times.
+
+What's changed between versions is in [CHANGELOG.md](CHANGELOG.md) (and under **What's new** on the page).
 
 This is a straight port of the Python version. It has no dependencies (no `npm install` needed) and gives the same results within noise. There are two ways to use it:
 
@@ -32,12 +34,28 @@ The app has to be served over `http://`. Double-clicking `index.html` opens it a
   Then open the address it prints, e.g. http://localhost:3000 or http://localhost:8000.
 
 On the page:
-1. **Choose File** and pick your filled chart (.xlsx).
+1. Either **Import chart (.xlsx)** and pick your filled chart, or switch to **Build chart on this page** and fill in the tables (see below).
 2. Pick the **Scale**.
 3. Set **Raids per set** (20,000 is a good default).
 4. Optionally set a **Seed**. With the same seed you get the same results again.
 5. Optionally name **Set A** and **Set B**. If the tab has a filled second block, it runs both and compares them.
 6. Press **Run**. When it finishes, **Download report** saves a standalone HTML copy of the results.
+
+### Building a chart on the page
+**Build chart on this page** shows the template's inputs for the selected scale: setup, team settings, gear, mage gear and the P1 tick chart, with Set A and Set B.
+- The **Spec planner** shows the same End spec / Room Time / LB swings / Time of regen numbers as the spreadsheet (P1 ends on the Death tick if you set one, otherwise on the last charted tick - the spreadsheet's P1 kill-odds estimate isn't included).
+- Each P1 chart row gets a ✓ or ✗ check (attack speeds, X only on Verzik auto ticks, H needs a has3Tick weapon). Hover the ✗ to see why.
+- Everything is saved in your browser automatically (per computer and browser). **Save to file** / **Open file** move a chart between computers or share it.
+- After importing an .xlsx, **Edit this chart on the page** copies it into the builder.
+
+### Optimizer
+The **Optimizer** tab tests combinations of chart inputs and ranks them:
+1. Pick the **Set**, type your **Breakpoints** (any number of times, e.g. `5:21, 5:12, 5:00`) and what to **Rank by**.
+2. Tick each input to vary and list the values to try - ring swap % per player, death charges, deep proc %, melee prayer, gear pieces, mage cape / armour, shadow modes, 3:1 and the other toggles your chart has.
+3. Check the estimated run time (shown before you start) and untick options if it's too long. **Search depth** trades time for precision.
+4. **Start search.** Every setup plays the same raids; weak setups are dropped after a quick screen, and the finalists are re-run on fresh raids so the winner isn't a lucky one. **Full report vs your chart** runs the normal report for any result.
+
+Rates count all attempts, including failed ones. Only inputs that exist on the chart can be varied - new behaviours need a sim update.
 
 ### Option B: the terminal
 From the VS Code terminal, in the `verzik_js` folder:
@@ -103,10 +121,13 @@ All three are free for a site like this. There's no server-side compute, because
 
 | Path | What it is |
 |---|---|
-| `index.html`, `app.js` | The browser app (UI, file loading, running the workers, drawing the report) |
-| `worker.js` | Web Worker. Each one runs a share of the raids. |
+| `index.html`, `app.js` | The browser app (chart source, tabs, running the workers, drawing the report) |
+| `builder-ui.js` | "Build chart on this page" form |
+| `optimizer-ui.js` | Optimizer tab |
+| `worker.js` | Web Worker. Each one runs a share of the raids (report runs and optimizer batches). |
 | `cli/run.mjs`, `cli/worker.mjs` | Command-line runner (Node worker threads) |
-| `engine/` | The simulator: chart reader (`xlsx.js`, `sim.js`), phases (`p2.js`, `reds.js`, `duo_reds.js`, `p3.js`), supplies, gear, horn, RNG, and report |
+| `engine/` | The simulator: chart reader (`xlsx.js`, `sim.js`), phases (`p2.js`, `reds.js`, `duo_reds.js`, `p3.js`), supplies, gear, horn, RNG, report, optimizer search (`optimize.js`), chart form (`chartform.js`), spec planner (`planner.js`) and version / What's new (`version.js`) |
+| `CHANGELOG.md` | What changed in each version |
 | `verzik_chart_template.xlsx` | Blank input chart. The **Mechanics & behavior** sheet in it explains what the sim models. |
 | `CONVENTIONS.md` | Notes for anyone editing the engine (porting rules, function signatures) |
 

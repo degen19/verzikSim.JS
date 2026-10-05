@@ -6,53 +6,105 @@
   <title>Verzik Room Simulator</title>
   <link rel="icon" href="data:,">
   <style>
-    :root { --ink:#0b0b0b; --ink2:#52514e; --line:#e2e1dc; --bg:#f6f5f1; --card:#fcfcfb; --accent:#2a78d6; }
+    :root { --ink:#0b0b0b; --ink2:#52514e; --line:#e2e1dc; --bg:#f6f5f1; --card:#fcfcfb; --accent:#2a78d6; --soft:#eef4fc; --bad:#b3261e; --good:#1f7a3a; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
     header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
-    header h1 { margin: 0; font-size: 22px; }
+    header h1 { margin: 0; font-size: 22px; display: flex; align-items: baseline; gap: 10px; }
+    header h1 .ver { font-size: 12px; font-weight: 500; color: var(--ink2); background: var(--line); border-radius: 999px; padding: 2px 8px; }
     header p { margin: 6px 0 0; color: var(--ink2); font-size: 14px; }
     main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 12px 0; }
     .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
+    .row.between { justify-content: space-between; align-items: center; }
+    .row.wrap { flex-wrap: wrap; }
     label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink2); }
-    input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
-    input[type=number] { width: 120px; }
-    button { font: inherit; padding: 9px 18px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
+    input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
+    input[type=number] { width: 110px; }
+    input[type=checkbox] { width: 16px; height: 16px; padding: 0; }
+    button, .filebtn { font: inherit; padding: 9px 18px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
     button:disabled { opacity: .5; cursor: default; }
-    button.ghost { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+    .ghost { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+    .sm { padding: 5px 10px; font-size: 13px; }
+    .filebtn { display: inline-block; flex-direction: row; }
     .muted { color: var(--ink2); font-size: 13px; }
+    .small { font-size: 12px; }
+    .warn { color: #9a5b00; }
     .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: 10px; }
     .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-    .err { color: #b3261e; font-size: 14px; white-space: pre-wrap; }
+    .err { color: var(--bad); font-size: 14px; white-space: pre-wrap; }
     a { color: var(--accent); }
+    .seg { display: inline-flex; border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; }
+    .seg button { border-radius: 0; background: #fff; color: var(--accent); padding: 7px 14px; font-weight: 600; }
+    .seg button.on { background: var(--accent); color: #fff; }
+    .tabs { display: flex; gap: 4px; margin-top: 18px; border-bottom: 1px solid var(--line); }
+    .tabs button { background: transparent; color: var(--ink2); border-radius: 8px 8px 0 0; padding: 9px 16px; }
+    .tabs button.on { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-bottom-color: var(--card); margin-bottom: -1px; }
+    .scroll { overflow-x: auto; }
+    table.bt { border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
+    table.bt th, table.bt td { border: 1px solid var(--line); padding: 4px 6px; text-align: center; white-space: nowrap; }
+    table.bt th { background: #f3f2ee; color: var(--ink2); font-weight: 600; }
+    table.bt td.rl { text-align: left; font-weight: 600; background: #faf9f6; }
+    table.bt input[type=number] { width: 72px; }
+    table.bt input[type=text] { width: 110px; }
+    table.grid td { padding: 1px; }
+    table.grid th { font-size: 11px; padding: 2px 3px; min-width: 34px; }
+    table.grid th.auto, table.grid td.auto { background: #fbe3e1; }
+    input.code { width: 34px; padding: 3px 2px; text-align: center; font-size: 12px; text-transform: uppercase; border-radius: 4px; }
+    td.chk.ok { color: var(--good); font-weight: 700; } td.chk.bad { color: var(--bad); font-weight: 700; cursor: help; }
+    .teamset label { min-width: 150px; }
+    h3 { margin: 18px 0 6px; font-size: 15px; } h4 { margin: 10px 0 4px; font-size: 14px; }
+    .ogroup { border-top: 1px solid var(--line); padding: 4px 0 8px; }
+    .orow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 3px 0; }
+    .orow label.vary { flex-direction: row; align-items: center; gap: 6px; color: var(--ink); min-width: 240px; font-size: 14px; }
+    .orow label.pick { flex-direction: row; align-items: center; gap: 4px; color: var(--ink); }
+    .orow:not(.on) .oed { opacity: .45; }
+    table.res td.setup { text-align: left; white-space: normal; min-width: 280px; }
+    table.res tr.base td { background: var(--soft); }
+    .chg b { color: var(--accent); }
+    .news li { margin: 4px 0; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Verzik Room Simulator</h1>
-    <p>Fill in the chart template, load it here, and the sim plays the room thousands of times in your browser.
+    <h1>Verzik Room Simulator <span class="ver" id="ver"></span></h1>
+    <p>Load a chart (or build one on this page) and the sim plays the room thousands of times in your browser.
        Everything runs on your own computer - nothing is uploaded. <a href="verzik_chart_template.xlsx" download>Download the blank chart template</a>.</p>
   </header>
   <main>
     <div class="card">
-      <div class="row">
-        <label>Chart (.xlsx)<input id="file" type="file" accept=".xlsx"></label>
+      <div class="row between">
+        <div class="seg" id="src"><button data-src="import" class="on">Import chart (.xlsx)</button><button data-src="build">Build chart on this page</button></div>
         <label>Scale
           <select id="team"><option value="2">2-man (duo)</option><option value="3">3-man</option><option value="4" selected>4-man</option><option value="5">5-man</option></select>
         </label>
+      </div>
+      <div id="imp" class="row" style="margin-top:12px">
+        <label>Chart (.xlsx)<input id="file" type="file" accept=".xlsx"></label>
+        <button id="toBuilder" class="ghost sm" disabled>Edit this chart on the page</button>
+      </div>
+      <div id="status" class="muted" style="margin-top:10px">Import a chart or switch to "Build chart on this page".</div>
+    </div>
+    <div id="builder" class="card" hidden></div>
+
+    <div class="tabs" id="tabs"><button data-tab="run" class="on">Run report</button><button data-tab="opt">Optimizer</button><button data-tab="new">What's new</button></div>
+    <section id="tab-run" class="card" style="border-top-left-radius:0">
+      <div class="row">
         <label>Raids per set<input id="runs" type="number" value="20000" min="100" step="1000"></label>
         <label>Seed (optional)<input id="seed" type="number" placeholder="random"></label>
         <label>Set A label<input id="labA" placeholder="e.g. Booma P1"></label>
         <label>Set B label<input id="labB" placeholder="e.g. Horn P1"></label>
-        <button id="go" disabled>Run</button>
+        <button id="go">Run</button>
         <button id="dl" class="ghost" disabled>Download report</button>
       </div>
-      <div id="status" class="muted" style="margin-top:10px">Load a chart to start.</div>
+      <div id="runStatus" class="muted" style="margin-top:10px"></div>
       <div class="bar"><div id="prog"></div></div>
       <div id="err" class="err"></div>
-    </div>
-    <div id="out"></div>
+      <div id="out"></div>
+    </section>
+    <section id="tab-opt" class="card" hidden></section>
+    <section id="tab-new" class="card" hidden></section>
   </main>
   <script type="module" src="app.js"></script>
 </body>

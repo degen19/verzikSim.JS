@@ -1,5 +1,7 @@
 // Turns simulate() results into a self-contained HTML report (SVG charts + tables). Used by the web page and the CLI.
 
+import { VERSION } from './version.js';
+
 const COL = ['#2a78d6', '#d64545'];
 const fmt = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).padStart(4, '0')}`;
 const pct = (a, b) => (b ? `${(a / b * 100).toFixed(1)}%` : '-');
@@ -61,6 +63,14 @@ function depthBuckets(d, key) {
   return [avg(v.slice(lo, hi)), avg(v.slice(0, qn(0.10))), avg(v.slice(0, qn(0.25))), avg(v.slice(n - qn(0.25)))];
 }
 
+const fastest = (a) => a.reduce((m, x) => (x < m ? x : m), Infinity);
+/** How often the fastest room time happened: count of runs at that exact tick, out of all attempts. */
+function fastestFreq(r) {
+  if (!r.total.length) return '-';
+  const f = fastest(r.total), n = r.total.filter((x) => x === f).length;
+  return `${n.toLocaleString()} of ${r.runs.toLocaleString()} (1 in ${Math.round(r.runs / n).toLocaleString()})`;
+}
+
 function oddsRows(res, team) {
   if (team === 2) {
     const d = res.map((r) => r.duo);
@@ -71,6 +81,8 @@ function oddsRows(res, team) {
       ['Kill before the green ball lands (of 2-downs)', d.map((x) => pct(x.kill_ngl, x.n2d))],
       ['Someone dies in P1 (all runs)', d.map((x) => pct(x.die_p1, x.runs))],
       ['Full kill (all runs)', res.map((r) => pct(r.total.length, r.runs))],
+      ['Fastest completed run', res.map((r) => (r.total.length ? fmt(fastest(r.total)) : '-'))],
+      ['Fastest run frequency (all runs)', res.map((r) => fastestFreq(r))],
     ];
   }
   const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN);
@@ -172,7 +184,7 @@ export function reportHtml(res, labels, team, runs) {
   const what = team === 2 ? 'success = P2 down in two reds and P3 killed' : 'success = P2 down in reds and P3 killed';
   return `<div class="vz-report">
 <h2>${team}-man Verzik: room time${res.length === 2 ? ' comparison' : ''}</h2>
-<div class="sub">${runs.toLocaleString()} raids per set · times are total room time · charts use each set's successful runs · ${what}</div>
+<div class="sub">${runs.toLocaleString()} raids per set · times are total room time · charts use each set's successful runs · ${what} · sim v${VERSION}</div>
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3>${splits}${team === 2 ? '<div class="sub" style="margin-top:6px">Depth = Verzik HP % when the shield goes up (lower = deeper), averaged over the runs in each room-time bucket (Median = runs around the median room time).</div>' : ''}
 <h3>Odds</h3>${odds}
