@@ -6,10 +6,9 @@
   <title>Verzik Room Simulator</title>
   <link rel="icon" href="data:,">
   <script>
-    // light / dark: saved choice, else the system setting
+    // light / dark: saved choice, else dark
     (function () { var t = null; try { t = localStorage.getItem('verzikSim.theme'); } catch (e) {}
-      if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      document.documentElement.dataset.theme = t; })();
+      document.documentElement.dataset.theme = t === 'light' ? 'light' : 'dark'; })();
   </script>
   <style>
     :root { --ink:#0b0b0b; --ink2:#52514e; --line:#e2e1dc; --bg:#f6f5f1; --card:#fcfcfb; --accent:#2a78d6; --soft:#eef4fc; --bad:#b3261e; --good:#1f7a3a;
