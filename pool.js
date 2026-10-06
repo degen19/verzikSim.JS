@@ -21,6 +21,21 @@ export class SimPool {
     while (this.workers.length > n) this.workers.pop().terminate();
   }
 
+  /**
+   * Warm the workers up in the background (a short throwaway run per worker), so the first real run starts at full
+   * speed - a fresh worker is several times slower for its first few hundred raids while the browser optimizes it.
+   */
+  warm(cfgs, team, threads = threadCount()) {
+    if (!workersAvailable() || threads <= 1 || this.active) return;
+    try { this.ensure(threads); } catch { return; }
+    const runId = ++this.runSeq;
+    for (const w of this.workers) {
+      w.onmessage = null;                                           // results of the warm-up are ignored
+      w.postMessage({ cmd: 'init', runId, cfgs, team });
+      w.postMessage({ cmd: 'chunk', runId, k: 0, runs: 400, seed: 'warm-up' });
+    }
+  }
+
   /** Stop the current run: kill the workers (they're recreated on the next run). */
   stop() {
     if (this.active) this.active.cancel();

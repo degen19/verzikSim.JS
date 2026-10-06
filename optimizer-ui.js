@@ -8,8 +8,8 @@ const fmtT = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).pad
 const fmtS = (s) => `${Math.floor(s / 60)}:${String(Math.round((s % 60) * 10) / 10).padStart(2, '0')}`;
 const dur = (sec) => (sec < 90 ? `${Math.max(1, Math.round(sec))} seconds` : sec < 5400 ? `${Math.round(sec / 60)} minutes` : `${(sec / 3600).toFixed(1)} hours`);
 const DEFAULT_NUM = { ring: '20, 35, 50, 65, 80', deep: 'off, 40, 42, 44' };
-const CORES = threadCount();                    // same worker count as report runs (cores - 1, capped; ?threads=N overrides)
-const RATE_KEY = 'verzikSim.rate.v1';            // measured raids/second per scale, from finished searches on this computer
+const CORES = threadCount();                    // same worker count as report runs (all logical cores; ?threads=N overrides)
+const RATE_KEY = 'verzikSim.rate.v2';   // v2: engine got ~1.4x faster in v1.6.0, so older measurements are stale            // measured raids/second per scale, from finished searches on this computer
 const rates = (() => { try { return JSON.parse(localStorage.getItem(RATE_KEY)) || {}; } catch { return {}; } })();
 const keepRate = (t, r) => { rates[`${t}:${CORES}`] = r; try { localStorage.setItem(RATE_KEY, JSON.stringify(rates)); } catch { /* ignore */ } };
 

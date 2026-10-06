@@ -61,7 +61,8 @@ Rates count all attempts, including failed ones. Only inputs that exist on the c
 
 ### Multithreading
 Report runs are split into chunks of 2,000 raids that run in parallel Web Workers (`pool.js`). Everything still runs in your browser - nothing is sent anywhere.
-- **Threads:** logical cores minus one (left for the browser), at most 12; 1-2 core machines use all of them. The Run tab's status line shows the thread count and raids/second when a run finishes.
+- **Threads:** every logical core (the page itself is idle while workers run), up to 32. The Run tab's status line shows the thread count and raids/second when a run finishes.
+- **Warm-up:** a fresh worker is several times slower for its first few hundred raids while the browser optimizes the code, so the page warms the workers in the background as soon as a chart is loaded, and reuses them for every run.
 - **Same seed = same result** on any computer and any thread count: chunk *k* of a run always uses the random stream seeded by (seed, *k*), and chunks are merged in order.
 - Runs under 4,000 raids, or browsers without Web Workers, run on the main thread (same chunks, same results).
 - **Stop** cancels a running report. Workers are reused between runs.
@@ -69,7 +70,7 @@ Report runs are split into chunks of 2,000 raids that run in parallel Web Worker
 
 **Checking it:** `node tests/parity.mjs my_chart.xlsx --team 2 --runs 20000` shows (1) that 1, 2 and N threads give identical results, (2) that the results match the old single-stream method within noise, and (3) the speed-up on your computer.
 
-**Benchmarking in the browser:** run the same chart and raid count with `?threads=1` and then with no `?threads` (or `?threads=4`), and compare the raids/second in the status line. Use 20,000+ raids so worker start-up doesn't dominate. With the same Seed, the two reports are identical.
+**Benchmarking in the browser:** load a chart, wait a few seconds (warm-up), then run the same chart and raid count with `?threads=1` and with no `?threads`, and compare the raids/second in the status line. Use 20,000+ raids. With the same Seed, the two reports are identical.
 
 ### Option B: the terminal
 From the VS Code terminal, in the `verzik_js` folder:

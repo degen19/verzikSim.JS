@@ -7,13 +7,15 @@ import { simulate } from './simulate.js';
 
 export const CHUNK = 2000;                 // raids per chunk (big enough that message overhead is negligible)
 export const SINGLE_THREAD_BELOW = 4000;   // smaller runs aren't worth starting workers for
-export const MAX_WORKERS = 12;
+export const MAX_WORKERS = 32;
 
-/** Sensible worker count for a machine: leave one logical core for the browser/UI, cap at MAX_WORKERS. */
+/**
+ * Worker count for a machine: every logical core (the page itself is idle while workers run), capped at
+ * MAX_WORKERS. ?threads=N on the page (or --threads N on the command line) overrides this.
+ */
 export function workerCount(cores) {
   const c = Math.max(1, Math.floor(Number(cores) || 4));
-  if (c <= 2) return c;                    // 1-2 cores: use them; the main thread is idle while workers run
-  return Math.min(c - 1, MAX_WORKERS);
+  return Math.min(c, MAX_WORKERS);
 }
 
 /** [{k, runs}] covering `runs` raids in CHUNK-sized pieces. */

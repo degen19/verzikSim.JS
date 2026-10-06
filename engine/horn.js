@@ -84,7 +84,7 @@ export function try_horn(caster, players, rank, phase, team, next_is_claw, L, t,
   caster.horn_until = rec.horn_until = t + HORN_TICKS;
   if (phase === 'p2') caster.horn_used_p2 = true;
   else caster.horn_used_p3 = true;
-  L(`t${rjust(t, 4)} ${tag}${caster.name}: SOULFLAME HORN (-25% -> ${fx(caster.spec)}%) - guaranteed first hit for ` +
+  L.on && L(`t${rjust(t, 4)} ${tag}${caster.name}: SOULFLAME HORN (-25% -> ${fx(caster.spec)}%) - guaranteed first hit for ` +
     `${caster.name} and ${rec.name}`);
   return true;
 }

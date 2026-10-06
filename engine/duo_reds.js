@@ -128,7 +128,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
   for (const _p of p2r['players']) {
     _p.pool.phase = 'reds'; _p.pool.scb_res = 0; _p.sc_at = null;
   }
-  const L = log != null ? ((s) => log.push(s)) : ((s) => null);
+  const L = log != null ? ((s) => log.push(s)) : ((s) => null); L.on = log != null;   // log text is only built when a log is kept
   const players = p2r['players'], pid = p2r['pid'];
   const rank = new Map(pid.map((p, k) => [p, k]));
   const team = 2;
@@ -148,10 +148,10 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
     st['purple_in_reds'] = true;
     if (purple['alive']) {
       purple_dc.mode = 'purple_bp';
-      L(`     PURPLE CRAB carried into reds (${dget(purple, 'ignored') ? 'ignored 2nd purple' : 'still alive'}): `
+      L.on && L(`     PURPLE CRAB carried into reds (${dget(purple, 'ignored') ? 'ignored 2nd purple' : 'still alive'}): `
         + `${purple_dc.name} blowpipes it from the shield`);
     } else {
-      L('     Purple crab explosion held until r12');
+      L.on && L('     Purple crab explosion held until r12');
     }
   }
   let vq = [];                       // [land_t, rank, sub, label, amount, player, kind]
@@ -181,7 +181,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
         if (!ok) {
           p.ring = 'Ultor'; p.regen_timer = 0;
           st['set2_ultor'] = dget(st, 'set2_ultor', 0) + 1;
-          L(`t${rjust(P0, 4)} ${p.name}: on ${fx(p.spec)}% - no 2nd set-2 claw by r31 even on Lightbearer -> `
+          L.on && L(`t${rjust(P0, 4)} ${p.name}: on ${fx(p.spec)}% - no 2nd set-2 claw by r31 even on Lightbearer -> `
             + 'swaps to Ultor at the first reds proc');
         }
       }
@@ -215,7 +215,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
         supplies.window(p, 4, L, P, `s${s} shield `, { sharks: false, brews: !p.shadow });   // shadow: no brews before P3
       }
     }
-    L(`\n=== DUO REDS SET ${s} === r0 = t${P}. Verzik ${hp} (${fx(hp / mx_hp * 100, 1)}%). Crabs ${crab_hp0} HP each`);
+    L.on && L(`\n=== DUO REDS SET ${s} === r0 = t${P}. Verzik ${hp} (${fx(hp / mx_hp * 100, 1)}%). Crabs ${crab_hp0} HP each`);
     const r_start = s === 1 ? 0 : 1;
     const r_end = s === 1 ? LAST_R : CRAB_HEAL_R;
     for (const r of range(r_start, r_end + 1)) {
@@ -230,13 +230,13 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
           const side = kind.slice(5);
           if (crabs[side] <= 0) continue;
           crabs[side] = Math.max(0, crabs[side] - amt);
-          L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: ${label} on ${side} crab ${amt} -> crab ${crabs[side]}`);
+          L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: ${label} on ${side} crab ${amt} -> crab ${crabs[side]}`);
           if (crabs[side] === 0 && s === 1) {
             const owner = players.find((q) => truthy(side === 'West' ? q.west : q.east)) ?? null;
             if (owner) {
               const old = owner.spec; owner.spec = Math.min(100, owner.spec + 15); owner.gain_src = 'other';
               st['dc1'].push(owner.name);
-              L(`t${rjust(t, 4)} s${s} r${r} ${side} crab dies -> ${owner.name} DC spec ${fx(old)}% -> ${fx(owner.spec)}%`);
+              L.on && L(`t${rjust(t, 4)} s${s} r${r} ${side} crab dies -> ${owner.name} DC spec ${fx(old)}% -> ${fx(owner.spec)}%`);
             }
           }
           continue;
@@ -244,12 +244,12 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
         if (kind === 'purple') {
           const old = purple_dc.spec; purple_dc.spec = Math.min(100, purple_dc.spec + 15); purple_dc.gain_src = 'other'; purple_dc.purple_pending = false; purple_dc.purple_owed = false;
           st['purple_popped_r'] = [s, r];
-          L(`t${rjust(t, 4)} s${s} r${r} PURPLE CRAB POPS -> ${purple_dc.name} spec ${fx(old)}% -> ${fx(purple_dc.spec)}%`);
+          L.on && L(`t${rjust(t, 4)} s${s} r${r} PURPLE CRAB POPS -> ${purple_dc.name} spec ${fx(old)}% -> ${fx(purple_dc.spec)}%`);
           continue;
         }
         hp -= amt;
         p.reds_dmg += amt;
-        L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: ${label} ${amt} -> Verzik ${hp}`);
+        L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: ${label} ${amt} -> Verzik ${hp}`);
         if (hp <= 0 && kill == null) kill = t;
       }
       // ---- purple crab: nothing during the shield; from r12 on her cycle: heal if alive, explode if popped
@@ -258,14 +258,14 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
           const d = rng.randint(65, 75);
           hp -= d;
           pc['expl_due'] = false;
-          L(`t${rjust(t, 4)} s${s} r${r} purple crab explosion ${d} -> Verzik ${hp}`);
+          L.on && L(`t${rjust(t, 4)} s${s} r${r} purple crab explosion ${d} -> Verzik ${hp}`);
           if (hp <= 0) kill = t;
           pc = !pc['alive'] ? null : pc;
         } else if (pc['alive']) {
           const h_ = rng.randint(9, 11);
           const old = hp; hp = Math.min(mx_hp, hp + h_);
           st['purple_heal'] += hp - old;
-          L(`t${rjust(t, 4)} s${s} r${r} purple crab heals Verzik ${hp - old} -> ${hp}`);
+          L.on && L(`t${rjust(t, 4)} s${s} r${r} purple crab heals Verzik ${hp - old} -> ${hp}`);
         }
       }
       // ---- crabs heal on r41
@@ -277,7 +277,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
             if (owner) {
               const old = owner.spec; owner.spec = Math.min(100, owner.spec + 15); owner.gain_src = 'other';
               st['dc1'].push(owner.name);
-              L(`t${rjust(t, 4)} s1 r${r} ${side} crab heals Verzik (dies) -> ${owner.name} DC spec ${fx(old)}% -> ${fx(owner.spec)}%`);
+              L.on && L(`t${rjust(t, 4)} s1 r${r} ${side} crab heals Verzik (dies) -> ${owner.name} DC spec ${fx(old)}% -> ${fx(owner.spec)}%`);
             }
           }
         }
@@ -288,11 +288,11 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
         st[`crab_heal${s}`] = hp - old;
         if (s === 1) st['crab_left1'] = { ...crabs };
         else st['crab_left'] = { ...crabs };
-        L(`t${rjust(t, 4)} s${s} r${r} crabs heal Verzik +${hp - old} -> ${hp}`);
+        L.on && L(`t${rjust(t, 4)} s${s} r${r} crabs heal Verzik +${hp - old} -> ${hp}`);
       }
       if (kill != null) {
         st['kill_set'] = s; st['kill_r'] = kill - P;
-        L(`t${rjust(kill, 4)} s${s} r${kill - P} VERZIK P2 HP 0 (success)`);
+        L.on && L(`t${rjust(kill, 4)} s${s} r${kill - P} VERZIK P2 HP 0 (success)`);
         break;
       }
       if (s === 2 && r === CRAB_HEAL_R) break;
@@ -304,7 +304,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
           const h_ = floordiv(floordiv(rng.randint(0, 47), 2), 2);
           const old = hp; hp = Math.min(mx_hp, hp + h_);
           st['blood_total'] += hp - old;
-          L(`t${rjust(t, 4)} s${s} r${r} VERZIK attack: blood heal +${hp - old} -> ${hp}`);
+          L.on && L(`t${rjust(t, 4)} s${s} r${r} VERZIK attack: blood heal +${hp - old} -> ${hp}`);
         } else if (st['since_ltg'] < 4) {
           st['since_ltg'] += 1;                       // plain attack
         } else {                                      // 5th plain attack: lightning
@@ -312,7 +312,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
           const vd = rng.random() >= 0.5 ? 5 : 8;
           vq.push([t + vd, -1, 1, 'Lightning rebound', rng.randint(20, 25), players[0], 'dmg']);
           st['lightning'] = dget(st, 'lightning', 0) + 1;
-          L(`t${rjust(t, 4)} s${s} r${r} VERZIK attack: LIGHTNING (rebound lands t${t + vd})`);
+          L.on && L(`t${rjust(t, 4)} s${s} r${r} VERZIK attack: LIGHTNING (rebound lands t${t + vd})`);
         }
       }
       st['hp_now'] = hp; st['crabs_now'] = crabs['West'] + crabs['East'];
@@ -325,7 +325,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
           if (p.regen_timer >= p.regen_period()) {
             p.regen_timer = 0;
             const old = p.spec; p.spec = Math.min(100, p.spec + 10); p.gain_src = 'regen';
-            L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: regen ${fx(old)}% -> ${fx(p.spec)}%`);
+            L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: regen ${fx(old)}% -> ${fx(p.spec)}%`);
           }
         } else {
           p.regen_timer = 0;
@@ -333,7 +333,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
         custom_surge(p, t, L, `r${r} `); auto_surge(p, t, L, `r${r} `);
         if (swap_due(p)) {
           p.ring = 'Ultor'; p.regen_timer = 0;
-          L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: spec ${fx(p.spec)}% >= target -> swaps to Ultor`);
+          L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: spec ${fx(p.spec)}% >= target -> swaps to Ultor`);
         }
         if (p.thrall_next != null && t === p.thrall_next && r >= SHIELD) {
           vq.push([t + 1, rank.get(p), 9, 'Thrall', rng.randint(0, 3), p, 'dmg']);
@@ -345,7 +345,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
           const [ch] = blowpipe_chance(p);
           const ok = rng.random() < ch;
           p.next_attack = t + 2;
-          L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: blowpipe at purple crab (acc ${fx(ch * 100, 1)}%) -> ${ok ? 'PASSES' : 'miss'}`);
+          L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: blowpipe at purple crab (acc ${fx(ch * 100, 1)}%) -> ${ok ? 'PASSES' : 'miss'}`);
           if (ok) {
             p.mode = 'melee';
             pc['alive'] = false; pc['expl_due'] = true;      // queued poison hit: no more heals, explodes next cycle
@@ -387,7 +387,7 @@ export function _hit_crab_scythe(p, t, r, vq, rank, rng, L, st, why) {
   });
   p.next_attack = t + 5;
   st['crab_swings'] += 1;
-  L(`t${rjust(t, 4)} s1 r${r} ${p.name}: Scythe on ${p.red_crab} crab (${why})`);
+  L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: Scythe on ${p.red_crab} crab (${why})`);
 }
 
 export function _scythe_verzik(p, t, r, vq, rank, rng, L, s, tag = '') {
@@ -399,7 +399,7 @@ export function _scythe_verzik(p, t, r, vq, rank, rng, L, s, tag = '') {
   });
   p.next_attack = t + 5;
   p.reds_n += 1;
-  L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: Scythe${tag} -> ${plist(sp)}`);
+  L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: Scythe${tag} -> ${plist(sp)}`);
 }
 
 /** [accuracy, maxes, hit delay, speed] for a fill attack on the crab or on Verzik. */
@@ -449,7 +449,7 @@ export function _fill(p, t, r, kind, target, vq, rank, rng, L, st) {
   });
   p.next_attack = t + spd;
   st['fills'].push(kind);
-  L(`t${rjust(t, 4)} s1 r${r} ${p.name}: TICK FILL ${kind} on ${target === 'crab' ? 'their ' + p.red_crab + ' crab' : 'Verzik'} -> ${plist(ds)}`);
+  L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: TICK FILL ${kind} on ${target === 'crab' ? 'their ' + p.red_crab + ' crab' : 'Verzik'} -> ${plist(ds)}`);
 }
 
 export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
@@ -510,7 +510,7 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
         });
         p.next_attack = t + 4; p.reds_n += 1; p.set1_r40_claw = true;
         st['set1_r40_claw'] = dget(st, 'set1_r40_claw', 0) + 1;
-        L(`t${rjust(t, 4)} s1 r${r} ${p.name}: CLAW SPEC on r40 instead of the scratch (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${plist(hits)}`);
+        L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: CLAW SPEC on r40 instead of the scratch (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${plist(hits)}`);
         return;
       }
       _fill(p, t, r, kind, tgt, vq, rank, rng, L, st);
@@ -528,7 +528,7 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
         _hit_crab_scythe(p, t, r, vq, rank, rng, L, st, 'collision tick');
       } else {
         p.next_attack = t + 1; st['waits'] += 1;
-        L(`t${rjust(t, 4)} s1 r${r} ${p.name}: lines up with Verzik's attack -> waits 1t`);
+        L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: lines up with Verzik's attack -> waits 1t`);
       }
       return;
     }
@@ -545,7 +545,7 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     } else {
       p.next_attack = t + 1;
       st['waits'] += 1;
-      L(`t${rjust(t, 4)} s1 r${r} ${p.name}: lines up with Verzik's attack -> waits 1t`);
+      L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: lines up with Verzik's attack -> waits 1t`);
     }
     return;
   }
@@ -571,7 +571,7 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     });
     p.next_attack = t + 4; p.reds_n += 1; p.set1_claw = true;
     st['set1_claws'] = dget(st, 'set1_claws', 0) + 1;
-    L(`t${rjust(t, 4)} s1 r${r} ${p.name}: CLAW SPEC in set 1 (spec ${fx(old)}% -> ${fx(p.spec)}%, still 50%+ by set 2) -> ${plist(hits)}`);
+    L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: CLAW SPEC in set 1 (spec ${fx(old)}% -> ${fx(p.spec)}%, still 50%+ by set 2) -> ${plist(hits)}`);
     return;
   }
   _scythe_verzik(p, t, r, vq, rank, rng, L, 1);
@@ -639,14 +639,14 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
       if (ga(p, 'crab_bp', false)) {
         const [ch, mx] = bp_vs(p, CRAB_DEF_ROLL);                // under 70: blowpipe the crab, then shark + brew + super combat
         vq.push([t + 2, rank.get(p), 0, 'Blowpipe', roll(rng, ch, mx), p, 'crab:' + p.red_crab]);
-        L(`t${rjust(t, 4)} s2 r${r} ${p.name}: Blowpipe on ${p.red_crab} crab (death charge swing)`);
+        L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: Blowpipe on ${p.red_crab} crab (death charge swing)`);
         supplies.window(p, Math.max(1, floordiv(SHIELD - 1 - r, 3) + 1), L, t, `s2 r${r} shield `, { sharks: true, brews: !p.shadow });
       } else if (r <= SHIELD - 5) {
         const [ch, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL);
         [mx, floordiv(mx, 2)].forEach((m, k) => {
           vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, roll(rng, ch, m), p, 'crab:' + p.red_crab]);
         });
-        L(`t${rjust(t, 4)} s2 r${r} ${p.name}: Scythe on ${p.red_crab} crab (death charge swing)`);
+        L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: Scythe on ${p.red_crab} crab (death charge swing)`);
       }
       p.dc_swing_done = true;
     }
@@ -665,14 +665,14 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
       if (SET2_ULTOR && p.ring === 'Lightbearer') {
         p.ring = 'Ultor'; p.regen_timer = 0;                 // LB can't get them a 2nd claw by r31: Ultor for the swings
         st['set2_ultor'] = dget(st, 'set2_ultor', 0) + 1;
-        L(`t${rjust(t, 4)} s2 r${r} ${p.name}: no 2nd claw by r31 even on Lightbearer -> swaps to Ultor`);
+        L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: no 2nd claw by r31 even on Lightbearer -> swaps to Ultor`);
       }
     } else if (p.spec >= 50) {
       p.plan = 'scratch_claw';
     } else {
       p.plan = 'scythe';
     }
-    L(`t${rjust(t, 4)} s2 r${r} ${p.name}: spec ${fx(p.spec)}% -> plan ${p.plan}`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: spec ${fx(p.spec)}% -> plan ${p.plan}`);
   }
   const n = p.reds_n + 1;
   if (verz) {
@@ -685,12 +685,12 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
       vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
       p.next_attack = t + 5; p.reds_n = n;
       st['shadow'] += 1;
-      L(`t${rjust(t, 4)} s2 r${r} ${p.name}: SHADOW on the collision tick -> ${d}`);
+      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: SHADOW on the collision tick -> ${d}`);
       return;
     }
     p.next_attack = t + 1;
     st['waits'] += 1;
-    L(`t${rjust(t, 4)} s2 r${r} ${p.name}: lines up with Verzik's attack -> waits 1t`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: lines up with Verzik's attack -> waits 1t`);
     return;
   }
   if (r === 40 && p.spec >= 30 && dget(st, 'hp_now', 10 ** 6) < P2_HP[2] * LAST_HIT_THR / 100) {
@@ -706,7 +706,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     });
     p.next_attack = t + 7; p.reds_n = n;
     st['halb'] += 1;
-    L(`t${rjust(t, 4)} s2 r${r} ${p.name}: HALBERD SPEC on r40 -> ${plist(hits)}`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: HALBERD SPEC on r40 -> ${plist(hits)}`);
     return;
   }
   if (p.plan === 'r40claw') {
@@ -717,7 +717,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
         vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
       });
       p.next_attack = t + 4; p.reds_n = n; p.claws_done += 1; st['claws'] += 1;
-      L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${plist(hits)}`);
+      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${plist(hits)}`);
       return;
     }
     if (p.reds_n === 0 && !p.scratch_done) {
@@ -728,7 +728,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
         vq.push([t + 1, rank.get(p), k, 'Claw scratch', d, p, 'dmg']);
       });
       p.next_attack = t + 4; p.reds_n = n; p.scratch_done = true; st['scratch'] += 1;
-      L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch r11 (no claw yet) -> ${plist(ds)}`);
+      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch r11 (no claw yet) -> ${plist(ds)}`);
       return;
     }
     _scythe_verzik(p, t, r, vq, rank, rng, L, 2);
@@ -746,7 +746,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     });
     p.next_attack = t + 4; p.reds_n = n; p.scratch_done = true;
     st['scratch'] += 1;
-    L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch -> ${plist(ds)}`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch -> ${plist(ds)}`);
     return;
   }
   if (want_claw) {
@@ -758,7 +758,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     });
     p.next_attack = t + 4; p.reds_n = n; p.claws_done += 1;
     st['claws'] += 1;
-    L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${plist(hits)}`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${plist(hits)}`);
     return;
   }
   _scythe_verzik(p, t, r, vq, rank, rng, L, 2);

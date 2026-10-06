@@ -112,7 +112,7 @@ export function try_heart(p, t = null, L = null, tag = '') {
   if (heart_pending(p) && p.mag >= 99) {
     p.mag = HEART_MAGIC; p.heart_used = true;
     if (L) {
-      L(`t${rjust(t, 4)} ${tag}${p.name}: Magic boosted to ${HEART_MAGIC}`);
+      L.on && L(`t${rjust(t, 4)} ${tag}${p.name}: Magic boosted to ${HEART_MAGIC}`);
     }
     return true;
   }
@@ -193,7 +193,7 @@ export function window(p, slots, L, t, tag, opts = {}) {
     done.push(tick.join('+'));
   }
   if (done.length && L) {
-    L(`t${rjust(t, 4)} ${tag}${p.name}: ${done.join(' | ')} -> ${p.hp} HP, Atk ${p.atk} Str ${p.str} Def ${p.dfn}`);
+    L.on && L(`t${rjust(t, 4)} ${tag}${p.name}: ${done.join(' | ')} -> ${p.hp} HP, Atk ${p.atk} Str ${p.str} Def ${p.dfn}`);
   }
   try_heart(p, t, L, tag);                        // shadow player back at 99 Magic: boost to 112 (no potion slot)
   _after_window(p, start, used, L, tag);
@@ -206,7 +206,7 @@ export function _after_window(p, t, used, L, tag) {
     p.catchup = true;
     p.pool.catchups = ga(p.pool, 'catchups', 0) + 1;
     if (L) {
-      L(`t${rjust(t, 4)} ${tag}${p.name}: window over before max stats (Atk ${p.atk} Str ${p.str}) - keeps potting while attacking`);
+      L.on && L(`t${rjust(t, 4)} ${tag}${p.name}: window over before max stats (Atk ${p.atk} Str ${p.str}) - keeps potting while attacking`);
     }
   }
 }
@@ -234,7 +234,7 @@ export function catchup(p, t, L = null, tag = '') {
   }
   p.sip_ready = t + 3;
   if (L) {
-    L(`t${rjust(t, 4)} ${tag}${p.name}: catch-up ${what} -> Atk ${p.atk} Str ${p.str}`);
+    L.on && L(`t${rjust(t, 4)} ${tag}${p.name}: catch-up ${what} -> Atk ${p.atk} Str ${p.str}`);
   }
 }
 
@@ -277,7 +277,7 @@ export function heal_other(p, team_players, t, L, clear) {
   clear(p);
   p.pool.heal_others += 1; p.pool.pneck_procs += 1;
   if (L) {
-    L(`t${rjust(t, 4)} ${p.name}: HEAL OTHER ${amt} -> ${tgt.name} (${tgt.hp} HP); phoenix necklace procs -> ${p.hp} HP, ` +
+    L.on && L(`t${rjust(t, 4)} ${p.name}: HEAL OTHER ${amt} -> ${tgt.name} (${tgt.hp} HP); phoenix necklace procs -> ${p.hp} HP, ` +
       `incoming damage cleared (${p.pneck} left)`);
   }
   return true;
@@ -295,7 +295,7 @@ export function redemption(p, L = null, t = null, why = '') {
     p.pool.redemptions = ga(p.pool, 'redemptions', 0) + 1;
     const rw = ga(p.pool, 'redemption_why', {}); rw[why] = dget(rw, why, 0) + 1; p.pool.redemption_why = rw;
     if (L) {
-      L(`t${rjust(t, 4)} ${p.name}: REDEMPTION procs${why ? (' (' + why + ')') : ''} ${old} -> ${p.hp} HP, prayer 0 - restore next`);
+      L.on && L(`t${rjust(t, 4)} ${p.name}: REDEMPTION procs${why ? (' (' + why + ')') : ''} ${old} -> ${p.hp} HP, prayer 0 - restore next`);
     }
     return true;
   }
@@ -311,12 +311,12 @@ export function prayer_restore(p, t, L = null) {
   if (p.pool.take('restore')) {
     drink_restore(p); p.prayer_down = false; p.sip_ready = t + 3;
     if (L) {
-      L(`t${rjust(t, 4)} ${p.name}: restore after redemption - protection prayers back`);
+      L.on && L(`t${rjust(t, 4)} ${p.name}: restore after redemption - protection prayers back`);
     }
     return true;
   }
   if (L) {
-    L(`t${rjust(t, 4)} ${p.name}: no restores left after redemption - no protection prayers`);
+    L.on && L(`t${rjust(t, 4)} ${p.name}: no restores left after redemption - no protection prayers`);
   }
   return false;
 }
@@ -332,7 +332,7 @@ export function check_death(p, phase, L = null, t = null) {
       const pd = p.pool.potential_deaths;
       pd[phase] = dget(pd, phase, 0) + 1;
       if (L) {
-        L(`t${rjust(t, 4)} ${p.name}: POTENTIAL DEATH (${p.hp} HP, ${phase}) - logged only, keeps going`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: POTENTIAL DEATH (${p.hp} HP, ${phase}) - logged only, keeps going`);
       }
       return;
     }
@@ -344,7 +344,7 @@ export function check_death(p, phase, L = null, t = null) {
       p.pool.deaths_no_scb[phase] = dget(p.pool.deaths_no_scb, phase, 0) + 1;
     }
     if (L) {
-      L(`t${rjust(t, 4)} ${p.name}: DIES (${p.hp} HP)${no_scb ? ' - team out of super combats, so no brewing' : ''}`);
+      L.on && L(`t${rjust(t, 4)} ${p.name}: DIES (${p.hp} HP)${no_scb ? ' - team out of super combats, so no brewing' : ''}`);
     }
   } else if (p.hp > 0) {
     p.below0 = false;

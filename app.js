@@ -54,6 +54,7 @@ $('src').addEventListener('click', async (e) => {
 $('team').addEventListener('change', async () => {
   if (source === 'build') await builder.show(team());
   if (tab === 'opt') optimizer.refresh();
+  prewarm();
 });
 $('file').addEventListener('change', async (e) => {
   $('err').textContent = '';
@@ -66,6 +67,7 @@ $('file').addEventListener('change', async (e) => {
     $('status').textContent = `Loaded ${f.name} (${tabs.join(', ')}). Pick a scale, then Run or open the Optimizer.`;
     $('toBuilder').disabled = false;
     if (tab === 'opt') optimizer.refresh();
+    prewarm();
   } catch (err) {
     $('status').textContent = `Couldn't read that file: ${err.message}`;
   }
@@ -91,6 +93,14 @@ $('tab-new').innerHTML = `<h3>What's new</h3>${CHANGES.map((c) => `<h4>v${c.vers
 // ---- run report (multithreaded via pool.js; one pool, workers reused between runs)
 const pool = new SimPool();
 let lastInfo = null;
+/** Warm the report workers for the current chart (in the background; any error is ignored here). */
+async function prewarm() {
+  try {
+    const wb = await getWorkbook(); if (!wb) return;
+    const c = await parse_chart(wb, team(), null, 'A');
+    if (filled(c)) pool.warm(c, team());
+  } catch { /* a chart problem shows up when the user presses Run */ }
+}
 export function runWorkers(cfgs, t, runs, seed, onProgress) {
   const p = pool.run(cfgs, t, runs, seed, { onProgress });
   lastInfo = p.info;

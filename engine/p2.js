@@ -110,7 +110,7 @@ export function run_p2(p1, team, rng, log = null) {
   for (const _p of p1['players']) {
     _p.pool.phase = 'P2'; _p.pool.scb_res = 0; _p.sc_at = null;
   }
-  const L = log != null ? ((s) => { log.push(s); }) : ((s) => {});
+  const L = log != null ? ((s) => { log.push(s); }) : ((s) => {}); L.on = log != null;   // log text is only built when a log is kept
   const players = p1['players'], pid = p1['pid'];
   const rank = new Map(pid.map((p, k) => [p, k]));
   const K = p1['end'] + 14;
@@ -118,7 +118,7 @@ export function run_p2(p1, team, rng, log = null) {
   const mx_hp = P2_HP[team], reds_at = P2_REDS[team];
   const flags = [];
   let vq = [];                       // [land, rank, sub, label, dmg, player]
-  L(`\n=== PHASE 2 === K = t${K} (first player attacks queued). Verzik HP ${hp}, reds below ${reds_at}`);
+  L.on && L(`\n=== PHASE 2 === K = t${K} (first player attacks queued). Verzik HP ${hp}, reds below ${reds_at}`);
   for (const p of players) {
     p.next_attack = K;
     p.thrall_next = null;
@@ -144,7 +144,7 @@ export function run_p2(p1, team, rng, log = null) {
       sp.fallback_on = true;
       sp.target_spec = 100;
       sp.ring = 'Lightbearer';
-      L(`t${rjust(K, 4)} P1 died after ${used} of ${planned} Dawn specs - ${sp.name} (shadow) camps Lightbearer to 100% in P2`
+      L.on && L(`t${rjust(K, 4)} P1 died after ${used} of ${planned} Dawn specs - ${sp.name} (shadow) camps Lightbearer to 100% in P2`
         + (truthy(sp.shadow_lb) ? ', shadowing while on LB' : ''));
     }
   }
@@ -164,7 +164,7 @@ export function run_p2(p1, team, rng, log = null) {
     crab['spec_paid'] = true;                    // blowpipe hit still in flight at the shield: +15 now
     const old = purple_dc.spec;
     purple_dc.spec = Math.min(100, purple_dc.spec + 15); purple_dc.gain_src = 'other'; purple_dc.purple_pending = false; purple_dc.purple_owed = false;
-    L(`t${rjust(t, 4)} purple crab pop (in flight) -> ${purple_dc.name} spec ${fx(old)}% -> ${fx(purple_dc.spec)}%`);
+    L.on && L(`t${rjust(t, 4)} purple crab pop (in flight) -> ${purple_dc.name} spec ${fx(old)}% -> ${fx(purple_dc.spec)}%`);
   };
   const flush_queued = () => {
     // everything queued before the shield still lands as damage
@@ -183,9 +183,9 @@ export function run_p2(p1, team, rng, log = null) {
       if (h[3].startsWith('Shadow')) {
         shadow_stats['late_dmg'] += h[4];
       }
-      L(`t${rjust(h[0], 4)} (queued before shield) ${h[5] ? (h[5].name + ': ') : ''}${h[3]} ${h[4]} -> Verzik ${hp}`);
+      L.on && L(`t${rjust(h[0], 4)} (queued before shield) ${h[5] ? (h[5].name + ': ') : ''}${h[3]} ${h[4]} -> Verzik ${hp}`);
     }
-    L(`     Proc depth: crossing hit ${hp_cross} (${fx(hp_cross / mx_hp * 100, 1)}%), at shield start ${hp_tick} ` +
+    L.on && L(`     Proc depth: crossing hit ${hp_cross} (${fx(hp_cross / mx_hp * 100, 1)}%), at shield start ${hp_tick} ` +
       `(${fx(hp_tick / mx_hp * 100, 1)}%), after queued damage ${hp} (${fx(hp / mx_hp * 100, 1)}%)`);
   };
 
@@ -197,7 +197,7 @@ export function run_p2(p1, team, rng, log = null) {
       Object.assign(_sim.CAMP, { now: t, eta: Math.trunc(est_reds) + 55 });
     }
     if (all(players.map((q) => q.dead))) {
-      L(`t${rjust(t, 4)} WIPE - everyone dead in P2`); break;
+      L.on && L(`t${rjust(t, 4)} WIPE - everyone dead in P2`); break;
     }
     const verz_attack = (t - (K + 1)) >= 0 && pymod(t - (K + 1), 4) === 0;
     // ---- Verzik step: cycle-start crab effects, then queue (damage lands), then attack
@@ -207,7 +207,7 @@ export function run_p2(p1, team, rng, log = null) {
         const old = hp;
         hp = Math.min(mx_hp, hp + h);
         crab_stats['healed'] += hp - old;
-        L(`t${rjust(t, 4)} PURPLE CRAB heals Verzik ${hp - old} -> ${hp}`);
+        L.on && L(`t${rjust(t, 4)} PURPLE CRAB heals Verzik ${hp - old} -> ${hp}`);
       }
       if (dget(crab, 'pop_dmg_tick') === t) {
         const d = rng.randint(65, 75);
@@ -221,7 +221,7 @@ export function run_p2(p1, team, rng, log = null) {
     if (shield_tick != null && t === shield_tick) {
       reds_tick = t;
       hp_tick = hp;
-      L(`t${rjust(t, 4)} HEALING PHASE STARTS (start of her cycle after the proc on t${proc_tick}). Verzik ${hp}`);
+      L.on && L(`t${rjust(t, 4)} HEALING PHASE STARTS (start of her cycle after the proc on t${proc_tick}). Verzik ${hp}`);
       // the proc was already queued, so anyone whose attack lines up with this cycle start still swings once more
       // (their hit is queued before the healing starts in her turn)
       for (const p of (LAST_SWING ? pid : [])) {
@@ -237,7 +237,7 @@ export function run_p2(p1, team, rng, log = null) {
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + sh_delay, rank.get(p), 0, `Shadow (${sh_why})`, d, p]);
           shadow_stats['casts'] += 1; shadow_stats['dmg'] += d;
-          L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - SHADOW [${sh_why}] -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - SHADOW [${sh_why}] -> ${d}`);
         } else {
           const [ch, mx] = scythe_roll(p);
           const sp = [];
@@ -246,7 +246,7 @@ export function run_p2(p1, team, rng, log = null) {
             sp.push(d);
             vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
           });
-          L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - Scythe -> [${sp.join(', ')}]`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - Scythe -> [${sp.join(', ')}]`);
         }
         p.next_attack = t + 5;
         p.last_swing = true;
@@ -265,12 +265,12 @@ export function run_p2(p1, team, rng, log = null) {
       if (label === 'Purple crab explosion') {
         crab_stats['dmg'] += dmg;
       }
-      L(`t${rjust(t, 4)} ${p ? p.name + ': ' : ''}${label} ${dmg} -> Verzik ${hp}`);
+      L.on && L(`t${rjust(t, 4)} ${p ? p.name + ': ' : ''}${label} ${dmg} -> Verzik ${hp}`);
       if (hp <= reds_at && proc_tick == null) {
         proc_tick = t;
         hp_cross = hp;
         shield_tick = t + pymod(-(t - (K + 1)), 4);          // start of her next cycle (this tick if it is one)
-        L(`t${rjust(t, 4)} AT/BELOW 35% on this hit: Verzik ${hp} (${fx(hp / mx_hp * 100, 1)}%). ` +
+        L.on && L(`t${rjust(t, 4)} AT/BELOW 35% on this hit: Verzik ${hp} (${fx(hp / mx_hp * 100, 1)}%). ` +
           `Healing phase starts at her next cycle, t${shield_tick}.`);
       }
     }
@@ -280,7 +280,7 @@ export function run_p2(p1, team, rng, log = null) {
     if (shield_tick != null && t === shield_tick) {
       reds_tick = t;
       hp_tick = hp;
-      L(`t${rjust(t, 4)} HEALING PHASE STARTS this tick (proc landed on the start of her cycle). Verzik ${hp}`);
+      L.on && L(`t${rjust(t, 4)} HEALING PHASE STARTS this tick (proc landed on the start of her cycle). Verzik ${hp}`);
       flush_queued();
       break;
     }
@@ -294,7 +294,7 @@ export function run_p2(p1, team, rng, log = null) {
         const dmg = rng.randint(20, 25);
         vq.push([t + vd, -1, 1, 'Lightning rebound', dmg, null]);
         victim.pending_hits = [...ga(victim, 'pending_hits', []), [t + 2, 7]];
-        L(`t${rjust(t, 4)} VERZIK attack #${n_att}: LIGHTNING -> ${victim.name} (7 on t${t + 2}); ` +
+        L.on && L(`t${rjust(t, 4)} VERZIK attack #${n_att}: LIGHTNING -> ${victim.name} (7 on t${t + 2}); ` +
           `rebound ${dmg} on Verzik t${t + vd}`);
       } else if ((crab == null || (!crab['alive'] && !truthy(dget(crab, 'pop_dmg_tick'))))
           && attacks_since_purple >= PURPLE_CD_ATTACKS && rng.random() < 1 / 3) {
@@ -332,18 +332,18 @@ export function run_p2(p1, team, rng, log = null) {
             adds.push(`${p.name} ${p.boak} boak`);
           }
         }
-        L(`t${rjust(t, 4)} VERZIK attack #${n_att}: PURPLE CRAB spawns. Movement: ${adds.join(', ')}`
+        L.on && L(`t${rjust(t, 4)} VERZIK attack #${n_att}: PURPLE CRAB spawns. Movement: ${adds.join(', ')}`
           + ((purple_dc && team !== 2) ? `; ${purple_dc.name} blowpipes from t${purple_dc.bp_from}` : '')
           + `; first heal t${t + 8}`);
         if (purple_dc && !crab['ignored'] && team === 2) {
           purple_dc.mode = 'purple_scythe';
         } else if (crab['ignored']) {
-          L(`t${rjust(t, 4)} purple #${crab_stats['spawned']} at ${fx(hp / mx_hp * 100, 1)}% (<= ${purple_dc.purple2_thr}%): left until the reds shield`);
+          L.on && L(`t${rjust(t, 4)} purple #${crab_stats['spawned']} at ${fx(hp / mx_hp * 100, 1)}% (<= ${purple_dc.purple2_thr}%): left until the reds shield`);
         }
       } else {
         regular += 1;
         attacks_since_purple += 1;
-        L(`t${rjust(t, 4)} VERZIK attack #${n_att}: regular`);
+        L.on && L(`t${rjust(t, 4)} VERZIK attack #${n_att}: regular`);
       }
     }
     // ---- players
@@ -354,7 +354,7 @@ export function run_p2(p1, team, rng, log = null) {
       for (const [lt, d] of ga(p, 'pending_hits', []).filter((x) => x[0] === t)) {
         p.hp -= d;
         supplies.check_death(p, 'P2', L, t);
-        L(`t${rjust(t, 4)} ${p.name}: lightning hits for ${d} -> ${p.hp} HP`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: lightning hits for ${d} -> ${p.hp} HP`);
       }
       p.pending_hits = ga(p, 'pending_hits', []).filter((x) => x[0] !== t);
       // spec regen
@@ -364,7 +364,7 @@ export function run_p2(p1, team, rng, log = null) {
           p.regen_timer = 0;
           const old = p.spec;
           p.spec = Math.min(100, p.spec + 10); p.gain_src = 'regen';
-          L(`t${rjust(t, 4)} ${p.name}: regen ${fx(old)}% -> ${fx(p.spec)}%`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: regen ${fx(old)}% -> ${fx(p.spec)}%`);
         }
       } else {
         p.regen_timer = 0;
@@ -374,7 +374,7 @@ export function run_p2(p1, team, rng, log = null) {
         p.ring = 'Ultor';
         p.regen_timer = 0;
         p.ring_swapped_at = t;
-        L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% >= target ${fx(Number(p.target_spec))}% -> swaps to Ultor ` +
+        L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% >= target ${fx(Number(p.target_spec))}% -> swaps to Ultor ` +
           `(regen timer reset, now 50t)`);
       }
       custom_surge(p, t, L); auto_surge(p, t, L);
@@ -392,13 +392,13 @@ export function run_p2(p1, team, rng, log = null) {
         const old = p.hp;
         supplies.drink_brew(p);
         p.sip_ready = t + 3; p.sc_at = t + 3;
-        L(`t${rjust(t, 4)} ${p.name}: brew ${old} -> ${p.hp} (super combat t${t + 3})`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: brew ${old} -> ${p.hp} (super combat t${t + 3})`);
       }
       supplies.catchup(p, t, L);                      // failsafe: still below max after a window - pot while attacking
       // attack
       if (t >= p.next_attack && p.boak_block.has(t)) {
         p.next_attack = t + 1;                          // moving for the purple (boak): can't attack this tick
-        L(`t${rjust(t, 4)} ${p.name}: ${p.boak} boak, can't attack -> +1t`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: ${p.boak} boak, can't attack -> +1t`);
       } else if (t >= p.next_attack && p.bp_from != null && t >= p.bp_from && crab && crab['alive']
           && !truthy(dget(crab, 'pop_at')) && p.mode !== 'blowpipe') {
         p.mode = 'blowpipe';                            // purple DC: blowpipe tick reached, off cooldown
@@ -416,7 +416,7 @@ export function run_p2(p1, team, rng, log = null) {
           if (p.ring === 'Lightbearer') {
             p.lb_p2 = ga(p, 'lb_p2', 0) + 1;
           }
-          L(`t${rjust(t, 4)} ${p.name}: SHADOW [${sh_why}] (acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + sh_delay}) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: SHADOW [${sh_why}] (acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + sh_delay}) -> ${d}`);
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
@@ -427,19 +427,19 @@ export function run_p2(p1, team, rng, log = null) {
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow (3:1)', d, p]);
           p.next_attack = t + 5;
           shadow_stats['casts'] += 1; shadow_stats['dmg'] += d;
-          L(`t${rjust(t, 4)} ${p.name}: SHADOW [3:1] (acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: SHADOW [3:1] (acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
         } else if (verz_attack && p.mode !== 'blowpipe') {
           p.next_attack = t + 1;
-          L(`t${rjust(t, 4)} ${p.name}: attack lines up with Verzik's attack -> +1t`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: attack lines up with Verzik's attack -> +1t`);
         } else if (p.mode === 'blowpipe') {
           const [ch] = blowpipe_chance(p);
           p.bp_shots += 1;
           crab_stats['bp_shots'] += 1;
           const ok = rng.random() < ch;
-          L(`t${rjust(t, 4)} ${p.name}: blowpipe at purple crab #${p.bp_shots} (acc ${fx(ch * 100, 1)}%) -> `
+          L.on && L(`t${rjust(t, 4)} ${p.name}: blowpipe at purple crab #${p.bp_shots} (acc ${fx(ch * 100, 1)}%) -> `
             + (ok ? `PASSES, pops on t${t + BP_DELAY}` : 'miss'));
           p.next_attack = t + 2;
           if (ok) {
@@ -453,7 +453,7 @@ export function run_p2(p1, team, rng, log = null) {
             }
             crab['pop_dmg_tick'] = nxt; crab['expl_t'] = nxt;
             crab_stats['pop_tick'] = t;
-            L(`t${rjust(t, 4)} purple crab won't heal again; explosion on her next cycle, t${nxt}`);
+            L.on && L(`t${rjust(t, 4)} purple crab won't heal again; explosion on her next cycle, t${nxt}`);
           }
         } else {
           const [ch, mx] = scythe_roll(p);
@@ -464,7 +464,7 @@ export function run_p2(p1, team, rng, log = null) {
             vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
           });
           p.next_attack = t + 5;
-          L(`t${rjust(t, 4)} ${p.name}: Scythe (acc ${fx(ch * 100, 1)}%, max ${mx}, ring ${p.ring}) -> [${splats.join(', ')}]`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe (acc ${fx(ch * 100, 1)}%, max ${mx}, ring ${p.ring}) -> [${splats.join(', ')}]`);
           if (p.ring === 'Lightbearer') {
             p.lb_p2 = ga(p, 'lb_p2', 0) + 1;
           }
@@ -473,7 +473,7 @@ export function run_p2(p1, team, rng, log = null) {
           }
           if (p.mode === 'purple_scythe') {
             p.mode = 'blowpipe';
-            L(`t${rjust(t, 4)} ${p.name}: last scythe before blowpiping the crab (blowpipe from t${p.next_attack})`);
+            L.on && L(`t${rjust(t, 4)} ${p.name}: last scythe before blowpiping the crab (blowpipe from t${p.next_attack})`);
           }
         }
       }
@@ -488,7 +488,7 @@ export function run_p2(p1, team, rng, log = null) {
       const nxt = dget(crab, 'expl_t', t);
       const old = purple_dc.spec;
       purple_dc.spec = Math.min(100, purple_dc.spec + 15); purple_dc.gain_src = 'other'; purple_dc.purple_pending = false; purple_dc.purple_owed = false;
-      L(`t${rjust(t, 4)} PURPLE CRAB POPS after ${purple_dc.bp_shots} blowpipe shot(s). Explosion t${nxt}. ` +
+      L.on && L(`t${rjust(t, 4)} PURPLE CRAB POPS after ${purple_dc.bp_shots} blowpipe shot(s). Explosion t${nxt}. ` +
         `${purple_dc.name} spec ${fx(old)}% -> ${fx(purple_dc.spec)}%`);
     }
     t += 1;

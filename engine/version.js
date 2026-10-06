@@ -1,6 +1,12 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.5.0';
+export const VERSION = '1.6.0';
 export const CHANGES = [
+  { version: '1.6.0', date: '2026-10-05', items: [
+    'Faster: the simulator runs about 1.3-1.5x faster per core (the detailed raid log is no longer built when nobody is reading it, and a per-tick chart lookup now happens once per raid). Results are exactly the same as before.',
+    'Uses every logical core by default (was cores minus one). Add ?threads=N to the address to use fewer.',
+    'Workers warm up in the background as soon as a chart is loaded, so the first run starts at full speed.',
+    'Optimizer run-time estimates re-measured for the faster engine.',
+  ] },
   { version: '1.5.0', date: '2026-10-05', items: [
     'Multithreading reworked: report runs are split into 2,000-raid chunks shared across reusable Web Workers (cores minus one, up to 12). The same seed now gives exactly the same results on any computer and any number of threads.',
     'Very large runs (hundreds of thousands to millions of raids) no longer fail when the results are combined.',

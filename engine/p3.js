@@ -227,7 +227,7 @@ export function _py_int_set_order(values) {
 
 
 export function run_p3(r_reds, cfgs, team, rng, log = null) {
-  const L = log != null ? (s) => log.push(s) : (s) => {};
+  const L = log != null ? (s) => log.push(s) : (s) => {}; L.on = log != null;   // log text is only built when a log is kept
   const players = r_reds['players'], pid = r_reds['pid'], Kp = r_reds['kill'];
   const rank = new Map(pid.map((p, k) => [p, k]));
   const duo = team === 2;
@@ -247,7 +247,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       if (gain) {
         const old = p.spec;
         p.spec = Math.min(100, p.spec + gain);
-        L(`t${rjust(Kp, 4)} ${p.name}: West/East DC +${gain}% -> ${fx(old)}% -> ${fx(p.spec)}%`);
+        L.on && L(`t${rjust(Kp, 4)} ${p.name}: West/East DC +${gain}% -> ${fx(old)}% -> ${fx(p.spec)}%`);
       }
     }
   }
@@ -300,7 +300,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
     return ph === 'P3 after yellows, before green' ? P3_BREW_AT_PRE_GREEN : P3_BREW_BELOW - 1;
   };
   st['start_snap'] = players.map((p) => p.snapshot());
-  L(`\n=== PHASE 3 === P2 died t${Kp}. Verzik ${hp}, 20% mark below ${mark20}, chally at <= ${chally_hp}. ` +
+  L.on && L(`\n=== PHASE 3 === P2 died t${Kp}. Verzik ${hp}, 20% mark below ${mark20}, chally at <= ${chally_hp}. ` +
     `Tank: ${tank.name}${ducktank ? ' (Ducktank)' : ' (standard tank)'}. P3 tick 1 = t${Kp + 5}; first attacks t${Kp + 6}, ` +
     `autos from t${Kp + 10} every 7`);
   const tick = (t) => t - Kp - 4;                      // chart tick
@@ -381,7 +381,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       V['at'] = t + 5;
       if (ev === 'yellow') V['y5'] = V['at'];
     }
-    L(`t${rjust(t, 4)} Verzik's cooldown -> 5; next ${ev} t${(V['at'] && V['at'] > t) ? V['at'] : t + 5}`);
+    L.on && L(`t${rjust(t, 4)} Verzik's cooldown -> 5; next ${ev} t${(V['at'] && V['at'] > t) ? V['at'] : t + 5}`);
   };
 
   let t = Kp + 1;
@@ -393,15 +393,15 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       const label = h[3], amt = h[4], p = h[5];
       if (kill !== null) {
         anim = 8;
-        L(`t${rjust(t, 4)} ${p.name}: ${label} ${amt} lands after the kill (overkill)`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: ${label} ${amt} lands after the kill (overkill)`);
         break;
       }
       hp -= amt;
-      L(`t${rjust(t, 4)} ${p.name}: ${label} ${amt} -> Verzik ${hp}`);
+      L.on && L(`t${rjust(t, 4)} ${p.name}: ${label} ${amt} -> Verzik ${hp}`);
       if (hp < mark20 && st['below20'] === null) {
         st['below20'] = t; st['below20_auto'] = autos; st['below20_attacker'] = p.name;
         st['below20_round'] = p.p3_n;
-        L(`t${rjust(t, 4)} *** BELOW 20% *** (${hp}) after ${autos} attacks; crossing hit from ${p.name} #${p.p3_n} (chart tick ${tick(t)})`);
+        L.on && L(`t${rjust(t, 4)} *** BELOW 20% *** (${hp}) after ${autos} attacks; crossing hit from ${p.name} #${p.p3_n} (chart tick ${tick(t)})`);
         tl.push([t, 'V', '20%']);
         on_proc(t);
         for (const q of players) {
@@ -446,18 +446,18 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           const na = Math.max(q.next_attack, ws);
           if (pymod(na - ref, 5)) {
             q.next_attack = na + pymod(ref - na, 5);
-            L(`t${rjust(t, 4)} ${q.name}: off the team's tick for webs -> next swing t${q.next_attack} (chart ${tick(q.next_attack)})`);
+            L.on && L(`t${rjust(t, 4)} ${q.name}: off the team's tick for webs -> next swing t${q.next_attack} (chart ${tick(q.next_attack)})`);
           }
         }
         if (V['cycle'] === 1) {
           st['webs_start'] = ws; st['webs_end'] = ws + WEBS_LEN - 1; st['drag'] = d;
         }
-        L(`t${rjust(t, 4)} Verzik moves to webs (drag ${d}): webs t${ws}-t${ws + WEBS_LEN - 1} (chart ${tick(ws)}-${tick(ws + WEBS_LEN - 1)})`);
+        L.on && L(`t${rjust(t, 4)} Verzik moves to webs (drag ${d}): webs t${ws}-t${ws + WEBS_LEN - 1} (chart ${tick(ws)}-${tick(ws + WEBS_LEN - 1)})`);
         tl.push([t, 'V', 'move']);
       } else if (ev === 'webs') {                     // last web tick
         const first = V['first_post'] || (t + POST_WEBS_GAP);
         V['ev'] = 'post'; V['n'] = 0; V['block'] = 4; V['at'] = first; V['first_post'] = null;
-        L(`t${rjust(t, 4)} webs end; her first attack after webs t${first}`);
+        L.on && L(`t${rjust(t, 4)} webs end; her first attack after webs t${first}`);
       } else if (ev === 'yellow') {
         V['invuln'] = [t + 1, t + YELLOW_LEN];
         if (st['yellow'] === null) {
@@ -473,7 +473,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         for (const q of supplies.by_hp(players)) {     // 14 invulnerable ticks: heal up, restore, super combat
           supplies.window(q, floordiv(YELLOW_LEN - 1, 3) + 1, L, t + 1, 'yellows ', { sharks: true, hp_target: 115 });
         }
-        L(`t${rjust(t, 4)} YELLOWS: invulnerable t${t + 1}-t${t + YELLOW_LEN} (chart ${tick(t + 1)}-${tick(t + YELLOW_LEN)}); ` +
+        L.on && L(`t${rjust(t, 4)} YELLOWS: invulnerable t${t + 1}-t${t + YELLOW_LEN} (chart ${tick(t + 1)}-${tick(t + YELLOW_LEN)}); ` +
           `next attack t${t + POST_YELLOW_GAP}`);
         tl.push([t + 1, 'V', 'Y']);
       } else {                                        // an attack: auto / post / autoY / green / auto9
@@ -489,7 +489,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           const tgt = rng.choice(alive_now);
           tgt.pending.push([t + GREEN_DELAY, 'green', { chain: [tgt], passes: alive_now.length }]);
           st['green'] += 1;
-          L(`t${rjust(t, 4)} VERZIK GREEN BALL -> ${tgt.name} takes ${GREEN_DMG} on t${t + GREEN_DELAY}; next attack t${t + GREEN_CD}`);
+          L.on && L(`t${rjust(t, 4)} VERZIK GREEN BALL -> ${tgt.name} takes ${GREEN_DMG} on t${t + GREEN_DELAY}; next attack t${t + GREEN_CD}`);
         } else {
           const style = rng.random() < 0.5 ? 'magic' : 'ranged';
           const parts = [];
@@ -505,7 +505,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
             p.pending.push([t + AUTO_DELAY, d]);
             parts.push(`${p.name} ${d}${off ? ' (off prayer)' : ''}`);
           }
-          L(`t${rjust(t, 4)} VERZIK ${ev} #${V['n'] + 1} (${style}, chart ${tick(t)}) lands t${t + AUTO_DELAY}: ` + parts.join(', '));
+          L.on && L(`t${rjust(t, 4)} VERZIK ${ev} #${V['n'] + 1} (${style}, chart ${tick(t)}) lands t${t + AUTO_DELAY}: ` + parts.join(', '));
         }
         schedule_after_attack(t);
         if (ev === 'auto' && V['ev'] === 'move') st['after9'] = t;
@@ -530,7 +530,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           const old = hp;
           hp = Math.min(mx, hp + 3 * lost);
           st['tornado_hits'] += 1;
-          L(`t${rjust(t, 4)} ${p.name}: TORNADO hit, loses ${lost} HP -> ${p.hp}; Verzik heals ${hp - old} -> ${hp}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: TORNADO hit, loses ${lost} HP -> ${p.hp}; Verzik heals ${hp - old} -> ${hp}`);
           if (!boosted) {
             boosted = true;
             atk_lvl = Math.floor(atk_lvl * 1.05);              // combat stats +5% (rounded down), not HP
@@ -538,7 +538,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
             P3_DEF[1] = (dl + 9) * (P3_SLASH + 64);
             P3_CRUSH = (dl + 9) * (70 + 64); P3_MAGIC = (dl + 9) * (100 + 64);
             st['tornado_boost'] = t;
-            L(`t${rjust(t, 4)} Verzik's combat stats +5% from the tornado: attack ${atk_lvl}, defence ${Math.floor(P3_DEF_LVL * 1.05)}`);
+            L.on && L(`t${rjust(t, 4)} Verzik's combat stats +5% from the tornado: attack ${atk_lvl}, defence ${Math.floor(P3_DEF_LVL * 1.05)}`);
           }
           continue;
         }
@@ -552,7 +552,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
             p.hp -= GREEN_PASS_DMG;
             st['green_passes'] = dget(st, 'green_passes', 0) + 1;
             p.pool.green_passes = ga(p.pool, 'green_passes', 0) + 1;
-            L(`t${rjust(t, 4)} ${p.name}: PASSES the green ball (would die) - takes ${GREEN_PASS_DMG} -> ${p.hp} HP; ` +
+            L.on && L(`t${rjust(t, 4)} ${p.name}: PASSES the green ball (would die) - takes ${GREEN_PASS_DMG} -> ${p.hp} HP; ` +
               `${nxt.name} takes it t${t + GREEN_DELAY} (${chain.concat([nxt]).map((q) => q.name).join(' > ')})`);
             if (p.pool.left['restore'] > 0) supplies.redemption(p, L, t, 'green ball pass');
             supplies.check_death(p, 'P3 green ball hit', L, t);
@@ -567,7 +567,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           }
           p.hp -= GREEN_DMG;
           if (!has(st, 'green_74')) st['green_74'] = t;   // first time the green ball's 74 actually lands
-          L(`t${rjust(t, 4)} ${p.name}: green ball ${GREEN_DMG} -> ${p.hp} HP (no vengeance)`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: green ball ${GREEN_DMG} -> ${p.hp} HP (no vengeance)`);
           if (p.pool.left['restore'] > 0) {              // prayed only under 84 HP (the only time it can proc), and only
             supplies.redemption(p, L, t, 'green ball');  // with a restore left - otherwise Piety/Zeal would be lost
           }
@@ -598,7 +598,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           }
           if (hp <= 0 && kill === null) kill = t;
         }
-        L(msg);
+        L.on && L(msg);
       }
       p.pending = p.pending.filter((x) => x[0] !== t);
       if (!p.veng_active && t - p.veng_cast >= 50) {
@@ -622,7 +622,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           supplies.drink_brew(p);
           p.sip_ready = t + 3; p.sc_at = t + 3;
           st['eats'] += 1;
-          L(`t${rjust(t, 4)} ${p.name}: ${ate ? 'shark + ' : ''}brew ${old} -> ${p.hp} HP (super combat t${t + 3})`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: ${ate ? 'shark + ' : ''}brew ${old} -> ${p.hp} HP (super combat t${t + 3})`);
         }
       }
       if (ga(p, 'sc_at', null) === t) {
@@ -641,7 +641,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           const old = p.hp;
           supplies.drink_brew(p); p.sip_ready = t + 3;
           p.pool.emergency_brews = ga(p.pool, 'emergency_brews', 0) + 1;
-          L(`t${rjust(t, 4)} ${p.name}: EMERGENCY brew (no super combat to follow) ${old} -> ${p.hp} HP, stats drop to Atk ${p.atk} Str ${p.str}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: EMERGENCY brew (no super combat to follow) ${old} -> ${p.hp} HP, stats drop to Atk ${p.atk} Str ${p.str}`);
         }
       }
       if (p.spec < 100) {
@@ -670,7 +670,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           const nic = (q) => q.spec >= 50;
           if (truthy(horn.try_horn(p, players, rank, 'p3', team, nic, L, t))) {
             st['horns'] += 1; st['webs_horn'] = dget(st, 'webs_horn', 0) + 1;
-            L(`t${rjust(t, 4)} ${p.name}: no halberd by their webs hit #${nth} -> horned after the crab spawn`);
+            L.on && L(`t${rjust(t, 4)} ${p.name}: no halberd by their webs hit #${nth} -> horned after the crab spawn`);
           }
         }
       }
@@ -695,12 +695,12 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       if (verz_now && t !== first_auto) {
         if (p === tank) {
           p.next_attack = t + 1;
-          L(`t${rjust(t, 4)} ${p.name} (tank): lines up with her attack -> +1t`);
+          L.on && L(`t${rjust(t, 4)} ${p.name} (tank): lines up with her attack -> +1t`);
           continue;
         }
         if (in_window && nt_sync) {
           p.next_attack = t + 1;                      // stay on the tank's tick (cheaper than a later scratch fix)
-          L(`t${rjust(t, 4)} ${p.name}: drops this tick to stay on the tank's tick`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: drops this tick to stay on the tank's tick`);
           continue;
         }
       }
@@ -710,7 +710,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       if (duo && p !== tank && V['cycle'] === 1 && V['ev'] === 'move' && st['below20'] === null &&
           V['cd'] === 7 && t === V['at'] - 2 && p.spec >= 30) {
         use = 'H'; V['drag3'] = true;
-        L(`t${rjust(t, 4)} ${p.name}: 30%+ before webs -> halberd, Verzik will drag 3 ticks`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: 30%+ before webs -> halberd, Verzik will drag 3 ticks`);
       // ---- tank's 13th swing: get back on the team's rhythm
       } else if (p === tank && !p.special_done && n === 13 && (V['ev'] === 'auto' || V['ev'] === 'move')) {
         p.special_done = true;
@@ -761,7 +761,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       if (use === 'F') {
         const old = p.hp; supplies.eat_shark(p); st['eats'] += 1;
         p.next_attack = t + 3;
-        L(`t${rjust(t, 4)} ${p.name} (tank): shark instead of the 3-tick hit ${old} -> ${p.hp} HP`);
+        L.on && L(`t${rjust(t, 4)} ${p.name} (tank): shark instead of the 3-tick hit ${old} -> ${p.hp} HP`);
       } else if (use === '3') {
         st['t3'] += 1;
         let ch, m, d;
@@ -781,7 +781,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), 0, '3-tick hit', d, p]);
         }
         p.next_attack = t + 3;
-        L(`t${rjust(t, 4)} ${p.name}: 3-TICK (${p.has3}) #${n} -> ${d}`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: 3-TICK (${p.has3}) #${n} -> ${d}`);
       } else if (use === 'S') {
         const [ch, m] = melee(p, SCY, P3_DEF[1]);
         const sp = [];
@@ -795,7 +795,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 5;
-        L(`t${rjust(t, 4)} ${p.name}: Scythe #${n} (chart ${tick(t)}) -> [${sp.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe #${n} (chart ${tick(t)}) -> [${sp.join(', ')}]`);
       } else if (use === 'X') {
         const [ch, m] = melee(p, CLAW, P3_DEF[1]);
         const ds = [];
@@ -805,7 +805,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         });
         p.next_attack = t + 4;
         st['scratches'] += 1;
-        L(`t${rjust(t, 4)} ${p.name}: claw scratch #${n} -> [${ds.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: claw scratch #${n} -> [${ds.join(', ')}]`);
       } else if (use === 'C') {
         p.spec -= 50;
         st['claws'] += 1;
@@ -815,7 +815,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 4;
-        L(`t${rjust(t, 4)} ${p.name}: CLAW SPEC #${n} (chart ${tick(t)}) -> [${hits.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: CLAW SPEC #${n} (chart ${tick(t)}) -> [${hits.join(', ')}]`);
       } else {
         p.spec -= 30;
         p.halb_done = true;
@@ -834,19 +834,19 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 7;
-        L(`t${rjust(t, 4)} ${p.name}: HALBERD SPEC #${n} (chart ${tick(t)}) -> [${hits.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: HALBERD SPEC #${n} (chart ${tick(t)}) -> [${hits.join(', ')}]`);
       }
       if (p.resync_after) {
         p.resync_after = false;
         p.next_attack = sync(p.next_attack, Kp);
-        L(`t${rjust(t, 4)} ${p.name} (tank): back on the team's rhythm on t${p.next_attack} (chart ${tick(p.next_attack)})`);
+        L.on && L(`t${rjust(t, 4)} ${p.name} (tank): back on the team's rhythm on t${p.next_attack} (chart ${tick(p.next_attack)})`);
       }
       p.p3_n = n;
       p.last_atk_t = t;
       tl.push([t, p.name, use]);
       if (p === tank && n === 9 && ducktank) {
         p.next_attack += 1;
-        L(`t${rjust(t, 4)} ${p.name} (tank): 9th swing -> +1t (Ducktank)`);
+        L.on && L(`t${rjust(t, 4)} ${p.name} (tank): 9th swing -> +1t (Ducktank)`);
       }
       if (p.thrall_next === null) {
         p.thrall_next = t + rng.randint(1, 2);
@@ -858,7 +858,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
     if (kill !== null) break;
     if (all(players.map((q) => q.dead))) {
       st['wipe'] = t;
-      L(duo ? `t${rjust(t, 4)} WIPE - both players dead` : `t${rjust(t, 4)} WIPE - everyone dead`);
+      L.on && L(duo ? `t${rjust(t, 4)} WIPE - both players dead` : `t${rjust(t, 4)} WIPE - everyone dead`);
       break;
     }
     t += 1;

@@ -105,7 +105,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
   for (const _p of p2['players']) {
     _p.pool.phase = 'reds'; _p.pool.scb_res = 0; _p.sc_at = null;
   }
-  const L = log != null ? ((s) => log.push(s)) : ((s) => null);
+  const L = log != null ? ((s) => log.push(s)) : ((s) => null); L.on = log != null;   // log text is only built when a log is kept
   const players = p2['players'], pid = p2['pid'], P = p2['reds_tick'];
   const rank = new Map(pid.map((p, k) => [p, k]));
   let hp = p2['hp'];
@@ -116,7 +116,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     bounce: false, bounced: null, chancers: [], skippers: [], zcb: 0, ruby: 0, ruby_dmg: 0, zcb_dmg: 0,
     blood_heals: 0, blood_total: 0, shadow: 0, shadow_dmg: 0, horns: 0, horn_hits: 0, crab_heal: 0, claws: 0, claw_dmg: 0, crab_left: null,
   };
-  L(`\n=== RED CRABS === proc t${P} (r0). Verzik ${hp} (${fx(hp / mx_hp * 100, 1)}%). Shield r0-r10, `
+  L.on && L(`\n=== RED CRABS === proc t${P} (r0). Verzik ${hp} (${fx(hp / mx_hp * 100, 1)}%). Shield r0-r10, `
     + `her attacks r12-r36, crab heal r40, fail r44 (t${P + FAIL_R}). Crabs ${crab_hp0} HP each`);
   players.forEach((p, i) => {
     p.red_crab = dget(cfgs[i], 'redCrab') || dget(DEFAULT_CRABS, team, Array(team).fill('West'))[i];
@@ -163,7 +163,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     pdc.crab_done = true;
     pdc.reds_bp = pend == null;
     st['purple_in_reds'] = true;
-    L(`     PURPLE CRAB alive at the shield: ${pdc.name} `
+    L.on && L(`     PURPLE CRAB alive at the shield: ${pdc.name} `
       + (truthy(pend) ? `already blowpiped it (pops t${pend})` : 'blowpipes it from r0 (skips the red crab swing)'));
   }
   let pop_spec_at = pc ? pc['pop_at'] : null;
@@ -180,7 +180,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       if (kind.startsWith('crab:')) {
         const side = kind.slice(5);
         crabs[side] = Math.max(0, crabs[side] - amt);
-        L(`t${rjust(t, 4)} r${r} ${p.name}: ${label} on ${side} crab ${amt} -> crab ${crabs[side]}`);
+        L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ${label} on ${side} crab ${amt} -> crab ${crabs[side]}`);
         continue;
       }
       if (kind === 'ruby') {
@@ -197,7 +197,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       if (label.startsWith('ZCB')) {
         st['zcb_dmg'] += amt;
       }
-      L(`t${rjust(t, 4)} r${r} ${p.name}: ${label} ${amt} -> Verzik ${hp}`);
+      L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ${label} ${amt} -> Verzik ${hp}`);
       if (hp <= 0 && kill == null) {
         kill = t;
       }
@@ -208,18 +208,18 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       hp = Math.min(mx_hp, hp + heal);
       st['crab_heal'] = hp - old;
       st['crab_left'] = { ...crabs };
-      L(`t${rjust(t, 4)} r${r} crabs popped on r40, heal lands after player damage: by crabs' HP (West ${crabs['West']}, East ${crabs['East']}) `
+      L.on && L(`t${rjust(t, 4)} r${r} crabs popped on r40, heal lands after player damage: by crabs' HP (West ${crabs['West']}, East ${crabs['East']}) `
         + `+${hp - old} -> ${hp}`);
     }
     if (pop_spec_at != null && pop_spec_at === t) {
       pop_spec_at = null;
       const old = pdc.spec; pdc.spec = Math.min(100, pdc.spec + 15); pdc.gain_src = 'other'; pdc.purple_pending = false;
-      L(`t${rjust(t, 4)} r${r} PURPLE CRAB POPS -> ${pdc.name} spec ${fx(old)}% -> ${fx(pdc.spec)}% (explosion on her next cycle)`);
+      L.on && L(`t${rjust(t, 4)} r${r} PURPLE CRAB POPS -> ${pdc.name} spec ${fx(old)}% -> ${fx(pdc.spec)}% (explosion on her next cycle)`);
     }
     if (pc && r >= 12 && (r - 12) % 4 === 0 && kill == null) {
       if (pc['expl_due']) {
         const d = rng.randint(65, 75); hp -= d; st['purple_expl'] = d;
-        L(`t${rjust(t, 4)} r${r} purple crab explosion ${d} -> Verzik ${hp}`);
+        L.on && L(`t${rjust(t, 4)} r${r} purple crab explosion ${d} -> Verzik ${hp}`);
         pc = null;
         if (hp <= 0) {
           kill = t;
@@ -227,11 +227,11 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       } else if (pc['alive']) {
         const h_ = rng.randint(9, 11); const old = hp; hp = Math.min(mx_hp, hp + h_);
         st['purple_heal'] = dget(st, 'purple_heal', 0) + hp - old;
-        L(`t${rjust(t, 4)} r${r} purple crab heals Verzik ${hp - old} -> ${hp}`);
+        L.on && L(`t${rjust(t, 4)} r${r} purple crab heals Verzik ${hp - old} -> ${hp}`);
       }
     }
     if (kill != null) {
-      L(`t${rjust(kill, 4)} r${kill - P} VERZIK P2 HP 0 (success, ${P + FAIL_R - kill - 1} ticks to spare)`);
+      L.on && L(`t${rjust(kill, 4)} r${kill - P} VERZIK P2 HP 0 (success, ${P + FAIL_R - kill - 1} ticks to spare)`);
       break;
     }
     const verz = VERZ_ATTACKS.includes(r);
@@ -260,7 +260,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
         if (at_risk.length && (at_risk.length === alive.length || rng.random() < 0.5)) {
           bounced = rng.choice(at_risk);
         }
-        L(`t${rjust(t, 4)} r${r} VERZIK attack #2 (bounce chance): in range ${st['chancers'].length ? pylist(st['chancers']) : 'nobody'}`
+        L.on && L(`t${rjust(t, 4)} r${r} VERZIK attack #2 (bounce chance): in range ${st['chancers'].length ? pylist(st['chancers']) : 'nobody'}`
           + (st['skippers'].length ? `, out ${pylist(st['skippers'])}` : '') + ' -> '
           + (bounced ? `BOUNCES ${bounced.name}` : 'no bounce'));
       }
@@ -276,17 +276,17 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           hp = Math.min(mx_hp, hp + h);
           st['blood_heals'] += 1;
           st['blood_total'] += hp - old;
-          L(`t${rjust(t, 4)} r${r} VERZIK attack #${n_att}: blood heal +${hp - old} -> ${hp}`);
+          L.on && L(`t${rjust(t, 4)} r${r} VERZIK attack #${n_att}: blood heal +${hp - old} -> ${hp}`);
         } else if (since_ltg < 4) {
           since_ltg += 1;                                   // plain attack: counts toward her lightning
-          L(`t${rjust(t, 4)} r${r} VERZIK attack #${n_att}: plain attack`);
+          L.on && L(`t${rjust(t, 4)} r${r} VERZIK attack #${n_att}: plain attack`);
         } else {                                            // 5th plain attack since the last: lightning
           since_ltg = 0;
           const vd = rng.random() < 1 / team ? 8 : 5;
           const d = rng.randint(20, 25);
           vq.push([t + vd, -1, 1, 'Lightning rebound', d, players[0], 'ltg']);
           st['lightning'] = dget(st, 'lightning', 0) + 1;
-          L(`t${rjust(t, 4)} r${r} VERZIK attack #${n_att}: LIGHTNING (rebound ${d} lands t${t + vd})`);
+          L.on && L(`t${rjust(t, 4)} r${r} VERZIK attack #${n_att}: LIGHTNING (rebound ${d} lands t${t + vd})`);
         }
       }
     }
@@ -302,7 +302,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           p.regen_timer = 0;
           const old = p.spec;
           p.spec = Math.min(100, p.spec + 10); p.gain_src = 'regen';
-          L(`t${rjust(t, 4)} r${r} ${p.name}: regen ${fx(old)}% -> ${fx(p.spec)}%`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: regen ${fx(old)}% -> ${fx(p.spec)}%`);
         }
       } else {
         p.regen_timer = 0;
@@ -310,14 +310,14 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       custom_surge(p, t, L, `r${r} `); auto_surge(p, t, L, `r${r} `);
       if (swap_due(p)) {
         p.ring = 'Ultor'; p.regen_timer = 0; p.ring_swapped_at = t;
-        L(`t${rjust(t, 4)} r${r} ${p.name}: spec ${fx(p.spec)}% >= target -> swaps to Ultor`);
+        L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: spec ${fx(p.spec)}% >= target -> swaps to Ultor`);
       }
       if (pc && p === pdc && ga(p, 'reds_bp', false)) {
         if (t >= p.next_attack) {
           const [ch] = blowpipe_chance(p);
           const ok = rng.random() < ch;
           p.next_attack = t + 2;
-          L(`t${rjust(t, 4)} r${r} ${p.name}: blowpipe at purple crab (acc ${fx(ch * 100, 1)}%) -> `
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: blowpipe at purple crab (acc ${fx(ch * 100, 1)}%) -> `
             + (ok ? `PASSES, pops t${t + BP_DELAY}` : 'miss'));
           if (ok) {
             p.reds_bp = false; pc['pop_at'] = t + BP_DELAY; pop_spec_at = t + BP_DELAY;
@@ -335,7 +335,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
             vq.push([t + 2, rank.get(p), 0, 'Blowpipe', d, p, 'crab:' + p.red_crab]);
             p.next_attack = t + 2;
-            L(`t${rjust(t, 4)} r${r} ${p.name}: Blowpipe on ${p.red_crab} crab -> ${d}`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Blowpipe on ${p.red_crab} crab -> ${d}`);
             shield_sips(p, t, r, L);
           } else if (r <= SHIELD - 5) {
             const [ch, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL);
@@ -344,9 +344,9 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
               vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p, 'crab:' + p.red_crab]);
             });
             p.next_attack = t + 5;
-            L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe on ${p.red_crab} crab (acc ${fx(ch * 100, 1)}%, max ${mx})`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe on ${p.red_crab} crab (acc ${fx(ch * 100, 1)}%, max ${mx})`);
           } else {
-            L(`t${rjust(t, 4)} r${r} ${p.name}: too late for a crab swing`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: too late for a crab swing`);
           }
           p.crab_done = true;
         }
@@ -360,7 +360,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
         p.next_attack = p === pdc ? Math.max(t, p.next_attack) : t;                           // everyone hits Verzik on the first tick
         if (ga(p, 'shadow', false) && p.spec < 100) {
           p.sh_plan = p.spec >= 50 ? 'claw_first' : 'shadow16';
-          L(`t${rjust(t, 4)} r${r} ${p.name}: shadow player on ${fx(p.spec)}% -> `
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: shadow player on ${fx(p.spec)}% -> `
             + (p.sh_plan === 'claw_first' ? 'claw > scythe > shadow > scythes' : 'scythe > shadow (r16) > scythes, one claw by r31'));
         }
       }
@@ -380,7 +380,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
         } else if (r === BOUNCE_R && n === 2) {
           if (p.skip16) {
             p.next_attack = t + 1;
-            L(`t${rjust(t, 4)} r${r} ${p.name}: has spec for 2 claws in attacks 3-6 -> skips the bounce chance (+1t)`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: has spec for 2 claws in attacks 3-6 -> skips the bounce chance (+1t)`);
             continue;
           }
         } else if (verz && !p.zcb_due && p.sh_plan === 'claw_first' && !p.sh_col_done && p.reds_claws >= 1) {
@@ -390,14 +390,14 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
           st['shadow'] += 1; st['shadow_dmg'] += d;
           p.next_attack = t + 5; p.reds_n = n;
-          L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow) -> ${d}`);
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
           continue;
         } else if (verz && !p.zcb_due) {
           p.next_attack = t + 1;
-          L(`t${rjust(t, 4)} r${r} ${p.name}: attack lines up with Verzik's attack -> +1t`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: attack lines up with Verzik's attack -> +1t`);
           continue;
         }
         if ((p.zcb_due && ga(p, 'shadow', false)) || (r === BOUNCE_R && n === 2 && p.dist16)) {
@@ -408,7 +408,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
           st['shadow'] += 1; st['shadow_dmg'] += d;
           p.next_attack = t + 5;
-          L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (${why}, acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (${why}, acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
         } else if (p.zcb_due) {
           const [ch, mx] = zcb_auto(p);
           p.zcb_due = false;
@@ -418,11 +418,11 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             p.hp -= floordiv(p.hp, 10);
             supplies.check_death(p, 'reds', L, t);
             vq.push([t + 3, rank.get(p), 0, 'ZCB ruby proc', 0, p, 'ruby']);
-            L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced) -> RUBY PROC (22% of current HP, cap 110)`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced) -> RUBY PROC (22% of current HP, cap 110)`);
           } else {
             const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
             vq.push([t + 3, rank.get(p), 0, 'ZCB auto', d, p, 'dmg']);
-            L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced, acc ${fx(ch * 100, 1)}%) -> ${d}`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced, acc ${fx(ch * 100, 1)}%) -> ${d}`);
           }
           p.next_attack = t + 5;
         } else if (p.spec >= 50 && (
@@ -438,7 +438,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
           });
           p.next_attack = t + 4;
-          L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, `
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, `
             + `max ${mx}) -> ${pylist(hits)}`);
         } else if (r === 40 && p.spec >= 30 && !ga(p, 'horn_p2', false) && r40_halberd_ok(hp, team, cfgs)) {
           const old = p.spec; p.spec -= 30;
@@ -450,7 +450,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           });
           p.next_attack = t + 7;
           st['halb'] = dget(st, 'halb', 0) + 1;
-          L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r40 (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r40 (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
         } else {
           const [ch, mx] = scythe_roll(p);
           const splats = [];
@@ -464,20 +464,20 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           if (buffed) {
             st['horn_hits'] += 1; p.horn_buff = null;
           }
-          L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe #${n} (acc ${fx(ch * 100, 1)}%, max ${mx}`
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe #${n} (acc ${fx(ch * 100, 1)}%, max ${mx}`
             + `${buffed ? ', HORN: 1st hit guaranteed' : ''}) -> ${pylist(splats)}`);
         }
         p.reds_n = n;
         if (r === BOUNCE_R && ga(p, 'was_bounced', false) && n === 2) {
           if (ga(p, 'shadow', false)) {
             p.zcb_due = true;
-            L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - shadow next (t${p.next_attack})`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - shadow next (t${p.next_attack})`);
           } else if (p.bzcb) {
             p.zcb_due = true;
-            L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - ZCB auto next (t${p.next_attack})`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - ZCB auto next (t${p.next_attack})`);
           } else {
             p.next_attack += 4;
-            L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - +4t, back on t${p.next_attack}`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - +4t, back on t${p.next_attack}`);
           }
         }
         if (p.thrall_next == null) {

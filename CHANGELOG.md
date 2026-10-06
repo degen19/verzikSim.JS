@@ -2,6 +2,12 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.6.0 - 2026-10-05
+- Engine ~1.3-1.5x faster per core with bit-for-bit identical results: log text is only built when a log is being kept (`L.on && L(...)`), and P1's "last charted tick" is computed once per raid instead of every tick.
+- Default threads: every logical core (max 32); `?threads=N` / `--threads N` to override.
+- Report workers are warmed up in the background when a chart loads.
+- Optimizer speed estimates reset (stored measurements predate the faster engine).
+
 ## v1.5.0 - 2026-10-05
 - Multithreading: report runs split into 2,000-raid chunks across a reusable Web Worker pool (cores - 1, max 12). Each chunk has its own seeded random stream, so a given seed gives identical results on any machine / thread count (the simulation logic is unchanged).
 - Fixed: merging very large runs (100k+ raids per worker) overflowed the call stack.

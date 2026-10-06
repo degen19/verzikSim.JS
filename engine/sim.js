@@ -91,7 +91,7 @@ export function auto_surge(p, t, L, tag = '') {
   p.spec = Math.min(100, p.spec + 25); p.gain_src = 'other';
   p.surge_ready = t + SURGE_CD;
   p.sip_ready = t + 3;
-  L(`t${rjust(t, 4)} ${tag}${p.name}: surge (cooldown up) ${fx(old)}% -> ${fx(p.spec)}%`);
+  L.on && L(`t${rjust(t, 4)} ${tag}${p.name}: surge (cooldown up) ${fx(old)}% -> ${fx(p.spec)}%`);
   return true;
 }
 
@@ -105,7 +105,7 @@ export function custom_surge(p, t, L, tag = '') {
   p.spec = Math.min(100, p.spec + 25); p.gain_src = 'other';
   p.surge_ready = t + SURGE_CD;
   p.sip_ready = t + 3;
-  L(`t${rjust(t, 4)} ${tag}${p.name}: surge (custom timing ${fmt(p.custom_tick)}) ${fx(old)}% -> ${fx(p.spec)}%`);
+  L.on && L(`t${rjust(t, 4)} ${tag}${p.name}: surge (custom timing ${fmt(p.custom_tick)}) ${fx(old)}% -> ${fx(p.spec)}%`);
   return true;
 }
 
@@ -532,7 +532,7 @@ export function trio_shadow_alert(cfgs) {
 
 
 export function run_p1(cfgs, team, rng, log = null) {
-  const L = log != null ? ((s) => log.push(s)) : ((s) => null);
+  const L = log != null ? ((s) => log.push(s)) : ((s) => null); L.on = log != null;   // log text is only built when a log is kept
   const players = cfgs.map((c, i) => new Player(i + 1, c));
   const brew_below = team === 2 ? DUO_P1_BREW_BELOW : BREW_BELOW;     // P1 brew threshold (duo: 75)
   const pool = new supplies.Pool(cfgs, team);
@@ -554,8 +554,8 @@ export function run_p1(cfgs, team, rng, log = null) {
   const flags = [];
   const snaps = {};
   snaps['Before P1'] = players.map((p) => p.snapshot());
-  L(`PID order this raid: ${pid.map((p) => p.name).join(', ')}`);
-  L(`Verzik P1 HP ${hp}`);
+  L.on && L(`PID order this raid: ${pid.map((p) => p.name).join(', ')}`);
+  L.on && L(`Verzik P1 HP ${hp}`);
   const rank = new Map(pid.map((p, k) => [p, k]));
   let t = 0;
   let kill_tick = null;
@@ -569,7 +569,7 @@ export function run_p1(cfgs, team, rng, log = null) {
       const [, , p, dmg, cap, label] = h;
       if (kill_tick != null) {
         anim = 4;
-        L(`t${rjust(t, 3)} ${p.name}: ${label} lands after kill (overkill)`);
+        L.on && L(`t${rjust(t, 3)} ${p.name}: ${label} lands after kill (overkill)`);
         break;
       }
       let ctr = null;
@@ -586,10 +586,10 @@ export function run_p1(cfgs, team, rng, log = null) {
         if (heal && p.hp < p.base) {
           const old = p.hp;
           p.hp = Math.min(p.base, p.hp + heal);
-          L(`t${rjust(t, 3)} ${p.name}: blood fury heals ${p.hp - old} -> ${p.hp} HP`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: blood fury heals ${p.hp - old} -> ${p.hp} HP`);
         }
       }
-      L(`t${rjust(t, 3)} ${p.name}: ${label} lands ${final}` + (cap != null ? ` (roll ${dmg}, counter ${ctr})` : '')
+      L.on && L(`t${rjust(t, 3)} ${p.name}: ${label} lands ${final}` + (cap != null ? ` (roll ${dmg}, counter ${ctr})` : '')
         + ` -> Verzik ${Math.max(hp, 0)}`);
       if (hp <= 0) kill_tick = t;
     }
@@ -612,7 +612,7 @@ export function run_p1(cfgs, team, rng, log = null) {
         pq.push([t + AUTO_DELAY, p, d]);
         parts.push(`${p.name} ${d}`);
       }
-      L(`t${rjust(t, 3)} VERZIK auto #${n} queued (lands t${t + AUTO_DELAY}): ` + parts.join(', '));
+      L.on && L(`t${rjust(t, 3)} VERZIK auto #${n} queued (lands t${t + AUTO_DELAY}): ` + parts.join(', '));
     }
     // ---- players, PID order
     for (const p of pid) {
@@ -620,13 +620,13 @@ export function run_p1(cfgs, team, rng, log = null) {
       for (const h of pq.filter((h) => h[0] === t && h[1] === p)) {
         const before = p.hp;
         p.hp -= h[2];
-        L(`t${rjust(t, 3)} ${p.name}: takes ${h[2]} from Verzik -> ${p.hp} HP`);
+        L.on && L(`t${rjust(t, 3)} ${p.name}: takes ${h[2]} from Verzik -> ${p.hp} HP`);
         // phoenix necklace flicked on for the landing tick when at 70-88 HP (procs at 1-19: +29); no Heal Other in P1
         const flick = 70 <= before && before <= 88 && (ga(p, 'pneck_p1', false) || team !== 2);   // duo: only with 'Pneck on P1' ticked
         if (p.pneck > 0 && flick && 0 < p.hp && p.hp <= supplies.PNECK_AT) {
           p.pneck -= 1; p.hp += supplies.PNECK_HEAL;
           p.pool.pneck_procs += 1; p.pool.pneck_p1 = ga(p.pool, 'pneck_p1', 0) + 1;
-          L(`t${rjust(t, 3)} ${p.name}: phoenix necklace (flicked on at ${before} HP) procs -> ${p.hp} HP (${p.pneck} left)`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: phoenix necklace (flicked on at ${before} HP) procs -> ${p.hp} HP (${p.pneck} left)`);
         }
         if (team === 2 && p.hp > 0) {
           let na = next_auto(t);
@@ -637,7 +637,7 @@ export function run_p1(cfgs, team, rng, log = null) {
             if (p.hp < TANK_HP) {
               p.avoid = new Set([...ga(p, 'avoid', new Set()), na]);
               p.blocked = new Set([...ga(p, 'blocked', new Set()), ...range(na - 3, na + 4)]);
-              L(`t${rjust(t, 3)} ${p.name}: ${p.hp} HP can't tank the next auto - runs from it (no attacks t${na - 3}-t${na + 3})`);
+              L.on && L(`t${rjust(t, 3)} ${p.name}: ${p.hp} HP can't tank the next auto - runs from it (no attacks t${na - 3}-t${na + 3})`);
             }
           } else {
             // duo non-shadow player, with an Ayak tick before the next auto (and sharks left):
@@ -655,7 +655,7 @@ export function run_p1(cfgs, team, rng, log = null) {
                 'none': 'no brews until the next auto (can tank it)',
                 'prep': `brews up to 35+, then holds for the shark + brew on the Ayak tick t${at}`,
               };
-              L(`t${rjust(t, 3)} ${p.name}: ${p.hp} HP - ` + dget(msg, p.hold[1], `holds brews until the next auto ` +
+              L.on && L(`t${rjust(t, 3)} ${p.name}: ${p.hp} HP - ` + dget(msg, p.hold[1], `holds brews until the next auto ` +
                 `(plan: ${p.hold[1]} on the Ayak tick t${at})`));
             }
           }
@@ -664,7 +664,7 @@ export function run_p1(cfgs, team, rng, log = null) {
       pq = pq.filter((h) => !(h[0] === t && h[1] === p));
       if (p.amulet_mode === 'Both' && p.amulet === 'Rancour' && p.bf_hp && p.hp < p.bf_hp) {
         p.amulet = 'Blood fury';
-        L(`t${rjust(t, 3)} ${p.name}: HP ${p.hp} < ${p.bf_hp}, swaps to blood fury`);
+        L.on && L(`t${rjust(t, 3)} ${p.name}: HP ${p.hp} < ${p.bf_hp}, swaps to blood fury`);
       }
       supplies.check_death(p, 'P1', L, t);
       // timers: spec regen
@@ -674,7 +674,7 @@ export function run_p1(cfgs, team, rng, log = null) {
           p.regen_timer = 0;
           const old = p.spec;
           p.spec = Math.min(100, p.spec + 10); p.gain_src = 'regen';
-          L(`t${rjust(t, 3)} ${p.name}: natural regen ${fx(old)}% -> ${fx(p.spec)}%`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: natural regen ${fx(old)}% -> ${fx(p.spec)}%`);
         }
       } else {
         p.regen_timer = 0;
@@ -685,16 +685,19 @@ export function run_p1(cfgs, team, rng, log = null) {
         p.thrall_next = t + 4;
       }
       let act = act_at(p, t);
-      const akeys = intKeys(p.actions);
-      if (act == null && akeys.length && t > Math.max(...akeys) && t >= p.next_attack) {
+      if (p.last_action_tick === undefined) {                 // chart never changes during a raid: find its last tick once
+        const akeys = intKeys(p.actions);
+        p.last_action_tick = akeys.length ? Math.max(...akeys) : null;
+      }
+      if (act == null && p.last_action_tick !== null && t > p.last_action_tick && t >= p.next_attack) {
         act = 'S';   // chart finished: keep scything off cooldown
       }
       if (team === 2 && has(ga(p, 'blocked', []), t)) {
-        if (act != null && !['P', 'X'].includes(act)) L(`t${rjust(t, 3)} ${p.name}: running from the auto - skips ${act}`);
+        if (act != null && !['P', 'X'].includes(act)) L.on && L(`t${rjust(t, 3)} ${p.name}: running from the auto - skips ${act}`);
         act = null;
         if (p.hp + 20 <= 99 && t >= ga(p, 'food_ready', 0) && p.pool.take('shark')) {
           const old = p.hp; p.hp = Math.min(p.base, p.hp + 20); p.food_ready = t + 3;
-          L(`t${rjust(t, 3)} ${p.name}: shark while running ${old} -> ${p.hp} HP`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: shark while running ${old} -> ${p.hp} HP`);
         }
       }
       let hold = ga(p, 'hold', null);
@@ -710,11 +713,11 @@ export function run_p1(cfgs, team, rng, log = null) {
         if (!p.shadow && want_brew && t >= p.sip_ready && p.pool.take('brew')) {
           supplies.drink_brew(p); p.sip_ready = t + 3; combo = ' + brew';
         }
-        L(`t${rjust(t, 3)} ${p.name}: ${old} HP on an Ayak tick - shark${combo} instead -> ${p.hp} (Atk ${p.atk} Str ${p.str})`);
+        L.on && L(`t${rjust(t, 3)} ${p.name}: ${old} HP on an Ayak tick - shark${combo} instead -> ${p.hp} (Atk ${p.atk} Str ${p.str})`);
         act = null;
       }
       if (has(WEAPONS, act) && act !== 'S' && p.dawn_thr && hp <= P1_HP[team] * p.dawn_thr / 100) {
-        L(`t${rjust(t, 3)} ${p.name}: Verzik at ${hp} HP (<= ${p.dawn_thr}%) - scythe instead of ${act}`);
+        L.on && L(`t${rjust(t, 3)} ${p.name}: Verzik at ${hp} HP (<= ${p.dawn_thr}%) - scythe instead of ${act}`);
         act = 'S';                                       // at/below the Dawn threshold every attack is a scythe
       }
       // (no Heal Other in P1 - only the phoenix necklace flick on autos at 70-88 HP)
@@ -735,7 +738,7 @@ export function run_p1(cfgs, team, rng, log = null) {
           const late = t - p.surge_pending;
           if (late) flags.push(`t${t}: ${p.name} surge ${late}t late (chart t${p.surge_pending})`);
           p.surge_pending = null;
-          L(`t${rjust(t, 3)} ${p.name}: surge ${fx(old)}% -> ${fx(p.spec)}%` + (late ? ` (${late}t late)` : ''));
+          L.on && L(`t${rjust(t, 3)} ${p.name}: surge ${fx(old)}% -> ${fx(p.spec)}%` + (late ? ` (${late}t late)` : ''));
         }
       }
       const surge_soon = p.surge_pending != null || [1, 2].some((k) => act_at(p, t + k) === 'P' && t + k >= p.surge_ready);
@@ -744,7 +747,7 @@ export function run_p1(cfgs, team, rng, log = null) {
         const na_q = hold[0] - AUTO_DELAY;
         const ayak_left = range(t, na_q).some((e) => act_at(p, e) === 'E') && p.pool.left['shark'] > 0;
         const nw = range_plan(p.hp, ayak_left, p.pool.left['shark'], p.pool.left['brew'], hold[1]);
-        if (nw !== hold[1]) L(`t${rjust(t, 3)} ${p.name}: ${p.hp} HP - plan now ${nw || 'brew as normal'} until the next auto`);
+        if (nw !== hold[1]) L.on && L(`t${rjust(t, 3)} ${p.name}: ${p.hp} HP - plan now ${nw || 'brew as normal'} until the next auto`);
         p.hold = hold = nw ? [hold[0], nw] : null;
       }
       const ayak_soon = [1, 2].some((k) => act_at(p, t + k) === 'E');
@@ -757,25 +760,25 @@ export function run_p1(cfgs, team, rng, log = null) {
           p.hold_restored = true;
           supplies.drink_restore(p);
           p.sip_ready = t + 3; p.food_ready = Math.max(ga(p, 'food_ready', 0), t + 3);
-          L(`t${rjust(t, 3)} ${p.name}: ${p.hp} HP, holding - super restore for low stats (Atk ${p.atk} Str ${p.str})`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: ${p.hp} HP, holding - super restore for low stats (Atk ${p.atk} Str ${p.str})`);
         }
       } else if (t >= p.sip_ready) {
         if (p.hp < brew_below && surge_soon && p.hp >= 70) {
-          L(`t${rjust(t, 3)} ${p.name}: brew held for surge (HP ${p.hp})`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: brew held for surge (HP ${p.hp})`);
         } else if (p.hp < brew_below && team === 2 && p.hp <= 70 && p.pool.left['shark'] > 0
             && [1, 2].some((k) => act_at(p, t + k) === 'E')) {
           // a brew now would put food on cooldown over the coming Ayak tick: save it for the shark + brew there
-          L(`t${rjust(t, 3)} ${p.name}: brew held for the shark + brew on the Ayak tick (HP ${p.hp})`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: brew held for the shark + brew on the Ayak tick (HP ${p.hp})`);
         } else if (p.hp < brew_below && p.pool.take('brew')) {          // P1: brew under 90 (duo 85), no super combat until the transition
           const old = p.hp;
           supplies.drink_brew(p);
           p.sip_ready = t + 3;
           p.food_ready = Math.max(ga(p, 'food_ready', 0), t + 3);   // potions put food on cooldown too
-          L(`t${rjust(t, 3)} ${p.name}: brew ${old} -> ${p.hp} HP (Atk ${p.atk} Str ${p.str} Def ${p.dfn})`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: brew ${old} -> ${p.hp} HP (Atk ${p.atk} Str ${p.str} Def ${p.dfn})`);
         } else if (p.hp > 90 && Math.min(p.atk, p.str) < 99 && p.pool.take('restore')) {
           supplies.drink_restore(p);
           p.sip_ready = t + 3;
-          L(`t${rjust(t, 3)} ${p.name}: super restore (Atk ${p.atk} Str ${p.str} Def ${p.dfn})`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: super restore (Atk ${p.atk} Str ${p.str} Def ${p.dfn})`);
         }
       }
       if (act == null || act === 'P' || act === 'X') {
@@ -784,7 +787,7 @@ export function run_p1(cfgs, team, rng, log = null) {
         const old = p.spec;
         p.spec = Math.min(100, p.spec + 10); p.gain_src = 'regen';
         p.regen_timer = 0;
-        L(`t${rjust(t, 3)} ${p.name}: R forced regen ${fx(old)}% -> ${fx(p.spec)}% (timer restarted, ${p.regen_period()}t)`);
+        L.on && L(`t${rjust(t, 3)} ${p.name}: R forced regen ${fx(old)}% -> ${fx(p.spec)}% (timer restarted, ${p.regen_period()}t)`);
       } else if (act.startsWith('ST')) {
         // Python int() raises on junk after '>'; here junk just gives "no valid target"
         const tgt_i = act.includes('>') ? Math.trunc(Number(act.split('>')[1])) : null;
@@ -798,7 +801,7 @@ export function run_p1(cfgs, team, rng, log = null) {
           p.hp -= 10;
           supplies.check_death(p, 'P1', L, t);
           tgt.spec = 100;
-          L(`t${rjust(t, 3)} ${p.name}: spec transfer -> ${tgt.name} (now 100%); ${p.name} 0%, -10 HP`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: spec transfer -> ${tgt.name} (now 100%); ${p.name} 0%, -10 HP`);
         }
       } else if (act === 'H' && !p.has3) {
         flags.push(`t${t}: ${p.name} H (3-tick) with no has3Tick weapon - skipped`);
@@ -806,7 +809,7 @@ export function run_p1(cfgs, team, rng, log = null) {
         if (act === 'H') act = 'H_' + p.has3;
         if (act === 'D' && p.spec < 35) {
           flags.push(`t${t}: ${p.name} Dawn spec with only ${fx(p.spec)}% - skipped`);
-          L(`t${rjust(t, 3)} ${p.name}: DAWN SPEC SKIPPED (spec ${fx(p.spec)}%)`);
+          L.on && L(`t${rjust(t, 3)} ${p.name}: DAWN SPEC SKIPPED (spec ${fx(p.spec)}%)`);
           continue;
         }
         if (t < p.next_attack) {
@@ -834,7 +837,7 @@ export function run_p1(cfgs, team, rng, log = null) {
           const lbl = w.name + (splats.length > 1 ? ` hit ${k + 1}` : '');
           vq.push([t + w.delay, rank.get(p), p, d, cap, lbl, k]);
         });
-        L(`t${rjust(t, 3)} ${p.name}: ${w.name} queued, lands t${t + w.delay}` + (info ? ` (${info})` : ''));
+        L.on && L(`t${rjust(t, 3)} ${p.name}: ${w.name} queued, lands t${t + w.delay}` + (info ? ` (${info})` : ''));
         if (p.thrall_next == null) p.thrall_next = t + rng.randint(1, 2);
       } else {
         flags.push(`t${t}: ${p.name} unknown code '${act}'`);
@@ -845,7 +848,7 @@ export function run_p1(cfgs, team, rng, log = null) {
   const end = kill_tick != null ? kill_tick + anim : null;
   let spec_end;
   if (kill_tick != null) {
-    L(`t${rjust(kill_tick, 3)} VERZIK P1 HP 0. Death animation ${anim} ticks -> ends t${end}`);
+    L.on && L(`t${rjust(kill_tick, 3)} VERZIK P1 HP 0. Death animation ${anim} ticks -> ends t${end}`);
     snaps['End of P1 (HP 0)'] = players.map((p) => p.snapshot());
     spec_end = players.map((p) => p.spec);
     // 14-tick gap supplies
