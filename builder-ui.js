@@ -39,6 +39,15 @@ export function createBuilder(root, { onChange }) {
     return tpl[t];
   }
   const vals = () => state[team][block];
+  const LOCK = '__lockChart';                                       // per set: P1 chart locked (kept by Reset / Copy)
+  const isChartKey = (k) => k.startsWith('chart|');
+  const locked = (b = block) => !!(state[team][b] && state[team][b][LOCK]);
+  /** `fresh` with the P1 chart (and lock) of `old` carried over. */
+  const keepChart = (fresh, old) => {
+    const out = {}; for (const [k, v] of Object.entries(fresh)) if (!isChartKey(k)) out[k] = v;
+    for (const [k, v] of Object.entries(old)) if (isChartKey(k)) out[k] = v;
+    out[LOCK] = true; return out;
+  };
   const persist = () => { clearTimeout(timer); timer = setTimeout(() => save(state), 300); onChange && onChange(); };
 
   function input(f, v) {
@@ -71,7 +80,7 @@ export function createBuilder(root, { onChange }) {
     const rows = nm.map((n, k) => `<tr><td class="rl">${esc(n)}</td><td class="chk" id="chk-${k}"></td>${ch.ticks.map(([t]) => {
       const f = tpl[team].descs[block].fields.get(`chart|${t}|${k}`);
       const v = String(vals()[f.key] ?? '').toUpperCase();
-      return `<td class="${isAutoTick(t) ? 'auto' : ''}"><input class="code${v && !CODES.includes(v) ? ' badcode' : ''}" list="vz-codes" data-key="${esc(f.key)}" ${v ? `data-code="${esc(v)}"` : ''} value="${esc(v)}"></td>`;
+      return `<td class="${isAutoTick(t) ? 'auto' : ''}"><input class="code${v && !CODES.includes(v) ? ' badcode' : ''}" list="vz-codes" data-key="${esc(f.key)}" ${v ? `data-code="${esc(v)}"` : ''} value="${esc(v)}" ${locked() ? 'disabled' : ''}></td>`;
     }).join('')}</tr>`).join('');
     return `<div class="scroll"><table class="bt grid"><tr><th></th><th>Check</th>${head}</tr>${rows}</table></div>
       <datalist id="vz-codes">${CODES.map((c) => `<option value="${c}">`).join('')}</datalist>
@@ -118,7 +127,10 @@ export function createBuilder(root, { onChange }) {
       <h3>Team settings</h3><div class="row wrap teamset">${teamFields}</div>
       <h3>Gear</h3>${playerTable('gear', d.gear)}
       ${d.mage.length ? `<h3>Mage gear <span class="muted small">(used by Shadow players)</span></h3>${playerTable('mage', d.mage)}` : ''}
-      <h3>P1 chart</h3>${chartGrid()}<div id="vz-checks" class="err small"></div>`;
+      <div class="row between" style="margin-top:18px"><h3 style="margin:0">P1 chart ${locked() ? '<span class="muted small">(locked)</span>' : ''}</h3>
+        <div class="row"><button class="ghost sm" data-act="clearchart" ${locked() ? 'disabled title="Unlock the chart to clear it"' : ''}>Clear chart</button>
+        <button class="ghost sm" data-act="lockchart" title="A locked chart can't be edited and is kept by Reset this set and Copy">${locked() ? 'Unlock chart' : 'Lock chart'}</button></div></div>
+      ${chartGrid()}<div id="vz-checks" class="err small"></div>`;
     refreshDerived();
   }
 
@@ -141,8 +153,26 @@ export function createBuilder(root, { onChange }) {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.block) { block = b.dataset.block; render(); return; }
     const act = b.dataset.act;
-    if (act === 'copy') { const other = block === 'A' ? 'B' : 'A'; state[team][other] = remap(state[team][block], block, other); block = other; render(); persist(); }
-    if (act === 'reset') { state[team][block] = { ...tpl[team].defaults[block] }; render(); persist(); }
+    if (act === 'copy') {
+      const other = block === 'A' ? 'B' : 'A';
+      const copied = remap(state[team][block], block, other); delete copied[LOCK];
+      state[team][other] = locked(other) ? keepChart(copied, state[team][other]) : copied;   // a locked chart stays put
+      block = other; render(); persist();
+    }
+    if (act === 'reset') {
+      const fresh = { ...tpl[team].defaults[block] };
+      state[team][block] = locked() ? keepChart(fresh, state[team][block]) : fresh;           // locked: everything but the chart
+      render(); persist();
+    }
+    if (act === 'clearchart' && !locked()) {
+      if (!confirm(`Clear the whole P1 chart for Set ${block}? Everything else stays as it is.`)) return;
+      for (const k of Object.keys(vals())) if (isChartKey(k)) vals()[k] = '';
+      render(); persist();
+    }
+    if (act === 'lockchart') {
+      if (locked()) delete vals()[LOCK]; else vals()[LOCK] = true;
+      render(); persist();
+    }
     if (act === 'export') {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', team, sets: state[team] }, null, 1)], { type: 'application/json' }));

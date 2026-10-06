@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.6.0';
+export const VERSION = '1.6.1';
 export const CHANGES = [
+  { version: '1.6.1', date: '2026-10-05', items: [
+    'Chart builder: "Clear chart" empties just the P1 chart (everything else stays).',
+    'Chart builder: "Lock chart" protects the P1 chart - its cells can\'t be edited, and "Reset this set" / "Copy" leave it alone while resetting or copying everything else. Each set has its own lock, saved with the chart.',
+  ] },
   { version: '1.6.0', date: '2026-10-05', items: [
     'Faster: the simulator runs about 1.3-1.5x faster per core (the detailed raid log is no longer built when nobody is reading it, and a per-tick chart lookup now happens once per raid). Results are exactly the same as before.',
     'Uses every logical core by default (was cores minus one). Add ?threads=N to the address to use fewer.',

@@ -47,6 +47,7 @@ On the page:
 **Build chart on this page** shows the template's inputs for the selected scale: setup, team settings, gear, mage gear and the P1 tick chart, with Set A and Set B.
 - The **Spec planner** shows the same End spec / Room Time / LB swings / Time of regen numbers as the spreadsheet (P1 ends on the Death tick if you set one, otherwise on the last charted tick - the spreadsheet's P1 kill-odds estimate isn't included).
 - Each P1 chart row gets a ✓ or ✗ check (attack speeds, X only on Verzik auto ticks, H needs a has3Tick weapon). Hover the ✗ to see why.
+- **Clear chart** empties only the P1 chart. **Lock chart** freezes it: its cells can't be edited, and **Reset this set** / **Copy** reset or copy everything else but leave the locked chart alone.
 - Everything is saved in your browser automatically (per computer and browser). **Save to file** / **Open file** move a chart between computers or share it.
 - After importing an .xlsx, **Edit this chart on the page** copies it into the builder.
 
