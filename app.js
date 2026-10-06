@@ -6,6 +6,7 @@ import { VERSION, CHANGES } from './engine/version.js';
 import { createBuilder } from './builder-ui.js';
 import { createOptimizer } from './optimizer-ui.js';
 import { createMechanics } from './mechanics-ui.js';
+import { SimPool } from './pool.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -87,27 +88,13 @@ $('tabs').addEventListener('click', (e) => {
 });
 $('tab-new').innerHTML = `<h3>What's new</h3>${CHANGES.map((c) => `<h4>v${c.version} <span class="muted small">${c.date}</span></h4><ul class="news">${c.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}`;
 
-// ---- run report
+// ---- run report (multithreaded via pool.js; one pool, workers reused between runs)
+const pool = new SimPool();
+let lastInfo = null;
 export function runWorkers(cfgs, t, runs, seed, onProgress) {
-  const n = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 16));
-  const per = Math.ceil(runs / n);
-  const done = new Array(n).fill(0);
-  const jobs = [];
-  for (let i = 0; i < n; i++) {
-    const r = Math.min(per, runs - per * i);
-    if (r <= 0) break;
-    jobs.push(new Promise((resolve, reject) => {
-      const w = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-      w.onmessage = (ev) => {
-        if (ev.data.progress != null) { done[i] = ev.data.progress; onProgress && onProgress(done.reduce((s, x) => s + x, 0) / runs); return; }
-        if (ev.data.error) { reject(new Error(ev.data.error)); w.terminate(); return; }
-        resolve(ev.data.result); w.terminate();
-      };
-      w.onerror = (ev) => { reject(new Error(ev.message)); w.terminate(); };
-      w.postMessage({ cmd: 'sim', cfgs, team: t, runs: r, seed: seed * 1000 + i });
-    }));
-  }
-  return Promise.all(jobs).then(mergeResults);
+  const p = pool.run(cfgs, t, runs, seed, { onProgress });
+  lastInfo = p.info;
+  return p;
 }
 
 /** Used by the Optimizer's "Full report vs your chart". */
@@ -120,7 +107,7 @@ async function runReport(cfgsList, labels) {
 }
 
 $('go').addEventListener('click', async () => {
-  $('err').textContent = ''; $('out').innerHTML = ''; $('go').disabled = true; $('dl').disabled = true;
+  $('err').textContent = ''; $('out').innerHTML = ''; $('go').disabled = true; $('dl').disabled = true; $('stop').disabled = false;
   const t = team(), runs = Math.max(100, Number($('runs').value) || 20000);
   const seed = $('seed').value === '' ? Math.floor(Math.random() * 1e9) : Number($('seed').value);
   try {
@@ -145,7 +132,8 @@ $('go').addEventListener('click', async () => {
       }
     }
     $('prog').style.width = '100%';
-    $('runStatus').textContent = `Done in ${((performance.now() - t0) / 1000).toFixed(1)}s (seed ${seed}).`;
+    const secs = (performance.now() - t0) / 1000;
+    $('runStatus').textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * sets.length / secs).toLocaleString()} raids/s · ${lastInfo ? lastInfo.mode : ''} (seed ${seed}).`;
     $('out').innerHTML = reportHtml(res, labels, t, runs);
     lastPage = reportPage(res, labels, t, runs);
     $('dl').disabled = false;
@@ -153,9 +141,10 @@ $('go').addEventListener('click', async () => {
     $('err').textContent = err.message;
     $('runStatus').textContent = '';
   } finally {
-    $('go').disabled = false;
+    $('go').disabled = false; $('stop').disabled = true;
   }
 });
+$('stop').addEventListener('click', () => { pool.stop(); $('stop').disabled = true; });
 
 $('dl').addEventListener('click', () => {
   if (!lastPage) return;

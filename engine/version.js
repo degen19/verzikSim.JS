@@ -1,6 +1,12 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.4.0';
+export const VERSION = '1.5.0';
 export const CHANGES = [
+  { version: '1.5.0', date: '2026-10-05', items: [
+    'Multithreading reworked: report runs are split into 2,000-raid chunks shared across reusable Web Workers (cores minus one, up to 12). The same seed now gives exactly the same results on any computer and any number of threads.',
+    'Very large runs (hundreds of thousands to millions of raids) no longer fail when the results are combined.',
+    'Stop button for report runs. The status line shows threads used and raids per second. Small runs and browsers without Web Workers run on the main thread with identical results.',
+    'Add ?threads=N to the page address to choose the thread count (also used by the Optimizer).',
+  ] },
   { version: '1.4.0', date: '2026-10-05', items: ['4 and 5-man reports: new row "P3 20% on or before tick 72 (before webs, of kills)" - how often Verzik drops below 20% in P3 by tick 72 (tick 1 = P3 attackable), as a share of successful runs.'] },
   { version: '1.3.2', date: '2026-10-05', items: ['Mechanics & behavior: each section is its own dropdown (collapsed until clicked), with Expand all / Collapse all; searching opens the matching sections. The top toggles look like dropdown buttons.'] },
   { version: '1.3.1', date: '2026-10-05', items: ['"View mechanics & behavior" at the top of the page: the full Mechanics & behavior sheet from the chart template, with search and a scale filter.'] },

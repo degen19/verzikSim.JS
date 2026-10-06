@@ -1,6 +1,13 @@
-// Node worker thread: runs a share of the raids and posts the results back.
-import { parentPort, workerData } from 'node:worker_threads';
-import { simulate } from '../engine/simulate.js';
+// Node worker thread: same protocol as the browser worker - store the chart once, then run chunks on request.
+import { parentPort } from 'node:worker_threads';
+import { runChunk } from '../engine/parallel.js';
 
-const { cfgs, team, runs, seed } = workerData;
-parentPort.postMessage(simulate(cfgs, team, runs, seed));
+let job = null;
+parentPort.on('message', (d) => {
+  try {
+    if (d.cmd === 'init') job = d;
+    else if (d.cmd === 'chunk') parentPort.postMessage({ k: d.k, result: runChunk(job.cfgs, job.team, d.k, d.runs, d.seed) });
+  } catch (e) {
+    parentPort.postMessage({ k: d.k, error: e.message });
+  }
+});

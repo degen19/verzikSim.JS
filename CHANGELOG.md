@@ -2,6 +2,13 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.5.0 - 2026-10-05
+- Multithreading: report runs split into 2,000-raid chunks across a reusable Web Worker pool (cores - 1, max 12). Each chunk has its own seeded random stream, so a given seed gives identical results on any machine / thread count (the simulation logic is unchanged).
+- Fixed: merging very large runs (100k+ raids per worker) overflowed the call stack.
+- Stop button for report runs; status shows threads and raids/second; main-thread fallback for small runs (< 4,000 raids) or no Web Worker support; `?threads=N` URL override.
+- Terminal runner uses the same chunk plan (`--threads N`), so it matches the browser for a given seed.
+- `tests/parity.mjs`: identical-across-threads check, comparison with the old single-stream method, and a speed benchmark.
+
 ## v1.4.0 - 2026-10-05
 - 4 and 5-man reports: "P3 20% on or before tick 72 (before webs, of kills)" - share of successful runs where Verzik drops below 20% in P3 by tick 72 (tick 1 = P3 attackable).
 

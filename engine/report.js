@@ -8,24 +8,11 @@ const fmt = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).padS
 const pct = (a, b) => (b ? `${(a / b * 100).toFixed(1)}%` : '-');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-/** Merge results from several workers (same team) into one. */
-export function mergeResults(parts) {
-  const out = JSON.parse(JSON.stringify(parts[0]));
-  for (const r of parts.slice(1)) {
-    for (const k of ['total', 'p1', 'p2', 'p3', 'depth', 'p20', 'reds']) out[k].push(...r[k]);
-    out.runs += r.runs;
-    if (out.duo) {
-      for (const k of ['die_p1', 'kill_ny', 'kill_ng', 'kill_ngl', 'n2d', 'runs']) out.duo[k] += r.duo[k];
-      for (const k of ['sp1', 'sproc', 'sp2', 'sp3', 'dep1', 'dep2']) out.duo[k].push(...r.duo[k]);
-      out.n2d += r.n2d;
-    } else {
-      out.die_p1 += r.die_p1;
-      for (const k of ['sp1', 'sproc', 'sp2', 'sp3']) out.splits[k].push(...r.splits[k]);
-    }
-  }
-  out.succ = out.total.length / out.runs;
-  return out;
-}
+/** Merge results from several workers / chunks (same team) into one. Safe for any size - see parallel.js. */
+export { mergeResults } from './parallel.js';
+
+const arrMin = (a) => a.reduce((m, x) => (x < m ? x : m), Infinity);
+const arrMax = (a) => a.reduce((m, x) => (x > m ? x : m), -Infinity);
 
 function q(sortedArr, f) {
   const m = sortedArr.length;
@@ -91,7 +78,7 @@ function oddsRows(res, team) {
     ['Success (all runs)', res.map((r) => pct(r.total.length, r.runs))],
     ['Someone dies in P1 (all runs)', res.map((r) => pct(r.die_p1, r.runs))],
     ['Avg reds proc depth (Verzik HP %)', res.map((r) => `${mean(r.depth).toFixed(1)}%`)],
-    ['Deepest reds proc', res.map((r) => (r.depth.length ? `${Math.min(...r.depth).toFixed(1)}%` : '-'))],
+    ['Deepest reds proc', res.map((r) => (r.depth.length ? `${arrMin(r.depth).toFixed(1)}%` : '-'))],
     ['Avg P3 20% tick', res.map((r) => (r.p20.length ? mean(r.p20).toFixed(1) : '-'))],
     ...(team === 4 || team === 5 ? [[`P3 20% on or before tick ${WEBS_TICK} (before webs, of kills)`,
       res.map((r) => pct(r.p20.filter((x) => x <= WEBS_TICK).length, r.total.length))]] : []),
@@ -108,7 +95,7 @@ function histogramSvg(res, labels) {
     for (const t of r.total) { const s = Math.round(t * 0.6); c.set(s, (c.get(s) || 0) + 1); }
     return xs.map((s) => (c.get(s) || 0) / n * 100);
   });
-  const top = Math.max(...series.flat(), 1);
+  const top = Math.max(arrMax(series.flat()), 1);
   const W = Math.max(900, xs.length * 22), H = 360, L = 50, B = 46, T = 20, R = 10;
   const pw = W - L - R, ph = H - T - B, slot = pw / xs.length, bw = slot * 0.8 / res.length;
   let g = '';

@@ -59,6 +59,18 @@ The **Optimizer** tab tests combinations of chart inputs and ranks them:
 
 Rates count all attempts, including failed ones. Only inputs that exist on the chart can be varied - new behaviours need a sim update.
 
+### Multithreading
+Report runs are split into chunks of 2,000 raids that run in parallel Web Workers (`pool.js`). Everything still runs in your browser - nothing is sent anywhere.
+- **Threads:** logical cores minus one (left for the browser), at most 12; 1-2 core machines use all of them. The Run tab's status line shows the thread count and raids/second when a run finishes.
+- **Same seed = same result** on any computer and any thread count: chunk *k* of a run always uses the random stream seeded by (seed, *k*), and chunks are merged in order.
+- Runs under 4,000 raids, or browsers without Web Workers, run on the main thread (same chunks, same results).
+- **Stop** cancels a running report. Workers are reused between runs.
+- Add `?threads=N` to the page address to force a thread count, e.g. `.../verzikSim.JS/?threads=1` (single thread) or `?threads=4`. This also applies to the Optimizer.
+
+**Checking it:** `node tests/parity.mjs my_chart.xlsx --team 2 --runs 20000` shows (1) that 1, 2 and N threads give identical results, (2) that the results match the old single-stream method within noise, and (3) the speed-up on your computer.
+
+**Benchmarking in the browser:** run the same chart and raid count with `?threads=1` and then with no `?threads` (or `?threads=4`), and compare the raids/second in the status line. Use 20,000+ raids so worker start-up doesn't dominate. With the same Seed, the two reports are identical.
+
 ### Option B: the terminal
 From the VS Code terminal, in the `verzik_js` folder:
 ```
@@ -127,9 +139,11 @@ All three are free for a site like this. There's no server-side compute, because
 | `builder-ui.js` | "Build chart on this page" form |
 | `optimizer-ui.js` | Optimizer tab |
 | `mechanics-ui.js` | "View mechanics & behavior" panel (reads the template's sheet) |
-| `worker.js` | Web Worker. Each one runs a share of the raids (report runs and optimizer batches). |
+| `pool.js` | Worker pool for report runs: reusable workers, chunk queue, progress, Stop, single-thread fallback |
+| `worker.js` | Web Worker: runs chunks of raids (report runs) and optimizer batches |
+| `tests/parity.mjs` | Multithreading checks: identical results across thread counts, match vs the old method, speed |
 | `cli/run.mjs`, `cli/worker.mjs` | Command-line runner (Node worker threads) |
-| `engine/` | The simulator: chart reader (`xlsx.js`, `sim.js`), phases (`p2.js`, `reds.js`, `duo_reds.js`, `p3.js`), supplies, gear, horn, RNG, report, optimizer search (`optimize.js`), chart form (`chartform.js`), spec planner (`planner.js`) and version / What's new (`version.js`) |
+| `engine/` | The simulator: chart reader (`xlsx.js`, `sim.js`), phases (`p2.js`, `reds.js`, `duo_reds.js`, `p3.js`), supplies, gear, horn, RNG, report, optimizer search (`optimize.js`), parallel chunk plan + merge (`parallel.js`), chart form (`chartform.js`), spec planner (`planner.js`) and version / What's new (`version.js`) |
 | `CHANGELOG.md` | What changed in each version |
 | `verzik_chart_template.xlsx` | Blank input chart. The **Mechanics & behavior** sheet in it explains what the sim models. |
 | `CONVENTIONS.md` | Notes for anyone editing the engine (porting rules, function signatures) |
