@@ -151,7 +151,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     if (p.dead || p.hp >= 90) {
       continue;
     }
-    if (p.hp < 70 && p.pool.left['scb'] > 0 && p.pool.left['shark'] > 0 && !p.crab_done) {
+    if (p.hp < 70 && p.pool.left['scb'] > 0 && p.pool.left['shark'] > 0 && !p.crab_done && p.has_bp) {
       p.crab_bp = true;                                 // sips after the blowpipe
     } else {
       supplies.window(p, 4, L, P, 'reds shield ', { sharks: false });

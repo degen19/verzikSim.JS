@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.15.2';
+export const VERSION = '1.16.0';
 export const CHANGES = [
+  { version: '1.16.0', date: '2026-10-08', items: [
+    'Has BP: a new checkbox per player in the gear table (every scale; ticked by default, and older charts count as ticked). Unticked: no blowpipe in P1 (B is flagged in the chart checks), no blowpipe tick fills or crab blowpipe in reds, and the player can\'t pop the purple crab.',
+    'If the purple DC (1st or 2nd purple in duos) has no blowpipe the sim won\'t run: "A blowpipe is required to pop the purple crab. Either change the player who DC\'s purple, or add a blowpipe to [player]". The Optimizer only offers blowpipe owners as the purple DC, and 4 Claw Priority only hands the purple DC to a player with a blowpipe.',
+  ] },
   { version: '1.15.2', date: '2026-10-08', items: [
     'Shadow modes: Shadow camp, 3:1, Shadow while LB and Deep proc can only be ticked for a player with Shadow ticked, and Shadow camp can\'t be combined with 3:1 or Shadow while LB (the chart builder greys these out and says why; the Optimizer skips such setups).',
     'Note on the chart builder and in Mechanics & behavior: Shadow while LB takes priority over 3:1 - with both ticked, they shadow on Lightbearer hits, then 3:1 after the ring swap.',

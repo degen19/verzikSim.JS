@@ -209,7 +209,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
     for (const p of supplies.by_hp(players)) {
       p.crab_bp = false;
       if (p.dead || p.hp >= 90) continue;
-      if (s === 2 && p.hp < 70 && p.pool.left['scb'] > 0 && p.pool.left['shark'] > 0 && !p.dc_swing_done) {
+      if (s === 2 && p.hp < 70 && p.pool.left['scb'] > 0 && p.pool.left['shark'] > 0 && !p.dc_swing_done && p.has_bp) {
         p.crab_bp = true;
       } else {
         supplies.window(p, 4, L, P, `s${s} shield `, { sharks: false, brews: !p.shadow });   // shadow: no brews before P3
@@ -483,6 +483,7 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
       kind = dget({ 3: 'ayak', 2: 'bp', 4: 'scratch' }, gap);
       if (kind === 'scratch' && r !== 40) kind = null;  // a 4-tick fill is only the r40 claw scratch (-> scythe on r44)
     }
+    if (kind === 'bp' && !p.has_bp) kind = null;         // no blowpipe: no 2-tick fix
     if ((kind === 'ayak' || kind === 'bp') && !ga(p, 'perfect1', true)) {
       kind = null;                                      // 'Perfect 1st set' unticked: no Ayak / blowpipe tick fixing
     }

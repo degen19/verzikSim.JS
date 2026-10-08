@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.16.0 - 2026-10-08
+- **Has BP** per player (gear table, all scales, default ticked; template + builder + parser). Without it: B in P1 skipped (chart check ✗), no blowpipe fills / crab blowpipe in reds, can't pop the purple. Purple DC without a blowpipe stops the run with an error. Optimizer purple-DC choices and 4 Claw Priority respect it.
+
 ## v1.15.2 - 2026-10-08
 - Shadow mode rules: Shadow camp / 3:1 / Shadow while LB / Deep proc need Shadow; Shadow camp excludes 3:1 and Shadow while LB. Builder disables invalid boxes (tooltips), Optimizer skips invalid setups, imported charts get Run-tab notes.
 - Builder note + Mechanics sheet: Shadow while LB takes priority over 3:1 (shadow on LB hits, then 3:1 after the swap); full priority Deep proc > camp > while LB > 3:1.

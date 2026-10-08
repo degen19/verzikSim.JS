@@ -182,7 +182,7 @@ export function claw_priority_setup(players, L, t) {
   const pdc = players.find((p) => p.purple === true || pybool(p.purple)) ?? null;
   L.on && L(`t${rjust(t, 4)} 4 CLAW PRIORITY: P1 died after ${used} of ${total} Dawn specs - ${pri.name} (${fx(pri.spec)}%) `
     + `aims for both claws by reds r36, the others for one claw by r36`);
-  if (pdc && pdc !== pri) {
+  if (pdc && pdc !== pri && pri.has_bp) {                     // the purple needs a blowpipe to pop
     pdc.purple = false; pri.purple = true;
     L.on && L(`t${rjust(t, 4)} 4 CLAW PRIORITY: ${pri.name} takes the purple DC from ${pdc.name}`);
   }
@@ -329,6 +329,7 @@ export class Player {
     this.default_swap = this.lb && this.target_spec == null;   // neither % set: default Ultor swap (default_transition)
     this.default_wait = false;
     this.purple = dget(cfg, 'PurpleDC', false);
+    this.has_bp = dget(cfg, 'hasBP', true) !== false;   // no blowpipe: no B in P1, no blowpipe fills, can't pop the purple
     this.purple2nd = dget(cfg, 'Purple2DC', false);
     this.has3 = dget(cfg, 'has3Tick') || false;
     this.shadow = dget(cfg, 'shadow', false);
@@ -553,8 +554,14 @@ export async function parse_chart(wb, team, tab = null, block = 'A') {
       for (const [key, h] of [['shadow', 'Shadow'], ['shadowLB', 'Shadow while LB'], ['deepProc', 'Deep proc'],
         ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
         ['horn', 'Horn'], ['hornP2', 'P2 horn'], ['hornP3', 'P3 horn'],
-        ['eastBoak', 'East Boak'], ['westBoak', 'West Boak'], ['redemptionFlick', 'Redemption flick'], ['pneckP1', 'Pneck on P1'], ['passGreen', 'Pass green if death']]) {
+        ['eastBoak', 'East Boak'], ['westBoak', 'West Boak'], ['redemptionFlick', 'Redemption flick'], ['pneckP1', 'Pneck on P1'], ['passGreen', 'Pass green if death'],
+        ['hasBP', 'Has BP']]) {
         if (get(h) != null && pystr(get(h)).trim() !== '') cfgs[k][key] = yes(get(h));
+      }
+      // Has BP (blank / no column = has one): popping the purple crab needs a blowpipe
+      if (cfgs[k].hasBP === false && (cfgs[k].PurpleDC || cfgs[k].Purple2DC)) {
+        const nm = cfgs[k].name || `P${k + 1}`;
+        throw new Error(`A blowpipe is required to pop the purple crab. Either change the player who DC's purple, or add a blowpipe to ${nm}`);
       }
       // shadow modes need Shadow; Shadow camp takes over 3:1 / Shadow while LB. cfgs.notes tells the page what was ignored.
       const c = cfgs[k], nm = c.name || `P${k + 1}`, modes = [['shadowLB', 'Shadow while LB'], ['deepProc', 'Deep proc'], ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1']];
@@ -935,6 +942,8 @@ export function run_p1(cfgs, team, rng, log = null) {
           tgt.spec = 100;
           L.on && L(`t${rjust(t, 3)} ${p.name}: spec transfer -> ${tgt.name} (now 100%); ${p.name} 0%, -10 HP`);
         }
+      } else if (act === 'B' && !p.has_bp) {
+        flags.push(`t${t}: ${p.name} B (blowpipe) without Has BP - skipped`);
       } else if (act === 'H' && !p.has3) {
         flags.push(`t${t}: ${p.name} H (3-tick) with no has3Tick weapon - skipped`);
       } else if (has(WEAPONS, act)) {

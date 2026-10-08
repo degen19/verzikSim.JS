@@ -25,6 +25,7 @@ const HELP = {
   'Shadow camp': 'Duo: shadow every P2 attack until reds. Needs Shadow; not with 3:1 or Shadow while LB (camp already covers them).',
   'Deep proc': 'Shadow from max distance below the Deep proc HP %. Needs Shadow.', redCrab: 'Red crab hit once during the reds shield',
   offPrayer: "Verzik P3 autos taken off prayer (0-9)",
+  'Has BP': 'Has a blowpipe (default). Unticked: no blowpipe in P1 or for tick fills, and they can\'t pop the purple crab (the purple DC must have one).',
   '4 Claw Priority': "If Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status prioritises 100% spec for reds (both claws by r36, taking over the purple DC); the others prioritise 50%. Off: rings follow the chart.", has3Tick: 'Weapon used by H in the P1 chart',
 };
 
@@ -204,7 +205,7 @@ export function createBuilder(root, { onChange }) {
     for (let k = 0; k < team; k++) {
       const acts = {};
       if (ch) for (const [t] of ch.ticks) { const v = vals()[`chart|${t}|${k}`]; if (v) acts[t] = v; }
-      const msg = checkRow(acts, vals()[`gear|has3Tick|${k}`], team);
+      const msg = checkRow(acts, vals()[`gear|has3Tick|${k}`], team, vals()[`gear|Has BP|${k}`] !== false);
       const c = root.querySelector(`#chk-${k}`); if (c) { c.textContent = msg ? '✗' : '✓'; c.title = msg; c.className = `chk ${msg ? 'bad' : 'ok'}`; }
     }
     const msgs = [];

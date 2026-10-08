@@ -9,7 +9,7 @@ export const TEAM_HEADERS = ['Number of Purples', 'Death tick', 'Deep proc HP %'
 export const COMPUTED = ['End spec', 'Purple crab', 'Room Time', 'LB swings', 'West/East DC +', 'Spec used', 'Time of regen'];
 const BOOLS = new Set(['lightbearerOn', '1st Purple DC', '2nd Purple DC', 'PurpleDC', 'WestDC', 'EastDC', 'bouncedZCB', 'Shadow', 'Shadow camp',
   '3:1', 'Shadow while LB', 'Deep proc', 'Horn', 'P2 horn', 'P3 horn', 'East Boak', 'West Boak', 'Pneck on P1', 'Redemption flick',
-  'Pass green if death', 'Perfect 1st set', 'Ducktank', '4 Claw Priority']);
+  'Pass green if death', 'Perfect 1st set', 'Ducktank', '4 Claw Priority', 'Has BP']);
 const SELECTS = {
   meleePrayer: ['Piety', 'Zeal'], helm: ['Torva full helm', 'Oathplate helm'], body: ['Torva platebody', 'Oathplate chest'],
   legs: ['Torva platelegs', 'Oathplate legs'], amulet: ['Rancour', 'Blood fury', 'Both'], redCrab: ['West', 'East', 'None'],
@@ -159,7 +159,7 @@ export function shadowBlock(header, on) {
 }
 
 /** Chart checks, per player: the same rules as the spreadsheet's Check column. Returns a message or ''. */
-export function checkRow(acts, has3Tick, team) {
+export function checkRow(acts, has3Tick, team, hasBP = true) {
   let prev = null;
   const ticks = Object.keys(acts).map(Number).sort((a, b) => a - b);
   for (const t of ticks) {
@@ -169,6 +169,7 @@ export function checkRow(acts, has3Tick, team) {
     if (st && Number(st[1]) > team) return `tick ${t}: ${a} - there's no player ${st[1]}`;
     if (a === 'X' && !isAutoTick(t)) return `tick ${t}: X only goes on a Verzik auto tick (19, 33, 47...)`;
     if (a === 'H' && (!has3Tick || has3Tick === 'No')) return `tick ${t}: H needs a has3Tick weapon in the gear table`;
+    if (a === 'B' && hasBP === false) return `tick ${t}: B needs Has BP ticked in the gear table`;
     if (a in SPEED) {
       if (prev && t - prev[0] < SPEED[prev[1]]) return `tick ${t}: ${a} is too soon after ${prev[1]} on tick ${prev[0]} (${SPEED[prev[1]]}t)`;
       prev = [t, a];

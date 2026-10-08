@@ -85,11 +85,12 @@ export function catalog(cfgs, team) {
   const who = (pred) => { const i = cfgs.findIndex(pred); return i < 0 ? null : names[i]; };
 
   // death charges (team-wide: one owner each)
-  opts.push({ id: 'dc_p1', group: 'Death charges', label: team === 2 ? '1st purple DC' : 'Purple DC', kind: 'choice', choices: names,
+  const bpNames = names.filter((_, i) => cfgs[i].hasBP !== false);   // popping the purple needs a blowpipe
+  opts.push({ id: 'dc_p1', group: 'Death charges', label: team === 2 ? '1st purple DC' : 'Purple DC', kind: 'choice', choices: bpNames,
     current: who((c) => c.PurpleDC), apply: (cf, v) => cf.forEach((c, i) => { c.PurpleDC = names[i] === v; }) });
   if (team === 2) {
     const p2cur = who((c) => c.Purple2DC) || who((c) => c.PurpleDC);
-    opts.push({ id: 'dc_p2', group: 'Death charges', label: '2nd purple DC', kind: 'choice', choices: names, current: p2cur,
+    opts.push({ id: 'dc_p2', group: 'Death charges', label: '2nd purple DC', kind: 'choice', choices: bpNames, current: p2cur,
       apply: (cf, v) => { const p1 = cf.find((c) => c.PurpleDC); cf.forEach((c, i) => { c.Purple2DC = names[i] === v && c !== p1; }); },
       after: 'dc_p1' });
   }
