@@ -345,9 +345,11 @@ export class Player {
     this.dawn_thr = dget(cfg, 'dawnThr');            // P1 HP % at/below which a Dawn spec becomes a scythe
     horn.init_player(this, cfg);
     const mg = dget(cfg, 'mage', {});
-    this.mage_gear = [dget(mg, 'helm', 'Ancestral hat'), dget(mg, 'body', 'Ancestral robe top'),
+    // mage helm 'off' = takes the melee helm off and wears nothing; 'melee' = keeps the melee helm on
+    const mhelm = dget(mg, 'helm', 'Ancestral hat');
+    this.mage_gear = [mhelm === 'off' ? null : mhelm === 'melee' ? this.helm : mhelm, dget(mg, 'body', 'Ancestral robe top'),
       dget(mg, 'legs', 'Ancestral robe bottom'), dget(mg, 'cape', 'Imbued saradomin cape'),
-      'Occult necklace', 'Avernic treads (max)', 'Confliction gauntlets'];
+      'Occult necklace', 'Avernic treads (max)', 'Confliction gauntlets'].filter(Boolean);
     this.west = dget(cfg, 'WestDC', false);
     this.east = dget(cfg, 'EastDC', false);
     this.spec = Number(dget(cfg, 'startSpec', 100));
@@ -572,7 +574,8 @@ export async function parse_chart(wb, team, tab = null, block = 'A') {
       const v = (h) => (has(mc, h) ? ws.cell(r, mc[h]).value : null);
       const mg = {};
       ['mage helm', 'mage body', 'mage legs'].forEach((h, i) => {
-        const x = v(h);
+        const x = v(h), xs = pystr(x).trim().toLowerCase();
+        if (i === 0 && (xs === 'take off' || xs === 'none')) { mg.helm = xs === 'take off' ? 'off' : 'melee'; return; }   // no helm / keep the melee helm
         if (pybool(x)) mg[h.split(' ')[1]] = names[pystr(x).includes('irtus') ? 'Virtus' : 'Ancestral'][i];
       });
       const x = v('mage cape');

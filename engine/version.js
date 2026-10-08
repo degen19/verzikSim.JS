@@ -1,6 +1,12 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.12.0';
+export const VERSION = '1.13.0';
 export const CHANGES = [
+  { version: '1.13.0', date: '2026-10-08', items: [
+    'Optimizer: each player\'s options sit in a collapsible section (closed by default, with Expand all / Collapse all; the header shows how many options you\'re varying).',
+    'Optimizer: mage gear is chosen per piece - Mage helm, Mage top, Mage bottom (plus Mage cape) - instead of a whole Ancestral / Virtus set.',
+    'New mage helm options, in the chart (template and builder) and the Optimizer: Take off (no helm at all while shadowing) and None (keeps the melee helm on).',
+    'Optimizer: removed melee gear (helm, body, legs, amulet), melee prayer, Boak side, Redemption flick and Pass green if death. East Pattern is only offered for East Boak players.',
+  ] },
   { version: '1.12.0', date: '2026-10-08', items: [
     'Set C: a third setup to compare. "Build chart on this page" has Set A / Set B / Set C tabs (copy any set to any other), the Run tab has a Set C label, and the report, charts and Optimizer handle all three. Saved charts and chart files include Set C.',
     'Set C lives on the page: the spreadsheet template still has Sets A and B (an imported chart can be copied to the page with "Edit this chart on the page" and given a Set C there).',

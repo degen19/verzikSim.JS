@@ -1,7 +1,7 @@
 // Optimizer: sweeps chart inputs (ring %, death charges, deep proc, gear, toggles) and finds the setups that
 // most often beat the user's breakpoints. Used by the web page's Optimizer tab (via worker.js).
 import { Rng } from './rng.js';
-import { run_p1, PRAYERS } from './sim.js';
+import { run_p1 } from './sim.js';
 import { run_p2 } from './p2.js';
 import { run_reds } from './reds.js';
 import { run_duo_reds } from './duo_reds.js';
@@ -63,15 +63,15 @@ export function mergeCounts(a, b) {
 
 // ---------------------------------------------------------------- what can be swept
 
-const HELMS = ['Torva full helm', 'Oathplate helm'];
-const BODIES = ['Torva platebody', 'Oathplate chest'];
-const LEGS = ['Torva platelegs', 'Oathplate legs'];
-const AMULETS = ['Rancour', 'Blood fury'];
-const MAGE_SETS = { Ancestral: ['Ancestral hat', 'Ancestral robe top', 'Ancestral robe bottom'], Virtus: ['Virtus mask', 'Virtus robe top', 'Virtus robe bottom'] };
+// mage gear by piece (shadow players). Helm 'Take off' = no helm at all; 'None' = keeps the melee helm on.
+const MAGE_HELM = { Ancestral: 'Ancestral hat', Virtus: 'Virtus mask', 'Take off': 'off', None: 'melee' };
+const MAGE_BODY = { Ancestral: 'Ancestral robe top', Virtus: 'Virtus robe top' };
+const MAGE_LEGS = { Ancestral: 'Ancestral robe bottom', Virtus: 'Virtus robe bottom' };
+const labelOf = (map, item, def) => Object.keys(map).find((k) => map[k] === item) || def;
 const MAGE_CAPES = ['Infernal cape', 'Imbued saradomin cape'];
 const TOGGLES = [
   ['shadowLB', 'Shadow while on Lightbearer'], ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
-  ['pneckP1', 'Pneck on P1'], ['redemptionFlick', 'Redemption flick'], ['passGreen', 'Pass green if death'],
+  ['pneckP1', 'Pneck on P1'],
 ];
 
 /**
@@ -113,26 +113,18 @@ export function catalog(cfgs, team) {
       opts.push({ id: `ring_${i}`, group: g, label: 'Ring swap %', kind: 'num', current: Number(c.ringSwitch ?? c.targetSpec ?? 100),
         apply: (cf, v) => { cf[i].ringSwitch = v; } });
     }
-    opts.push({ id: `prayer_${i}`, group: g, label: 'Melee prayer', kind: 'choice', choices: Object.keys(PRAYERS), current: c.meleePrayer || 'Piety',
-      apply: (cf, v) => { cf[i].meleePrayer = v; } });
-    for (const [key, label, list, def] of [['helm', 'Helm', HELMS, 'Torva full helm'], ['body', 'Body', BODIES, 'Torva platebody'],
-      ['legs', 'Legs', LEGS, 'Torva platelegs'], ['amulet', 'Amulet', AMULETS, 'Rancour']]) {
-      opts.push({ id: `${key}_${i}`, group: g, label, kind: 'choice', choices: list, current: c[key] || def,
-        apply: (cf, v) => { cf[i][key] = v; } });
-    }
     if (c.shadow) {
       const mg = c.mage || {};
       opts.push({ id: `mcape_${i}`, group: g, label: 'Mage cape', kind: 'choice', choices: MAGE_CAPES, current: mg.cape || 'Imbued saradomin cape',
         apply: (cf, v) => { cf[i].mage = { ...(cf[i].mage || {}), cape: v }; } });
-      opts.push({ id: `mset_${i}`, group: g, label: 'Mage armour', kind: 'choice', choices: Object.keys(MAGE_SETS),
-        current: String(mg.helm || 'Ancestral').startsWith('Virtus') ? 'Virtus' : 'Ancestral',
-        apply: (cf, v) => { const [h, b, l] = MAGE_SETS[v]; cf[i].mage = { ...(cf[i].mage || {}), helm: h, body: b, legs: l }; } });
+      for (const [key, label, map, def] of [['helm', 'Mage helm', MAGE_HELM, 'Ancestral'], ['body', 'Mage top', MAGE_BODY, 'Ancestral'],
+        ['legs', 'Mage bottom', MAGE_LEGS, 'Ancestral']]) {
+        opts.push({ id: `m${key}_${i}`, group: g, label, kind: 'choice', choices: Object.keys(map), current: labelOf(map, mg[key], def),
+          apply: (cf, v) => { cf[i].mage = { ...(cf[i].mage || {}), [key]: map[v] }; } });
+      }
     }
     if (team > 2) {
-      opts.push({ id: `boak_${i}`, group: g, label: 'Boak side', kind: 'choice', choices: ['East', 'West'],
-        current: c.eastBoak ? 'East' : c.westBoak ? 'West' : '-',
-        apply: (cf, v) => { cf[i].eastBoak = v === 'East'; cf[i].westBoak = v === 'West'; } });
-      opts.push({ id: `epat_${i}`, group: g, label: 'East Pattern (East Boak players)', kind: 'choice', choices: ['A', '0-T'], current: c.eastPattern || 'A',
+      if (c.eastBoak) opts.push({ id: `epat_${i}`, group: g, label: 'East Pattern', kind: 'choice', choices: ['A', '0-T'], current: c.eastPattern || 'A',
         apply: (cf, v) => { cf[i].eastPattern = v; } });
     }
     for (const [key, label] of TOGGLES) {

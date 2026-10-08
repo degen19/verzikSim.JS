@@ -17,6 +17,7 @@ const keepRate = (key, r) => { rates[key] = r; try { localStorage.setItem(RATE_K
 export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
   let cfgs = null, team = 0, block = 'A', opts = [], rate = null, rateKey = '', pool = null, stopped = false;
   const sel = {};               // optionId -> {on, text, picks:Set}
+  const openGroups = new Set(['Death charges', 'Team']);   // player groups start collapsed (state kept while the page is open)
 
   root.innerHTML = `
     <div class="row wrap">
@@ -72,14 +73,18 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
   function renderOpts() {
     const groups = {};
     for (const o of opts) (groups[o.group] ||= []).push(o);
-    $('o-opts').innerHTML = Object.entries(groups).map(([g, list]) => `<div class="ogroup"><h4>${esc(g)}</h4>${list.map((o) => {
+    const head = `<div class="row" style="margin-bottom:6px"><button class="ghost sm" data-groups="open">Expand all</button><button class="ghost sm" data-groups="close">Collapse all</button></div>`;
+    $('o-opts').innerHTML = head + Object.entries(groups).map(([g, list]) => {
+      const n = list.filter((o) => sel[o.id].on).length;
+      return `<details class="ogroup" data-group="${esc(g)}" ${openGroups.has(g) ? 'open' : ''}><summary><h4 style="display:inline">${esc(g)}</h4> <span class="muted small">${n ? `${n} varied` : `${list.length} option${list.length === 1 ? '' : 's'}`}</span></summary>${list.map((o) => {
       const s = sel[o.id];
       const cur = `<span class="muted small">now: ${esc(o.current ?? '-')}</span>`;
       const editor = o.kind === 'num'
         ? `<input data-text="${o.id}" value="${esc(s.text)}" ${s.on ? '' : 'disabled'} style="width:170px">`
         : o.choices.map((c) => `<label class="pick"><input type="checkbox" data-pick="${o.id}" value="${esc(c)}" ${s.picks.has(c) ? 'checked' : ''} ${s.on ? '' : 'disabled'}>${esc(c)}</label>`).join('');
       return `<div class="orow ${s.on ? 'on' : ''}"><label class="vary"><input type="checkbox" data-on="${o.id}" ${s.on ? 'checked' : ''}>${esc(o.label)}</label>${cur}<span class="oed">${editor}</span></div>`;
-    }).join('')}</div>`).join('');
+    }).join('')}</details>`;
+    }).join('');
     estimate();
   }
 
@@ -252,6 +257,14 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     if (t.id === 'o-depth') { estimate(); return; }
     if (t.id === 'o-scope') { rate = null; rankOptions(); estimate(); return; }
     if (t.id === 'o-set') { block = t.value; refresh(); }
+  });
+  root.addEventListener('toggle', (e) => {                // remember which groups are open across re-renders
+    const g = e.target.dataset && e.target.dataset.group; if (g == null) return;
+    if (e.target.open) openGroups.add(g); else openGroups.delete(g);
+  }, true);
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-groups]'); if (!b) return;
+    root.querySelectorAll('details.ogroup').forEach((d) => { d.open = b.dataset.groups === 'open'; });
   });
   $('o-go').addEventListener('click', search);
   $('o-stop').addEventListener('click', () => { stopped = true; if (pool) pool.forEach((w) => w.terminate()); $('o-err').textContent = 'Search stopped.'; $('o-go').disabled = false; $('o-stop').disabled = true; pool = null; });

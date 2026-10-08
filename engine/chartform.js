@@ -15,7 +15,8 @@ const SELECTS = {
   legs: ['Torva platelegs', 'Oathplate legs'], amulet: ['Rancour', 'Blood fury', 'Both'], redCrab: ['West', 'East', 'None'],
   has3Tick: ['No', 'Breaker', 'Ayak', 'Swift blade'], 'Number of Purples': [1, 2],
   'East Pattern': ['A', '0-T'],                    // B, C and FLEX come later
-  'mage helm': ['Ancestral', 'Virtus'], 'mage body': ['Ancestral', 'Virtus'], 'mage legs': ['Ancestral', 'Virtus'],
+  // mage helm Take off: no helm at all; None: keeps the melee helm on
+  'mage helm': ['Ancestral', 'Virtus', 'Take off', 'None'], 'mage body': ['Ancestral', 'Virtus'], 'mage legs': ['Ancestral', 'Virtus'],
   'mage cape': ['Imbued sara', 'Infernal'],
 };
 const FIXED = new Set(['necklace', 'boots', 'gloves']);           // mage gear the sim always assumes

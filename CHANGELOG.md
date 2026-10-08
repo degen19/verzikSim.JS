@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.13.0 - 2026-10-08
+- Optimizer: collapsible player sections (Expand all / Collapse all, "N varied" in each header).
+- Mage gear per piece in the Optimizer (helm / top / bottom / cape). New mage helm options **Take off** (no helm) and **None** (keeps the melee helm) in the template's mage helm dropdown, the builder and the Optimizer.
+- Optimizer options removed: melee helm / body / legs / amulet, melee prayer, Boak side, Redemption flick, Pass green if death. East Pattern only for East Boak players.
+
 ## v1.12.0 - 2026-10-08
 - **Set C** (third comparison set): builder tabs A / B / C with copy between any two sets; Run tab Set C label; report, charts, Optimizer set picker and terminal runner (`--labels "A" "B" "C"`) take up to three sets. Saved charts / files include Set C.
 - Set C is a page feature: the builder adds it as a copy of Set B's layout (`withSetC`); the chart reader also accepts a `SET C` block in a spreadsheet. The .xlsx template itself still has Sets A and B.
