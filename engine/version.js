@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.6.1';
+export const VERSION = '1.7.0';
 export const CHANGES = [
+  { version: '1.7.0', date: '2026-10-08', items: [
+    'Report: new chart "Finished by this time or faster - % of all attempts". Failed raids count as attempts, so each line levels off at the set\'s success rate (dashed line). This is your odds per attempt, the same way the Optimizer counts.',
+    'Report: the Splits table and the existing charts now say clearly that they use successful runs only, with the number of kills out of all attempts for each set.',
+    'Run tab: optional Breakpoints (e.g. 5:21, 5:12, 5:00). They are marked on the new chart and added to the Odds table as "Under 5:00 (all attempts)" and "(of kills)". Remembered in your browser.',
+  ] },
   { version: '1.6.1', date: '2026-10-05', items: [
     'Chart builder: "Clear chart" empties just the P1 chart (everything else stays).',
     'Chart builder: "Lock chart" protects the P1 chart - its cells can\'t be edited, and "Reset this set" / "Copy" leave it alone while resetting or copying everything else. Each set has its own lock, saved with the chart.',

@@ -2,6 +2,7 @@
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart } from './engine/sim.js';
 import { mergeResults, reportHtml, reportPage, REPORT_CSS } from './engine/report.js';
+import { parseBreakpoints } from './engine/optimize.js';
 import { VERSION, CHANGES } from './engine/version.js';
 import { createBuilder } from './builder-ui.js';
 import { createOptimizer } from './optimizer-ui.js';
@@ -107,13 +108,24 @@ export function runWorkers(cfgs, t, runs, seed, onProgress) {
   return p;
 }
 
+// Run-tab breakpoints: marked on the report's "% of all attempts" chart and added to the Odds table. Remembered in this browser.
+const BPS_KEY = 'verzikSim.runBps';
+try { const v = localStorage.getItem(BPS_KEY); if (v != null) $('bpsRun').value = v; } catch { /* storage off */ }
+$('bpsRun').addEventListener('change', () => { try { localStorage.setItem(BPS_KEY, $('bpsRun').value); } catch { /* storage off */ } });
+function runBps() {
+  const v = $('bpsRun').value.trim();
+  if (!v) return [];
+  try { return parseBreakpoints(v); } catch (e) { throw new Error(`Breakpoints: ${e.message}`); }
+}
+
 /** Used by the Optimizer's "Full report vs your chart". */
 async function runReport(cfgsList, labels) {
   const runs = Math.max(100, Number($('runs').value) || 20000);
   const seed = Math.floor(Math.random() * 1e9);
   const res = [];
   for (const c of cfgsList) res.push(await runWorkers(c, team(), runs, seed));
-  return reportHtml(res, labels, team(), runs);
+  let breakpoints = []; try { breakpoints = runBps(); } catch { /* a bad Run-tab entry shouldn't block this */ }
+  return reportHtml(res, labels, team(), runs, { breakpoints });
 }
 
 $('go').addEventListener('click', async () => {
@@ -121,6 +133,7 @@ $('go').addEventListener('click', async () => {
   const t = team(), runs = Math.max(100, Number($('runs').value) || 20000);
   const seed = $('seed').value === '' ? Math.floor(Math.random() * 1e9) : Number($('seed').value);
   try {
+    const breakpoints = runBps();
     const wb = await getWorkbook();
     if (!wb) throw new Error('Import a chart or build one on the page first.');
     const sets = [];
@@ -144,8 +157,8 @@ $('go').addEventListener('click', async () => {
     $('prog').style.width = '100%';
     const secs = (performance.now() - t0) / 1000;
     $('runStatus').textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * sets.length / secs).toLocaleString()} raids/s · ${lastInfo ? lastInfo.mode : ''} (seed ${seed}).`;
-    $('out').innerHTML = reportHtml(res, labels, t, runs);
-    lastPage = reportPage(res, labels, t, runs);
+    $('out').innerHTML = reportHtml(res, labels, t, runs, { breakpoints });
+    lastPage = reportPage(res, labels, t, runs, { breakpoints });
     $('dl').disabled = false;
   } catch (err) {
     $('err').textContent = err.message;

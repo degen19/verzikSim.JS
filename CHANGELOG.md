@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.7.0 - 2026-10-08
+- Report: new **"Finished by this time or faster - % of all attempts"** chart. Failed raids count as attempts, so each line levels off at that set's success rate (dashed). Same counting as the Optimizer.
+- Report: Splits table and the existing charts are labelled as **successful runs only**, with kills / attempts per set.
+- Run tab: optional **Breakpoints** (`5:21, 5:12, 5:00`): marked on the new chart and added to the Odds table ("Under 5:00 (all attempts)" / "(of kills)"). Terminal: `--bps "5:21, 5:12, 5:00"`.
+
 ## v1.6.1 - 2026-10-05
 - Builder: **Clear chart** (P1 chart only) and **Lock chart** (locked chart can't be edited and is kept by Reset this set / Copy; per set; saved in the browser and in saved chart files).
 

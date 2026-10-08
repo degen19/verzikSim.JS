@@ -2,6 +2,7 @@
 // Run the sim from the command line (uses all CPU cores) and write an HTML report.
 //   node cli/run.mjs my_chart.xlsx --team 2
 //   node cli/run.mjs my_chart.xlsx --team 4 --runs 50000 --seed 1 --labels "Setup A" "Setup B" --out report.html
+//   node cli/run.mjs my_chart.xlsx --team 4 --bps "5:21, 5:12, 5:00"   (breakpoints for the all-attempts chart + odds)
 //   node cli/run.mjs my_chart.xlsx --all            (every filled tab: 2, 3, 4 and 5-man)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
@@ -10,10 +11,11 @@ import { fileURLToPath } from 'node:url';
 import { readXlsx } from '../engine/xlsx.js';
 import { parse_chart } from '../engine/sim.js';
 import { reportPage } from '../engine/report.js';
+import { parseBreakpoints } from '../engine/optimize.js';
 import { planChunks, mergeResults, runChunksSequential, workerCount } from '../engine/parallel.js';
 
 function args() {
-  const a = process.argv.slice(2), o = { runs: 20000, seed: null, labels: null, team: null, out: null, all: false, threads: workerCount(cpus().length) };
+  const a = process.argv.slice(2), o = { runs: 20000, seed: null, labels: null, team: null, out: null, bps: [], all: false, threads: workerCount(cpus().length) };
   o.chart = a[0];
   for (let i = 1; i < a.length; i++) {
     if (a[i] === '--team') o.team = Number(a[++i]);
@@ -21,11 +23,12 @@ function args() {
     else if (a[i] === '--seed') o.seed = Number(a[++i]);
     else if (a[i] === '--out') o.out = a[++i];
     else if (a[i] === '--all') o.all = true;
+    else if (a[i] === '--bps') o.bps = parseBreakpoints(a[++i]);
     else if (a[i] === '--threads') o.threads = Math.max(1, Number(a[++i]) || 1);
     else if (a[i] === '--labels') { o.labels = [a[++i], a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : undefined].filter(Boolean); }
   }
   if (!o.chart || (!o.team && !o.all)) {
-    console.log('usage: node cli/run.mjs chart.xlsx --team 2|3|4|5 [--runs 20000] [--seed N] [--threads N] [--labels "A" "B"] [--out report.html]\n' +
+    console.log('usage: node cli/run.mjs chart.xlsx --team 2|3|4|5 [--runs 20000] [--seed N] [--threads N] [--labels "A" "B"] [--bps "5:21,5:12,5:00"] [--out report.html]\n' +
                 '       node cli/run.mjs chart.xlsx --all');
     process.exit(1);
   }
@@ -82,7 +85,7 @@ for (const team of teams) {
     continue;
   }
   const out = o.out && !o.all ? o.out : `verzik_${team}man_report.html`;
-  writeFileSync(out, reportPage(res, labels, team, o.runs));
+  writeFileSync(out, reportPage(res, labels, team, o.runs, { breakpoints: o.bps }));
   res.forEach((r, k) => console.log(`${labels[k]}: success ${(r.succ * 100).toFixed(2)}%`));
   console.log(`${team}-man done in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${out}`);
 }

@@ -41,7 +41,8 @@ On the page:
 3. Set **Raids per set** (20,000 is a good default).
 4. Optionally set a **Seed**. With the same seed you get the same results again.
 5. Optionally name **Set A** and **Set B**. If the tab has a filled second block, it runs both and compares them.
-6. Press **Run**. When it finishes, **Download report** saves a standalone HTML copy of the results.
+6. Optionally type **Breakpoints** (e.g. `5:21, 5:12, 5:00`) to mark your target times on the report.
+7. Press **Run**. When it finishes, **Download report** saves a standalone HTML copy of the results.
 
 ### Building a chart on the page
 **Build chart on this page** shows the template's inputs for the selected scale: setup, team settings, gear, mage gear and the P1 tick chart, with Set A and Set B.
@@ -59,6 +60,8 @@ The **Optimizer** tab tests combinations of chart inputs and ranks them:
 4. **Start search.** Every setup plays the same raids; weak setups are dropped after a quick screen, and the finalists are re-run on fresh raids so the winner isn't a lucky one. **Full report vs your chart** runs the normal report for any result.
 
 Rates count all attempts, including failed ones. Only inputs that exist on the chart can be varied - new behaviours need a sim update.
+
+**Reading the report:** the Splits table (Median / Top 10% / Top 25% / Bottom 25%), the histogram and the first "Finished by this time" chart use each set's **successful runs only** - a failed raid has no room time. The "% of all attempts" chart counts failed raids too, so it levels off at the success rate; it's your odds of a given time per attempt, the same way the Optimizer counts.
 
 ### Multithreading
 Report runs are split into chunks of 2,000 raids that run in parallel Web Workers (`pool.js`). Everything still runs in your browser - nothing is sent anywhere.
