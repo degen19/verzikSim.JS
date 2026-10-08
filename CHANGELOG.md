@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.13.1 - 2026-10-08
+- Optimizer: Amulet (Rancour / Blood fury) back as a per-player option.
+
 ## v1.13.0 - 2026-10-08
 - Optimizer: collapsible player sections (Expand all / Collapse all, "N varied" in each header).
 - Mage gear per piece in the Optimizer (helm / top / bottom / cape). New mage helm options **Take off** (no helm) and **None** (keeps the melee helm) in the template's mage helm dropdown, the builder and the Optimizer.

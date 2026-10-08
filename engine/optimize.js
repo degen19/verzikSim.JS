@@ -113,6 +113,8 @@ export function catalog(cfgs, team) {
       opts.push({ id: `ring_${i}`, group: g, label: 'Ring swap %', kind: 'num', current: Number(c.ringSwitch ?? c.targetSpec ?? 100),
         apply: (cf, v) => { cf[i].ringSwitch = v; } });
     }
+    opts.push({ id: `amulet_${i}`, group: g, label: 'Amulet', kind: 'choice', choices: ['Rancour', 'Blood fury'], current: c.amulet || 'Rancour',
+      apply: (cf, v) => { cf[i].amulet = v; } });
     if (c.shadow) {
       const mg = c.mage || {};
       opts.push({ id: `mcape_${i}`, group: g, label: 'Mage cape', kind: 'choice', choices: MAGE_CAPES, current: mg.cape || 'Imbued saradomin cape',

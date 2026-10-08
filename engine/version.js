@@ -1,6 +1,7 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.13.0';
+export const VERSION = '1.13.1';
 export const CHANGES = [
+  { version: '1.13.1', date: '2026-10-08', items: ['Optimizer: Amulet (Rancour / Blood fury) is back as a per-player option.'] },
   { version: '1.13.0', date: '2026-10-08', items: [
     'Optimizer: each player\'s options sit in a collapsible section (closed by default, with Expand all / Collapse all; the header shows how many options you\'re varying).',
     'Optimizer: mage gear is chosen per piece - Mage helm, Mage top, Mage bottom (plus Mage cape) - instead of a whole Ancestral / Virtus set.',
