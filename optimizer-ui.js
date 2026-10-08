@@ -9,6 +9,7 @@ const fmtS = (s) => `${Math.floor(s / 60)}:${String(Math.round((s % 60) * 10) / 
 const dur = (sec) => (sec < 90 ? `${Math.max(1, Math.round(sec))} seconds` : sec < 5400 ? `${Math.round(sec / 60)} minutes` : `${(sec / 3600).toFixed(1)} hours`);
 const DEFAULT_NUM = { ring: '20, 35, 50, 65, 80', deep: 'off, 40, 42, 44' };
 const CORES = threadCount();                    // same worker count as report runs (all logical cores; ?threads=N overrides)
+const BPS_KEY = 'verzikSim.optBps.v1';  // breakpoints typed per scale: {team: text}
 const RATE_KEY = 'verzikSim.rate.v2';   // v2: engine got ~1.4x faster in v1.6.0, so older measurements are stale            // measured raids/second per scale, from finished searches on this computer
 const rates = (() => { try { return JSON.parse(localStorage.getItem(RATE_KEY)) || {}; } catch { return {}; } })();
 const keepRate = (t, r) => { rates[`${t}:${CORES}`] = r; try { localStorage.setItem(RATE_KEY, JSON.stringify(rates)); } catch { /* ignore */ } };
@@ -20,7 +21,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
   root.innerHTML = `
     <div class="row wrap">
       <label>Set<select id="o-set"><option value="A">Set A</option><option value="B">Set B</option></select></label>
-      <label>Breakpoints (m:ss)<input id="o-bps" value="5:21, 5:12, 5:00" style="width:200px"></label>
+      <label title="Target room times for this scale. Leave blank to rank by success rate.">Breakpoints (m:ss)<input id="o-bps" placeholder="m:ss, comma-separated" style="width:200px"></label>
       <label>Rank by<select id="o-rank"></select></label>
       <label>Search depth<select id="o-depth">${Object.entries(DEPTHS).map(([k, d]) => `<option value="${k}" ${k === 'standard' ? 'selected' : ''}>${d.label}</option>`).join('')}</select></label>
     </div>
@@ -38,12 +39,19 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     <div id="o-report"></div>`;
   const $ = (id) => root.querySelector(`#${id}`);
 
-  function bps() { try { const b = parseBreakpoints($('o-bps').value); $('o-err').textContent = ''; return b; } catch (e) { $('o-err').textContent = e.message; return null; } }
+  const savedBps = (() => { try { return JSON.parse(localStorage.getItem(BPS_KEY)) || {}; } catch { return {}; } })();
+  const keepBps = () => { savedBps[team] = $('o-bps').value; try { localStorage.setItem(BPS_KEY, JSON.stringify(savedBps)); } catch { /* ignore */ } };
+  /** Breakpoints in seconds; [] when the box is blank (rank by success only); null (with a message) when it can't be read. */
+  function bps() {
+    if (!$('o-bps').value.trim()) { $('o-err').textContent = ''; return []; }
+    try { const b = parseBreakpoints($('o-bps').value); $('o-err').textContent = ''; return b; } catch (e) { $('o-err').textContent = e.message; return null; }
+  }
   function rankOptions() {
     const b = bps() || [];
     const cur = $('o-rank').value;
     $('o-rank').innerHTML = b.map((s, j) => `<option value="${j}">Faster than ${fmtS(s)}</option>`).join('') + `<option value="success">${team === 2 ? '2-down success' : 'Success'}</option>`;
     if ([...$('o-rank').options].some((o) => o.value === cur)) $('o-rank').value = cur;
+    $('o-rank').title = b.length ? '' : 'Add breakpoints to rank by a room time';
   }
 
   function values(o) {
@@ -70,7 +78,14 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     estimate();
   }
 
-  async function calibrate() {
+  // The speed test runs once at a time. A search started meanwhile waits for it (they used to share the worker pool,
+  // and the test's clean-up shut down the search's workers, so the search hung with no progress).
+  let calibrating = null;
+  function calibrate() {
+    if (!calibrating) calibrating = calibrateNow().finally(() => { calibrating = null; });
+    return calibrating;
+  }
+  async function calibrateNow() {
     const key = JSON.stringify([team, block]);
     if (rate && rateKey === key) return rate;
     rateKey = key;
@@ -129,6 +144,10 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     $('o-err').textContent = ''; $('o-out').innerHTML = ''; $('o-report').innerHTML = '';
     if (!workersAvailable()) { $('o-err').textContent = "This browser doesn't support Web Workers, which the Optimizer needs. Try a current Chrome, Edge, Firefox or Safari."; return; }
     const b = bps(); if (!b) return;
+    if (calibrating) {
+      $('o-status').textContent = 'Finishing the speed test first...';
+      try { await calibrating; } catch { /* the search measures its own speed anyway */ }
+    }
     curBps = b;
     const metric = $('o-rank').value === 'success' ? 'success' : Number($('o-rank').value);
     const depth = DEPTHS[$('o-depth').value];
@@ -224,7 +243,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     if (t.dataset.on) { sel[t.dataset.on].on = t.checked; renderOpts(); return; }
     if (t.dataset.text) { sel[t.dataset.text].text = t.value; estimate(); return; }
     if (t.dataset.pick) { const s = sel[t.dataset.pick]; t.checked ? s.picks.add(t.value) : s.picks.delete(t.value); estimate(); return; }
-    if (t.id === 'o-bps') { rankOptions(); return; }
+    if (t.id === 'o-bps') { keepBps(); rankOptions(); return; }
     if (t.id === 'o-depth') { estimate(); return; }
     if (t.id === 'o-set') { block = t.value; refresh(); }
   });
@@ -233,7 +252,8 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
 
   async function refresh() {
     $('o-err').textContent = '';
-    team = getTeam();
+    const t = getTeam();
+    if (t !== team) { team = t; $('o-bps').value = savedBps[team] || ''; rankOptions(); }   // each scale keeps its own breakpoints
     const wb = await getWorkbook();
     if (!wb) { $('o-opts').innerHTML = '<p class="muted">Import a chart or build one above first.</p>'; cfgs = null; estimate(); return; }
     try { cfgs = await parse_chart(wb, team, null, block); } catch (e) { cfgs = null; $('o-opts').innerHTML = ''; $('o-err').textContent = e.message; return; }

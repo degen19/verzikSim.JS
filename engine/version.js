@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.8.0';
+export const VERSION = '1.8.1';
 export const CHANGES = [
+  { version: '1.8.1', date: '2026-10-08', items: [
+    'Breakpoints are kept per scale (Run tab and Optimizer), so duo times don\'t follow you to 4-man. The Optimizer\'s breakpoints start blank: leave them blank to rank by success rate.',
+    'Report charts: labels are placed so they never overlap each other or the marker dots, and stay off the lines where possible (with a thin pointer line when a label has to move away).',
+    'Fixed: pressing Start search while the Optimizer was still measuring this computer\'s speed could make the search hang with no progress.',
+  ] },
   { version: '1.8.0', date: '2026-10-08', items: [
     'Chart library (Build chart on this page): give a chart a name and Save it in this browser. Pick any saved chart from the Chart list to load it, and Delete it from the same bar. The bar shows when the page has unsaved changes.',
     'Default charts: ready-made charts appear in the same Chart list (under "Default charts") for the selected scale. Loading one gives you a copy - save it under your own name to keep changes.',

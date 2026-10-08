@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.8.1 - 2026-10-08
+- Breakpoints are kept **per scale** on the Run tab and in the Optimizer. The Optimizer's breakpoints start blank (blank = rank by success rate); hints say `m:ss, comma-separated`.
+- Report charts: **labels no longer overlap** - each label picks a free spot around its point (off other labels, marker dots and, where possible, the lines), with a leader line if it has to move away; labels have a background halo.
+- Fixed: **Start search** pressed while the Optimizer was measuring speed hung the search (the speed test shut down the search's workers).
+
 ## v1.8.0 - 2026-10-08
 - **Chart library** in "Build chart on this page": name a chart and **Save** it in this browser; the **Chart** list loads any saved chart (per scale); **Delete**; **New** starts blank. The bar shows unsaved changes.
 - **Default charts**: listed in `defaults/index.json` (a builder .json or a filled .xlsx per entry, see `defaults/README.md`) and shown under "Default charts" in the same list.

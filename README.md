@@ -41,7 +41,7 @@ On the page:
 3. Set **Raids per set** (20,000 is a good default).
 4. Optionally set a **Seed**. With the same seed you get the same results again.
 5. Optionally name **Set A** and **Set B**. If the tab has a filled second block, it runs both and compares them.
-6. Optionally type **Breakpoints** (e.g. `5:21, 5:12, 5:00`) to mark your target times on the report.
+6. Optionally type **Breakpoints** (`m:ss`, comma-separated; kept per scale) to mark your target times on the report.
 7. Press **Run**. When it finishes, **Download report** saves a standalone HTML copy of the results.
 
 ### Building a chart on the page
@@ -56,7 +56,7 @@ On the page:
 
 ### Optimizer
 The **Optimizer** tab tests combinations of chart inputs and ranks them:
-1. Pick the **Set**, type your **Breakpoints** (any number of times, e.g. `5:21, 5:12, 5:00`) and what to **Rank by**.
+1. Pick the **Set**, type your **Breakpoints** (any number of times, `m:ss` comma-separated; kept per scale; leave blank to rank by success) and what to **Rank by**.
 2. Tick each input to vary and list the values to try - ring swap % per player, death charges, deep proc %, melee prayer, gear pieces, mage cape / armour, shadow modes, 3:1 and the other toggles your chart has.
 3. Check the estimated run time (shown before you start) and untick options if it's too long. **Search depth** trades time for precision.
 4. **Start search.** Every setup plays the same raids; weak setups are dropped after a quick screen, and the finalists are re-run on fresh raids so the winner isn't a lucky one. **Full report vs your chart** runs the normal report for any result.

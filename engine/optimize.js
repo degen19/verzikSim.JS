@@ -183,14 +183,14 @@ export function score(c, metric) {
 }
 export const finalScore = (c, metric) => (metric === 'success' ? c.k / c.n : c.under[metric] / c.n);
 
-/** Parse "5:21, 5:12, 5:00" into seconds (sorted slowest first). */
+/** Parse "m:ss, m:ss, ..." into seconds (sorted slowest first). */
 export function parseBreakpoints(text) {
   const out = [];
   for (const part of String(text).split(/[,\s]+/).filter(Boolean)) {
     const m = part.match(/^(\d+):(\d{1,2}(?:\.\d+)?)$/);
-    if (!m) throw new Error(`"${part}" isn't a time - use m:ss, e.g. 5:12`);
+    if (!m) throw new Error(`"${part}" isn't a time - use m:ss, comma-separated`);
     out.push(Number(m[1]) * 60 + Number(m[2]));
   }
-  if (!out.length) throw new Error('Add at least one breakpoint, e.g. 5:21, 5:12, 5:00');
+  if (!out.length) throw new Error('Add at least one breakpoint (m:ss, comma-separated)');
   return [...new Set(out)].sort((a, b) => b - a);
 }

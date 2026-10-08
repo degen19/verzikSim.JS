@@ -53,6 +53,7 @@ $('src').addEventListener('click', async (e) => {
   if (tab === 'opt') optimizer.refresh();
 });
 $('team').addEventListener('change', async () => {
+  showRunBps();
   if (source === 'build') await builder.show(team());
   if (tab === 'opt') optimizer.refresh();
   prewarm();
@@ -109,9 +110,12 @@ export function runWorkers(cfgs, t, runs, seed, onProgress) {
 }
 
 // Run-tab breakpoints: marked on the report's "% of all attempts" chart and added to the Odds table. Remembered in this browser.
-const BPS_KEY = 'verzikSim.runBps';
-try { const v = localStorage.getItem(BPS_KEY); if (v != null) $('bpsRun').value = v; } catch { /* storage off */ }
-$('bpsRun').addEventListener('change', () => { try { localStorage.setItem(BPS_KEY, $('bpsRun').value); } catch { /* storage off */ } });
+// Kept per scale, so duo times don't follow you to 4-man.
+const BPS_KEY = 'verzikSim.runBps.v2';
+const runBpsSaved = (() => { try { return JSON.parse(localStorage.getItem(BPS_KEY)) || {}; } catch { return {}; } })();
+const showRunBps = () => { $('bpsRun').value = runBpsSaved[team()] || ''; };
+showRunBps();
+$('bpsRun').addEventListener('input', () => { runBpsSaved[team()] = $('bpsRun').value; try { localStorage.setItem(BPS_KEY, JSON.stringify(runBpsSaved)); } catch { /* storage off */ } });
 function runBps() {
   const v = $('bpsRun').value.trim();
   if (!v) return [];
