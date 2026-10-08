@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.15.2 - 2026-10-08
+- Shadow mode rules: Shadow camp / 3:1 / Shadow while LB / Deep proc need Shadow; Shadow camp excludes 3:1 and Shadow while LB. Builder disables invalid boxes (tooltips), Optimizer skips invalid setups, imported charts get Run-tab notes.
+- Builder note + Mechanics sheet: Shadow while LB takes priority over 3:1 (shadow on LB hits, then 3:1 after the swap); full priority Deep proc > camp > while LB > 3:1.
+- Fix: 3:1 without Shadow no longer casts shadows (engine now clears shadow modes for non-shadow players).
+
 ## v1.15.1 - 2026-10-08
 - Chart template calc sheet: the 95% start rule in every scale and set (helper cell per player = first Dawn tick + 1; regen held before it, R on it). Verified against the page planner on recalculated charts (100 player rows, 0 differences).
 

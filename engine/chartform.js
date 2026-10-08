@@ -144,6 +144,20 @@ export function overlaySheet(tplWs, descs, values) {
   };
 }
 
+/**
+ * Shadow mode rules for one player. `on(header)` = is that checkbox ticked. Returns why `header` can't be ticked,
+ * or '' if it can. Shadow camp, 3:1, Shadow while LB and Deep proc need Shadow; Shadow camp excludes 3:1 and Shadow
+ * while LB (camp already shadows every P2 attack). Shadow while LB + 3:1 is fine: shadow on LB hits, then 3:1.
+ */
+export const SHADOW_MODES = ['Shadow camp', '3:1', 'Shadow while LB', 'Deep proc'];
+export function shadowBlock(header, on) {
+  if (!SHADOW_MODES.includes(header)) return '';
+  if (!on('Shadow')) return 'Needs Shadow ticked (a player without a shadow)';
+  if (header === 'Shadow camp' && (on('3:1') || on('Shadow while LB'))) return "Can't be combined with 3:1 or Shadow while LB";
+  if ((header === '3:1' || header === 'Shadow while LB') && on('Shadow camp')) return "Can't be combined with Shadow camp (camp already shadows every P2 attack)";
+  return '';
+}
+
 /** Chart checks, per player: the same rules as the spreadsheet's Check column. Returns a message or ''. */
 export function checkRow(acts, has3Tick, team) {
   let prev = null;

@@ -1,6 +1,6 @@
 // "Build chart on this page": the chart template's inputs as a form, for the selected scale. Saved in this browser.
 import { readXlsx } from './engine/xlsx.js';
-import { describe, readValues, overlaySheet, checkRow, withSetC, BLOCKS, CODES, CODE_HELP, isAutoTick } from './engine/chartform.js';
+import { describe, readValues, overlaySheet, checkRow, withSetC, shadowBlock, SHADOW_MODES, BLOCKS, CODES, CODE_HELP, isAutoTick } from './engine/chartform.js';
 import { readPlanInputs, plan } from './engine/planner.js';
 
 const STORE = 'verzikSim.builder.v1';
@@ -19,7 +19,11 @@ const HELP = {
   'startSpec (%)': 'Spec % at the start of the room', lightbearerOn: 'Starts the room on Lightbearer',
   'Custom Surge Timing': 'Room time of a surge pot without a P in the chart (m:ss)', 'Target spec': 'Spec used in P2 (the ring-swap target if no Ring switch %)',
   'Ring switch %': 'Swap Lightbearer -> Ultor at this spec %. Both this and Target spec blank: swap when the regen in progress at P1\'s end lands, as long as they still reach 50% (one claw) by reds r36', 'P3 target spec': 'Spec wanted for P3 (default 30)',
-  'Death tick': 'Tick P1 dies (blank = last charted tick)', redCrab: 'Red crab hit once during the reds shield',
+  'Death tick': 'Tick P1 dies (blank = last charted tick)',
+  'Shadow while LB': 'Shadow while wearing Lightbearer, then scythe (or 3:1) after the swap. Takes priority over 3:1: with both ticked they shadow on Lightbearer hits, then 3:1. Needs Shadow; not with Shadow camp.',
+  '3:1': 'Scythe, but the attack that would collide with Verzik becomes a shadow. With Shadow while LB: 3:1 starts after the ring swap. Needs Shadow; not with Shadow camp.',
+  'Shadow camp': 'Duo: shadow every P2 attack until reds. Needs Shadow; not with 3:1 or Shadow while LB (camp already covers them).',
+  'Deep proc': 'Shadow from max distance below the Deep proc HP %. Needs Shadow.', redCrab: 'Red crab hit once during the reds shield',
   offPrayer: "Verzik P3 autos taken off prayer (0-9)",
   '4 Claw Priority': "If Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status prioritises 100% spec for reds (both claws by r36, taking over the purple DC); the others prioritise 50%. Off: rings follow the chart.", has3Tick: 'Weapon used by H in the P1 chart',
 };
@@ -143,9 +147,17 @@ export function createBuilder(root, { onChange }) {
     } catch (err) { render(); libMsg(err.message); }
   }
 
+  /** Is this player's checkbox `header` (any table) ticked? */
+  const ticked = (header, player) => {
+    for (const t of ['gear', 'setup']) { const fd = field(t, header, player); if (fd) return vals()[fd.key] === true || (vals()[fd.key] ?? fd.def) === true; }
+    return false;
+  };
   function input(f, v) {
     const k = `data-key="${esc(f.key)}"`;
-    if (f.type === 'bool') return `<input type="checkbox" ${k} ${v === true ? 'checked' : ''}>`;
+    if (f.type === 'bool') {
+      const why = f.player != null ? shadowBlock(f.header, (h) => ticked(h, f.player)) : '';
+      return `<input type="checkbox" ${k} ${v === true && !why ? 'checked' : ''} ${why ? `disabled title="${esc(why)}"` : ''}>`;
+    }
     if (f.type === 'select') {
       const ch = [...f.choices]; if (v !== '' && !ch.map(String).includes(String(v))) ch.push(v);
       return `<select ${k}>${ch.map((c) => `<option ${String(c) === String(v) ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
@@ -220,6 +232,7 @@ export function createBuilder(root, { onChange }) {
       <h3>Team settings</h3><div class="row wrap teamset">${teamFields}</div>
       ${d.team.some((f) => f.header === '4 Claw Priority') ? `<p class="muted small">4 Claw Priority (on by default): when checked, if Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status (didn't use their last Dawn; ties: highest spec % out of P1, then closest to their next regen) prioritises 100% spec for reds - both claws by r36, and they take over the purple DC. The others prioritise 50% (one claw by r36). Each camps Lightbearer only as long as needed.</p>` : ''}
       <h3>Gear</h3>${playerTable('gear', d.gear)}
+      ${d.gear.includes('Shadow while LB') ? `<p class="muted small">Shadow modes need Shadow ticked. Shadow while LB takes priority over 3:1 - with both ticked, they shadow on Lightbearer hits, then 3:1 after the ring swap.${d.gear.includes('Shadow camp') ? ' Shadow camp can\'t be combined with 3:1 or Shadow while LB.' : ''}</p>` : ''}
       ${d.mage.length ? `<h3>Mage gear <span class="muted small">(used by Shadow players)</span></h3>${playerTable('mage', d.mage)}` : ''}
       <div class="row between" style="margin-top:18px"><h3 style="margin:0">P1 chart ${locked() ? '<span class="muted small">(locked)</span>' : ''}</h3>
         <div class="row"><button class="ghost sm" data-act="clearchart" ${locked() ? 'disabled title="Unlock the chart to clear it"' : ''}>Clear chart</button>
@@ -240,7 +253,15 @@ export function createBuilder(root, { onChange }) {
     const f = tpl[team].descs[block].fields.get(key);
     if (f && f.type === 'select' && typeof f.choices[0] === 'number') v = Number(v);
     vals()[key] = v;
-    if (key.startsWith('setup|Name|')) { render(); }
+    const fld = tpl[team].descs[block].fields.get(key);
+    if (fld && fld.player != null && (fld.header === 'Shadow' || SHADOW_MODES.includes(fld.header))) {
+      // keep the shadow modes valid: clear any box this change made unavailable, then redraw
+      for (const h of SHADOW_MODES) {
+        const g = field('gear', h, fld.player) || field('setup', h, fld.player);
+        if (g && vals()[g.key] === true && shadowBlock(h, (x) => ticked(x, fld.player))) vals()[g.key] = false;
+      }
+      render();
+    } else if (key.startsWith('setup|Name|')) { render(); }
     else refreshDerived();
     persist();
   });

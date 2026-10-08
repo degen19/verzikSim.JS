@@ -556,6 +556,16 @@ export async function parse_chart(wb, team, tab = null, block = 'A') {
         ['eastBoak', 'East Boak'], ['westBoak', 'West Boak'], ['redemptionFlick', 'Redemption flick'], ['pneckP1', 'Pneck on P1'], ['passGreen', 'Pass green if death']]) {
         if (get(h) != null && pystr(get(h)).trim() !== '') cfgs[k][key] = yes(get(h));
       }
+      // shadow modes need Shadow; Shadow camp takes over 3:1 / Shadow while LB. cfgs.notes tells the page what was ignored.
+      const c = cfgs[k], nm = c.name || `P${k + 1}`, modes = [['shadowLB', 'Shadow while LB'], ['deepProc', 'Deep proc'], ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1']];
+      cfgs.notes = cfgs.notes || [];
+      if (!c.shadow) {
+        const on = modes.filter(([key]) => c[key]).map(([, h]) => h);
+        if (on.length) cfgs.notes.push(`${nm}: ${on.join(', ')} ticked without Shadow - ignored.`);
+        for (const [key] of modes) c[key] = false;
+      } else if (c.shadowCamp && (c.shadow31 || c.shadowLB)) {
+        cfgs.notes.push(`${nm}: Shadow camp is ticked with ${[c.shadow31 && '3:1', c.shadowLB && 'Shadow while LB'].filter(Boolean).join(' and ')} - camp takes over, so ${c.shadow31 && c.shadowLB ? 'those are' : 'that is'} never used.`);
+      }
     }
   }
   // mage gear table (rows used only with Shadow)

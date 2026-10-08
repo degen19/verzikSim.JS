@@ -1,7 +1,7 @@
 // Optimizer tab: choose inputs to vary, set breakpoints, see the estimated run time, run a staged search.
 import { parse_chart } from './engine/sim.js';
 import { threadCount, workersAvailable } from './pool.js';
-import { catalog, applyCombo, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts } from './engine/optimize.js';
+import { catalog, applyCombo, validCfgs, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts } from './engine/optimize.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtT = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).padStart(4, '0')}`;
@@ -72,7 +72,11 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     return o.choices.filter((c) => s.picks.has(c));
   }
   const sweep = () => opts.filter((o) => sel[o.id]?.on).map((o) => ({ id: o.id, values: values(o) })).filter((s) => s.values.length);
-  const nCombos = () => sweep().reduce((n, s) => n * s.values.length, 1);
+  const nCombos = () => {
+    const n = sweep().reduce((m, s) => m * s.values.length, 1);
+    if (n > 20000 || !cfgs) return n;                             // count only valid setups (shadow rules) when cheap to
+    return enumerate(sweep()).filter((c) => validCfgs(applyCombo(cfgs, team, c))).length;
+  };
 
   function renderOpts() {
     const groups = {};
@@ -195,7 +199,9 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
         for (const c of combos) {
           const own = Object.fromEntries(Object.entries(c).filter(([id]) => st.opts.some((o) => o.id === id)));
           const key = JSON.stringify(own); if (seen.has(key)) continue; seen.add(key);
-          out.push({ combo: own, set: st, cfgs: applyCombo(scopedOf(st.cfgs), team, own), counts: null });
+          const cf = applyCombo(scopedOf(st.cfgs), team, own);
+          if (!validCfgs(cf)) continue;                            // e.g. Shadow camp + 3:1
+          out.push({ combo: own, set: st, cfgs: cf, counts: null });
         }
         return out;
       });

@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.15.1';
+export const VERSION = '1.15.2';
 export const CHANGES = [
+  { version: '1.15.2', date: '2026-10-08', items: [
+    'Shadow modes: Shadow camp, 3:1, Shadow while LB and Deep proc can only be ticked for a player with Shadow ticked, and Shadow camp can\'t be combined with 3:1 or Shadow while LB (the chart builder greys these out and says why; the Optimizer skips such setups).',
+    'Note on the chart builder and in Mechanics & behavior: Shadow while LB takes priority over 3:1 - with both ticked, they shadow on Lightbearer hits, then 3:1 after the ring swap.',
+    'Fixed: 3:1 ticked for a player without Shadow made them cast shadows in P2. Imported charts with these combinations now run with a note saying what was ignored.',
+  ] },
   { version: '1.15.1', date: '2026-10-08', items: [
     'Chart template: the spreadsheet\'s own End spec / Room Time / LB swings / Time of regen columns now follow the 95% start rule too (no R charted: regen held until the first Dawn spec, forced regen the tick after). Download the template again to get it.',
   ] },

@@ -146,6 +146,9 @@ export function applyCombo(cfgs, team, combo) {
   return cf;
 }
 
+/** False when a setup breaks the shadow rules (Shadow camp together with 3:1 or Shadow while LB). */
+export const validCfgs = (cfgs) => cfgs.every((c) => !(c.shadowCamp && (c.shadow31 || c.shadowLB)));
+
 /** All combinations of the chosen values: sweep = [{id, values: [...]}, ...]. */
 export function enumerate(sweep) {
   let out = [{}];

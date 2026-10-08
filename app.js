@@ -147,6 +147,7 @@ $('go').addEventListener('click', async () => {
       try { const c = await parse_chart(wb, t, null, block); if (filled(c)) sets.push([block, c]); } catch (e) { if (block === 'A') throw e; }
     }
     if (!sets.length) throw new Error(`The ${t}-man chart has no filled P1 chart.`);
+    const notes = sets.flatMap(([b, c]) => (c.notes || []).map((n) => `Set ${b} - ${n}`));
     const scope = $('scope').value;
     for (const s of sets) s[1] = s[1].map((c) => ({ ...c, scope }));                // phases to simulate (see simulate.js)
     const labels = sets.map(([b]) => $(`lab${b}`).value || (b === 'A' ? `${t}-man` : `${t}-man set ${b}`));
@@ -164,6 +165,7 @@ $('go').addEventListener('click', async () => {
     }
     $('prog').style.width = '100%';
     const secs = (performance.now() - t0) / 1000;
+    $('err').textContent = notes.length ? `Chart notes:\n${notes.join('\n')}` : '';
     $('runStatus').textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * sets.length / secs).toLocaleString()} raids/s · ${lastInfo ? lastInfo.mode : ''} (seed ${seed}).`;
     $('out').innerHTML = reportHtml(res, labels, t, runs, { breakpoints });
     lastPage = reportPage(res, labels, t, runs, { breakpoints });
