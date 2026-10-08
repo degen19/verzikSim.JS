@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.14.0';
+export const VERSION = '1.15.0';
 export const CHANGES = [
+  { version: '1.15.0', date: '2026-10-08', items: [
+    'Players starting at 95%: if their chart has no R, they get no regen before their first Dawn spec, then a forced regen (as if R) on the tick after it - so a regen can never take them from 95% to 100% before they spec. Applies to the sim and the page\'s spec planner; a charted R works as before.',
+  ] },
   { version: '1.14.0', date: '2026-10-08', items: [
     'Optimizer: optimize several sets at once. Tick Set A, B and/or C (sets with a filled P1 chart), choose the inputs to vary once, and every ticked set is searched with them on the same raids. Options a set doesn\'t have are skipped for that set.',
     'Results: one ranked table per set, or tick "Combine into one ranked list" for a single ranking across all sets (with a Set column). Switching views doesn\'t re-run anything. Sets are named with the Run tab\'s set labels.',

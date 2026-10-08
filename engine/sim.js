@@ -658,6 +658,9 @@ export function run_p1(cfgs, team, rng, log = null) {
     p.actions = c.actions;
     p.auto_surge_on = team <= 2;           // surge re-use after its cooldown: duos/solos only
     if (Object.values(p.actions).includes('P')) p.custom_tick = null;   // a P on the chart takes priority over the custom timing
+    // 95% start, a Dawn spec on the chart and no R: no regen before their first spec, then a forced regen the tick after it
+    const acts = Object.values(p.actions);
+    p.auto_r = Number(p.spec) === 95 && acts.includes('D') && !acts.includes('R') ? 'pending' : null;
   }
   const pid = players.slice();
   rng.shuffle(pid);
@@ -780,8 +783,14 @@ export function run_p1(cfgs, team, rng, log = null) {
         L.on && L(`t${rjust(t, 3)} ${p.name}: HP ${p.hp} < ${p.bf_hp}, swaps to blood fury`);
       }
       supplies.check_death(p, 'P1', L, t);
-      // timers: spec regen
-      if (p.spec < 100) {
+      // timers: spec regen (95% start: held until their first Dawn spec, then the automatic R the tick after it)
+      if (p.auto_r === t) {
+        const old = p.spec;
+        p.spec = Math.min(100, p.spec + 10); p.gain_src = 'regen'; p.regen_timer = 0; p.auto_r = null;
+        L.on && L(`t${rjust(t, 3)} ${p.name}: regen the tick after their first spec (95% start, no R charted) ${fx(old)}% -> ${fx(p.spec)}%`);
+      } else if (p.auto_r === 'pending') {
+        // no natural regen before their first spec
+      } else if (p.spec < 100) {
         p.regen_timer += 1;
         if (p.regen_timer >= p.regen_period()) {
           p.regen_timer = 0;
@@ -934,6 +943,7 @@ export function run_p1(cfgs, team, rng, log = null) {
           const old = p.spec;
           p.spec -= 35;
           p.dawns_used += 1;
+          if (p.auto_r === 'pending') p.auto_r = t + 1;
           splats = [[rng.randint(75, 150), null]];
           info = `spec ${fx(old)}% -> ${fx(p.spec)}%`;
         } else if (act === 'A') {
@@ -966,6 +976,7 @@ export function run_p1(cfgs, team, rng, log = null) {
     spec_end = players.map((p) => p.spec);
     // 14-tick gap supplies
     if (team === 3 && dget(cfgs[0], 'clawPriority4', true) !== false) claw_priority_setup(players, L, kill_tick);
+    for (const p of players) if (p.auto_r != null) p.auto_r = null;   // never specced (or R due after the kill): regen as normal from here
     for (const p of supplies.by_hp(players)) {
       if (p.dead) continue;
       // P1 -> P2 transition (death animation + 14 ticks, invulnerable): heal up, restore, super combat

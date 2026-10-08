@@ -78,11 +78,17 @@ export function plan({ team, players, nPurples, deathTick, maxTick }) {
   const spec = players.map((p) => [p.start]), timer = players.map(() => [0]), last = players.map(() => 0);
   const surge = players.map((p) => (p.surge != null && !Object.values(p.acts).includes('P') ? p.surge : null));
   const period = players.map((p) => (p.lb ? 25 : 50));
+  // 95% start with a Dawn spec and no R: regen held until their first spec, then a forced regen (R) the tick after it
+  const autoR = players.map((p) => {
+    const ds = Object.entries(p.acts).filter(([, a]) => a === 'D').map(([t]) => Number(t));
+    return p.start === 95 && ds.length && !Object.values(p.acts).includes('R') ? Math.min(...ds) + 1 : null;
+  });
   for (let t = 1; t <= T; t++) {
+    const held = (i) => autoR[i] != null && t < autoR[i];         // no natural regen before the automatic R
     const s1 = players.map((p, i) => Math.min(100, spec[i][t - 1]
-      + (spec[i][t - 1] < 100 && timer[i][t - 1] + 1 >= period[i] ? 10 : 0) + (t === surge[i] ? 25 : 0)));
+      + (!held(i) && t !== autoR[i] && spec[i][t - 1] < 100 && timer[i][t - 1] + 1 >= period[i] ? 10 : 0) + (t === surge[i] ? 25 : 0)));
     for (let i = 0; i < n; i++) {
-      const a = players[i].acts[t] || '';
+      const a = players[i].acts[t] || (t === autoR[i] ? 'R' : '');
       const alive = t <= death;
       const receives = players.some((q, j) => j !== i && q.acts[t] === `ST>${i + 1}` && s1[j] >= 100) && alive;
       let s;
@@ -93,7 +99,7 @@ export function plan({ team, players, nPurples, deathTick, maxTick }) {
       else if (receives) s = 100;
       else s = s1[i];
       spec[i][t] = s;
-      timer[i][t] = a === 'R' ? 0 : spec[i][t - 1] >= 100 ? 0 : timer[i][t - 1] + 1 >= period[i] ? 0 : timer[i][t - 1] + 1;
+      timer[i][t] = a === 'R' || held(i) ? 0 : spec[i][t - 1] >= 100 ? 0 : timer[i][t - 1] + 1 >= period[i] ? 0 : timer[i][t - 1] + 1;
       if (a === 'P' || a === 'R' || (alive && (a === 'D' || a.startsWith('ST>') || receives))) last[i] = t;
     }
   }

@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.15.0 - 2026-10-08
+- **95% start**: with no R on their chart, a player's regen is held until their first Dawn spec and an automatic R lands the tick after it (sim P1 + page spec planner). Charted R unchanged; players without a Dawn spec regen normally. Mechanics & behavior sheet updated. (The spreadsheet's own calc-sheet planner columns still expect the R to be charted.)
+
 ## v1.14.0 - 2026-10-08
 - **Multi-set optimize**: Set A / B / C checkboxes in the Optimizer; one sweep is applied to every ticked set (options a set lacks are skipped, duplicate setups dropped), all on the same raids, screened per set.
 - Results per set, or **Combine into one ranked list** (Set column); Full report compares a setup with its own set as charted. Set names come from the Run tab labels.
