@@ -56,7 +56,7 @@ On the page:
 
 ### Optimizer
 The **Optimizer** tab tests combinations of chart inputs and ranks them:
-1. Pick the **Set**, type your **Breakpoints** (any number of times, `m:ss` comma-separated; kept per scale; leave blank to rank by success) and what to **Rank by**.
+1. Tick the **Sets** to optimize (one or several - each gets its own results table, or one combined ranking), type your **Breakpoints** (any number of times, `m:ss` comma-separated; kept per scale; leave blank to rank by success) and what to **Rank by**.
 2. Tick each input to vary and list the values to try - ring swap % per player, death charges, deep proc %, melee prayer, gear pieces, mage cape / armour, shadow modes, 3:1 and the other toggles your chart has.
 3. Check the estimated run time (shown before you start) and untick options if it's too long. **Search depth** trades time for precision.
 4. **Start search.** Every setup plays the same raids; weak setups are dropped after a quick screen, and the finalists are re-run on fresh raids so the winner isn't a lucky one. **Full report vs your chart** runs the normal report for any result.

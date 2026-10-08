@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.13.1';
+export const VERSION = '1.14.0';
 export const CHANGES = [
+  { version: '1.14.0', date: '2026-10-08', items: [
+    'Optimizer: optimize several sets at once. Tick Set A, B and/or C (sets with a filled P1 chart), choose the inputs to vary once, and every ticked set is searched with them on the same raids. Options a set doesn\'t have are skipped for that set.',
+    'Results: one ranked table per set, or tick "Combine into one ranked list" for a single ranking across all sets (with a Set column). Switching views doesn\'t re-run anything. Sets are named with the Run tab\'s set labels.',
+  ] },
   { version: '1.13.1', date: '2026-10-08', items: ['Optimizer: Amulet (Rancour / Blood fury) is back as a per-player option.'] },
   { version: '1.13.0', date: '2026-10-08', items: [
     'Optimizer: each player\'s options sit in a collapsible section (closed by default, with Expand all / Collapse all; the header shows how many options you\'re varying).',

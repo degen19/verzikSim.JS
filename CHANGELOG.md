@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.14.0 - 2026-10-08
+- **Multi-set optimize**: Set A / B / C checkboxes in the Optimizer; one sweep is applied to every ticked set (options a set lacks are skipped, duplicate setups dropped), all on the same raids, screened per set.
+- Results per set, or **Combine into one ranked list** (Set column); Full report compares a setup with its own set as charted. Set names come from the Run tab labels.
+
 ## v1.13.1 - 2026-10-08
 - Optimizer: Amulet (Rancour / Blood fury) back as a per-player option.
 

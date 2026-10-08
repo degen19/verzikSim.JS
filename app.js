@@ -82,7 +82,9 @@ $('toBuilder').addEventListener('click', async () => {
 });
 
 // ---- tabs
-const optimizer = createOptimizer($('tab-opt'), { getWorkbook, getTeam: team, runReport });
+const optimizer = createOptimizer($('tab-opt'), { getWorkbook, getTeam: team, runReport,
+  getLabel: (b) => $(`lab${b}`).value || `Set ${b}` });                    // Run tab set labels
+for (const b of ['A', 'B', 'C']) $(`lab${b}`).addEventListener('change', () => { if (tab === 'opt') optimizer.refresh(); });
 $('tabs').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   tab = b.dataset.tab;
