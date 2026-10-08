@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.7.0';
+export const VERSION = '1.8.0';
 export const CHANGES = [
+  { version: '1.8.0', date: '2026-10-08', items: [
+    'Chart library (Build chart on this page): give a chart a name and Save it in this browser. Pick any saved chart from the Chart list to load it, and Delete it from the same bar. The bar shows when the page has unsaved changes.',
+    'Default charts: ready-made charts appear in the same Chart list (under "Default charts") for the selected scale. Loading one gives you a copy - save it under your own name to keep changes.',
+    'New starts a blank chart. Save to file now uses the chart\'s name in the file name.',
+  ] },
   { version: '1.7.0', date: '2026-10-08', items: [
     'Report: new chart "Finished by this time or faster - % of all attempts". Failed raids count as attempts, so each line levels off at the set\'s success rate (dashed line). This is your odds per attempt, the same way the Optimizer counts.',
     'Report: the Splits table and the existing charts now say clearly that they use successful runs only, with the number of kills out of all attempts for each set.',

@@ -4,11 +4,16 @@ import { describe, readValues, overlaySheet, checkRow, CODES, CODE_HELP, isAutoT
 import { readPlanInputs, plan } from './engine/planner.js';
 
 const STORE = 'verzikSim.builder.v1';
+const LIB = 'verzikSim.library.v1';          // saved charts: {team: [{id, name, saved, sets}]}
+const LIBCUR = 'verzikSim.libcur.v1';        // which saved / default chart each scale's working copy came from
 const CODE_BG = { S: '#8fd18f', D: '#c9b6e4', A: '#fff2a8', C: '#f8cbad', H: '#f4b183', E: '#b4c7e7', SB: '#ffd966', B: '#d9a6e0', T: '#8eb4e3',
   P: '#ff66cc', R: '#ffffff', X: '#595959', 'ST>n': '#33cc33' };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
 const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: keep in memory */ } };
+const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
+const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
+const when = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 const HELP = {
   'startSpec (%)': 'Spec % at the start of the room', lightbearerOn: 'Starts the room on Lightbearer',
@@ -23,6 +28,9 @@ export function createBuilder(root, { onChange }) {
   const tpl = {};                 // team -> {ws, descs: {A, B}, defaults: {A, B}}
   let state = load();             // team -> {A: {key: value}, B: {...}}
   let team = 4, block = 'A', timer = null;
+  let lib = loadKey(LIB);         // team -> [{id, name, saved, sets}]
+  let cur = loadKey(LIBCUR);      // team -> {kind: 'saved'|'default', id, name, snap}
+  let defaults = null;            // [{name, team, file, note}] from defaults/index.json (null = not fetched yet)
 
   async function ensure(t) {
     if (!tplWb) {
@@ -48,7 +56,89 @@ export function createBuilder(root, { onChange }) {
     for (const [k, v] of Object.entries(old)) if (isChartKey(k)) out[k] = v;
     out[LOCK] = true; return out;
   };
-  const persist = () => { clearTimeout(timer); timer = setTimeout(() => save(state), 300); onChange && onChange(); };
+  const persist = () => { clearTimeout(timer); timer = setTimeout(() => save(state), 300); libStatus(); onChange && onChange(); };
+
+  // ---- chart library: named charts saved in this browser, plus default charts shipped in defaults/
+  const charts = () => lib[team] || [];
+  const snapOf = () => JSON.stringify(state[team]);
+  const dirty = () => !cur[team] || cur[team].snap !== snapOf();
+  async function fetchDefaults() {
+    if (defaults) return defaults;
+    try {
+      const r = await fetch(new URL('./defaults/index.json', import.meta.url), { cache: 'no-cache' });
+      defaults = r.ok ? await r.json() : [];
+    } catch { defaults = []; }
+    if (!Array.isArray(defaults)) defaults = [];
+    return defaults;
+  }
+  /** Sets {A, B, ...} from a default chart file: a .json saved by this page, or a filled .xlsx chart. */
+  async function readDefault(d) {
+    const res = await fetch(new URL(`./defaults/${d.file}`, import.meta.url));
+    if (!res.ok) throw new Error(`Couldn't load the default chart "${d.name}"`);
+    if (/\.xlsx$/i.test(d.file)) {
+      const wb = await readXlsx(new Uint8Array(await res.arrayBuffer()));
+      const ws = await wb.load(`${team}-man`);
+      return { A: readValues(ws, describe(ws, team, 'A')), B: readValues(ws, describe(ws, team, 'B')) };
+    }
+    const j = await res.json();
+    if (j.app !== 'verzikSim' || !j.sets) throw new Error(`"${d.name}" isn't a chart saved from this page`);
+    return j.sets;
+  }
+  const withDefaults = (sets) => ({ A: { ...tpl[team].defaults.A, ...(sets.A || {}) }, B: { ...tpl[team].defaults.B, ...(sets.B || {}) } });
+  function markCurrent(kind, id, name) { cur[team] = { kind, id, name, snap: snapOf() }; saveKey(LIBCUR, cur); }
+  function libBar() {
+    const c = cur[team] || {};
+    const saved = charts().slice().sort((a, b) => a.name.localeCompare(b.name));
+    const defs = (defaults || []).map((d, i) => [d, i]).filter(([d]) => Number(d.team) === team);
+    const sel = (kind, id) => (c.kind === kind && String(c.id) === String(id) ? 'selected' : '');
+    return `<div class="row wrap lib">
+      <label>Chart<select data-lib="pick">
+        <option value="">${c.name ? '- choose a chart -' : '(unsaved working copy)'}</option>
+        ${saved.length ? `<optgroup label="Saved in this browser">${saved.map((x) => `<option value="s:${esc(x.id)}" ${sel('saved', x.id)}>${esc(x.name)}</option>`).join('')}</optgroup>` : ''}
+        ${defs.length ? `<optgroup label="Default charts">${defs.map(([d, i]) => `<option value="d:${i}" ${sel('default', i)}>${esc(d.name)}</option>`).join('')}</optgroup>` : ''}
+      </select></label>
+      <label>Name<input data-lib="name" placeholder="e.g. Booma P1 v2" value="${esc(c.kind === 'saved' ? c.name : '')}" style="width:190px"></label>
+      <button class="sm" data-act="libsave">Save</button>
+      <button class="ghost sm" data-act="libnew" title="Start a new unnamed chart from the blank template">New</button>
+      <button class="ghost sm" data-act="libdel" ${c.kind === 'saved' ? '' : 'disabled'}>Delete</button>
+      <span class="muted small" id="vz-libstat"></span>
+    </div>`;
+  }
+  const libMsg = (m) => { const el = root.querySelector('#vz-libstat'); if (el) { el.textContent = m; el.classList.add('err'); } };
+  function libStatus() {
+    const el = root.querySelector('#vz-libstat'); if (!el) return;
+    el.classList.remove('err');
+    const c = cur[team];
+    if (!c) { el.textContent = `${charts().length} saved ${team}-man chart${charts().length === 1 ? '' : 's'} · working copy not saved under a name`; return; }
+    const what = c.kind === 'default' ? `default chart "${c.name}"` : `"${c.name}"`;
+    el.textContent = dirty() ? `${what} - unsaved changes` : `${what} - ${c.kind === 'saved' ? 'saved' : 'unchanged'}`;
+  }
+  function libSave() {
+    const name = (root.querySelector('[data-lib="name"]').value || '').trim();
+    if (!name) { libMsg('Type a name for this chart, then Save.'); return; }
+    const list = (lib[team] = charts());
+    let x = list.find((y) => y.name.toLowerCase() === name.toLowerCase());
+    const isCur = cur[team] && cur[team].kind === 'saved' && x && x.id === cur[team].id;
+    if (x && !isCur && !confirm(`Replace the saved ${team}-man chart "${x.name}"?`)) return;
+    if (!x) { x = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name }; list.push(x); }
+    x.name = name; x.saved = Date.now(); x.sets = JSON.parse(snapOf());
+    if (!saveKey(LIB, lib)) { libMsg("Couldn't save - this browser's storage is full or turned off. Use Save to file instead."); return; }
+    markCurrent('saved', x.id, name); render();
+  }
+  async function libPick(v) {
+    if (!v) return;
+    if (dirty() && !confirm('The chart on the page has unsaved changes. Load the other chart anyway?')) { render(); return; }
+    try {
+      if (v.startsWith('s:')) {
+        const x = charts().find((y) => y.id === v.slice(2)); if (!x) return;
+        state[team] = withDefaults(x.sets); markCurrent('saved', x.id, x.name);
+      } else {
+        const i = Number(v.slice(2)), d = (await fetchDefaults())[i];
+        state[team] = withDefaults(await readDefault(d)); markCurrent('default', i, d.name);
+      }
+      block = 'A'; save(state); render(); onChange && onChange();
+    } catch (err) { render(); libMsg(err.message); }
+  }
 
   function input(f, v) {
     const k = `data-key="${esc(f.key)}"`;
@@ -110,7 +200,7 @@ export function createBuilder(root, { onChange }) {
   function render() {
     const d = tpl[team].descs[block].tables;
     const teamFields = d.team.map((f) => `<label title="${esc(HELP[f.header] || '')}">${esc(f.header)}${input(f, vals()[f.key] ?? f.def)}</label>`).join('');
-    root.innerHTML = `
+    root.innerHTML = `${libBar()}
       <div class="row between">
         <div class="seg"><button data-block="A" class="${block === 'A' ? 'on' : ''}">Set A</button><button data-block="B" class="${block === 'B' ? 'on' : ''}">Set B (optional)</button></div>
         <div class="row">
@@ -132,6 +222,7 @@ export function createBuilder(root, { onChange }) {
         <button class="ghost sm" data-act="lockchart" title="A locked chart can't be edited and is kept by Reset this set and Copy">${locked() ? 'Unlock chart' : 'Lock chart'}</button></div></div>
       ${chartGrid()}<div id="vz-checks" class="err small"></div>`;
     refreshDerived();
+    libStatus();
   }
 
   root.addEventListener('input', (e) => {
@@ -169,6 +260,18 @@ export function createBuilder(root, { onChange }) {
       for (const k of Object.keys(vals())) if (isChartKey(k)) vals()[k] = '';
       render(); persist();
     }
+    if (act === 'libsave') { libSave(); return; }
+    if (act === 'libdel') {
+      const c = cur[team]; if (!c || c.kind !== 'saved') return;
+      if (!confirm(`Delete the saved chart "${c.name}"? The chart stays on the page as an unsaved working copy.`)) return;
+      lib[team] = charts().filter((y) => y.id !== c.id); saveKey(LIB, lib);
+      delete cur[team]; saveKey(LIBCUR, cur); render(); return;
+    }
+    if (act === 'libnew') {
+      if (dirty() && !confirm('Start a new chart? Unsaved changes on the page will be lost (save them first if you want to keep them).')) return;
+      state[team] = { A: { ...tpl[team].defaults.A }, B: { ...tpl[team].defaults.B } };
+      delete cur[team]; saveKey(LIBCUR, cur); block = 'A'; save(state); render(); onChange && onChange(); return;
+    }
     if (act === 'lockchart') {
       if (locked()) delete vals()[LOCK]; else vals()[LOCK] = true;
       render(); persist();
@@ -176,16 +279,19 @@ export function createBuilder(root, { onChange }) {
     if (act === 'export') {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', team, sets: state[team] }, null, 1)], { type: 'application/json' }));
-      a.download = `verzik_${team}man_chart.json`; a.click();
+      const nm = cur[team] && cur[team].name ? `_${cur[team].name.replace(/[^\w.-]+/g, '_')}` : '';
+      a.download = `verzik_${team}man${nm}_chart.json`; a.click();
     }
   });
   root.addEventListener('change', async (e) => {
+    if (e.target.dataset.lib === 'pick') { await libPick(e.target.value); return; }
     if (e.target.dataset.act !== 'import' || !e.target.files[0]) return;
     try {
       const j = JSON.parse(await e.target.files[0].text());
       if (j.app !== 'verzikSim' || !j.sets) throw new Error("That file isn't a saved chart from this page");
       if (j.team !== team) throw new Error(`That file is a ${j.team}-man chart - switch Scale to ${j.team}-man first`);
-      state[team] = { A: { ...tpl[team].defaults.A, ...j.sets.A }, B: { ...tpl[team].defaults.B, ...j.sets.B } };
+      state[team] = withDefaults(j.sets);
+      delete cur[team]; saveKey(LIBCUR, cur);
       render(); persist();
     } catch (err) { alertMsg(err.message); }
     e.target.value = '';
@@ -195,7 +301,7 @@ export function createBuilder(root, { onChange }) {
   const alertMsg = (m) => { const el = root.querySelector('#vz-checks'); if (el) el.textContent = m; };
 
   return {
-    async show(t) { team = t; await ensure(t); render(); },
+    async show(t) { team = t; await ensure(t); await fetchDefaults(); render(); },
     /** A workbook-like object the sim reads exactly like an imported .xlsx. */
     async workbook(t) {
       await ensure(t);
@@ -208,6 +314,7 @@ export function createBuilder(root, { onChange }) {
       const ws = await wb.load(`${t}-man`);
       state[t] = { A: { ...tpl[t].defaults.A, ...readValues(ws, describe(ws, t, 'A')) },
                    B: { ...tpl[t].defaults.B, ...readValues(ws, describe(ws, t, 'B')) } };
+      delete cur[t]; saveKey(LIBCUR, cur);
       save(state);
     },
   };

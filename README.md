@@ -49,7 +49,9 @@ On the page:
 - The **Spec planner** shows the same End spec / Room Time / LB swings / Time of regen numbers as the spreadsheet (P1 ends on the Death tick if you set one, otherwise on the last charted tick - the spreadsheet's P1 kill-odds estimate isn't included).
 - Each P1 chart row gets a ✓ or ✗ check (attack speeds, X only on Verzik auto ticks, H needs a has3Tick weapon). Hover the ✗ to see why.
 - **Clear chart** empties only the P1 chart. **Lock chart** freezes it: its cells can't be edited, and **Reset this set** / **Copy** reset or copy everything else but leave the locked chart alone.
-- Everything is saved in your browser automatically (per computer and browser). **Save to file** / **Open file** move a chart between computers or share it.
+- **Chart library:** type a **Name** and press **Save** to keep the chart in this browser. The **Chart** list loads any saved chart for the selected scale (and the **Default charts** shipped with the site), **Delete** removes the loaded one, **New** starts blank. The bar tells you when the page has unsaved changes.
+- The working copy is also saved in your browser automatically (per computer and browser). **Save to file** / **Open file** move a chart between computers or share it.
+- **Adding default charts:** put the chart (a builder `.json` or a filled `.xlsx`) in `defaults/` and list it in `defaults/index.json` - see `defaults/README.md`.
 - After importing an .xlsx, **Edit this chart on the page** copies it into the builder.
 
 ### Optimizer
@@ -149,6 +151,7 @@ All three are free for a site like this. There's no server-side compute, because
 | `tests/parity.mjs` | Multithreading checks: identical results across thread counts, match vs the old method, speed |
 | `cli/run.mjs`, `cli/worker.mjs` | Command-line runner (Node worker threads) |
 | `engine/` | The simulator: chart reader (`xlsx.js`, `sim.js`), phases (`p2.js`, `reds.js`, `duo_reds.js`, `p3.js`), supplies, gear, horn, RNG, report, optimizer search (`optimize.js`), parallel chunk plan + merge (`parallel.js`), chart form (`chartform.js`), spec planner (`planner.js`) and version / What's new (`version.js`) |
+| `defaults/` | Default charts offered in the builder's Chart list (`index.json` + chart files) |
 | `CHANGELOG.md` | What changed in each version |
 | `verzik_chart_template.xlsx` | Blank input chart. The **Mechanics & behavior** sheet in it explains what the sim models. |
 | `CONVENTIONS.md` | Notes for anyone editing the engine (porting rules, function signatures) |
