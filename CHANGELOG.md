@@ -2,6 +2,12 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.9.0 - 2026-10-08
+- **Default ring swap** (Lightbearer, no Ring switch % and no Target spec): swap to Ultor the tick the Lightbearer regen in progress at P1's end lands (in the P1 to P2 gap or in P2). Previously they never swapped.
+- **Reds guard:** only swap if Ultor still gets them 50% (one claw) by reds r36 (duo: set-2 r11); the reds start is estimated from the P2 pace. Otherwise keep Lightbearer and re-check on each regen.
+- Swapping at P1's end when the regen lands after P2 starts was tested and was worse on every chart, so it isn't used (`FLAGS.DEFAULT_SWAP_P1`, off).
+- Charts with a Ring switch % or Target spec give identical results to v1.8.1. Mechanics & behavior sheet updated.
+
 ## v1.8.1 - 2026-10-08
 - Breakpoints are kept **per scale** on the Run tab and in the Optimizer. The Optimizer's breakpoints start blank (blank = rank by success rate); hints say `m:ss, comma-separated`.
 - Report charts: **labels no longer overlap** - each label picks a free spot around its point (off other labels, marker dots and, where possible, the lines), with a leader line if it has to move away; labels have a background halo.

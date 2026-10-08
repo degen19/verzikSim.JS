@@ -190,6 +190,12 @@ export function run_p2(p1, team, rng, log = null) {
   };
 
   while (t < K + 600) {
+    {                                                    // reds claw deadline from the pace so far (default ring swap guard)
+      const done = mx_hp - hp;
+      const rate = (t - K >= 20 && done > 0) ? done / (t - K) : _sim.P2_PACE0[team];
+      const est_reds = t + Math.max(0, hp - reds_at) / Math.max(rate, 1.0) + 2;
+      _sim.CAMP.now = t; _sim.CAMP.claw_by = Math.trunc(est_reds) + _sim.CLAW_BY_R[team];
+    }
     if (_sim.FLAGS.LB_CAMP && team === 2) {             // estimated set-2 r11 from the pace so far (camp-LB test mode)
       const done = mx_hp - hp;
       const rate = (t - K >= 20 && done > 0) ? done / (t - K) : 12.0;
@@ -374,7 +380,7 @@ export function run_p2(p1, team, rng, log = null) {
         p.ring = 'Ultor';
         p.regen_timer = 0;
         p.ring_swapped_at = t;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% >= target ${fx(Number(p.target_spec))}% -> swaps to Ultor ` +
+        L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% ` + (p.target_spec == null ? '(regen landed, default swap)' : `>= target ${fx(Number(p.target_spec))}%`) + ' -> swaps to Ultor ' +
           `(regen timer reset, now 50t)`);
       }
       custom_surge(p, t, L); auto_surge(p, t, L);

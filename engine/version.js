@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.8.1';
+export const VERSION = '1.9.0';
 export const CHANGES = [
+  { version: '1.9.0', date: '2026-10-08', items: [
+    'Default ring swap: a Lightbearer player with no Ring switch % and no Target spec now swaps to Ultor the tick the Lightbearer regen in progress at the end of P1 lands (during the P1 to P2 gap, or early in P2). Before, they stayed on Lightbearer for the whole room.',
+    'Reds guard: they only swap if they would still reach 50% (one claw) by reds r36 on Ultor (duo: set-2 r11), using the P2 pace to estimate when reds start. Otherwise they keep Lightbearer and check again on each regen.',
+    'A filled Ring switch % or Target spec works exactly as before (results are identical).',
+  ] },
   { version: '1.8.1', date: '2026-10-08', items: [
     'Breakpoints are kept per scale (Run tab and Optimizer), so duo times don\'t follow you to 4-man. The Optimizer\'s breakpoints start blank: leave them blank to rank by success rate.',
     'Report charts: labels are placed so they never overlap each other or the marker dots, and stay off the lines where possible (with a thin pointer line when a label has to move away).',

@@ -18,7 +18,7 @@ const when = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'num
 const HELP = {
   'startSpec (%)': 'Spec % at the start of the room', lightbearerOn: 'Starts the room on Lightbearer',
   'Custom Surge Timing': 'Room time of a surge pot without a P in the chart (m:ss)', 'Target spec': 'Spec used in P2 (the ring-swap target if no Ring switch %)',
-  'Ring switch %': 'Swap Lightbearer -> Ultor at this spec %', 'P3 target spec': 'Spec wanted for P3 (default 30)',
+  'Ring switch %': 'Swap Lightbearer -> Ultor at this spec %. Both this and Target spec blank: swap when the regen in progress at P1\'s end lands, as long as they still reach 50% (one claw) by reds r36', 'P3 target spec': 'Spec wanted for P3 (default 30)',
   'Death tick': 'Tick P1 dies (blank = last charted tick)', redCrab: 'Red crab hit once during the reds shield',
   offPrayer: "Verzik P3 autos taken off prayer (0-9)", has3Tick: 'Weapon used by H in the P1 chart',
 };

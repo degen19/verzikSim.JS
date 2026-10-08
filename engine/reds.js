@@ -1,7 +1,7 @@
 // P2 red crab phase: shield, crab swings, 7 Verzik attacks, bounce on her 2nd attack, claws, crab heal, fail at r44.
 // Line-by-line port of verzik_sim/reds.py
 import * as supplies from './supplies.js';
-import { auto_surge, custom_surge, lb_swap_ok, swap_due, ARMOUR, FIXED, AMULETS, RINGS, PRAYERS, hit_chance, fmt } from './sim.js';
+import { CAMP, CLAW_BY_R, auto_surge, custom_surge, lb_swap_ok, swap_due, ARMOUR, FIXED, AMULETS, RINGS, PRAYERS, hit_chance, fmt } from './sim.js';
 import * as horn from './horn.js';
 import { scythe_roll, P2_DEF, P2_HP, shadow_numbers, SHADOW_DELAY_NEAR, blowpipe_chance, BP_DELAY } from './p2.js';
 import { bp_vs } from './duo_reds.js';
@@ -172,6 +172,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
   let kill = null;
   for (let r = 0; r < FAIL_R; r++) {
     const t = P + r;
+    CAMP.now = t; CAMP.claw_by = P + CLAW_BY_R[team];
     // ---- Verzik step
     const landing = sorted(vq.filter((h) => h[0] === t), (h) => [h[1], h[2]]);
     vq = vq.filter((h) => h[0] !== t);

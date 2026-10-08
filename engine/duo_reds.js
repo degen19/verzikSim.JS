@@ -220,7 +220,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
     const r_end = s === 1 ? LAST_R : CRAB_HEAL_R;
     for (const r of range(r_start, r_end + 1)) {
       const t = P + r;
-      Object.assign(_sim.CAMP, { duo: true, now: t, eta: P1 + LAST_R + 11, dc_paid: [...st['dc1']] });
+      Object.assign(_sim.CAMP, { duo: true, now: t, eta: P1 + LAST_R + 11, dc_paid: [...st['dc1']], claw_by: P1 + LAST_R + 11 });
       // ---- damage lands
       const landing = sorted(vq.filter((h) => h[0] === t), (h) => [h[1], h[2]]);
       vq = vq.filter((h) => h[0] !== t);

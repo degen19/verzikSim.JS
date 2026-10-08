@@ -127,6 +127,7 @@ export const FLAGS = {
   LB_CAMP: false,
   LB_RULE: 'ticks',
   LB_KEEP_TICKS: 10,
+  DEFAULT_SWAP_P1: false,   // no Ring switch % / Target spec: true = if the LB regen in progress won't land by P2 start, swap at P1's end
 };
 // initial values, exported individually for convenience (read FLAGS.X for the live value)
 export const PURPLE_EARLY_SWAP = false;
@@ -134,7 +135,22 @@ export const LB_CAMP = false;
 export const LB_RULE = 'ticks';
 export const LB_KEEP_TICKS = 10;
 
-export const CAMP = { duo: false, now: null, eta: null, dc_paid: [] };   // filled in by p2 / duo_reds each tick
+export const CAMP = { duo: false, now: null, eta: null, dc_paid: [], claw_by: null };   // filled in by p2 / reds / duo_reds each tick
+
+// Default ring swap guard: everyone needs at least one claw (50%) in reds. CAMP.claw_by = the tick that claw must be
+// ready by: reds r36 (duo: set-2 r11), estimated from the P2 pace until the reds actually start.
+export const CLAW_NEED = 50;
+export const CLAW_BY_R = { 2: 55, 3: 36, 4: 36, 5: 36 };    // ticks after the reds proc
+export const P2_PACE0 = { 2: 13, 3: 18, 4: 26, 5: 31 };    // Verzik HP / tick in P2 before the real pace is known
+const P2_DROP = { 2: 2625 - 918, 3: 2625 - 918, 4: 3062 - 1071, 5: 3500 - 1225 };   // p2.js P2_HP - P2_REDS (no import: p2.js needs sim.js first)
+/** Estimated tick the first reds claw must be ready by, at P2 start `K` (before any P2 pace is known). */
+export const claw_by_at_start = (team, K) => K + Math.round(P2_DROP[team] / P2_PACE0[team]) + CLAW_BY_R[team];
+/** Would they still have 50% by `claw_by` if they swapped to Ultor at `now` (timer restarts; a popped purple's +15 counts)? */
+export function ultor_claw_ok(p, now, claw_by) {
+  if (now == null || claw_by == null) return true;
+  const owed = ga(p, 'purple_owed', false) ? 15 : 0;
+  return Math.min(100, p.spec + owed + 10 * floordiv(Math.max(0, claw_by - now), 50)) >= CLAW_NEED;
+}
 
 
 /** Spec on set-2 r11 if they swap to Ultor now: Ultor regens (timer restarts) + DC / purple spec still to come. */
@@ -154,10 +170,54 @@ export function swap_due(p) {
     // camp mode: ignore the Ring switch %; stay on Lightbearer (into reds if needed) until 100% by set-2 r11 is assured
     return p.spec >= 100 || camp_projection(p) >= 100;
   }
-  if (p.target_spec == null) return false;
+  if (p.target_spec == null) {
+    // no Ring switch % and no Target spec: swap once the Lightbearer regen in progress at P1's end has landed
+    // + guard: only if they'd still have a claw's 50% by the reds deadline on Ultor - otherwise keep camping LB and
+    // check again on each Lightbearer regen
+    if (ga(p, 'default_wait', false) !== true) return false;
+    if (p.spec >= 100) return true;
+    return p.gain_src === 'regen' && p.regen_timer === 0 && ultor_claw_ok(p, CAMP.now, CAMP.claw_by);
+  }
   const tgt = Number(p.target_spec);
   if (FLAGS.PURPLE_EARLY_SWAP && ga(p, 'purple_pending', false)) return p.spec >= tgt - 15;
   return p.spec >= tgt && (FLAGS.LB_RULE === 'ticks' ? lb_keep_ok(p) : lb_swap_ok(p));
+}
+
+
+/**
+ * Default ring swap (Lightbearer, no Ring switch % and no Target spec), over the P1 -> P2 gap of `gap` ticks from
+ * P1's kill tick t0: swap to Ultor the tick the Lightbearer regen in progress lands. If it lands during the gap they
+ * swap then; if it won't land by P2 start they keep Lightbearer and swap in P2 when it lands (swap_due), or - with
+ * FLAGS.DEFAULT_SWAP_P1 - swap at P1's end and start the Ultor timer straight away.
+ */
+export function default_transition(p, t0, gap, L, claw_by = null) {
+  const toUltor = (at, why) => {
+    p.ring = 'Ultor'; p.regen_timer = 0; p.ring_swapped_at = at; p.default_wait = false;
+    L.on && L(`t${rjust(at, 4)} ${p.name}: ${why} -> swaps to Ultor (default: no ring swap % set)`);
+  };
+  if (p.spec >= 100) { toUltor(t0, 'already 100% at P1 end'); return; }
+  const left = p.regen_period() - p.regen_timer;        // ticks until the Lightbearer regen in progress lands
+  if (left <= gap) {
+    p.spec = Math.min(100, p.spec + 10); p.gain_src = 'regen';
+    if (p.spec >= 100 || ultor_claw_ok(p, t0 + left, claw_by)) {
+      toUltor(t0 + left, `Lightbearer regen lands in the P1->P2 gap (${fx(p.spec)}%)`);
+      p.regen_timer = p.spec < 100 ? gap - left : 0;    // the rest of the gap counts on Ultor (< 50 ticks: no regen)
+      return;
+    }
+    // Ultor from here wouldn't give them a claw's 50% by the reds deadline: keep Lightbearer, check on each regen
+    let timer = gap - left;
+    while (timer >= p.regen_period() && p.spec < 100) { timer -= p.regen_period(); p.spec = Math.min(100, p.spec + 10); }
+    p.regen_timer = p.spec < 100 ? timer : 0;
+    p.default_wait = true; p.gain_src = 'wait';
+    L.on && L(`t${rjust(t0 + left, 4)} ${p.name}: Lightbearer regen lands (${fx(p.spec)}%) but Ultor wouldn't reach ${CLAW_NEED}% for a reds claw - keeps Lightbearer`);
+  } else if (FLAGS.DEFAULT_SWAP_P1) {
+    toUltor(t0, `Lightbearer regen still ${left}t away at P1 end (lands after P2 starts)`);
+    p.regen_timer = gap;
+  } else {
+    p.regen_timer += gap;                                // lands in P2; swap_due swaps them that tick
+    p.default_wait = true; p.gain_src = 'wait';
+    L.on && L(`t${rjust(t0, 4)} ${p.name}: Lightbearer regen ${left}t away - keeps Lightbearer into P2, swaps when it lands`);
+  }
 }
 
 
@@ -216,6 +276,9 @@ export class Player {
     this.ring = this.lb ? 'Lightbearer' : 'Ultor';
     const rs = dget(cfg, 'ringSwitch');
     this.target_spec = !(rs == null || rs === '') ? rs : dget(cfg, 'targetSpec');
+    if (this.target_spec === '') this.target_spec = null;
+    this.default_swap = this.lb && this.target_spec == null;   // neither % set: default Ultor swap (default_transition)
+    this.default_wait = false;
     this.purple = dget(cfg, 'PurpleDC', false);
     this.purple2nd = dget(cfg, 'Purple2DC', false);
     this.has3 = dget(cfg, 'has3Tick') || false;
@@ -858,7 +921,8 @@ export function run_p1(cfgs, team, rng, log = null) {
       supplies.window(p, floordiv(anim + 14 - 1, 3) + 1, L, kill_tick, 'P1->P2 ',
         { hp_target: 115, brews: !(team === 2 && p.shadow) });   // duo shadow player: sharks only (keeps 112 Magic)
       const gap = end + 14 - kill_tick;
-      if (p.spec < 100) {
+      if (p.default_swap && p.ring === 'Lightbearer') default_transition(p, kill_tick, gap, L, claw_by_at_start(team, kill_tick + gap));
+      else if (p.spec < 100) {
         p.regen_timer += gap;
         while (p.regen_timer >= p.regen_period() && p.spec < 100) {
           p.regen_timer -= p.regen_period();
