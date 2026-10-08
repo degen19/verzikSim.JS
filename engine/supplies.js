@@ -322,10 +322,17 @@ export function prayer_restore(p, t, L = null) {
 }
 
 // troubleshooting: only P1 deaths are real; later ones are logged as "potential deaths"
-export const FLAGS = { DEATHS_ONLY_P1: true };
+export const FLAGS = { DEATHS_ONLY_P1: true, DEATHS: false };   // DEATHS false: nobody dies - HP stops at 1 (logged)
 
 /** HP at 0 or below. In P1 the player dies. After P1 (DEATHS_ONLY_P1) it's only logged as a potential death. */
 export function check_death(p, phase, L = null, t = null) {
+  if (!FLAGS.DEATHS && p.hp <= 0) {
+    const pd = p.pool.potential_deaths;
+    pd[phase] = dget(pd, phase, 0) + 1;
+    if (L) L.on && L(`t${rjust(t, 4)} ${p.name}: would be at ${p.hp} HP (${phase}) - kept at 1 HP`);
+    p.hp = 1;
+    return;
+  }
   if (p.hp <= 0 && !truthy(ga(p, 'below0', false))) {
     p.below0 = true;
     if (FLAGS.DEATHS_ONLY_P1 && phase !== 'P1') {

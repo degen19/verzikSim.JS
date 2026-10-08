@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.10.0 - 2026-10-08
+- **4 Claw Priority** (trio, on by default; new team setting in the 3-man tab of the template and the builder): if Verzik's P1 dies in 11 or fewer Dawn specs, the player who didn't use their last Dawn (several: highest spec % out of P1, then closest to their next regen) prioritises 100% spec for reds - takes over the purple DC and camps Lightbearer until Ultor still gets both claws off by r36 (unreachable: until Ultor gives 80% by r40). The others camp Lightbearer until Ultor still gives one claw by r36. All 12 Dawns used / unchecked: rings as charted. Replaces the old shadow-camps-to-100% rule. Mechanics & behavior sheet updated.
+- **Crystal halberd spec**: hits that pass accuracy roll 1..max, then +floor(max / 10) (was: roll up to a 10% higher max). Reds r40, duo reds, P3 and the P3 planner.
+- Reds-start estimate for the ring guards never assumes a slower P2 than typical.
+
 ## v1.9.0 - 2026-10-08
 - **Default ring swap** (Lightbearer, no Ring switch % and no Target spec): swap to Ultor the tick the Lightbearer regen in progress at P1's end lands (in the P1 to P2 gap or in P2). Previously they never swapped.
 - **Reds guard:** only swap if Ultor still gets them 50% (one claw) by reds r36 (duo: set-2 r11); the reds start is estimated from the P2 pace. Otherwise keep Lightbearer and re-check on each regen.

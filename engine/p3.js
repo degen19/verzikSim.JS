@@ -28,6 +28,8 @@ export const DEF = {
 export const SCY = { atk: 125, str: 75 };
 export const CLAW = { atk: 57, str: 56 };
 export const HALB = { atk: 110, str: 118 };
+/** Halberd spec boost: each hit that passes accuracy rolls 1..max as normal, then adds floor(max / 10). */
+export const halb_bonus = (m) => floordiv(m, 10);
 export const THREE = { atk: 120, str: 40 };                   // has3Tick weapon: crush
 export let P3_CRUSH = (150 + 9) * (70 + 64);                  // 21,306
 export let P3_MAGIC = (150 + 9) * (100 + 64);                 // 26,076 (magic uses her Defence level)
@@ -101,8 +103,8 @@ export class Plan {
     [ch, m] = melee(p, SCY, P3_DEF[1]); this.S = ch * (_avg(m) + _avg(floordiv(m, 2)) + _avg(floordiv(m, 4)));
     [ch, m] = melee(p, CLAW, P3_DEF[1]); this.scratch = ch * (_avg(m) + _avg(floordiv(m, 2)));
     this.C = _claw_exp(pyround(ch, 3), m);
-    [ch1, m] = melee(p, HALB, P3_DEF[1]); [ch2] = melee(p, HALB, P3_DEF[1], 0.75); m = floordiv(m * 110, 100);
-    this.H = (ch1 + ch2) * _avg(m);
+    [ch1, m] = melee(p, HALB, P3_DEF[1]); [ch2] = melee(p, HALB, P3_DEF[1], 0.75);
+    this.H = (ch1 + ch2) * (_avg(m) + halb_bonus(m));
     if (p.has3 === 'Ayak') {
       [ch, m] = ayak(p);
     } else if (p.has3 === 'Swift blade') {
@@ -822,14 +824,13 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         st['chally'] += 1;
         let [ch1, m] = melee(p, HALB, P3_DEF[1]);
         const [ch2] = melee(p, HALB, P3_DEF[1], 0.75);
-        m = floordiv(m * 110, 100);
         const hits = [];
         const hb = truthy(horn.active(p, t));
         if (hb) {
           st['horn_hits'] += 1; p.horn_buff = null;
         }
         [ch1, ch2].forEach((c, k) => {
-          const d = ((k === 0 && hb) || rng.random() < c) ? Math.max(1, rng.randint(0, m)) : 0;
+          const d = ((k === 0 && hb) || rng.random() < c) ? Math.max(1, rng.randint(0, m)) + halb_bonus(m) : 0;
           hits.push(d);
           vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p]);
         });

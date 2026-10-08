@@ -134,20 +134,8 @@ export function run_p2(p1, team, rng, log = null) {
       p.boak = boak_side(p);
     }
   }
-  // trio rule: P1 died with a Dawn spec to spare (e.g. 11 of 12) -> the shadow player camps LB to 100%
-  if (team === 3) {
-    let planned = 0;
-    for (const p of players) for (const a of Object.values(p.actions)) if (a === 'D') planned += 1;
-    const used = sum(players.map((p) => p.dawns_used));
-    const sp = players.find((p) => truthy(p.shadow) && !p.dead) ?? null;
-    if (sp && used < planned) {
-      sp.fallback_on = true;
-      sp.target_spec = 100;
-      sp.ring = 'Lightbearer';
-      L.on && L(`t${rjust(K, 4)} P1 died after ${used} of ${planned} Dawn specs - ${sp.name} (shadow) camps Lightbearer to 100% in P2`
-        + (truthy(sp.shadow_lb) ? ', shadowing while on LB' : ''));
-    }
-  }
+  // trio: P1 dying with Dawn specs to spare is handled by 4 Claw Priority (sim.js claw_priority_setup, at P1's end)
+
   let regular = 0;
   let attacks_since_purple = PURPLE_CD_ATTACKS;
   let crab = null;                   // {spawn, alive, heals, popped_tick, pop_dmg_tick}
@@ -192,7 +180,8 @@ export function run_p2(p1, team, rng, log = null) {
   while (t < K + 600) {
     {                                                    // reds claw deadline from the pace so far (default ring swap guard)
       const done = mx_hp - hp;
-      const rate = (t - K >= 20 && done > 0) ? done / (t - K) : _sim.P2_PACE0[team];
+      // never assume slower than a typical P2: the first ticks deal little damage, and a late estimate would swap too early
+      const rate = Math.max(_sim.P2_PACE0[team], (t - K >= 20 && done > 0) ? done / (t - K) : 0);
       const est_reds = t + Math.max(0, hp - reds_at) / Math.max(rate, 1.0) + 2;
       _sim.CAMP.now = t; _sim.CAMP.claw_by = Math.trunc(est_reds) + _sim.CLAW_BY_R[team];
     }
@@ -380,7 +369,7 @@ export function run_p2(p1, team, rng, log = null) {
         p.ring = 'Ultor';
         p.regen_timer = 0;
         p.ring_swapped_at = t;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% ` + (p.target_spec == null ? '(regen landed, default swap)' : `>= target ${fx(Number(p.target_spec))}%`) + ' -> swaps to Ultor ' +
+        L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? `(4 Claw Priority: Ultor still makes ${p.claw_goal === 'two' ? (p.claw_fallback ? '80% by r40' : 'both claws by r36') : 'one claw by r36'})` : p.target_spec == null ? '(regen landed, default swap)' : `>= target ${fx(Number(p.target_spec))}%`) + ' -> swaps to Ultor ' +
           `(regen timer reset, now 50t)`);
       }
       custom_surge(p, t, L); auto_surge(p, t, L);

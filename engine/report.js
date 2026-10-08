@@ -1,6 +1,7 @@
 // Turns simulate() results into a self-contained HTML report (SVG charts + tables). Used by the web page and the CLI.
 
 import { VERSION } from './version.js';
+import { FLAGS as SUPPLY_FLAGS } from './supplies.js';
 
 const COL = ['#2a78d6', '#d64545', '#2f9e61'];
 export const WEBS_TICK = 72;     // 4-5 man: P3 tick (1 = P3 attackable) the 20% proc must land on or before to count as before webs
@@ -77,7 +78,7 @@ function oddsRows(res, team, bps = []) {
       ['Kill before yellows (of 2-downs)', d.map((x) => pct(x.kill_ny, x.n2d))],
       ['Kill before the green ball launches (of 2-downs)', d.map((x) => pct(x.kill_ng, x.n2d))],
       ['Kill before the green ball lands (of 2-downs)', d.map((x) => pct(x.kill_ngl, x.n2d))],
-      ['Someone dies in P1 (all runs)', d.map((x) => pct(x.die_p1, x.runs))],
+      ...(SUPPLY_FLAGS.DEATHS ? [['Someone dies in P1 (all runs)', d.map((x) => pct(x.die_p1, x.runs))]] : []),
       ['Full kill (all runs)', res.map((r) => pct(r.total.length, r.runs))],
       ['Fastest completed run', res.map((r) => (r.total.length ? fmt(fastest(r.total)) : '-'))],
       ['Fastest run frequency (all runs)', res.map((r) => fastestFreq(r))],
@@ -87,7 +88,7 @@ function oddsRows(res, team, bps = []) {
   const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN);
   return [
     ['Success (all runs)', res.map((r) => pct(r.total.length, r.runs))],
-    ['Someone dies in P1 (all runs)', res.map((r) => pct(r.die_p1, r.runs))],
+    ...(SUPPLY_FLAGS.DEATHS ? [['Someone dies in P1 (all runs)', res.map((r) => pct(r.die_p1, r.runs))]] : []),
     ['Avg reds proc depth (Verzik HP %)', res.map((r) => `${mean(r.depth).toFixed(1)}%`)],
     ['Deepest reds proc', res.map((r) => (r.depth.length ? `${arrMin(r.depth).toFixed(1)}%` : '-'))],
     ['Avg P3 20% tick', res.map((r) => (r.p20.length ? mean(r.p20).toFixed(1) : '-'))],

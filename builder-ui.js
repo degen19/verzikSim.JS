@@ -20,7 +20,8 @@ const HELP = {
   'Custom Surge Timing': 'Room time of a surge pot without a P in the chart (m:ss)', 'Target spec': 'Spec used in P2 (the ring-swap target if no Ring switch %)',
   'Ring switch %': 'Swap Lightbearer -> Ultor at this spec %. Both this and Target spec blank: swap when the regen in progress at P1\'s end lands, as long as they still reach 50% (one claw) by reds r36', 'P3 target spec': 'Spec wanted for P3 (default 30)',
   'Death tick': 'Tick P1 dies (blank = last charted tick)', redCrab: 'Red crab hit once during the reds shield',
-  offPrayer: "Verzik P3 autos taken off prayer (0-9)", has3Tick: 'Weapon used by H in the P1 chart',
+  offPrayer: "Verzik P3 autos taken off prayer (0-9)",
+  '4 Claw Priority': "If Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status prioritises 100% spec for reds (both claws by r36, taking over the purple DC); the others prioritise 50%. Off: rings follow the chart.", has3Tick: 'Weapon used by H in the P1 chart',
 };
 
 export function createBuilder(root, { onChange }) {
@@ -215,6 +216,7 @@ export function createBuilder(root, { onChange }) {
       <h3>Spec planner</h3><div id="vz-plan"></div>
       <p class="muted small">Same as the chart's End spec / Room Time / LB swings / Time of regen columns. P1 ends on the Death tick if set, otherwise on the last charted tick.</p>
       <h3>Team settings</h3><div class="row wrap teamset">${teamFields}</div>
+      ${d.team.some((f) => f.header === '4 Claw Priority') ? `<p class="muted small">4 Claw Priority (on by default): when checked, if Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status (didn't use their last Dawn; ties: highest spec % out of P1, then closest to their next regen) prioritises 100% spec for reds - both claws by r36, and they take over the purple DC. The others prioritise 50% (one claw by r36). Each camps Lightbearer only as long as needed.</p>` : ''}
       <h3>Gear</h3>${playerTable('gear', d.gear)}
       ${d.mage.length ? `<h3>Mage gear <span class="muted small">(used by Shadow players)</span></h3>${playerTable('mage', d.mage)}` : ''}
       <div class="row between" style="margin-top:18px"><h3 style="margin:0">P1 chart ${locked() ? '<span class="muted small">(locked)</span>' : ''}</h3>

@@ -145,11 +145,59 @@ export const P2_PACE0 = { 2: 13, 3: 18, 4: 26, 5: 31 };    // Verzik HP / tick i
 const P2_DROP = { 2: 2625 - 918, 3: 2625 - 918, 4: 3062 - 1071, 5: 3500 - 1225 };   // p2.js P2_HP - P2_REDS (no import: p2.js needs sim.js first)
 /** Estimated tick the first reds claw must be ready by, at P2 start `K` (before any P2 pace is known). */
 export const claw_by_at_start = (team, K) => K + Math.round(P2_DROP[team] / P2_PACE0[team]) + CLAW_BY_R[team];
-/** Would they still have 50% by `claw_by` if they swapped to Ultor at `now` (timer restarts; a popped purple's +15 counts)? */
+/** Spec they'd have by tick `by` if they swapped to Ultor at `now` (the timer restarts; a popped purple's +15 counts). */
+export function ultor_spec_by(p, now, by) {
+  const owed = ga(p, 'purple_owed', false) ? 15 : 0;
+  return Math.min(100, p.spec + owed + 10 * floordiv(Math.max(0, by - now), 50));
+}
+/** Spec they'd have by tick `by` staying on Lightbearer (the regen in progress keeps its timer). */
+export function lb_spec_by(p, now, by) {
+  const owed = ga(p, 'purple_owed', false) ? 15 : 0;
+  const ticks = Math.max(0, by - now), first = 25 - (p.ring === 'Lightbearer' ? p.regen_timer : 0);
+  const regens = ticks >= first ? 1 + floordiv(ticks - first, 25) : 0;
+  return Math.min(100, p.spec + owed + 10 * regens);
+}
+/** Would they still have 50% by `claw_by` if they swapped to Ultor at `now`? */
 export function ultor_claw_ok(p, now, claw_by) {
   if (now == null || claw_by == null) return true;
-  const owed = ga(p, 'purple_owed', false) ? 15 : 0;
-  return Math.min(100, p.spec + owed + 10 * floordiv(Math.max(0, claw_by - now), 50)) >= CLAW_NEED;
+  return ultor_spec_by(p, now, claw_by) >= CLAW_NEED;
+}
+
+/**
+ * Trio 4 Claw Priority (on by default; chart toggle "4 Claw Priority"). If Verzik's P1 dies before every charted
+ * Dawn spec is used, the player who didn't use their last Dawn is the priority player (several: highest spec coming
+ * out of P1, then closest to their next regen). They take over the purple DC and camp Lightbearer until Ultor still
+ * gives them 100% - both claws, the 2nd by reds r36; if that can't be reached even on Lightbearer, until Ultor gives
+ * 80% by r40. The other two camp Lightbearer until Ultor still gives 50% (one claw) by r36. All Dawns used: as charted.
+ */
+export function claw_priority_setup(players, L, t) {
+  const planned = (p) => Object.values(p.actions).filter((a) => a === 'D').length;
+  const total = sum(players.map(planned)), used = sum(players.map((p) => p.dawns_used));
+  if (used >= total) return;
+  const cand = players.filter((p) => !p.dead && p.dawns_used < planned(p));
+  if (!cand.length) return;
+  const next_regen = (p) => (p.spec >= 100 ? 0 : p.regen_period() - p.regen_timer);
+  cand.sort((a, b) => b.spec - a.spec || next_regen(a) - next_regen(b));
+  const pri = cand[0];
+  const pdc = players.find((p) => p.purple === true || pybool(p.purple)) ?? null;
+  L.on && L(`t${rjust(t, 4)} 4 CLAW PRIORITY: P1 died after ${used} of ${total} Dawn specs - ${pri.name} (${fx(pri.spec)}%) `
+    + `aims for both claws by reds r36, the others for one claw by r36`);
+  if (pdc && pdc !== pri) {
+    pdc.purple = false; pri.purple = true;
+    L.on && L(`t${rjust(t, 4)} 4 CLAW PRIORITY: ${pri.name} takes the purple DC from ${pdc.name}`);
+  }
+  for (const p of players) { p.claw_goal = p === pri ? 'two' : 'one'; p.claw_fallback = false; }
+}
+
+/** Lightbearer -> Ultor for a 4 Claw Priority player: swap once Ultor still meets their goal (see claw_priority_setup). */
+function claw_goal_swap(p) {
+  if (p.spec >= 100) return true;
+  const now = CAMP.now, by = CAMP.claw_by;
+  if (now == null || by == null) return false;
+  if (p.claw_goal === 'two' && !p.claw_fallback && lb_spec_by(p, now, by) < 100) p.claw_fallback = true;   // out of reach even on LB
+  const [need, at] = p.claw_goal === 'one' ? [CLAW_NEED, by] : p.claw_fallback ? [80, by + 4] : [100, by];
+  if (ultor_spec_by(p, now, at) < need) return false;
+  return p.gain_src === 'regen' || p.regen_period() - p.regen_timer > FLAGS.LB_KEEP_TICKS;   // finish a regen that's <= 10t away
 }
 
 
@@ -166,6 +214,7 @@ export function camp_projection(p) {
 /** Lightbearer -> Ultor check, used in P2, reds and duo reds. */
 export function swap_due(p) {
   if (p.ring !== 'Lightbearer') return false;
+  if (p.claw_goal) return claw_goal_swap(p);
   if (FLAGS.LB_CAMP && CAMP.duo && CAMP.eta != null && CAMP.now < CAMP.eta) {
     // camp mode: ignore the Ring switch %; stay on Lightbearer (into reds if needed) until 100% by set-2 r11 is assured
     return p.spec >= 100 || camp_projection(p) >= 100;
@@ -540,6 +589,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A') {
   const TEAM_KEYS = {
     'Crab HP threshold': 'crabHp', 'Second purple %': 'purple2Thr', 'Ducktank': 'ducktank', 'Perfect 1st set': 'perfectSet1', 'Deep proc HP %': 'deepThr', 'P3 halberd HP %': 'challyThr', 'Dawn threshold %': 'dawnThr', 'Purple HP %': 'purple2Thr', 'Tornado hit %': 'tornadoPct', 'P2 Scythe last hit threshold': 'lastHitThr',
     'Brew sips': 'brewSips', 'SCB sips': 'scbSips', 'Restore sips': 'restoreSips', 'Sharks': 'sharks',
+    '4 Claw Priority': 'clawPriority4',
   };
   for (let c = 1; c < ws.max_column + 1; c++) {
     const hv = ws.cell(sr, c).value;
@@ -548,6 +598,8 @@ export async function parse_chart(wb, team, tab = null, block = 'A') {
       const v = ws.cell(sr + 1, c).value;
       if (key === 'ducktank' || key === 'perfectSet1') {
         for (const cf of cfgs) cf[key] = yes(v);
+      } else if (key === 'clawPriority4') {
+        for (const cf of cfgs) cf[key] = v == null || pystr(v).trim() === '' ? true : yes(v);   // on unless unticked
       } else if (isPyNum(v)) {
         for (const cf of cfgs) cf[key] = Number(v);
       }
@@ -915,13 +967,14 @@ export function run_p1(cfgs, team, rng, log = null) {
     snaps['End of P1 (HP 0)'] = players.map((p) => p.snapshot());
     spec_end = players.map((p) => p.spec);
     // 14-tick gap supplies
+    if (team === 3 && dget(cfgs[0], 'clawPriority4', true) !== false) claw_priority_setup(players, L, kill_tick);
     for (const p of supplies.by_hp(players)) {
       if (p.dead) continue;
       // P1 -> P2 transition (death animation + 14 ticks, invulnerable): heal up, restore, super combat
       supplies.window(p, floordiv(anim + 14 - 1, 3) + 1, L, kill_tick, 'P1->P2 ',
         { hp_target: 115, brews: !(team === 2 && p.shadow) });   // duo shadow player: sharks only (keeps 112 Magic)
       const gap = end + 14 - kill_tick;
-      if (p.default_swap && p.ring === 'Lightbearer') default_transition(p, kill_tick, gap, L, claw_by_at_start(team, kill_tick + gap));
+      if (p.default_swap && !p.claw_goal && p.ring === 'Lightbearer') default_transition(p, kill_tick, gap, L, claw_by_at_start(team, kill_tick + gap));
       else if (p.spec < 100) {
         p.regen_timer += gap;
         while (p.regen_timer >= p.regen_period() && p.spec < 100) {

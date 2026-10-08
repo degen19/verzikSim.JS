@@ -697,10 +697,10 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     // under the scythe last-hit threshold: scythe, not halberd
   } else if (r === 40 && p.spec >= 30) {
     p.spec -= 30;
-    let [ch1, m] = p3.melee(p, p3.HALB, P2_DEF[1]);
+    const [ch1, m] = p3.melee(p, p3.HALB, P2_DEF[1]);
     const [ch2] = p3.melee(p, p3.HALB, P2_DEF[1], 0.75);
-    m = floordiv(m * 110, 100);
-    const hits = [roll(rng, ch1, m), roll(rng, ch2, m)];
+    const hb = (d) => (d > 0 ? d + p3.halb_bonus(m) : 0);          // +10% of max on hits that pass accuracy
+    const hits = [hb(roll(rng, ch1, m)), hb(roll(rng, ch2, m))];
     hits.forEach((d, k) => {
       vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']);
     });

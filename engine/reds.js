@@ -311,7 +311,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       custom_surge(p, t, L, `r${r} `); auto_surge(p, t, L, `r${r} `);
       if (swap_due(p)) {
         p.ring = 'Ultor'; p.regen_timer = 0; p.ring_swapped_at = t;
-        L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: spec ${fx(p.spec)}% >= target -> swaps to Ultor`);
+        L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? '(4 Claw Priority goal still reachable on Ultor)' : '>= target') + ' -> swaps to Ultor');
       }
       if (pc && p === pdc && ga(p, 'reds_bp', false)) {
         if (t >= p.next_attack) {
@@ -443,9 +443,8 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             + `max ${mx}) -> ${pylist(hits)}`);
         } else if (r === 40 && p.spec >= 30 && !ga(p, 'horn_p2', false) && r40_halberd_ok(hp, team, cfgs)) {
           const old = p.spec; p.spec -= 30;
-          let [ch1, m] = p3.melee(p, p3.HALB, P2_DEF[1]); const [ch2] = p3.melee(p, p3.HALB, P2_DEF[1], 0.75);
-          m = floordiv(m * 110, 100);
-          const hits = [ch1, ch2].map((c) => (rng.random() < c ? Math.max(1, rng.randint(0, m)) : 0));
+          const [ch1, m] = p3.melee(p, p3.HALB, P2_DEF[1]); const [ch2] = p3.melee(p, p3.HALB, P2_DEF[1], 0.75);
+          const hits = [ch1, ch2].map((c) => (rng.random() < c ? Math.max(1, rng.randint(0, m)) + p3.halb_bonus(m) : 0));
           hits.forEach((d, k) => {
             vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']);
           });
