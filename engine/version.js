@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.15.0';
+export const VERSION = '1.15.1';
 export const CHANGES = [
+  { version: '1.15.1', date: '2026-10-08', items: [
+    'Chart template: the spreadsheet\'s own End spec / Room Time / LB swings / Time of regen columns now follow the 95% start rule too (no R charted: regen held until the first Dawn spec, forced regen the tick after). Download the template again to get it.',
+  ] },
   { version: '1.15.0', date: '2026-10-08', items: [
     'Players starting at 95%: if their chart has no R, they get no regen before their first Dawn spec, then a forced regen (as if R) on the tick after it - so a regen can never take them from 95% to 100% before they spec. Applies to the sim and the page\'s spec planner; a charted R works as before.',
   ] },
