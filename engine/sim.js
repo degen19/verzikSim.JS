@@ -647,17 +647,20 @@ export function fmt(t) {
 }
 
 
-/** Trios: the shadow player should be the one with the last Dawn spec in the chart, since that is the
- * spec that goes unused when P1 dies early - and that player camps Lightbearer to 100% in P2. */
+/** Trios: the last Dawn spec in the chart is the one that goes unused when P1 dies early, and its player then pushes
+ * for 100% in reds (4 Claw Priority). That is better done by a non-shadow player, so this warns when the shadow player
+ * has the last Dawn (unless every player has Shadow). */
 export function trio_shadow_alert(cfgs) {
   if (cfgs.length !== 3) return null;
   const sh = cfgs.filter((c) => pybool(dget(c, 'shadow')));
+  if (!sh.length || sh.length === cfgs.length) return null;
   const cands = [];
   for (const c of cfgs) for (const t of intKeys(c.actions)) if (c.actions[t] === 'D') cands.push([t, c]);
   const last = cands.length ? maxBy(cands, (x) => x[0]) : null;
-  if (!sh.length || last == null || last[1] === sh[0]) return null;
-  return (`ALERT (trios): Shadow is on ${sh[0].name}, but ${last[1].name} has the last Dawn spec (tick ${last[0]}). ` +
-    `Suggest moving Shadow to ${last[1].name}.`);
+  if (last == null || !sh.includes(last[1])) return null;
+  return (`ALERT (trios): ${last[1].name} has Shadow and the last Dawn spec (tick ${last[0]}) - the one most likely to go ` +
+    'unused, whose player pushes for 100% in reds. It is better for a non-shadow player to push for 100%: ' +
+    'suggest giving the last Dawn spec to a non-shadow player.');
 }
 
 

@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.16.1 - 2026-10-08
+- 4 Claw Priority note (trio): better for a non-shadow player to push for 100% - give the last Dawn spec to a non-shadow player where possible (builder note + Mechanics sheet). `trio_shadow_alert` flipped: warns when the shadow player has the last Dawn (unless all have Shadow); it used to suggest moving Shadow onto the last-Dawn player. No sim behaviour change.
+
 ## v1.16.0 - 2026-10-08
 - **Has BP** per player (gear table, all scales, default ticked; template + builder + parser). Without it: B in P1 skipped (chart check ✗), no blowpipe fills / crab blowpipe in reds, can't pop the purple. Purple DC without a blowpipe stops the run with an error. Optimizer purple-DC choices and 4 Claw Priority respect it.
 

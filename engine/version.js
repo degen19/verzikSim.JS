@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.16.0';
+export const VERSION = '1.16.1';
 export const CHANGES = [
+  { version: '1.16.1', date: '2026-10-08', items: [
+    '4 Claw Priority note (trios): it\'s better for a non-shadow player to push for 100% spec in reds, so where you can, give the last Dawn spec (the one most likely to go unused) to a non-shadow player. Added to the chart builder and Mechanics & behavior. The trio shadow alert now warns when the shadow player has the last Dawn spec (it used to suggest the opposite). No change to results.',
+  ] },
   { version: '1.16.0', date: '2026-10-08', items: [
     'Has BP: a new checkbox per player in the gear table (every scale; ticked by default, and older charts count as ticked). Unticked: no blowpipe in P1 (B is flagged in the chart checks), no blowpipe tick fills or crab blowpipe in reds, and the player can\'t pop the purple crab.',
     'If the purple DC (1st or 2nd purple in duos) has no blowpipe the sim won\'t run: "A blowpipe is required to pop the purple crab. Either change the player who DC\'s purple, or add a blowpipe to [player]". The Optimizer only offers blowpipe owners as the purple DC, and 4 Claw Priority only hands the purple DC to a player with a blowpipe.',
