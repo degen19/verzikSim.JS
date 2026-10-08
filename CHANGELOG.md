@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.12.0 - 2026-10-08
+- **Set C** (third comparison set): builder tabs A / B / C with copy between any two sets; Run tab Set C label; report, charts, Optimizer set picker and terminal runner (`--labels "A" "B" "C"`) take up to three sets. Saved charts / files include Set C.
+- Set C is a page feature: the builder adds it as a copy of Set B's layout (`withSetC`); the chart reader also accepts a `SET C` block in a spreadsheet. The .xlsx template itself still has Sets A and B.
+
 ## v1.11.0 - 2026-10-08
 - **Phases** on the Run tab and in the Optimizer: Full raid, P1 + P2 (to the end of P2) or P1 only. Report title, splits, odds and breakpoints follow the chosen phase. Terminal: `--phase full|p2|p1`.
 - Each raid has its own random stream (`seed#i`), so the three phase modes play identical raids for a seed (results nest). Results for a given seed differ from v1.10.0 (statistically the same).

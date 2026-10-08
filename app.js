@@ -141,13 +141,13 @@ $('go').addEventListener('click', async () => {
     const wb = await getWorkbook();
     if (!wb) throw new Error('Import a chart or build one on the page first.');
     const sets = [];
-    for (const block of ['A', 'B']) {
+    for (const block of ['A', 'B', 'C']) {
       try { const c = await parse_chart(wb, t, null, block); if (filled(c)) sets.push([block, c]); } catch (e) { if (block === 'A') throw e; }
     }
     if (!sets.length) throw new Error(`The ${t}-man chart has no filled P1 chart.`);
     const scope = $('scope').value;
     for (const s of sets) s[1] = s[1].map((c) => ({ ...c, scope }));                // phases to simulate (see simulate.js)
-    const labels = sets.map(([b]) => (b === 'A' ? $('labA').value || `${t}-man` : $('labB').value || `${t}-man set B`));
+    const labels = sets.map(([b]) => $(`lab${b}`).value || (b === 'A' ? `${t}-man` : `${t}-man set ${b}`));
     const res = [];
     const t0 = performance.now();
     for (let k = 0; k < sets.length; k++) {

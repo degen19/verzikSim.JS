@@ -1,7 +1,7 @@
 // Port of sim.py - Verzik (ToB Normal Mode) tick simulator - Phase 1 stage.
 // (main() / CLI / csv / report printing not ported.)
 import {
-  floordiv, pymod, ga, dget, has, intKeys, isStr, isNum, sum, sorted, maxBy, rjust, ljust, fx, range,
+  floordiv, pymod, ga, dget, has, intKeys, blockRows, isStr, isNum, sum, sorted, maxBy, rjust, ljust, fx, range,
 } from './util.js';
 import * as supplies from './supplies.js';
 import * as horn from './horn.js';
@@ -483,12 +483,7 @@ export function surge_tick(v) {
 
 export async function parse_chart(wb, team, tab = null, block = 'A') {
   const ws = await wb.load(tab || `${team}-man`);
-  let banner = null;
-  for (let r = 1; r < ws.max_row + 1; r++) {
-    const v = ws.cell(r, 1).value;
-    if (isStr(v) && v.startsWith('SET B')) { banner = r; break; }
-  }
-  const [lo_r, hi_r] = block === 'A' ? [1, (banner || ws.max_row + 1) - 1] : [(banner || ws.max_row + 1), ws.max_row];
+  const [lo_r, hi_r] = blockRows(ws, block);
   const yes = (v) => ['yes', 'y', 'true', '1'].includes(pystr(v).trim().toLowerCase());
   const find_row = (label) => {
     for (let r = lo_r; r < hi_r + 1; r++) {

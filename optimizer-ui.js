@@ -20,7 +20,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
 
   root.innerHTML = `
     <div class="row wrap">
-      <label>Set<select id="o-set"><option value="A">Set A</option><option value="B">Set B</option></select></label>
+      <label>Set<select id="o-set"><option value="A">Set A</option><option value="B">Set B</option><option value="C">Set C</option></select></label>
       <label title="Target room times for this scale. Leave blank to rank by success rate.">Breakpoints (m:ss)<input id="o-bps" placeholder="m:ss, comma-separated" style="width:200px"></label>
       <label title="How far each raid is simulated. Breakpoints and success then refer to the end of that phase.">Phases<select id="o-scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option><option value="p1">P1 only</option></select></label>
       <label>Rank by<select id="o-rank"></select></label>

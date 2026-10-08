@@ -1,5 +1,7 @@
 // Chart form: describes every input on a chart tab (taken from the template's own layout), and turns form
 // values back into a sheet that parse_chart / the planner read exactly like an imported .xlsx.
+import { blockRows, BLOCKS } from './util.js';
+export { BLOCKS };
 
 export const TEAM_HEADERS = ['Number of Purples', 'Death tick', 'Deep proc HP %', 'P3 halberd HP %', 'Dawn threshold %', 'Second purple %',
   'Purple HP %', 'Tornado hit %', 'P2 Scythe last hit threshold', 'Crab HP threshold', 'Brew sips', 'SCB sips', 'Restore sips', 'Sharks',
@@ -35,9 +37,7 @@ const typeOf = (h) => (BOOLS.has(h) ? 'bool' : h in SELECTS ? 'select' : FIXED.h
  * field = {key, header, player (index or null), r, c, type, choices, def}
  */
 export function describe(ws, team, block = 'A') {
-  let banner = null;
-  for (let r = 1; r <= ws.max_row; r++) { const v = ws.cell(r, 1).value; if (typeof v === 'string' && v.startsWith('SET B')) { banner = r; break; } }
-  const [lo, hi] = block === 'A' ? [1, (banner || ws.max_row + 1) - 1] : [banner || ws.max_row + 1, ws.max_row];
+  const [lo, hi] = blockRows(ws, block);
   const findRow = (label) => {
     for (let r = lo; r <= hi; r++) for (let c = 1; c < 4; c++) {
       const v = ws.cell(r, c).value; if (typeof v === 'string' && v.trim().toLowerCase() === label.toLowerCase()) return r;
@@ -99,6 +99,29 @@ export function readValues(ws, desc) {
     vals[f.key] = v;
   }
   return vals;
+}
+
+/**
+ * The template tab plus a Set C block: a copy of Set B's layout (labels, defaults) placed after the last row, under a
+ * 'SET C' banner, so describe() / parse_chart() / the planner read Set C like the other two. Unchanged if the tab has
+ * no Set B or already has a Set C.
+ */
+export function withSetC(ws) {
+  const [bLo, bHi] = blockRows(ws, 'B');
+  if (bLo > ws.max_row || blockRows(ws, 'C')[0] <= ws.max_row) return ws;
+  const off = ws.max_row + 2 - bLo;
+  return {
+    max_row: bHi + off, max_column: ws.max_column,
+    cell(r, c) {
+      if (r <= ws.max_row) return ws.cell(r, c);
+      const src = r - off;
+      if (src < bLo) return { value: null };
+      const v = ws.cell(src, c).value;
+      if (c === 1 && src === bLo) return { value: 'SET C (optional) - a third setup to compare against Sets A and B.' };
+      if (c === 1 && typeof v === 'string' && / - set B$/.test(v)) return { value: v.replace(/ - set B$/, ' - set C') };
+      return { value: v };
+    },
+  };
 }
 
 /** A sheet that reads like the template tab with the form values written in. */

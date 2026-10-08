@@ -2,6 +2,7 @@
 // the template's calc sheet (deterministic spec timeline, no randomness). Works on an imported chart or one built
 // on the page. The P1 kill-odds model is not included: P1 ends on the Death tick if one is set, otherwise on the
 // last charted tick.
+import { blockRows } from './util.js';
 
 const yes = (v) => ['yes', 'y', 'true', '1'].includes(String(v ?? '').trim().toLowerCase());
 const num = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
@@ -24,9 +25,7 @@ function surgeTick(v) {
 
 /** Read the planner inputs for one block (A or B) of a tab. `ws` = sheet with cell(r,c).value, max_row, max_column. */
 export function readPlanInputs(ws, team, block = 'A') {
-  let banner = null;
-  for (let r = 1; r <= ws.max_row; r++) { const v = ws.cell(r, 1).value; if (typeof v === 'string' && v.startsWith('SET B')) { banner = r; break; } }
-  const [lo, hi] = block === 'A' ? [1, (banner || ws.max_row + 1) - 1] : [banner || ws.max_row + 1, ws.max_row];
+  const [lo, hi] = blockRows(ws, block);
   const findRow = (label) => {
     for (let r = lo; r <= hi; r++) for (let c = 1; c < 4; c++) {
       const v = ws.cell(r, c).value; if (typeof v === 'string' && v.trim().toLowerCase() === label.toLowerCase()) return r;

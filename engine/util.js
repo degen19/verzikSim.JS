@@ -113,4 +113,19 @@ export function has(container, x) {
 }
 
 /** Integer keys of an int-keyed plain-object dict (Python dict[int, ...]). */
+/** Rows [lo, hi] of chart block 'A', 'B' or 'C' on a tab. Blocks B and C start at their 'SET B' / 'SET C' banner rows
+ *  (column A); a missing block gives an empty range. */
+export const BLOCKS = ['A', 'B', 'C'];
+export function blockRows(ws, block = 'A') {
+  const at = {};
+  for (let r = 1; r <= ws.max_row; r++) {
+    const v = ws.cell(r, 1).value;
+    if (typeof v === 'string') for (const b of ['B', 'C']) if (at[b] == null && v.startsWith(`SET ${b}`)) at[b] = r;
+  }
+  const end = ws.max_row + 1;
+  if (block === 'A') return [1, (at.B ?? at.C ?? end) - 1];
+  if (block === 'B') return at.B == null ? [end, end - 1] : [at.B, (at.C ?? end) - 1];
+  return at.C == null ? [end, end - 1] : [at.C, ws.max_row];
+}
+
 export const intKeys = (d) => Object.keys(d).map(Number);

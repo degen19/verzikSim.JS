@@ -1,6 +1,6 @@
 // "Build chart on this page": the chart template's inputs as a form, for the selected scale. Saved in this browser.
 import { readXlsx } from './engine/xlsx.js';
-import { describe, readValues, overlaySheet, checkRow, CODES, CODE_HELP, isAutoTick } from './engine/chartform.js';
+import { describe, readValues, overlaySheet, checkRow, withSetC, BLOCKS, CODES, CODE_HELP, isAutoTick } from './engine/chartform.js';
 import { readPlanInputs, plan } from './engine/planner.js';
 
 const STORE = 'verzikSim.builder.v1';
@@ -40,11 +40,13 @@ export function createBuilder(root, { onChange }) {
       tplWb = await readXlsx(new Uint8Array(await res.arrayBuffer()));
     }
     if (!tpl[t]) {
-      const ws = await tplWb.load(`${t}-man`);
-      const descs = { A: describe(ws, t, 'A'), B: describe(ws, t, 'B') };
-      tpl[t] = { ws, descs, defaults: { A: readValues(ws, descs.A), B: readValues(ws, descs.B) } };
+      const ws = withSetC(await tplWb.load(`${t}-man`));          // the template's Sets A and B + a Set C copied from B
+      const descs = {}, defaults = {};
+      for (const b of BLOCKS) { descs[b] = describe(ws, t, b); defaults[b] = readValues(ws, descs[b]); }
+      tpl[t] = { ws, descs, defaults };
     }
-    if (!state[t]) state[t] = { A: { ...tpl[t].defaults.A }, B: { ...tpl[t].defaults.B } };
+    if (!state[t]) state[t] = {};
+    for (const b of BLOCKS) if (!state[t][b]) state[t][b] = { ...tpl[t].defaults[b] };   // older saves have no Set C
     return tpl[t];
   }
   const vals = () => state[team][block];
@@ -79,13 +81,13 @@ export function createBuilder(root, { onChange }) {
     if (/\.xlsx$/i.test(d.file)) {
       const wb = await readXlsx(new Uint8Array(await res.arrayBuffer()));
       const ws = await wb.load(`${team}-man`);
-      return { A: readValues(ws, describe(ws, team, 'A')), B: readValues(ws, describe(ws, team, 'B')) };
+      return Object.fromEntries(BLOCKS.map((b) => [b, readValues(ws, describe(ws, team, b))]));
     }
     const j = await res.json();
     if (j.app !== 'verzikSim' || !j.sets) throw new Error(`"${d.name}" isn't a chart saved from this page`);
     return j.sets;
   }
-  const withDefaults = (sets) => ({ A: { ...tpl[team].defaults.A, ...(sets.A || {}) }, B: { ...tpl[team].defaults.B, ...(sets.B || {}) } });
+  const withDefaults = (sets) => Object.fromEntries(BLOCKS.map((b) => [b, { ...tpl[team].defaults[b], ...(sets[b] || {}) }]));
   function markCurrent(kind, id, name) { cur[team] = { kind, id, name, snap: snapOf() }; saveKey(LIBCUR, cur); }
   function libBar() {
     const c = cur[team] || {};
@@ -203,15 +205,15 @@ export function createBuilder(root, { onChange }) {
     const teamFields = d.team.map((f) => `<label title="${esc(HELP[f.header] || '')}">${esc(f.header)}${input(f, vals()[f.key] ?? f.def)}</label>`).join('');
     root.innerHTML = `${libBar()}
       <div class="row between">
-        <div class="seg"><button data-block="A" class="${block === 'A' ? 'on' : ''}">Set A</button><button data-block="B" class="${block === 'B' ? 'on' : ''}">Set B (optional)</button></div>
+        <div class="seg">${BLOCKS.map((b) => `<button data-block="${b}" class="${block === b ? 'on' : ''}">Set ${b}${b === 'A' ? '' : ' (optional)'}</button>`).join('')}</div>
         <div class="row">
-          <button class="ghost sm" data-act="copy">${block === 'A' ? 'Copy Set A to Set B' : 'Copy Set B to Set A'}</button>
+          ${BLOCKS.filter((b) => b !== block).map((b) => `<button class="ghost sm" data-act="copy" data-to="${b}">Copy Set ${block} to Set ${b}</button>`).join('')}
           <button class="ghost sm" data-act="reset">Reset this set</button>
           <button class="ghost sm" data-act="export">Save to file</button>
           <label class="ghost sm filebtn">Open file<input type="file" accept=".json" data-act="import" hidden></label>
         </div>
       </div>
-      <p class="muted small">${team}-man chart, Set ${block}. Changes are saved in this browser automatically. Set B only runs if its P1 chart has something in it.</p>
+      <p class="muted small">${team}-man chart, Set ${block}. Changes are saved in this browser automatically. Sets B and C only run if their P1 chart has something in it.</p>
       <h3>Setup</h3>${playerTable('setup', d.setup)}
       <h3>Spec planner</h3><div id="vz-plan"></div>
       <p class="muted small">Same as the chart's End spec / Room Time / LB swings / Time of regen columns. P1 ends on the Death tick if set, otherwise on the last charted tick.</p>
@@ -247,7 +249,7 @@ export function createBuilder(root, { onChange }) {
     if (b.dataset.block) { block = b.dataset.block; render(); return; }
     const act = b.dataset.act;
     if (act === 'copy') {
-      const other = block === 'A' ? 'B' : 'A';
+      const other = b.dataset.to;
       const copied = remap(state[team][block], block, other); delete copied[LOCK];
       state[team][other] = locked(other) ? keepChart(copied, state[team][other]) : copied;   // a locked chart stays put
       block = other; render(); persist();
@@ -271,7 +273,7 @@ export function createBuilder(root, { onChange }) {
     }
     if (act === 'libnew') {
       if (dirty() && !confirm('Start a new chart? Unsaved changes on the page will be lost (save them first if you want to keep them).')) return;
-      state[team] = { A: { ...tpl[team].defaults.A }, B: { ...tpl[team].defaults.B } };
+      state[team] = withDefaults({});
       delete cur[team]; saveKey(LIBCUR, cur); block = 'A'; save(state); render(); onChange && onChange(); return;
     }
     if (act === 'lockchart') {
@@ -314,8 +316,7 @@ export function createBuilder(root, { onChange }) {
     async importFrom(wb, t) {
       await ensure(t);
       const ws = await wb.load(`${t}-man`);
-      state[t] = { A: { ...tpl[t].defaults.A, ...readValues(ws, describe(ws, t, 'A')) },
-                   B: { ...tpl[t].defaults.B, ...readValues(ws, describe(ws, t, 'B')) } };
+      state[t] = Object.fromEntries(BLOCKS.map((b) => [b, { ...tpl[t].defaults[b], ...readValues(ws, describe(ws, t, b)) }]));
       delete cur[t]; saveKey(LIBCUR, cur);
       save(state);
     },

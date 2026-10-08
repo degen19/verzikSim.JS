@@ -26,10 +26,10 @@ function args() {
     else if (a[i] === '--bps') o.bps = parseBreakpoints(a[++i]);
     else if (a[i] === '--phase') o.phase = { p1: 'p1', p2: 'p2', full: 'full' }[a[++i]] || 'full';
     else if (a[i] === '--threads') o.threads = Math.max(1, Number(a[++i]) || 1);
-    else if (a[i] === '--labels') { o.labels = [a[++i], a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : undefined].filter(Boolean); }
+    else if (a[i] === '--labels') { o.labels = []; while (a[i + 1] && !a[i + 1].startsWith('--')) o.labels.push(a[++i]); }
   }
   if (!o.chart || (!o.team && !o.all)) {
-    console.log('usage: node cli/run.mjs chart.xlsx --team 2|3|4|5 [--runs 20000] [--seed N] [--threads N] [--labels "A" "B"] [--bps "m:ss,..."] [--phase full|p2|p1] [--out report.html]\n' +
+    console.log('usage: node cli/run.mjs chart.xlsx --team 2|3|4|5 [--runs 20000] [--seed N] [--threads N] [--labels "A" "B" "C"] [--bps "m:ss,..."] [--phase full|p2|p1] [--out report.html]\n' +
                 '       node cli/run.mjs chart.xlsx --all');
     process.exit(1);
   }
@@ -68,15 +68,14 @@ const o = args();
 const wb = await readXlsx(readFileSync(o.chart));
 const teams = o.all ? [2, 3, 4, 5] : [o.team];
 for (const team of teams) {
-  let A, B;
-  try { A = await parse_chart(wb, team, null, 'A'); } catch { A = null; }
-  try { B = await parse_chart(wb, team, null, 'B'); } catch { B = null; }
-  const sets = [];
-  if (A && filled(A)) sets.push(A.map((c) => ({ ...c, scope: o.phase })));
-  if (B && filled(B)) sets.push(B.map((c) => ({ ...c, scope: o.phase })));
+  const sets = [], names = [];
+  for (const b of ['A', 'B', 'C']) {
+    let c; try { c = await parse_chart(wb, team, null, b); } catch { c = null; }
+    if (c && filled(c)) { sets.push(c.map((x) => ({ ...x, scope: o.phase }))); names.push(b); }
+  }
   if (!sets.length) { if (!o.all) console.log(`${team}-man: no filled set found`); continue; }
   const labels = o.labels && o.labels.length === sets.length ? o.labels
-    : sets.length === 2 ? [`${team}-man`, `${team}-man set B`] : [`${team}-man${!(A && filled(A)) ? ' set B' : ''}`];
+    : names.map((b) => (b === 'A' ? `${team}-man` : `${team}-man set ${b}`));
   const t0 = Date.now();
   const res = [];
   try {

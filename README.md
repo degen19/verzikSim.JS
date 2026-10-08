@@ -40,12 +40,12 @@ On the page:
 2. Pick the **Scale**.
 3. Pick the **Phases**: Full raid, P1 + P2 (stops when P2 dies) or P1 only - faster, and times / success refer to the end of that phase. Then set **Raids per set** (20,000 is a good default).
 4. Optionally set a **Seed**. With the same seed you get the same results again.
-5. Optionally name **Set A** and **Set B**. If the tab has a filled second block, it runs both and compares them.
+5. Optionally name **Set A**, **Set B** and **Set C**. Every set with a filled P1 chart is run and compared (Set C is made on the page - see below).
 6. Optionally type **Breakpoints** (`m:ss`, comma-separated; kept per scale) to mark your target times on the report.
 7. Press **Run**. When it finishes, **Download report** saves a standalone HTML copy of the results.
 
 ### Building a chart on the page
-**Build chart on this page** shows the template's inputs for the selected scale: setup, team settings, gear, mage gear and the P1 tick chart, with Set A and Set B.
+**Build chart on this page** shows the template's inputs for the selected scale: setup, team settings, gear, mage gear and the P1 tick chart, with Set A, Set B and Set C (copy any set to another with the Copy buttons).
 - The **Spec planner** shows the same End spec / Room Time / LB swings / Time of regen numbers as the spreadsheet (P1 ends on the Death tick if you set one, otherwise on the last charted tick - the spreadsheet's P1 kill-odds estimate isn't included).
 - Each P1 chart row gets a ✓ or ✗ check (attack speeds, X only on Verzik auto ticks, H needs a has3Tick weapon). Hover the ✗ to see why.
 - **Clear chart** empties only the P1 chart. **Lock chart** freezes it: its cells can't be edited, and **Reset this set** / **Copy** reset or copy everything else but leave the locked chart alone.

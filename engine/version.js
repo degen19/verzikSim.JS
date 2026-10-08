@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.11.0';
+export const VERSION = '1.12.0';
 export const CHANGES = [
+  { version: '1.12.0', date: '2026-10-08', items: [
+    'Set C: a third setup to compare. "Build chart on this page" has Set A / Set B / Set C tabs (copy any set to any other), the Run tab has a Set C label, and the report, charts and Optimizer handle all three. Saved charts and chart files include Set C.',
+    'Set C lives on the page: the spreadsheet template still has Sets A and B (an imported chart can be copied to the page with "Edit this chart on the page" and given a Set C there).',
+  ] },
   { version: '1.11.0', date: '2026-10-08', items: [
     'Phases: the Run tab and the Optimizer can simulate the Full raid, P1 + P2 (stops when P2 dies) or P1 only. Times, splits, success and breakpoints then refer to the end of that phase. P1 only runs about 3x faster than a full raid.',
     'Every raid now has its own random stream, so with the same seed P1 only, P1 + P2 and Full raid play the very same raids (success always nests: Full <= P1 + P2 <= P1). Same seed still gives the same result on any computer or thread count.',
