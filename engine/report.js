@@ -23,9 +23,12 @@ function q(sortedArr, f) {
   return sortedArr[Math.min(m - 1, Math.max(0, Math.floor(m * f) - 1))];
 }
 
+const scopeOfRes = (res) => (res[0] && res[0].scope) || 'full';
+
 function splitRows(res, labels) {
-  const rows = [];
-  const names = [['P1 end', 'sp1'], ['1st reds proc', 'sproc'], ['P2 end', 'sp2'], ['Room complete', 'sp3']];
+  const rows = [], scope = scopeOfRes(res);
+  const names = [['P1 end', 'sp1'], ['1st reds proc', 'sproc'], ['P2 end', 'sp2'], ['Room complete', 'sp3']]
+    .slice(0, scope === 'p1' ? 1 : scope === 'p2' ? 3 : 4);
   for (const [name, key] of names) {
     res.forEach((r, k) => {
       const src = r.duo ? r.duo[key] : r.splits[key];
@@ -34,7 +37,7 @@ function splitRows(res, labels) {
       rows.push([k === 0 ? name : '', labels[k], fmt(v[Math.floor(v.length / 2)]), fmt(q(v, 0.10)), fmt(q(v, 0.25)), fmt(q(v, 0.75)), k]);
     });
   }
-  if (res.some((r) => r.duo)) {
+  if (res.some((r) => r.duo) && scope !== 'p1') {
     for (const [name, key] of [['1st reds depth (avg)', 'dep1'], ['2nd reds depth (avg)', 'dep2']]) {
       res.forEach((r, k) => rows.push([k === 0 ? name : '', labels[k], ...depthBuckets(r.duo, key), k]));
     }
@@ -71,6 +74,15 @@ function bpRows(res, bps) {
 }
 
 function oddsRows(res, team, bps = []) {
+  const scope = scopeOfRes(res);
+  const fastestRows = [
+    ['Fastest completed run', res.map((r) => (r.total.length ? fmt(fastest(r.total)) : '-'))],
+    ['Fastest run frequency (all runs)', res.map((r) => fastestFreq(r))],
+  ];
+  if (scope === 'p1') return [['P1 killed (all runs)', res.map((r) => pct(r.total.length, r.runs))], ...fastestRows, ...bpRows(res, bps)];
+  if (scope === 'p2' && team === 2) {
+    return [['2-down success (all runs)', res.map((r) => pct(r.duo.n2d, r.runs))], ...fastestRows, ...bpRows(res, bps)];
+  }
   if (team === 2) {
     const d = res.map((r) => r.duo);
     return [
@@ -92,10 +104,12 @@ function oddsRows(res, team, bps = []) {
     ['Avg reds proc depth (Verzik HP %)', res.map((r) => `${mean(r.depth).toFixed(1)}%`)],
     ['Deepest reds proc', res.map((r) => (r.depth.length ? `${arrMin(r.depth).toFixed(1)}%` : '-'))],
     ['Avg P3 20% tick', res.map((r) => (r.p20.length ? mean(r.p20).toFixed(1) : '-'))],
-    ...(team === 4 || team === 5 ? [[`P3 20% on or before tick ${WEBS_TICK} (before webs, of kills)`,
+    ...(scope === 'full' && (team === 4 || team === 5) ? [[`P3 20% on or before tick ${WEBS_TICK} (before webs, of kills)`,
       res.map((r) => pct(r.p20.filter((x) => x <= WEBS_TICK).length, r.total.length))]] : []),
+    ...(scope === 'p2' ? fastestRows : []),
     ...bpRows(res, bps),
-  ];
+  ].filter((row) => scope === 'full' || !/P3 20%/.test(row[0]))
+    .map((row) => (scope === 'p2' && row[0] === 'Success (all runs)' ? ['P2 down in reds (all runs)', row[1]] : row));
 }
 
 function histogramSvg(res, labels) {
@@ -285,10 +299,15 @@ export function reportHtml(res, labels, team, runs, opts = {}) {
   const od = oddsRows(res, team, bps);
   const odds = `<table><tr><th></th>${labels.map((l, k) => `<th style="color:${COL[k]}">${esc(l)}</th>`).join('')}</tr>${
     od.map(([n, vals]) => `<tr><td>${n}</td>${vals.map((v) => `<td>${v}</td>`).join('')}</tr>`).join('')}</table>`;
-  const what = team === 2 ? 'success = P2 down in two reds and P3 killed' : 'success = P2 down in reds and P3 killed';
+  const scope = scopeOfRes(res);
+  const what = scope === 'p1' ? 'success = P1 killed' : scope === 'p2'
+    ? (team === 2 ? 'success = P2 down in two reds' : 'success = P2 down in reds')
+    : (team === 2 ? 'success = P2 down in two reds and P3 killed' : 'success = P2 down in reds and P3 killed');
+  const title = scope === 'p1' ? 'P1 only - time to the end of P1' : scope === 'p2' ? 'P1 + P2 - time to the end of P2' : 'room time';
+  const timesAre = scope === 'p1' ? 'times are room time at the end of P1' : scope === 'p2' ? 'times are room time when P2 dies' : 'times are total room time';
   return `<div class="vz-report">
-<h2>${team}-man Verzik: room time${res.length > 1 ? ' comparison' : ''}</h2>
-<div class="sub">${runs.toLocaleString()} raids per set · times are total room time · charts use each set's successful runs · ${what} · sim v${VERSION}</div>
+<h2>${team}-man Verzik: ${title}${res.length > 1 ? ' comparison' : ''}</h2>
+<div class="sub">${runs.toLocaleString()} raids per set · ${timesAre} · charts use each set's successful runs · ${what} · sim v${VERSION}</div>
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3><div class="sub">Median / Top 10% / Top 25% / Bottom 25% are of each set's <b>successful runs only</b> (${res.map((r, k) => `${esc(labels[k])}: ${r.total.length.toLocaleString()} kills of ${r.runs.toLocaleString()} attempts`).join(' · ')}). Failed raids have no room time, so they aren't in these columns - see "% of all attempts" below for odds per attempt.</div>${splits}${team === 2 ? '<div class="sub" style="margin-top:6px">Depth = Verzik HP % when the shield goes up (lower = deeper), averaged over the runs in each room-time bucket (Median = runs around the median room time).</div>' : ''}
 <h3>Odds</h3>${odds}

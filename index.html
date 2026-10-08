@@ -144,6 +144,7 @@
     <div class="tabs" id="tabs"><button data-tab="run" class="on">Run report</button><button data-tab="opt">Optimizer</button><button data-tab="new">What's new</button></div>
     <section id="tab-run" class="card" style="border-top-left-radius:0">
       <div class="row">
+        <label title="How far each raid is simulated. Times and success then refer to the end of that phase.">Phases<select id="scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option><option value="p1">P1 only</option></select></label>
         <label>Raids per set<input id="runs" type="number" value="20000" min="100" step="1000"></label>
         <label>Seed (optional)<input id="seed" type="number" placeholder="random"></label>
         <label>Set A label<input id="labA" placeholder="e.g. Booma P1"></label>

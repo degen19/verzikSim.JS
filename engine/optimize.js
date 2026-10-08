@@ -9,12 +9,15 @@ import { run_p3 } from './p3.js';
 
 /** One raid. Returns the room-complete tick, or null if the raid failed. Same RNG use as simulate(). */
 export function runOne(cfgs, team, rng) {
+  const scope = cfgs[0] && cfgs[0].scope;                    // 'p1' / 'p2' stop at that phase's end (see simulate.js)
   const r1 = run_p1(cfgs, team, rng);
   if (r1.players.every((p) => p.dead)) return null;
+  if (scope === 'p1') return r1.end ?? null;
   const r2 = run_p2(r1, team, rng);
   if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return null;
   const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng) : run_reds(r2, cfgs, team, rng);
   if (!r3.success || (team === 2 && r3.players.every((p) => p.dead))) return null;
+  if (scope === 'p2') return r3.kill;
   const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng);
   return r4.kill == null ? null : r4.end;
 }

@@ -38,7 +38,7 @@ The app has to be served over `http://`. Double-clicking `index.html` opens it a
 On the page:
 1. Either **Import chart (.xlsx)** and pick your filled chart, or switch to **Build chart on this page** and fill in the tables (see below).
 2. Pick the **Scale**.
-3. Set **Raids per set** (20,000 is a good default).
+3. Pick the **Phases**: Full raid, P1 + P2 (stops when P2 dies) or P1 only - faster, and times / success refer to the end of that phase. Then set **Raids per set** (20,000 is a good default).
 4. Optionally set a **Seed**. With the same seed you get the same results again.
 5. Optionally name **Set A** and **Set B**. If the tab has a filled second block, it runs both and compares them.
 6. Optionally type **Breakpoints** (`m:ss`, comma-separated; kept per scale) to mark your target times on the report.

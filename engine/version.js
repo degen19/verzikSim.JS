@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.10.0';
+export const VERSION = '1.11.0';
 export const CHANGES = [
+  { version: '1.11.0', date: '2026-10-08', items: [
+    'Phases: the Run tab and the Optimizer can simulate the Full raid, P1 + P2 (stops when P2 dies) or P1 only. Times, splits, success and breakpoints then refer to the end of that phase. P1 only runs about 3x faster than a full raid.',
+    'Every raid now has its own random stream, so with the same seed P1 only, P1 + P2 and Full raid play the very same raids (success always nests: Full <= P1 + P2 <= P1). Same seed still gives the same result on any computer or thread count.',
+  ] },
   { version: '1.10.0', date: '2026-10-08', items: [
     '4 Claw Priority (trio, on by default - new checkbox in the 3-man team settings, and in the chart template). If Verzik\'s P1 dies in 11 or fewer Dawn specs, the player who didn\'t use their last Dawn (if several: highest spec % out of P1, then closest to their next regen) prioritises 100% spec for reds. They take over the purple DC and camp Lightbearer until Ultor still gets both claws off by r36 - or, if that can\'t be reached, until Ultor gives 80% by r40. The others camp Lightbearer until Ultor still gives one claw by r36. All 12 Dawns used, or unchecked: rings follow the chart. This replaces the old "shadow player camps Lightbearer to 100%" rule.',
     'Crystal halberd spec damage corrected: each hit that passes accuracy rolls 1 to your normal max hit, then adds 10% of that max (rounded down). It used to roll up to a 10% higher max instead. Applies to reds r40, duo reds and P3.',

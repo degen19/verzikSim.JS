@@ -145,6 +145,8 @@ $('go').addEventListener('click', async () => {
       try { const c = await parse_chart(wb, t, null, block); if (filled(c)) sets.push([block, c]); } catch (e) { if (block === 'A') throw e; }
     }
     if (!sets.length) throw new Error(`The ${t}-man chart has no filled P1 chart.`);
+    const scope = $('scope').value;
+    for (const s of sets) s[1] = s[1].map((c) => ({ ...c, scope }));                // phases to simulate (see simulate.js)
     const labels = sets.map(([b]) => (b === 'A' ? $('labA').value || `${t}-man` : $('labB').value || `${t}-man set B`));
     const res = [];
     const t0 = performance.now();

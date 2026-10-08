@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.11.0 - 2026-10-08
+- **Phases** on the Run tab and in the Optimizer: Full raid, P1 + P2 (to the end of P2) or P1 only. Report title, splits, odds and breakpoints follow the chosen phase. Terminal: `--phase full|p2|p1`.
+- Each raid has its own random stream (`seed#i`), so the three phase modes play identical raids for a seed (results nest). Results for a given seed differ from v1.10.0 (statistically the same).
+
 ## v1.10.0 - 2026-10-08
 - **4 Claw Priority** (trio, on by default; new team setting in the 3-man tab of the template and the builder): if Verzik's P1 dies in 11 or fewer Dawn specs, the player who didn't use their last Dawn (several: highest spec % out of P1, then closest to their next regen) prioritises 100% spec for reds - takes over the purple DC and camps Lightbearer until Ultor still gets both claws off by r36 (unreachable: until Ultor gives 80% by r40). The others camp Lightbearer until Ultor still gives one claw by r36. All 12 Dawns used / unchecked: rings as charted. Replaces the old shadow-camps-to-100% rule. Mechanics & behavior sheet updated.
 - **Crystal halberd spec**: hits that pass accuracy roll 1..max, then +floor(max / 10) (was: roll up to a 10% higher max). Reds r40, duo reds, P3 and the P3 planner.

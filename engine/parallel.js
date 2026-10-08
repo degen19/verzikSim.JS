@@ -72,6 +72,7 @@ export function mergeResults(parts) {
     }
   }
   out.succ = out.total.length / out.runs;
+  out.scope = first.scope;
   return out;
 }
 

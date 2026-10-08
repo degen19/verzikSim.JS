@@ -15,7 +15,7 @@ import { parseBreakpoints } from '../engine/optimize.js';
 import { planChunks, mergeResults, runChunksSequential, workerCount } from '../engine/parallel.js';
 
 function args() {
-  const a = process.argv.slice(2), o = { runs: 20000, seed: null, labels: null, team: null, out: null, bps: [], all: false, threads: workerCount(cpus().length) };
+  const a = process.argv.slice(2), o = { runs: 20000, seed: null, labels: null, team: null, out: null, bps: [], phase: 'full', all: false, threads: workerCount(cpus().length) };
   o.chart = a[0];
   for (let i = 1; i < a.length; i++) {
     if (a[i] === '--team') o.team = Number(a[++i]);
@@ -24,11 +24,12 @@ function args() {
     else if (a[i] === '--out') o.out = a[++i];
     else if (a[i] === '--all') o.all = true;
     else if (a[i] === '--bps') o.bps = parseBreakpoints(a[++i]);
+    else if (a[i] === '--phase') o.phase = { p1: 'p1', p2: 'p2', full: 'full' }[a[++i]] || 'full';
     else if (a[i] === '--threads') o.threads = Math.max(1, Number(a[++i]) || 1);
     else if (a[i] === '--labels') { o.labels = [a[++i], a[i + 1] && !a[i + 1].startsWith('--') ? a[++i] : undefined].filter(Boolean); }
   }
   if (!o.chart || (!o.team && !o.all)) {
-    console.log('usage: node cli/run.mjs chart.xlsx --team 2|3|4|5 [--runs 20000] [--seed N] [--threads N] [--labels "A" "B"] [--bps "5:21,5:12,5:00"] [--out report.html]\n' +
+    console.log('usage: node cli/run.mjs chart.xlsx --team 2|3|4|5 [--runs 20000] [--seed N] [--threads N] [--labels "A" "B"] [--bps "m:ss,..."] [--phase full|p2|p1] [--out report.html]\n' +
                 '       node cli/run.mjs chart.xlsx --all');
     process.exit(1);
   }
@@ -71,11 +72,11 @@ for (const team of teams) {
   try { A = await parse_chart(wb, team, null, 'A'); } catch { A = null; }
   try { B = await parse_chart(wb, team, null, 'B'); } catch { B = null; }
   const sets = [];
-  if (A && filled(A)) sets.push(A);
-  if (B && filled(B)) sets.push(B);
+  if (A && filled(A)) sets.push(A.map((c) => ({ ...c, scope: o.phase })));
+  if (B && filled(B)) sets.push(B.map((c) => ({ ...c, scope: o.phase })));
   if (!sets.length) { if (!o.all) console.log(`${team}-man: no filled set found`); continue; }
   const labels = o.labels && o.labels.length === sets.length ? o.labels
-    : sets.length === 2 ? [`${team}-man`, `${team}-man set B`] : [`${team}-man${sets[0] === B ? ' set B' : ''}`];
+    : sets.length === 2 ? [`${team}-man`, `${team}-man set B`] : [`${team}-man${!(A && filled(A)) ? ' set B' : ''}`];
   const t0 = Date.now();
   const res = [];
   try {

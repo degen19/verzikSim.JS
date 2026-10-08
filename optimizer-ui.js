@@ -12,7 +12,7 @@ const CORES = threadCount();                    // same worker count as report r
 const BPS_KEY = 'verzikSim.optBps.v1';  // breakpoints typed per scale: {team: text}
 const RATE_KEY = 'verzikSim.rate.v2';   // v2: engine got ~1.4x faster in v1.6.0, so older measurements are stale            // measured raids/second per scale, from finished searches on this computer
 const rates = (() => { try { return JSON.parse(localStorage.getItem(RATE_KEY)) || {}; } catch { return {}; } })();
-const keepRate = (t, r) => { rates[`${t}:${CORES}`] = r; try { localStorage.setItem(RATE_KEY, JSON.stringify(rates)); } catch { /* ignore */ } };
+const keepRate = (key, r) => { rates[key] = r; try { localStorage.setItem(RATE_KEY, JSON.stringify(rates)); } catch { /* ignore */ } };
 
 export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
   let cfgs = null, team = 0, block = 'A', opts = [], rate = null, rateKey = '', pool = null, stopped = false;
@@ -22,6 +22,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     <div class="row wrap">
       <label>Set<select id="o-set"><option value="A">Set A</option><option value="B">Set B</option></select></label>
       <label title="Target room times for this scale. Leave blank to rank by success rate.">Breakpoints (m:ss)<input id="o-bps" placeholder="m:ss, comma-separated" style="width:200px"></label>
+      <label title="How far each raid is simulated. Breakpoints and success then refer to the end of that phase.">Phases<select id="o-scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option><option value="p1">P1 only</option></select></label>
       <label>Rank by<select id="o-rank"></select></label>
       <label>Search depth<select id="o-depth">${Object.entries(DEPTHS).map(([k, d]) => `<option value="${k}" ${k === 'standard' ? 'selected' : ''}>${d.label}</option>`).join('')}</select></label>
     </div>
@@ -38,6 +39,10 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     <div id="o-out"></div>
     <div id="o-report"></div>`;
   const $ = (id) => root.querySelector(`#${id}`);
+  const scope = () => $('o-scope').value;
+  /** The chart with the chosen phases on every player's config (simulate.js / optimize.js runOne read cfgs[k].scope). */
+  const scoped = () => cfgs.map((c) => ({ ...c, scope: scope() }));
+  const rateId = () => `${team}:${scope()}:${CORES}`;
 
   const savedBps = (() => { try { return JSON.parse(localStorage.getItem(BPS_KEY)) || {}; } catch { return {}; } })();
   const keepBps = () => { savedBps[team] = $('o-bps').value; try { localStorage.setItem(BPS_KEY, JSON.stringify(savedBps)); } catch { /* ignore */ } };
@@ -49,7 +54,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
   function rankOptions() {
     const b = bps() || [];
     const cur = $('o-rank').value;
-    $('o-rank').innerHTML = b.map((s, j) => `<option value="${j}">Faster than ${fmtS(s)}</option>`).join('') + `<option value="success">${team === 2 ? '2-down success' : 'Success'}</option>`;
+    $('o-rank').innerHTML = b.map((s, j) => `<option value="${j}">Faster than ${fmtS(s)}</option>`).join('') + `<option value="success">${scope() === 'p1' ? 'P1 killed' : team === 2 ? '2-down success' : scope() === 'p2' ? 'P2 down in reds' : 'Success'}</option>`;
     if ([...$('o-rank').options].some((o) => o.value === cur)) $('o-rank').value = cur;
     $('o-rank').title = b.length ? '' : 'Add breakpoints to rank by a room time';
   }
@@ -86,12 +91,12 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     return calibrating;
   }
   async function calibrateNow() {
-    const key = JSON.stringify([team, block]);
+    const key = JSON.stringify([team, block, scope()]);
     if (rate && rateKey === key) return rate;
     rateKey = key;
-    if (rates[`${team}:${CORES}`]) { rate = rates[`${team}:${CORES}`]; return rate; }   // measured by an earlier search here
+    if (rates[rateId()]) { rate = rates[rateId()]; return rate; }   // measured by an earlier search here
     $('o-est').textContent = 'Measuring how fast this computer runs the sim (a few seconds)...';
-    const base = applyCombo(cfgs, team, {});
+    const base = applyCombo(scoped(), team, {});
     const own = !pool;
     if (own) pool = makePool();
     try {
@@ -164,7 +169,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     const seed = Math.floor(Math.random() * 1e8);
     var t0 = performance.now();
     try {
-      let alive = combos.map((c) => ({ combo: c, cfgs: applyCombo(cfgs, team, c), counts: null }));
+      let alive = combos.map((c) => ({ combo: c, cfgs: applyCombo(scoped(), team, c), counts: null }));
       const stage = async (list, from, to, sd, label) => {
         stageLabel = `${label}: ${list.length.toLocaleString()} setup${list.length === 1 ? '' : 's'} × ${(to - from).toLocaleString()} raids`;
         $('o-status').textContent = `${stageLabel}...`;
@@ -185,14 +190,14 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
       const isChart = (x) => Object.entries(x.combo).every(([id, v]) => String(opts.find((o) => o.id === id)?.current) === String(v));
       finals.forEach((x) => { if (isChart(x)) x.base = true; });
       if (!finals.some(isChart)) {
-        finals.push({ combo: {}, cfgs: applyCombo(cfgs, team, {}), base: true });
+        finals.push({ combo: {}, cfgs: applyCombo(scoped(), team, {}), base: true });
       }
       const res = await stage(finals, 0, depth.n[2], seed + 7777777, 'Final round (fresh raids)');
       finals.forEach((x, i) => { x.counts = res[i]; });
       finals.sort((a, c) => finalScore(c.counts, metric) - finalScore(a.counts, metric));
       $('o-prog').style.width = '100%';
       const secs = (performance.now() - t0) / 1000;
-      if (secs > 20) { rate = total / secs; keepRate(team, rate); }      // better estimates next time
+      if (secs > 20) { rate = total / secs; keepRate(rateId(), rate); }      // better estimates next time
       $('o-status').textContent = `Done in ${dur((performance.now() - t0) / 1000)} · final round: ${depth.n[2].toLocaleString()} fresh raids per setup.`;
       renderResults(finals, metric);
     } catch (e) {
@@ -232,7 +237,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
       const x = list[Number(b.dataset.rep)];
       $('o-report').innerHTML = '<p class="muted">Running the full report...</p>';
       try {
-        $('o-report').innerHTML = await runReport([x.cfgs, applyCombo(cfgs, team, {})], [`Setup #${Number(b.dataset.rep) + 1}`, 'Your chart']);
+        $('o-report').innerHTML = await runReport([x.cfgs, applyCombo(scoped(), team, {})], [`Setup #${Number(b.dataset.rep) + 1}`, 'Your chart']);
         $('o-report').scrollIntoView({ behavior: 'smooth' });
       } catch (err) { $('o-report').innerHTML = `<p class="err">${esc(err.message)}</p>`; }
     };
@@ -245,6 +250,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport }) {
     if (t.dataset.pick) { const s = sel[t.dataset.pick]; t.checked ? s.picks.add(t.value) : s.picks.delete(t.value); estimate(); return; }
     if (t.id === 'o-bps') { keepBps(); rankOptions(); return; }
     if (t.id === 'o-depth') { estimate(); return; }
+    if (t.id === 'o-scope') { rate = null; rankOptions(); estimate(); return; }
     if (t.id === 'o-set') { block = t.value; refresh(); }
   });
   $('o-go').addEventListener('click', search);
