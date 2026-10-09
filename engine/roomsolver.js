@@ -42,8 +42,8 @@ export const RING_VALUES = [null, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];   //
 /** Search depth presets (raids per setup at each stage, setups kept between stages). */
 export const ROOM_DEPTHS = {
   quick:    { label: 'Quick',    p1Top: 10, n1: 150, keep1: 6,  n2: 150, keepP2: 10, n3: 150, keep2: 14, nFinal: 1500, editRounds: 1, editWidth: 2 },
-  standard: { label: 'Standard', p1Top: 20, n1: 200, keep1: 10, n2: 250, keepP2: 20, n3: 200, keep2: 24, nFinal: 3000, editRounds: 2, editWidth: 3 },
-  thorough: { label: 'Thorough', p1Top: 20, n1: 400, keep1: 14, n2: 500, keepP2: 28, n3: 400, keep2: 32, nFinal: 8000, editRounds: 3, editWidth: 4 },
+  standard: { label: 'Standard', p1Top: 40, p1Diverse: true, n1: 200, keep1: 14, n2: 250, keepP2: 24, n3: 200, keep2: 24, nFinal: 3000, editRounds: 2, editWidth: 3 },
+  thorough: { label: 'Thorough', p1Top: 60, p1Beam: 600, p1Diverse: true, n1: 400, keep1: 20, n2: 500, keepP2: 30, n3: 400, keep2: 32, nFinal: 8000, editRounds: 3, editWidth: 4 },
 };
 
 // ------------------------------------------------------------------ one raid
@@ -389,7 +389,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const ok50 = s1all.filter((x) => clawRate(x.c) >= bar - 1e-9);
   stats.cut50 = s1all.length - ok50.length; stats.clawBar = bestClaw;
   let minS = o.minSuccess || 0;
-  const okSucc = (c) => c.k / c.n >= minS - (o.succTol ?? CLAW_TOL.early) - 1e-9;   // early runs: tolerance for noise (and untuned settings)
+  const okSucc = (c) => c.k / c.n >= minS - (o.succTol ?? 0.10) - 1e-9;   // early runs: 10 points of slack (noise, and settings not tuned yet); exact on the final
   stats.succCut = ok50.filter((x) => !okSucc(x.c)).length;
   let s1 = ok50.filter((x) => okSucc(x.c));
   // nothing reaches the minimum success: carry on without it and rank by success first (the next best options)

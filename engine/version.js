@@ -1,6 +1,12 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.17.4';
+export const VERSION = '1.18.0';
 export const CHANGES = [
+  { version: '1.18.0', date: '2026-10-09', items: [
+    'Verz Solver: your chart is now also edited. From each filled set\'s own Dawn rotation, the solver tries every chart one change away - who has each Dawn, Dawns earlier or later, surges, spec transfers, start specs, and players swapping whole roles - keeps the best and edits those again (Quick 1 round, Standard 2, Thorough 3). The best few go through the full search with your chart\'s settings ("edited from your Set A").',
+    'Verz Solver (3-5 man): the Dawn threshold is now picked by the solver (1-6%) instead of being a form input - it decides how much spec is saved at the end of P1 for the claws in reds. See setup shows it, and Copy to set / Save as chart write it into the chart.',
+    'Verz Solver: a wider P1 search on Standard and Thorough. Besides the fastest P1 charts, the fastest chart for each way the spec ends up split between players at the end of P1 goes into the room search (who has the spec for the claws in reds decides a lot of raids). Thorough also searches more Dawn rotations and keeps more setups through each stage. Searches take longer than before.',
+    'Verz Solver: the minimum success % is applied on the final run only (the early stages allow 10 points under it), so setups aren\'t cut before their ring swaps, thresholds and horns have been tuned.',
+  ] },
   { version: '1.17.4', date: '2026-10-09', items: [
     'Verz Solver: new "Also try my chart" option (on by default). Every filled set (A, B, C) of the chart on this page - imported or built - is run exactly as charted and always listed ("Your Set A"), and also goes through the same search (ring swap %, purple, reds DCs, horns; duos: 2nd purple, shadow mode, thresholds) - those rows say "from your Set A". So the results are never worse than your own chart. If your set\'s settings differ from the Solver form (gear, prayer...), the results say which, since those rows use your chart\'s own settings. Copy to set / Save as chart on those rows keep your chart\'s settings.',
     'Verz Solver: setups where a player misses their claw in reds are no longer left out - the setups are ranked on breakpoints and success like any other.',

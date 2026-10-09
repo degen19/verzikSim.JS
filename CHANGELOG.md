@@ -2,6 +2,12 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.18.0 - 2026-10-09
+- Verz Solver **edits your chart**: `planFromChart` (Dawn order + holders, charted tick as the earliest, transfers / first surge onto the Dawn before them, start specs; duo dodges from the X ticks) and `planNeighbors` (holder change, adjacent holder swap, Dawn timing -4..+4 for a Dawn and the ones after it, all as early as possible, surge moved / added / dropped, transfer added / moved / dropped, start spec flip, last Dawn dropped / one added, all player permutations) in solver.js; `editCandidates` + an "Editing your chart" stage in `solveRoom` (rounds / width per depth: 1/2, 2/3, 3/4; best 3 kept per set, `edited: true`), worker command `edits`.
+- 3-5 man **Dawn threshold searched 1-6%** (option pass after the purple re-check; setups start at 3%); removed from the 3-5 Solver form.
+- **Diverse P1 candidates** (`p1Diverse`, Standard and Thorough): the 20 fastest + the fastest chart per end-of-P1 spec split (60-raid P1 sim, 10% steps; duos per dodge pattern), within 4 ticks of the fastest. Standard: p1Top 40, keep1 14, keepP2 24. Thorough: p1Top 60, beam 600, keep1 20, keepP2 30.
+- Minimum success: 10 points of slack before the final (`succTol`), exact on the final. CLI: `--minbelow N` (your chart's success minus N), `--diverse`, `--succtol`, `--editrounds`, `--editwidth`, `--nomine`.
+
 ## v1.17.4 - 2026-10-09
 - Verz Solver **Also try my chart** (default on; `seeds` option of `solveRoom`, CLI `--nomine` to leave out): each filled set of the page's chart runs as charted (always listed, outside the merge / minimum-success filters) and goes through the screen, ring / purple / P2 horn / duo passes, reds DCs + P3 horns and the final like the solver's own setups ("from your Set X"). Unset Boak sides take the form's side; a set the sim can't run is skipped with a note. Rows say when the set's settings differ from the form; Copy / Save use the set's own values.
 - Claw rule removed (now optional `clawRule`, off): setups where someone misses their reds claw are ranked like any other.

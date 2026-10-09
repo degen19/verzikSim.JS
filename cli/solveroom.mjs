@@ -19,7 +19,7 @@ import { checkRow } from '../engine/chartform.js';
 
 const a = process.argv.slice(2);
 const o = { team: 5, set: 'A', rings: null, horns: null, bps: '', boak: '', p1top: 20, p1beam: 150, n1: 200, keep1: 10, n2: 250,
-  keepP2: 20, n3: 200, keep2: 24, final: 3000, editrounds: 2, editwidth: 3, diverse: 0, succtol: 3, top: 10, out: '', minsuccess: 0, nomine: 0, minbelow: null };
+  keepP2: 20, n3: 200, keep2: 24, final: 3000, editrounds: 2, editwidth: 3, diverse: 0, succtol: 10, top: 10, out: '', minsuccess: 0, nomine: 0, minbelow: null };
 o.chart = a[0];
 for (let i = 1; i < a.length; i++) { if (a[i] === '--nomine') { o.nomine = 1; continue; } const k = a[i].replace(/^--/, ''); if (k in o) o[k] = isNaN(Number(a[i + 1])) ? a[++i] : Number(a[++i]); }
 const fmt = (t) => { const s = t * 0.6; return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
