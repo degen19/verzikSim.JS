@@ -5,6 +5,7 @@ import {
 } from './util.js';
 import * as supplies from './supplies.js';
 import * as horn from './horn.js';
+import { ITEMS } from './gear.js';
 
 export const TICK = 0.6;
 
@@ -395,16 +396,21 @@ export class Player {
 }
 
 
+/** Dawnbringer auto max hit. Shadow players (in their mage gear, on Augury): floor(Magic / 6) x (100 + the mage gear's
+ *  magic damage % + 4 for Augury) / 100, at their current Magic (duo shadow player: boosted to 112) - 23 at 112 in
+ *  Ancestral, occult, imbued sara cape, Avernic treads and Confliction gauntlets. Other players: 17 as before. */
+export function dawn_auto_max(p, magic = p.mag) {
+  if (!pybool(p.shadow)) return floordiv(floordiv(floordiv(112, 3) - 2, 2) * (100 + 2), 100);
+  const mdmg = sum((p.mage_gear || []).map((n) => (ITEMS[n] ? ITEMS[n].mdmg : 0))) + 4;
+  return floordiv(floordiv(magic, 6) * (100 + mdmg), 100);
+}
+
 /** Return list of [damage_before_counter, counter_cap] hitsplats; cap null = no counter-roll.
  * ('D' / 'A' return just the list; other codes return [list, chance, max] like Python.) */
 export function roll_attack(p, code, rng) {
   const w = WEAPONS[code];
   if (code === 'D') return [[rng.randint(75, 150), null]];
-  if (code === 'A') {
-    let mx = floordiv(floordiv(112, 3) - 2, 2);
-    mx = floordiv(mx * (100 + 2), 100);           // treads magic dmg
-    return [[rng.randint(0, mx), null]];
-  }
+  if (code === 'A') return [[rng.randint(0, dawn_auto_max(p)), null]];
   const gear = p.pieces(code);
   const idx = w.idx;
   const atk_bonus = w.atk[idx] + sum(gear.map((g) => g.atk[idx]));

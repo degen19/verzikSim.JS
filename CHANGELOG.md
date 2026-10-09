@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.17.3 - 2026-10-08
+- **Dawn autos (A)** for Shadow players: max = floor(Magic/6) x (100 + mage gear mdmg + 4 Augury)/100 (`dawn_auto_max` in sim.js, gear.js ITEMS; mage helm/top/legs/cape from the chart + occult, treads, Confliction) - 23 at 112 in Ancestral + imbued sara cape (was 17). Non-shadow players unchanged (17). Same-seed results unchanged for 3-5 man test charts; duo charts with mage Dawn autos change. Verz Solver uses the same max. Mechanics sheet (codes row) updated.
+
 ## v1.17.2 - 2026-10-08
 - Verz Solver duo P1: blowpipe not allowed on a+1 after a dodged auto (from a+2); Eye of ayak still on a+1.
 

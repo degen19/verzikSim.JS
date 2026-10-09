@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.17.2';
+export const VERSION = '1.17.3';
 export const CHANGES = [
+  { version: '1.17.3', date: '2026-10-08', items: [
+    'Dawnbringer autos (A) for Shadow players now use their mage gear and Augury: max hit = Magic / 6 (rounded down) x (100 + the magic damage of their mage helm, top, legs and cape + occult 5 + Avernic treads 2 + Confliction gauntlets 7 + Augury 4)%. A duo mage at their boosted 112 Magic in Ancestral with an imbued saradomin cape hits up to 23 (it was 17). Other players\' Dawn autos are unchanged (17).',
+    'This changes results for charts where a Shadow player uses Dawn autos (mostly duos); every other chart gives the same results as before with the same seed. The Verz Solver now weighs the mage\'s Dawn autos against scythes the same way.',
+  ] },
   { version: '1.17.2', date: '2026-10-08', items: [
     'Verz Solver (duos): no blowpipe on the tick after a Verzik auto you dodge - it\'s too far away; it can fire from the tick after that. Eye of ayak still goes on the tick after.',
   ] },

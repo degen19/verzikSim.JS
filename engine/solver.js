@@ -17,7 +17,7 @@
 //    giver -> 0%, receiver -> 100%.
 //  - 95% start with no R charted: no regen before the first Dawn, a forced regen the tick after it (the sim does this).
 //  - Only the SB owner uses Sulphur blades. Scythe-first: other attacks only where a scythe doesn't fit. No dodges (3-5).
-import { Player, WEAPONS, P1_HP, roll_attack, run_p1, AUTO_QUEUE_FIRST, AUTO_EVERY } from './sim.js';
+import { Player, WEAPONS, P1_HP, roll_attack, run_p1, AUTO_QUEUE_FIRST, AUTO_EVERY, SHADOW_MAGIC, dawn_auto_max } from './sim.js';
 import { Rng } from './rng.js';
 
 export const CHART_END = 90;                 // ticks planned in 3-5 man (P1 ends well before this)
@@ -64,7 +64,7 @@ export function attackTable(p, { sb = false, bp = true, duo = false } = {}) {
   }
   out.D = { mean: DAWN_MEAN, var: DAWN_VAR, speed: 4, delay: 2 };
   if (duo) {                                     // Dawnbringer auto: 0..max, no accuracy roll or cap (as in the sim)
-    const mx = Math.floor((Math.floor(112 / 3) - 2) / 2 * 102 / 100);
+    const mx = dawn_auto_max(p, p.shadow ? SHADOW_MAGIC : p.mag);   // duo shadow player: 112 Magic in P1
     out.A = { mean: mx / 2, var: ((mx + 1) ** 2 - 1) / 12, speed: 4, delay: 2 };
   }
   return out;
