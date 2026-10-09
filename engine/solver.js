@@ -229,7 +229,7 @@ export function buildChart(ctx, plan, r = null) {
 
 /**
  * Duo fills. Rules (from the chart author): around an auto a player dodges, no melee from a-3 to a+3, the tick before
- * it is Dawnbringer only (spec or auto), and nothing on a itself (the X); Eye of ayak / blowpipe are fine from a+1.
+ * it is Dawnbringer only (spec or auto), and nothing on a itself (the X); Eye of ayak is fine from a+1, the blowpipe from a+2.
  * Dawn autos (A) only for the mage (the ranger has no mage gear), while they hold the staff: from their spec until 4 ticks before the other player's next spec
  * (the staff changes hands while both scythe); the receiver's last attack before their spec starts by then too.
  */
@@ -254,6 +254,7 @@ function buildDuo(ctx, r) {
       for (const a of dodge) {
         if (melee.has(code) && Math.abs(t - a) <= 3) return false;
         if (!melee.has(code) && code !== 'A' && t >= a - 3 && t <= a - 1) return false;
+        if (code === 'B' && t === a + 1) return false;                // the blowpipe is too far away the tick after; from a+2
       }
       return true;
     };

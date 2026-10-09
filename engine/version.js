@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.17.1';
+export const VERSION = '1.17.2';
 export const CHANGES = [
+  { version: '1.17.2', date: '2026-10-08', items: [
+    'Verz Solver (duos): no blowpipe on the tick after a Verzik auto you dodge - it\'s too far away; it can fire from the tick after that. Eye of ayak still goes on the tick after.',
+  ] },
   { version: '1.17.1', date: '2026-10-08', items: [
     'Verz Solver: the team\'s supplies have their own group at the top of Advanced - Brew sips, Super combat sips, Restore sips and Sharks - editable in every scale (defaults as in the chart template; duos start at 32 brew sips).',
   ] },

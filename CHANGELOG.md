@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.17.2 - 2026-10-08
+- Verz Solver duo P1: blowpipe not allowed on a+1 after a dodged auto (from a+2); Eye of ayak still on a+1.
+
 ## v1.17.1 - 2026-10-08
 - Verz Solver: Advanced opens with a **Team supplies** group (Brew / Super combat / Restore sips, Sharks), every scale; template defaults, duos 32 brew sips.
 
