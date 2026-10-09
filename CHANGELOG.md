@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.17.4 - 2026-10-09
+- Verz Solver **Also try my chart** (default on; `seeds` option of `solveRoom`, CLI `--nomine` to leave out): each filled set of the page's chart runs as charted (always listed, outside the merge / minimum-success filters) and goes through the screen, ring / purple / P2 horn / duo passes, reds DCs + P3 horns and the final like the solver's own setups ("from your Set X"). Unset Boak sides take the form's side; a set the sim can't run is skipped with a note. Rows say when the set's settings differ from the form; Copy / Save use the set's own values.
+- Claw rule removed (now optional `clawRule`, off): setups where someone misses their reds claw are ranked like any other.
+- Solver P1 charts capped at the template's columns (`CHART_END` 80, `DUO_END` 140): Copy to set reproduces the solved chart exactly (checked 2-5 man).
+
 ## v1.17.3 - 2026-10-08
 - **Dawn autos (A)** for Shadow players: max = floor(Magic/6) x (100 + mage gear mdmg + 4 Augury)/100 (`dawn_auto_max` in sim.js, gear.js ITEMS; mage helm/top/legs/cape from the chart + occult, treads, Confliction) - 23 at 112 in Ancestral + imbued sara cape (was 17). Non-shadow players unchanged (17). Same-seed results unchanged for 3-5 man test charts; duo charts with mage Dawn autos change. Verz Solver uses the same max. Mechanics sheet (codes row) updated.
 

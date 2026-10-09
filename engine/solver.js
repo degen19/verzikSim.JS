@@ -20,8 +20,9 @@
 import { Player, WEAPONS, P1_HP, roll_attack, run_p1, AUTO_QUEUE_FIRST, AUTO_EVERY, SHADOW_MAGIC, dawn_auto_max } from './sim.js';
 import { Rng } from './rng.js';
 
-export const CHART_END = 90;                 // ticks planned in 3-5 man (P1 ends well before this)
-export const DUO_END = 170;                  // duos: P1 takes ~115-135 ticks
+// Ticks planned = the chart template's P1 columns, so a solved chart copied into a chart plays exactly as it was solved
+export const CHART_END = 80;                 // 3-5 man (P1 ends well before this)
+export const DUO_END = 140;                  // duos: P1 takes ~115-135 ticks
 const endOf = (ctx) => ctx.end || CHART_END;
 const DAWN_COST = 35, SURGE = 25, THRALL_EVERY = 4;
 const DAWN_MEAN = 112.5, DAWN_VAR = ((150 - 75 + 1) ** 2 - 1) / 12;

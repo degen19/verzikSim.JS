@@ -18,10 +18,8 @@
 //  - identical players (same setup) are interchangeable for the ring and purple choices: tried in one order
 //  - purple DC only for players with a blowpipe
 //  - P1 charts where someone can't get to 50% by reds even in the best case are dropped before any full raid
-//  - everyone has to claw in reds: the best "everyone clawed" rate among the setups compared sets the bar, and setups
-//    more than CLAW_TOL below it are dropped (3 points on the small early runs, 2 on the final) - a hard constraint,
-//    never traded for speed. On top of that a fixed floor: everyone claws in CLAW_FLOOR (95%) of raids, measured on
-//    the final run (early runs use the floor minus their tolerance)
+//  - everyone-claws rule (o.clawRule, off by default): only when asked for, setups where a player misses their claw in
+//    reds are dropped (relative to the best setup, and a 95% floor on the final). Off, the ranking alone decides.
 //  - optional minimum success rate (o.minSuccess): setups under it are dropped - at the end of P2 already (success can
 //    only fall from there to the full raid), with the same small tolerance on the short early runs, exactly on the final.
 //    If none reach it, the setups with the highest success are shown instead (o.top of them, listed by speed)
@@ -166,7 +164,7 @@ const withRings = (cfgs, lb) => cfgs.map((c, k) => ({ ...c, lightbearerOn: lb[k]
 
 /** The top P1 charts for one Lightbearer assignment, as full player configs (P1 chart + start spec filled in);
  *  charts where someone can't reach 50% by reds are dropped. Returns {cands: [cfgs], charts, dropped}. */
-export function p1Candidates(base, team, lb, { beam = 150, top = 20, gap = 150, sbOwner = null } = {}) {
+export function p1Candidates(base, team, lb, { beam = 150, top = 20, gap = 150, sbOwner = null, clawRule = false } = {}) {
   const cf = withRings(base, lb);
   let charts;
   if (team === 2) {
@@ -182,7 +180,7 @@ export function p1Candidates(base, team, lb, { beam = 150, top = 20, gap = 150, 
   const cands = [];
   for (const f of charts) {
     const cfg = cf.map((c, k) => ({ ...c, actions: f.built.acts[k], startSpec: f.plan.start[k] }));
-    if (cantMake50(cfg, team, 40, gap) <= 0.5) cands.push(cfg);
+    if (!clawRule || cantMake50(cfg, team, 40, gap) <= 0.5) cands.push(cfg);
   }
   return { cands, charts: charts.length, dropped: charts.length - cands.length };
 }
@@ -213,6 +211,7 @@ const pctl = (ends, fs) => { const e = [...ends].filter((x) => x >= 0).sort((x, 
 export async function solveRoom(base, team, o, ev = localEvaluator) {
   const log = o.log || (() => {});
   const seed = o.seed ?? 'room';
+  const clawRule = !!o.clawRule;                         // everyone-claws rule: off unless asked for
   const stats = { hornP2Tried: 0, hornP2Changed: 0, hornP3Tried: 0, hornP3Changed: 0, dcEquiv: 0, dcTried: 0, dcSame: 0, dcClaw: 0, dcSucc: 0,
     lbSets: 0, p1Charts: 0, p1Dropped50: 0, setups1: 0, cut50: 0, succCut: 0, ringTried: 0, ringSame: 0, ringCamp: 0, ringClaw: 0,
     purpleTried: 0, purpleChanged: 0, finalSame: 0, finalClawCut: 0, finalSuccCut: 0, raids: 0, t: {} };
@@ -258,7 +257,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   step('P1 charts');
   const lbSets = lbAssignments(base, o.rings);
   stats.lbSets = lbSets.length;
-  const p1 = await Promise.all(lbSets.map((lb) => ev.p1(base, team, lb, { beam: o.p1Beam ?? 150, top: o.p1Top, gap, sbOwner: o.sbOwner ?? null })));
+  const p1 = await Promise.all(lbSets.map((lb) => ev.p1(base, team, lb, { beam: o.p1Beam ?? 150, top: o.p1Top, gap, sbOwner: o.sbOwner ?? null, clawRule })));
   const cands = [];
   p1.forEach((r, i) => {
     stats.p1Charts += r.charts; stats.p1Dropped50 += r.dropped;
@@ -290,13 +289,18 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
       s1all.push({ ...cd, cfg: cd.cfg.map((c, k) => ({ ...c, PurpleDC: k === o2, Purple2DC: false })), purple: o2 });
     }
   }
+  // your own chart(s) (o.seeds: [{cfg, label}]): screened with the rest, always carried through every stage, varied like
+  // the solver's own setups, and the as-charted version always runs in the final - so a result is never worse than it
+  const seeds = (o.seeds || []).map((sd) => ({ lb: sd.cfg.map((c) => !!c.lightbearerOn), cfg: sd.cfg, seedLabel: sd.label,
+    purple: Math.max(0, sd.cfg.findIndex((c) => c.PurpleDC)) }));
+  s1all.push(...seeds);
   stats.setups1 = s1all.length;
   (await run('p2', s1all.map((x) => x.cfg), o.n1, 'screen')).forEach((c, i) => { s1all[i].c = c; });
   // everyone needs a claw in reds: the best rate sets the bar
   // (relative only here: the fixed floor is applied on the final run, after the ring swaps / purple / horns - the
   // choices that can lift claws - have had their go)
   const bestClaw = Math.max(...s1all.map((x) => clawRate(x.c)));
-  const bar = bestClaw - CLAW_TOL.early;
+  const bar = clawRule ? bestClaw - CLAW_TOL.early : -Infinity;
   const ok50 = s1all.filter((x) => clawRate(x.c) >= bar - 1e-9);
   stats.cut50 = s1all.length - ok50.length; stats.clawBar = bestClaw;
   let minS = o.minSuccess || 0;
@@ -309,6 +313,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const rank = (c, early) => (fallback ? c.k / c.n + 1e-3 * score(c, early) : score(c, early));
   s1.sort((a, b) => rank(b.c, true) - rank(a.c, true));
   const keep1 = s1.slice(0, o.keep1);
+  for (const x of s1all) if (x.seedLabel && !keep1.includes(x)) keep1.push(x);   // your charts always go on
   T('screen', t0);
   log(`  screen: ${stats.setups1} setups x ${o.n1} raids, best everyone-clawed ${(stats.clawBar * 100).toFixed(1)}%, ${stats.cut50} cut (claw rule), kept ${keep1.length}`);
 
@@ -319,7 +324,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const okClaw = (c) => clawRate(c) >= bar - 1e-9 && okSucc(c);     // claw rule + minimum success
   // a setup that meets the rules always beats one that doesn't; between two that do, the faster one wins
   // while a setup is below the claw floor, more claws come first (then speed); above it, speed decides
-  const floorOk = (c) => clawRate(c) >= CLAW_FLOOR - CLAW_TOL.early - 1e-9;
+  const floorOk = (c) => !clawRule || clawRate(c) >= CLAW_FLOOR - CLAW_TOL.early - 1e-9;
   const better = (c, best) => {
     if (!okClaw(c)) return false;
     if (!okClaw(best)) return true;
@@ -427,6 +432,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     if (fseen.has(k)) continue; fseen.add(k);
     top2.push(x); if (top2.length >= o.keepP2) break;
   }
+  for (const x of s2) if (x.seedLabel && !top2.includes(x)) top2.push(x);
   const dcPairs = async (x) => {
     const pairs = [];
     for (let w = 0; w < team; w++) for (let e = 0; e < team; e++) pairs.push([w, e]);
@@ -441,7 +447,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     });
     return out;
   };
-  const okClaw3 = (c, ref) => clawRate(c) >= Math.min(clawRate(ref), CLAW_FLOOR) - CLAW_TOL.early - 1e-9 && okSucc(c);
+  const okClaw3 = (c, ref) => (!clawRule || clawRate(c) >= Math.min(clawRate(ref), CLAW_FLOOR) - CLAW_TOL.early - 1e-9) && okSucc(c);
   // P3 horns (full raids, on the setup's best reds DC pair): switch a holder's P3 use on/off, or give a spare horn to
   // someone for P3 only; if anything changed, every reds DC pair is tried again with the new horns
   const hornP3Pass = async (x) => {
@@ -465,7 +471,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     const pairs = (await dcPairs(x)).sort((a, b) => rank(b.c, true) - rank(a.c, true));
     return o.horns && pairs.length ? [...pairs, ...(await hornP3Pass(pairs[0]))] : pairs;
   }))).flat();
-  const bar3 = Math.max(...s3.map((x) => clawRate(x.c))) - CLAW_TOL.early;
+  const bar3 = clawRule ? Math.max(...s3.map((x) => clawRate(x.c))) - CLAW_TOL.early : -Infinity;
   stats.dcClaw = s3.filter((x) => clawRate(x.c) < bar3 - 1e-9).length;
   stats.dcSucc = s3.filter((x) => clawRate(x.c) >= bar3 - 1e-9 && !okSucc(x.c)).length;
   s3 = s3.filter((x) => clawRate(x.c) >= bar3 - 1e-9 && okSucc(x.c)).sort((a, b) => rank(b.c, true) - rank(a.c, true));
@@ -480,14 +486,23 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const same = (x) => JSON.stringify([coreKey(x.cfg), x.cfg.map((c) => (c.WestDC ? 1 : 0) + (c.EastDC ? 1 : 0))]);
   const fin = [], effSeen = new Set();
   for (const x of s3) { const k = same(x); if (effSeen.has(k)) { stats.dcEquiv++; continue; } effSeen.add(k); fin.push(x); if (fin.length >= o.keep2) break; }
+  // the best version of each of your charts the search found, and each one exactly as charted
+  for (const sd of seeds) {
+    const best = s3.find((x) => x.seedLabel === sd.seedLabel);
+    if (best && !fin.includes(best)) fin.push(best);
+    fin.push({ ...sd, asCharted: true });
+  }
   (await run('full', fin.map((x) => x.cfg), o.nFinal, 'final')).forEach((c, i) => { fin[i].c = c; });
   // setups that play out identically on every final raid (e.g. a horn that never goes off): keep the simplest one
+  // your charts as charted: kept out of the merging and filters below (they're the reference), ranked with the rest
+  const mine = fin.filter((x) => x.asCharted);
+  fin.splice(0, fin.length, ...fin.filter((x) => !x.asCharted));
   const uses = (x) => x.cfg.reduce((a, c) => a + (c.hornP2 ? 1 : 0) + (c.hornP3 ? 1 : 0), 0);
   const bySig = new Map();
   for (const x of fin) { const k = x.c.ends.join(','); const y = bySig.get(k); if (!y || uses(x) < uses(y)) bySig.set(k, x); }
   stats.finalSame = fin.length - bySig.size;
   fin.splice(0, fin.length, ...bySig.values());
-  const fbar = fin.length ? Math.max(Math.max(...fin.map((x) => clawRate(x.c))) - CLAW_TOL.final, CLAW_FLOOR) : CLAW_FLOOR;
+  const fbar = !clawRule ? -Infinity : fin.length ? Math.max(Math.max(...fin.map((x) => clawRate(x.c))) - CLAW_TOL.final, CLAW_FLOOR) : CLAW_FLOOR;
   stats.finalClawCut = fin.filter((x) => clawRate(x.c) < fbar - 1e-9).length;
   for (let i = fin.length - 1; i >= 0; i--) if (clawRate(fin[i].c) < fbar - 1e-9) fin.splice(i, 1);
   stats.finalSuccCut = fin.filter((x) => x.c.k / x.c.n < minS - 1e-9).length;      // minimum success, exact on the final
@@ -497,6 +512,8 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   if (fallback) { fin.sort((a, b) => b.c.k - a.c.k || score(b.c) - score(a.c)); fin.splice(o.top); }
   fin.sort((a, b) => score(b.c) - score(a.c) || b.c.k - a.c.k);
   const top = fin.slice(0, o.top);
+  top.push(...mine);                                                                // your chart as charted: always shown
+  top.sort((a, b) => score(b.c) - score(a.c) || b.c.k - a.c.k);
   (await ev.p1sim(top.map((x) => x.cfg), team, 2000, 'confirm')).forEach((r, i) => { top[i].p1 = r; });
   // breakpoint columns back in the order they were given
   if (bpOrder != null && bpOrder !== 0) for (const x of top) { const u = x.c.under; x.c.under = [...u.slice(1, bpOrder + 1), u[0], ...u.slice(bpOrder + 1)]; }

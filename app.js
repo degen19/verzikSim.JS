@@ -95,6 +95,7 @@ const solver = createSolver($('tab-solve'), {
     else await builder.show(team());
   },
   saveChart: (t, name, values) => builder.saveChart(t, name, values),
+  getWorkbook,                                                            // "Also try my chart": the chart on this page
 });
 for (const b of ['A', 'B', 'C']) $(`lab${b}`).addEventListener('change', () => { if (tab === 'opt') optimizer.refresh(); });
 $('tabs').addEventListener('click', (e) => {

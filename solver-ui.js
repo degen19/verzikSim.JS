@@ -5,7 +5,7 @@ import { readXlsx } from './engine/xlsx.js';
 import { parse_chart } from './engine/sim.js';
 import { describe, readValues, overlaySheet, shadowBlock, SHADOW_MODES } from './engine/chartform.js';
 import { parseBreakpoints } from './engine/optimize.js';
-import { solveRoom, ROOM_DEPTHS } from './engine/roomsolver.js';
+import { solveRoom, evalRange, ROOM_DEPTHS } from './engine/roomsolver.js';
 import { SolverPool } from './solver-pool.js';
 
 const STORE = 'verzikSim.solver.v1';
@@ -49,7 +49,7 @@ const HELP = {
   'Restore sips': 'Super restore sips the whole team brings', Sharks: 'Sharks the whole team brings',
 };
 
-export function createSolver(root, { getTeam, toBuilder = null, saveChart = null }) {
+export function createSolver(root, { getTeam, toBuilder = null, saveChart = null, getWorkbook = null }) {
   let tplWb = null, team = 0, pool = null, running = false, results = null, sortCol = null, sortDir = 1, open = {}, lastValues = null;
   const shownSetups = new Set();          // result rows whose setup is open
   const tpl = {};                                    // team -> {ws, desc, defaults}
@@ -141,7 +141,9 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         <label>Rank by${sel('rankBy', ro, s.rankBy)}</label>
         <label title="Optional: setups below this raid success % are left out.">Minimum success %<input data-s="minSucc" type="number" min="0" max="100" step="any" value="${esc(s.minSucc)}" placeholder="optional"></label>
         <label>Search depth${sel('depth', Object.entries(ROOM_DEPTHS).map(([k, x]) => [k, x.label]), s.depth)}</label>
-      </div>`;
+      </div>
+      <label class="row" style="margin-top:8px;gap:6px" title="Every filled set (A, B, C) of the chart on this page (imported or built) is run exactly as charted and always shown, and also goes through the same search (ring swap %, purple, DCs, ${duo ? 'shadow mode, thresholds' : 'horns'}) - so the results are never worse than your chart.">
+        <input type="checkbox" data-s="mine" ${s.mine !== false ? 'checked' : ''}> Also try my chart (the sets on this page, as charted and improved)</label>`;
     const boakCol = { custom: true, label: 'Boak side', help: 'Which side they move to for the purple crab', cell: (k) => sel(`boak:${k}`, [['West', 'West'], ['East', 'East']], s.boak[k]) };
     const patCol = { custom: true, label: 'East pattern', help: 'East Boak pattern', cell: (k) => { const f = field('gear', 'East Pattern', k); return f && s.boak[k] === 'East' ? input(f) : '<span class="muted">-</span>'; } };
     const gearCols = [['setup', 'Name'], ['setup', 'meleePrayer'], ...PLAYER_GEAR.slice(0, 7).map((h) => ['gear', h])];
@@ -160,7 +162,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       ${advTeam.length ? `<h4>Team</h4><div class="row wrap teamset">${advTeam.map(teamField).join('')}</div>` : ''}`;
     root.innerHTML = `<h3 style="margin-top:0">Verz Solver <span class="muted small">(${team}-man)</span></h3>
       <p class="muted small">Set the team's gear and settings. The solver writes the P1 chart and picks start specs, who wears Lightbearer, ring swap %,
-        the purple and reds DCs and ${duo ? 'the shadow mode and Dawn / P2 last-hit thresholds' : 'the horns'} - everyone always claws in reds. Settings are saved in this browser.</p>
+        the purple and reds DCs and ${duo ? 'the shadow mode and Dawn / P2 last-hit thresholds' : 'the horns'}. Settings are saved in this browser.</p>
       ${section('team', 'Team', teamBody, true)}
       ${section('players', 'Players', playersBody, true)}
       ${section('adv', 'Advanced', advBody, false)}
@@ -198,7 +200,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const key = t.dataset.s;
     if (key.startsWith('boak:')) { S().boak[Number(key.slice(5))] = t.value; persist(); render(); return; }
     const hadBps = (() => { try { return bpsList().length > 0; } catch { return false; } })();
-    S()[key] = t.value;
+    S()[key] = t.type === 'checkbox' ? t.checked : t.value;
     if (key === 'bps') { let now = false; try { now = bpsList().length > 0; } catch { /* shown on Start */ } if (!hadBps && now) S().rankBy = '0'; }
     persist();
     if (key === 'bps') render();
@@ -227,6 +229,21 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       PurpleDC: false, Purple2DC: false, WestDC: false, EastDC: false, horn: false, hornP2: false, hornP3: false }));
   }
 
+  /** The form fields your chart's set has different values for (header names, once each) - only what the form shows,
+   *  and not what the solver decides (or the form randomizes, horn priority). */
+  function formDiff(mine, form) {
+    const solved = new Set(['startSpec (%)', 'lightbearerOn', 'PurpleDC', '1st Purple DC', '2nd Purple DC', 'WestDC', 'EastDC', 'Ring switch %',
+      'Target spec', 'Horn', 'P2 horn', 'P3 horn', 'hornPriority', 'Name', ...(team === 2 ? [...DUO_SOLVED, 'Shadow camp', '3:1', 'Shadow while LB'] : [])]);
+    const shown = new Set([...PLAYER_SETUP, ...PLAYER_GEAR, ...ADV_GEAR, 'redCrab', 'East Boak', 'West Boak', 'East Pattern',
+      ...tpl[team].desc.tables.team.map((f) => f.header).filter((h) => h !== 'Death tick')]);
+    const out = new Set();
+    for (const f of tpl[team].desc.fields.values()) {
+      if (f.table === 'chart' || solved.has(f.header) || (!shown.has(f.header) && f.table !== 'mage')) continue;
+      const a = mine[f.key] ?? '', b = form[f.key] ?? '';
+      if (String(a) !== String(b)) out.add(LABEL[f.header] || f.header);
+    }
+    return [...out];
+  }
   /** A result as chart-builder values: the form as it was run + the solver's choices and P1 chart. */
   function chartValues(x, vals) {
     const out = { ...vals };
@@ -241,7 +258,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       put('setup', 'WestDC', k, !!c.WestDC);
       put('setup', 'EastDC', k, !!c.EastDC);
       put('setup', 'Ring switch %', k, c.ringSwitch ?? '');
-      put('setup', 'Target spec', k, '');
+      if (!x.seedLabel) put('setup', 'Target spec', k, '');           // your chart's rows keep their own
       put('gear', 'Horn', k, !!c.horn);
       put('gear', 'P2 horn', k, !!c.hornP2);
       put('gear', 'P3 horn', k, !!c.hornP3);
@@ -263,6 +280,32 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     try { cfgs = await buildCfgs(); } catch (e) { err.textContent = e.message; return; }
     if (!cfgs.some((c) => c.hasBP !== false)) { err.textContent = 'Nobody has a blowpipe - someone needs one to pop the purple crab.'; return; }
     if (team === 2 && cfgs.filter((c) => c.shadow).length !== 1) { err.textContent = 'Duos: tick Shadow for the mage (one player).'; return; }
+    // your chart(s): every filled set on the page, with its own values (for Copy to set / Save as chart)
+    const seeds = [], skipped = [];
+    if (s.mine !== false && getWorkbook) {
+      try {
+        const wb = await getWorkbook();
+        const ws = wb ? await wb.load(`${team}-man`) : null;
+        if (ws) for (const b of ['A', 'B', 'C']) {
+          let cfg; try { cfg = await parse_chart(wb, team, null, b); } catch (e) { if (b === 'A') skipped.push(`Set A: ${e.message}`); continue; }
+          if (cfg.length !== team || !cfg.some((c) => c.actions && Object.keys(c.actions).length)) continue;
+          const values = { ...tpl[team].defaults, ...readValues(ws, describe(ws, team, b)) };
+          // Boak side left unset on your chart: the form's side (and the 0-T East pattern, as the form defaults)
+          if (team > 2) cfg = cfg.map((c, k) => {
+            if (!c.eastBoak !== !c.westBoak) return c;
+            const e = s.boak[k] === 'East';
+            if (field('gear', 'East Boak', k)) values[`gear|East Boak|${k}`] = e;
+            if (field('gear', 'West Boak', k)) values[`gear|West Boak|${k}`] = !e;
+            const pat = e && !c.eastPattern ? V()[`gear|East Pattern|${k}`] || '0-T' : c.eastPattern;
+            if (e && !c.eastPattern && field('gear', 'East Pattern', k)) values[`gear|East Pattern|${k}`] = pat;
+            return { ...c, eastBoak: e, westBoak: !e, ...(e ? { eastPattern: pat } : {}) };
+          });
+          // one full raid first: a set the sim can't run is left out (and said so) instead of stopping the search
+          try { evalRange('full', cfg, team, 0, 1, 'check', []); } catch (e) { skipped.push(`Set ${b}: ${e.message}`); continue; }
+          seeds.push({ cfg, label: `Set ${b}`, values });
+        }
+      } catch { /* no chart on the page */ }
+    }
     const minSucc = s.minSucc === '' ? 0 : Math.max(0, Math.min(100, Number(s.minSucc))) / 100;
     const depth = ROOM_DEPTHS[s.depth] || ROOM_DEPTHS.standard;
     running = true; root.querySelector('#sv-go').disabled = true; root.querySelector('#sv-stop').disabled = false;
@@ -282,8 +325,10 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       const res = await solveRoom(cfgs, team, {
         rings: Number(s.rings), horns: team === 2 ? 0 : Number(s.horns), bpsFull: bps, rankBy: s.rankBy, minSuccess: minSucc,
         sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show,
+        seeds: seeds.map(({ cfg, label }) => ({ cfg, label })),
       }, pool);
-      results = { ...res, bps, team, names: names(), minSucc: s.minSucc, secs: (performance.now() - t0) / 1000, values: lastValues };
+      const mine = Object.fromEntries(seeds.map((sd) => [sd.label, { values: sd.values, diff: formDiff(sd.values, lastValues) }]));
+      results = { ...res, bps, team, names: names(), minSucc: s.minSucc, secs: (performance.now() - t0) / 1000, values: lastValues, mine, skipped };
       sortCol = null; sortDir = 1; shownSetups.clear();
       show({ stage: 'Done', raids: res.stats.raids });
       bar.style.width = '100%';
@@ -312,7 +357,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     if (b.dataset.copy != null || b.dataset.save != null) {
       const i = Number(b.dataset.copy ?? b.dataset.save), x = results && results.top[i], msg = root.querySelector(`#sv-msg-${i}`);
       if (!x) return;
-      const vals = chartValues(x, results.values || {});
+      const vals = chartValues(x, (x.seedLabel && results.mine[x.seedLabel] ? results.mine[x.seedLabel].values : results.values) || {});
       (async () => {
         try {
           if (b.dataset.copy != null) {
@@ -377,19 +422,21 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     if (!results) { out.innerHTML = ''; return; }
     const { top, bps, fallback, names: nm, minSucc, stats, secs } = results;
     if (!top.length) {
-      out.innerHTML = `<p class="err">No setup has everyone clawing in reds in 95% of raids${minSucc ? ` with ${esc(minSucc)}%+ success` : ''} - nothing to suggest.</p>`;
+      out.innerHTML = `<p class="err">No setup found${minSucc ? ` with ${esc(minSucc)}%+ success` : ''} - nothing to suggest.</p>`;
       return;
     }
     const cols = [...bps.map((_, j) => ({ key: `b${j}`, label: `≤ ${fmtS(bps[j])}`, val: (x) => x.c.under[j] / x.c.n })), { key: 'succ', label: 'Success', val: (x) => x.c.k / x.c.n },
       ...(results.team === 2 ? [{ key: 'wipe', label: 'Wipe', val: (x) => -(x.c.wipe || 0) / x.c.n, show: (x) => (x.c.wipe || 0) / x.c.n,
         help: 'Raids where both players die in P1 or P3 (counted as failed)' }] : [])];
     let rows = top.map((x, i) => ({ x, i }));
+    const num = new Map(); let n1 = 0; top.forEach((x, i) => { if (!x.asCharted) num.set(i, ++n1); });   // your as-charted rows aren't numbered
     if (sortCol) { const c = cols.find((y) => y.key === sortCol); rows.sort((a, b) => sortDir * (c.val(b.x) - c.val(a.x)) || a.i - b.i); }
     const arrow = (k) => (sortCol === k ? (sortDir === 1 ? ' ▼' : ' ▲') : '');
-    out.innerHTML = `${fallback ? `<p class="warn">No setups met ${esc(minSucc)}% success rate - these are the next best options with the highest rates of success.</p>` : ''}
-      <p class="muted small">Top ${top.length} of the setups found, ${(top[0].c.n).toLocaleString()} raids each (${stats.raids.toLocaleString()} raids in ${Math.round(secs)}s). Click a column to sort it best to worst, again to reverse; # goes back to the solver's order.</p>
+    const diffs = Object.entries(results.mine || {}).filter(([, m]) => m.diff.length);
+    out.innerHTML = `${(results.skipped || []).map((t) => `<p class="warn">Your chart wasn't included - ${esc(t)}</p>`).join('')}${diffs.map(([l, m]) => `<p class="warn">Your ${esc(l)} has different settings from the form (${esc(m.diff.slice(0, 6).join(', '))}${m.diff.length > 6 ? ', ...' : ''}) - its rows use your chart's own settings, so they aren't a like-for-like comparison.</p>`).join('')}${fallback ? `<p class="warn">No setups met ${esc(minSucc)}% success rate - these are the next best options with the highest rates of success.</p>` : ''}
+      <p class="muted small">Top ${n1} of the setups found${top.length > n1 ? ', plus your chart as charted' : ''}, ${(top[0].c.n).toLocaleString()} raids each (${stats.raids.toLocaleString()} raids in ${Math.round(secs)}s). Click a column to sort it best to worst, again to reverse; # goes back to the solver's order.</p>
       <div class="scroll"><table class="bt res" style="min-width:min(760px,100%)"><tr><th data-sort="#" style="cursor:pointer" title="The solver's order">#${sortCol ? '' : ' ▼'}</th>${cols.map((c) => `<th data-sort="${c.key}" style="cursor:pointer" title="${esc(c.help ? `${c.help}. ` : '')}Sort best to worst">${esc(c.label)}${arrow(c.key)}</th>`).join('')}<th></th></tr>
-      ${rows.map(({ x, i }) => `<tr><td>${i + 1}</td>${cols.map((c) => `<td>${pct(c.show ? c.show(x) : c.val(x))}</td>`).join('')}<td><button class="ghost sm" data-setup="${i}">${shownSetups.has(i) ? 'Hide setup' : 'See setup'}</button></td></tr>
+      ${rows.map(({ x, i }) => `<tr><td style="white-space:nowrap">${x.asCharted ? `Your ${esc(x.seedLabel)}` : `${num.get(i)}${x.seedLabel ? ` <span class="muted small">(from your ${esc(x.seedLabel)})</span>` : ''}`}</td>${cols.map((c) => `<td>${pct(c.show ? c.show(x) : c.val(x))}</td>`).join('')}<td><button class="ghost sm" data-setup="${i}">${shownSetups.has(i) ? 'Hide setup' : 'See setup'}</button></td></tr>
         <tr id="sv-setup-${i}" ${shownSetups.has(i) ? '' : 'hidden'}><td colspan="${cols.length + 2}" style="text-align:left;white-space:normal">
           <div style="width:0;min-width:100%;overflow-x:auto">${setupHtml(x, nm)}</div></td></tr>`).join('')}</table></div>`;
   }

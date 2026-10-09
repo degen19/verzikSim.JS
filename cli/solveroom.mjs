@@ -8,8 +8,8 @@
 // --minsuccess: minimum raid success % (e.g. 85) - setups below it are left out.
 // --boak: East/West Boak per player (E/W) when the chart has them unset (default: first 2 West, the rest East 0-T).
 // --horns: Soulflame horns in the raid (default 2 in 5s, 1 otherwise; 0 = none).
-// Searched: P1 chart, who has Lightbearer, purple DC, ring swap %, reds West/East DCs, horns (holder, P2/P3 use). Everyone clawing in reds is a
-// hard constraint (95%+ of raids).
+// Searched: P1 chart, who has Lightbearer, purple DC, ring swap %, reds West/East DCs, horns (holder, P2/P3 use).
+// Your chart's set also goes in: run as charted (always listed) and through the same search (--nomine to leave it out).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { readXlsx } from '../engine/xlsx.js';
 import { parse_chart } from '../engine/sim.js';
@@ -18,9 +18,9 @@ import { checkRow } from '../engine/chartform.js';
 
 const a = process.argv.slice(2);
 const o = { team: 5, set: 'A', rings: null, horns: null, bps: '', boak: '', p1top: 20, p1beam: 150, n1: 200, keep1: 10, n2: 250,
-  keepP2: 20, n3: 200, keep2: 24, final: 3000, top: 10, out: '', minsuccess: 0 };
+  keepP2: 20, n3: 200, keep2: 24, final: 3000, top: 10, out: '', minsuccess: 0, nomine: 0 };
 o.chart = a[0];
-for (let i = 1; i < a.length; i++) { const k = a[i].replace(/^--/, ''); if (k in o) o[k] = isNaN(Number(a[i + 1])) ? a[++i] : Number(a[++i]); }
+for (let i = 1; i < a.length; i++) { if (a[i] === '--nomine') { o.nomine = 1; continue; } const k = a[i].replace(/^--/, ''); if (k in o) o[k] = isNaN(Number(a[i + 1])) ? a[++i] : Number(a[++i]); }
 const fmt = (t) => { const s = t * 0.6; return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
 const fmtS = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
@@ -60,9 +60,10 @@ console.log(`P2-end breakpoints for the early stages: ${bpsP2.map(fmtS).join(', 
 
 const t1 = Date.now();
 const res = await solveRoom(base, o.team, { rings, horns, bps: bpsP2, bpsFull, p1Top: o.p1top, p1Beam: o.p1beam, n1: o.n1, keep1: o.keep1,
-  n2: o.n2, keepP2: o.keepP2, n3: o.n3, keep2: o.keep2, nFinal: o.final, top: o.top, minSuccess: (o.minsuccess || 0) / 100, log: (s) => console.log(s) });
+  n2: o.n2, keepP2: o.keepP2, n3: o.n3, keep2: o.keep2, nFinal: o.final, top: o.top, minSuccess: (o.minsuccess || 0) / 100, log: (s) => console.log(s),
+  seeds: o.nomine ? [] : [{ cfg: mineCfgs, label: `Set ${o.set}` }] });
 const st = res.stats;
-if (!res.top.length) console.log(`No setup has everyone clawing in 95% of raids${o.minsuccess ? ` with ${o.minsuccess}%+ success` : ''} - nothing to suggest`);
+if (!res.top.length) console.log(`No setup found${o.minsuccess ? ` with ${o.minsuccess}%+ success` : ''} - nothing to suggest`);
 if (o.minsuccess) console.log(`Minimum success ${o.minsuccess}%: ${st.succCut} setups cut at the screen, ${st.dcSucc} at reds DCs, ${st.finalSuccCut} on the final`);
 console.log(`Search ${((Date.now() - t1) / 1000).toFixed(0)}s (P1 ${st.t.p1.toFixed(0)}s, screen ${st.t.screen.toFixed(0)}s, ring swaps ${st.t.rings.toFixed(0)}s, `
   + `reds DCs ${st.t.dc.toFixed(0)}s, final ${st.t.final.toFixed(0)}s), ${st.raids.toLocaleString()} raids`);
@@ -76,18 +77,20 @@ const who = (cf, key) => names[cf.findIndex((c) => c[key])] ?? '-';
 // results table: like the Optimizer - the breakpoints and raid success; the settings are under "see setup"
 const head = ['#', ...bpsFull.map((b) => `<= ${fmtS(b)}`), 'Success', ...(o.team === 2 ? ['Wipe'] : [])];
 const row = (lab, c) => [lab, ...bpsFull.map((_, j) => pct(c.under[j] / c.n)), pct(c.k / c.n), ...(o.team === 2 ? [pct(c.wipe / c.n)] : [])];
-const rows = [...res.top.map((x, i) => row(String(i + 1), x.c)), row('Yours', mine)];
+let nr = 0;
+const lab = res.top.map((x) => (x.asCharted ? `Your ${x.seedLabel}` : `${++nr}${x.seedLabel ? ` (from your ${x.seedLabel})` : ''}`));
+const rows = res.top.map((x, i) => row(lab[i], x.c));
 const wd = head.map((h, j) => Math.max(h.length, ...rows.map((r) => r[j].length)));
 const lines = [];
 const out = (s) => { console.log(s); lines.push(s); };
 if (res.fallback) out(`\nNo setups met ${o.minsuccess}% success rate - these are the next best options with the highest rates of success`);
-out(`\nTop ${res.top.length} (${o.final.toLocaleString()} full raids each)`);
+out(`\nTop ${nr}${nr < res.top.length ? ' + your chart' : ''} (${o.final.toLocaleString()} full raids each)`);
 out(head.map((h, j) => h.padEnd(wd[j])).join('  '));
 for (const r of rows) out(r.map((c, j) => c.padEnd(wd[j])).join('  '));
 
 // "see setup" for each: settings + P1 chart
 res.top.forEach((x, i) => {
-  const head1 = (`\n#${i + 1} setup: Lightbearer ${x.cfg.map((c, k) => (c.lightbearerOn ? names[k] : null)).filter(Boolean).join(', ')}`
+  const head1 = (`\n${lab[i]} setup: Lightbearer ${x.cfg.map((c, k) => (c.lightbearerOn ? names[k] : null)).filter(Boolean).join(', ')}`
     + ` | purple DC ${who(x.cfg, 'PurpleDC')} | reds DCs West ${who(x.cfg, 'WestDC')}, East ${who(x.cfg, 'EastDC')} | horns ${hornText(x.cfg)}`
     + ` | ring swap ${x.cfg.map((c, k) => (c.lightbearerOn ? `${names[k]} ${c.ringSwitch ?? 'default'}` : null)).filter(Boolean).join(', ')}`
     + (o.team === 2 ? ` | 2nd purple ${who(x.cfg, 'Purple2DC')} | shadow ${(() => { const m = x.cfg.find((c) => c.shadow); return m ? [m.shadowCamp && 'camp', m.shadowLB && 'while LB', m.shadow31 && '3:1'].filter(Boolean).join(' + ') || 'plain' : '-'; })()} | Dawn thr ${x.cfg[0].dawnThr ?? '-'}% | P2 last hit ${x.cfg[0].lastHitThr ?? '-'}%` : '')

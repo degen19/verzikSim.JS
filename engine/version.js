@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.17.3';
+export const VERSION = '1.17.4';
 export const CHANGES = [
+  { version: '1.17.4', date: '2026-10-09', items: [
+    'Verz Solver: new "Also try my chart" option (on by default). Every filled set (A, B, C) of the chart on this page - imported or built - is run exactly as charted and always listed ("Your Set A"), and also goes through the same search (ring swap %, purple, reds DCs, horns; duos: 2nd purple, shadow mode, thresholds) - those rows say "from your Set A". So the results are never worse than your own chart. If your set\'s settings differ from the Solver form (gear, prayer...), the results say which, since those rows use your chart\'s own settings. Copy to set / Save as chart on those rows keep your chart\'s settings.',
+    'Verz Solver: setups where a player misses their claw in reds are no longer left out - the setups are ranked on breakpoints and success like any other.',
+    'Verz Solver: the solved P1 chart is kept within the chart\'s columns (80 ticks in 3-5 man, 140 in duos), so Copy to set always plays exactly like the solved setup.',
+  ] },
   { version: '1.17.3', date: '2026-10-08', items: [
     'Dawnbringer autos (A) for Shadow players now use their mage gear and Augury: max hit = Magic / 6 (rounded down) x (100 + the magic damage of their mage helm, top, legs and cape + occult 5 + Avernic treads 2 + Confliction gauntlets 7 + Augury 4)%. A duo mage at their boosted 112 Magic in Ancestral with an imbued saradomin cape hits up to 23 (it was 17). Other players\' Dawn autos are unchanged (17).',
     'This changes results for charts where a Shadow player uses Dawn autos (mostly duos); every other chart gives the same results as before with the same seed. The Verz Solver now weighs the mage\'s Dawn autos against scythes the same way.',
