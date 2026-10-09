@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.18.0';
+export const VERSION = '1.18.1';
 export const CHANGES = [
+  { version: '1.18.1', date: '2026-10-09', items: [
+    'Breakpoints work the same everywhere: times are rounded down to a tick (0.6s) and a raid counts if it finishes at that time or faster - in the Run report, the Optimizer and the Verz Solver. (The report and the Optimizer used to count only raids strictly faster than the time typed, so a room ending exactly on the breakpoint tick didn\'t count.) Labels now read "2:48.6 or faster".',
+    'Optimizer (duos): a raid where both players die in P1 or P3 counts as a failed raid, like in the Verz Solver.',
+    'Verz Solver: for the best setups, each Lightbearer player\'s ring swap % is tried 10 higher and 10 lower together with the setup\'s best reds DC pairs (a DC\'s +15 can change which ring swap % works best). Players\' 3-tick weapon now defaults to Eye of ayak.',
+  ] },
   { version: '1.18.0', date: '2026-10-09', items: [
     'Verz Solver: your chart is now also edited. From each filled set\'s own Dawn rotation, the solver tries every chart one change away - who has each Dawn, Dawns earlier or later, surges, spec transfers, start specs, and players swapping whole roles - keeps the best and edits those again (Quick 1 round, Standard 2, Thorough 3). The best few go through the full search with your chart\'s settings ("edited from your Set A").',
     'Verz Solver (3-5 man): the Dawn threshold is now picked by the solver (1-6%) instead of being a form input - it decides how much spec is saved at the end of P1 for the claws in reds. See setup shows it, and Copy to set / Save as chart write it into the chart.',

@@ -25,7 +25,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
   root.innerHTML = `
     <div class="row wrap">
       <div title="Every ticked set is searched with the same options, on the same raids. Each gets its own results table (or one combined ranking)."><div class="muted small">Sets</div><div id="o-sets" class="row" style="gap:8px"></div></div>
-      <label title="Target room times for this scale. Leave blank to rank by success rate.">Breakpoints (m:ss)<input id="o-bps" placeholder="m:ss, comma-separated" style="width:200px"></label>
+      <label title="Target room times for this scale, rounded down to a tick - a raid counts if it finishes at that time or faster. Leave blank to rank by success rate.">Breakpoints (m:ss)<input id="o-bps" placeholder="m:ss, comma-separated" style="width:200px"></label>
       <label title="How far each raid is simulated. Breakpoints and success then refer to the end of that phase.">Phases<select id="o-scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option><option value="p1">P1 only</option></select></label>
       <label>Rank by<select id="o-rank"></select></label>
       <label>Search depth<select id="o-depth">${Object.entries(DEPTHS).map(([k, d]) => `<option value="${k}" ${k === 'standard' ? 'selected' : ''}>${d.label}</option>`).join('')}</select></label>
@@ -59,7 +59,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
   function rankOptions() {
     const b = bps() || [];
     const cur = $('o-rank').value;
-    $('o-rank').innerHTML = b.map((s, j) => `<option value="${j}">Faster than ${fmtS(s)}</option>`).join('') + `<option value="success">${scope() === 'p1' ? 'P1 killed' : team === 2 ? '2-down success' : scope() === 'p2' ? 'P2 down in reds' : 'Success'}</option>`;
+    $('o-rank').innerHTML = b.map((s, j) => `<option value="${j}">${fmtS(s)} or faster</option>`).join('') + `<option value="success">${scope() === 'p1' ? 'P1 killed' : team === 2 ? '2-down success' : scope() === 'p2' ? 'P2 down in reds' : 'Success'}</option>`;
     if ([...$('o-rank').options].some((o) => o.value === cur)) $('o-rank').value = cur;
     $('o-rank').title = b.length ? '' : 'Add breakpoints to rank by a room time';
   }
@@ -251,7 +251,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     const oneIn = (x, n) => (x ? `1 in ${Math.round(n / x).toLocaleString()}` : '-');
     const multi = perSet.length > 1;
     const succ = scope() === 'p1' ? 'P1 killed' : team === 2 ? '2-down success' : scope() === 'p2' ? 'P2 down' : 'Success';
-    const head = (withSet) => `<tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Setup</th><th>${succ}</th>${curBps.map((x) => `<th>Faster than ${fmtS(x)}</th>`).join('')}<th>Fastest run</th><th></th></tr>`;
+    const head = (withSet) => `<tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Setup</th><th>${succ}</th>${curBps.map((x) => `<th>${fmtS(x)} or faster</th>`).join('')}<th>Fastest run</th><th></th></tr>`;
     const all = [];                                              // [setup, index for the report button]
     const row = (x, rank, withSet) => {
       const c = x.counts, idx = all.push(x) - 1;
@@ -269,7 +269,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       body = perSet.map((l) => `${multi ? `<h4>${esc(getLabel(l[0].set.block))}</h4>` : ''}<div class="scroll"><table class="bt res">${head(false)}${l.map((x, i) => row(x, i + 1, false)).join('')}</table></div>`).join('');
     }
     $('o-out').innerHTML = `<div class="row between"><h3>Results</h3>${multi ? `<label class="pick"><input type="checkbox" id="o-combine" ${combineView ? 'checked' : ''}>Combine into one ranked list</label>` : ''}</div>${body}
-      <p class="muted small">Highlighted values differ from that set's chart. Ranked by ${metric === 'success' ? 'success rate' : `rooms faster than ${fmtS(curBps[metric])}`} in the final round${multi ? ' (every set\'s finalists ran on the same fresh raids, so sets compare fairly)' : ''}.
+      <p class="muted small">Highlighted values differ from that set's chart. Ranked by ${metric === 'success' ? 'success rate' : `rooms at ${fmtS(curBps[metric])} or faster`} in the final round${multi ? ' (every set\'s finalists ran on the same fresh raids, so sets compare fairly)' : ''}.
       Differences under ~${(100 / Math.sqrt(DEPTHS[$('o-depth').value].n[2])).toFixed(1)} points (and much less for rare breakpoints) can be noise - use Thorough to separate close setups.</p>`;
     $('o-out').onclick = async (e) => {
       const b = e.target.closest('button[data-rep]'); if (!b) return;

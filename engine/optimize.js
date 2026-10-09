@@ -7,11 +7,16 @@ import { run_reds } from './reds.js';
 import { run_duo_reds } from './duo_reds.js';
 import { run_p3 } from './p3.js';
 
-/** One raid. Returns the room-complete tick, or null if the raid failed. Same RNG use as simulate(). */
+/** Duos: both players dead, or would have gone below 0 HP, in one of these phases (a wipe - same rule as the Verz Solver). */
+const wiped = (players, phases) => players.every((p) => p.dead || (p.would_die && phases.some((ph) => p.would_die.has(ph))));
+
+/** One raid. Returns the room-complete tick, or null if the raid failed (duos: a P1 or P3 wipe fails it).
+ *  Same RNG use as simulate(). */
 export function runOne(cfgs, team, rng) {
   const scope = cfgs[0] && cfgs[0].scope;                    // 'p1' / 'p2' stop at that phase's end (see simulate.js)
   const r1 = run_p1(cfgs, team, rng);
   if (r1.players.every((p) => p.dead)) return null;
+  if (team === 2 && wiped(r1.players, ['P1'])) return null;
   if (scope === 'p1') return r1.end ?? null;
   const r2 = run_p2(r1, team, rng);
   if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return null;
@@ -19,6 +24,7 @@ export function runOne(cfgs, team, rng) {
   if (!r3.success || (team === 2 && r3.players.every((p) => p.dead))) return null;
   if (scope === 'p2') return r3.kill;
   const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng);
+  if (team === 2 && wiped(r4.players || r3.players, ['P1', 'P3'])) return null;
   return r4.kill == null ? null : r4.end;
 }
 
@@ -27,7 +33,7 @@ export const raidRng = (seed, i) => new Rng(seed + i * 7919);
 
 /**
  * Run raids [from, to) for each variant. Returns per variant: {n, k, fastest, fastestN, under: [count per breakpoint]}.
- * Breakpoints are in seconds; a room counts if it finishes strictly faster than the breakpoint.
+ * Breakpoints are in seconds (tick times); a room counts if it finishes on the breakpoint or faster.
  */
 export function countBatch(variants, team, from, to, seed, bpSecs, onProgress = null) {
   const out = [];
@@ -41,7 +47,7 @@ export function countBatch(variants, team, from, to, seed, bpSecs, onProgress = 
       if (end != null) {
         c.k++;
         const s = end * 0.6;
-        bpSecs.forEach((b, j) => { if (s < b - 1e-9) c.under[j]++; });
+        bpSecs.forEach((b, j) => { if (s <= b + 1e-9) c.under[j]++; });
         if (c.fastest == null || end < c.fastest) { c.fastest = end; c.fastestN = 1; } else if (end === c.fastest) c.fastestN++;
       }
       if (onProgress && ++done % 200 === 0) onProgress(done, total);
@@ -184,13 +190,14 @@ export function score(c, metric) {
 }
 export const finalScore = (c, metric) => (metric === 'success' ? c.k / c.n : c.under[metric] / c.n);
 
-/** Parse "m:ss, m:ss, ..." into seconds (sorted slowest first). */
+/** Parse "m:ss, m:ss, ..." into seconds, rounded down to a tick (sorted slowest first). */
 export function parseBreakpoints(text) {
   const out = [];
   for (const part of String(text).split(/[,\s]+/).filter(Boolean)) {
     const m = part.match(/^(\d+):(\d{1,2}(?:\.\d+)?)$/);
     if (!m) throw new Error(`"${part}" isn't a time - use m:ss, comma-separated`);
-    out.push(Number(m[1]) * 60 + Number(m[2]));
+    // rounded down to a tick (0.6s): a room counts if it finishes on that tick or faster (same rule as the Verz Solver)
+    out.push(Math.round(Math.floor((Number(m[1]) * 60 + Number(m[2])) / 0.6 + 1e-6) * 6) / 10);
   }
   if (!out.length) throw new Error('Add at least one breakpoint (m:ss, comma-separated)');
   return [...new Set(out)].sort((a, b) => b - a);

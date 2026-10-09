@@ -76,6 +76,14 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       // default East pattern for East Boak players: 0-T
       for (let k = 2; k < t; k++) if (tpl[t].desc.fields.has(`gear|East Pattern|${k}`)) state[t].v[`gear|East Pattern|${k}`] = '0-T';
     }
+    // 3-tick weapon: Eye of ayak by default (once for settings saved before this default, where it was left as the chart's default)
+    if (!state[t].s.ayak) {
+      for (let k = 0; k < t; k++) {
+        const key = `gear|has3Tick|${k}`;
+        if (tpl[t].desc.fields.has(key) && (state[t].v[key] == null || state[t].v[key] === tpl[t].defaults[key])) state[t].v[key] = 'Ayak';
+      }
+      state[t].s.ayak = true;
+    }
   }
   const S = () => state[team].s, V = () => state[team].v;
   const persist = () => save(state);

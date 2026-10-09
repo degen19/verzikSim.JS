@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.18.1 - 2026-10-09
+- **One breakpoint rule**: `parseBreakpoints` rounds down to a tick; Optimizer `countBatch` and report `under()` count `end <= breakpoint` (were strictly faster). Labels "m:ss or faster". Success rates unchanged; breakpoint shares change where rooms end exactly on the tick.
+- Optimizer `runOne` (duos): P1 / P3 wipes (`would_die` on both players) are failed raids, as in the Verz Solver. 3-5 man unchanged.
+- Verz Solver: joint check after the reds DCs - for the 6 best core setups, each Lightbearer player's ring swap % +-10 (default -> 90 / 100) on each of its 3 best DC pairs, full raids; identical-outcome variants skipped. Solver form: 3-tick weapon defaults to Ayak (saved settings still at the chart default are moved to Ayak once).
+
 ## v1.18.0 - 2026-10-09
 - Verz Solver **edits your chart**: `planFromChart` (Dawn order + holders, charted tick as the earliest, transfers / first surge onto the Dawn before them, start specs; duo dodges from the X ticks) and `planNeighbors` (holder change, adjacent holder swap, Dawn timing -4..+4 for a Dawn and the ones after it, all as early as possible, surge moved / added / dropped, transfer added / moved / dropped, start spec flip, last Dawn dropped / one added, all player permutations) in solver.js; `editCandidates` + an "Editing your chart" stage in `solveRoom` (rounds / width per depth: 1/2, 2/3, 3/4; best 3 kept per set, `edited: true`), worker command `edits`.
 - 3-5 man **Dawn threshold searched 1-6%** (option pass after the purple re-check; setups start at 3%); removed from the 3-5 Solver form.

@@ -566,6 +566,35 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   stats.dcClaw = s3.filter((x) => clawRate(x.c) < bar3 - 1e-9).length;
   stats.dcSucc = s3.filter((x) => clawRate(x.c) >= bar3 - 1e-9 && !okSucc(x.c)).length;
   s3 = s3.filter((x) => clawRate(x.c) >= bar3 - 1e-9 && okSucc(x.c)).sort((a, b) => rank(b.c, true) - rank(a.c, true));
+  // joint check: the ring swaps were settled before the reds DCs, but a DC's +15 shifts which spec values a player
+  // reaches, so the best ring swap % can move with it. For the best setups, each Lightbearer player's ring swap % +-10
+  // is tried on each of the setup's best 3 reds DC pairs (one at a time, on the same full raids)
+  {
+    const groups = new Map();
+    for (const x of s3) { const k = coreKey(x.cfg); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
+    const list = [], from = [];
+    for (const g of [...groups.values()].slice(0, o.jointTop ?? 6)) {
+      for (const x of g.slice(0, 3)) {
+        x.cfg.forEach((c, k) => {
+          if (!c.lightbearerOn) return;
+          const cur = c.ringSwitch;
+          for (const v of cur == null ? [90, 100] : [cur - 10, cur + 10]) {
+            if (v < 10 || v > 100) continue;
+            list.push(x.cfg.map((cc, j) => (j === k ? { ...cc, ringSwitch: v } : cc))); from.push(x);
+          }
+        });
+      }
+    }
+    const res = await run('full', list, o.n3, 'full');
+    const seenE = new Set(s3.map((x) => x.c.ends.join(',')));
+    res.forEach((c, i) => {
+      stats.jointTried = (stats.jointTried || 0) + 1;
+      const sig = c.ends.join(','); if (seenE.has(sig)) return; seenE.add(sig);   // same raids as one already found
+      if (!okSucc(c)) return;
+      s3.push({ ...from[i], cfg: list[i], c });
+    });
+    s3.sort((a, b) => rank(b.c, true) - rank(a.c, true));
+  }
   T('dc', t0);
   log(`  reds DCs: ${top2.length} P2 setups x ${team * team} West/East pairs, ${stats.dcSame} identical to another, ${stats.dcClaw} cut (claw rule)`
     + (o.horns ? ` | P3 horns: ${stats.hornP3Tried} tried, ${stats.hornP3Changed} setups changed` : ''));

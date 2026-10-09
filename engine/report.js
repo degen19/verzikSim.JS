@@ -8,8 +8,8 @@ export const WEBS_TICK = 72;     // 4-5 man: P3 tick (1 = P3 attackable) the 20%
 const fmt = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).padStart(4, '0')}`;
 const pct = (a, b) => (b ? `${(a / b * 100).toFixed(1)}%` : '-');
 const fmtSec = (s) => { const r = Math.round(s % 60 * 10) / 10; return `${Math.floor(s / 60)}:${r < 10 ? '0' : ''}${r}`; };
-/** Raids that finished strictly faster than `sec` seconds (same rule as the Optimizer's breakpoints). */
-const under = (r, sec) => r.total.reduce((n, t) => n + (t * 0.6 < sec - 1e-9 ? 1 : 0), 0);
+/** Raids that finished on `sec` (a tick time) or faster - same rule as the Optimizer and the Verz Solver. */
+const under = (r, sec) => r.total.reduce((n, t) => n + (t * 0.6 <= sec + 1e-9 ? 1 : 0), 0);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /** Merge results from several workers / chunks (same team) into one. Safe for any size - see parallel.js. */
@@ -68,8 +68,8 @@ function fastestFreq(r) {
 
 function bpRows(res, bps) {
   return bps.flatMap((b) => [
-    [`Under ${fmtSec(b)} (all attempts)`, res.map((r) => pct(under(r, b), r.runs))],
-    [`Under ${fmtSec(b)} (of kills)`, res.map((r) => pct(under(r, b), r.total.length))],
+    [`${fmtSec(b)} or faster (all attempts)`, res.map((r) => pct(under(r, b), r.runs))],
+    [`${fmtSec(b)} or faster (of kills)`, res.map((r) => pct(under(r, b), r.total.length))],
   ]);
 }
 
@@ -265,7 +265,7 @@ function attemptsSvg(res, labels, bps) {
     shown.forEach((b) => {
       const v = under(r, b) / r.runs * 100;
       dots.push([Xs(b), Y(v)]);
-      g += `<circle cx="${Xs(b)}" cy="${Y(v)}" r="5" fill="${COL[k]}" style="stroke:var(--surf)" stroke-width="2"><title>${esc(labels[k])}: ${v.toFixed(2)}% of all attempts under ${fmtSec(b)}</title></circle>`;
+      g += `<circle cx="${Xs(b)}" cy="${Y(v)}" r="5" fill="${COL[k]}" style="stroke:var(--surf)" stroke-width="2"><title>${esc(labels[k])}: ${v.toFixed(2)}% of all attempts at ${fmtSec(b)} or faster</title></circle>`;
       marks.push({ x: Xs(b), y: Y(v), color: COL[k], text: `${v.toFixed(1)}%`, cands: RING([1, 2, 3, 4, 5], [[-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0]]) });
     });
   });
@@ -313,7 +313,7 @@ export function reportHtml(res, labels, team, runs, opts = {}) {
 <h3>Odds</h3>${odds}
 <h3>How often each room time happens (per second, % of successful runs)</h3>${legend}<div class="scroll">${histogramSvg(res, labels)}</div>
 <h3>Finished by this time or faster - % of successful runs</h3>${legend}<div class="scroll">${cumulativeSvg(res, labels)}</div>
-<h3>Finished by this time or faster - % of all attempts</h3><div class="sub">Failed raids count as attempts, so each line levels off at that set's success rate (dashed). ${bps.length ? 'Vertical lines are your breakpoints (room finished faster than that time).' : 'Add breakpoints on the Run tab to mark your target times.'}</div>${legend}<div class="scroll">${attemptsSvg(res, labels, bps)}</div>
+<h3>Finished by this time or faster - % of all attempts</h3><div class="sub">Failed raids count as attempts, so each line levels off at that set's success rate (dashed). ${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints on the Run tab to mark your target times.'}</div>${legend}<div class="scroll">${attemptsSvg(res, labels, bps)}</div>
 </div>`;
 }
 
