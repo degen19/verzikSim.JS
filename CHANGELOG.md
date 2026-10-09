@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.18.2 - 2026-10-09
+- Builder / Solver: redraws (Shadow and shadow-mode boxes) keep each `.scroll` table's horizontal scroll.
+
 ## v1.18.1 - 2026-10-09
 - **One breakpoint rule**: `parseBreakpoints` rounds down to a tick; Optimizer `countBatch` and report `under()` count `end <= breakpoint` (were strictly faster). Labels "m:ss or faster". Success rates unchanged; breakpoint shares change where rooms end exactly on the tick.
 - Optimizer `runOne` (duos): P1 / P3 wipes (`would_die` on both players) are failed raids, as in the Verz Solver. 3-5 man unchanged.

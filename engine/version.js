@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.18.1';
+export const VERSION = '1.18.2';
 export const CHANGES = [
+  { version: '1.18.2', date: '2026-10-09', items: [
+    'Chart builder and Verz Solver: ticking Shadow or a shadow mode (far right of the gear table) no longer scrolls the table back to the left.',
+  ] },
   { version: '1.18.1', date: '2026-10-09', items: [
     'Breakpoints work the same everywhere: times are rounded down to a tick (0.6s) and a raid counts if it finishes at that time or faster - in the Run report, the Optimizer and the Verz Solver. (The report and the Optimizer used to count only raids strictly faster than the time typed, so a room ending exactly on the breakpoint tick didn\'t count.) Labels now read "2:48.6 or faster".',
     'Optimizer (duos): a raid where both players die in P1 or P3 counts as a failed raid, like in the Verz Solver.',

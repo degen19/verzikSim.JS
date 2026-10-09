@@ -134,7 +134,13 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     return `<details class="msec" data-sec="${id}" ${isOpen ? 'open' : ''}><summary>${esc(title)}</summary><div style="padding:0 12px 10px">${body}</div></details>`;
   }
 
+  // redraws keep each table's horizontal scroll (e.g. ticking Shadow far right in the gear table)
   function render() {
+    const sx = [...root.querySelectorAll('.scroll')].map((e) => e.scrollLeft);
+    draw();
+    root.querySelectorAll('.scroll').forEach((e, i) => { if (sx[i]) e.scrollLeft = sx[i]; });
+  }
+  function draw() {
     const d = tpl[team].desc, nm = names(), s = S(), duo = team === 2;
     const main = duo ? DUO_MAIN : TEAM_MAIN;
     const ro = rankOpts(); if (!ro.some(([v]) => v === String(s.rankBy))) s.rankBy = ro[0][0];

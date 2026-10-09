@@ -213,7 +213,13 @@ export function createBuilder(root, { onChange }) {
     const m = root.querySelector('#vz-checks'); if (m) m.textContent = msgs.join('\n');
   }
 
+  // redraws keep each table's horizontal scroll (e.g. ticking Shadow far right in the gear table)
   function render() {
+    const sx = [...root.querySelectorAll('.scroll')].map((e) => e.scrollLeft);
+    draw();
+    root.querySelectorAll('.scroll').forEach((e, i) => { if (sx[i]) e.scrollLeft = sx[i]; });
+  }
+  function draw() {
     const d = tpl[team].descs[block].tables;
     const teamFields = d.team.map((f) => `<label title="${esc(HELP[f.header] || '')}">${esc(f.header)}${input(f, vals()[f.key] ?? f.def)}</label>`).join('');
     root.innerHTML = `${libBar()}
