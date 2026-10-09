@@ -6,6 +6,7 @@
 // --bps: full-room breakpoints (m:ss, rounded down to a tick; a raid counts if it is equal or faster). The first is
 //        the target the ranking uses, success is the tie-breaker. Blank = 10th/25th/50th percentile of your chart.
 // --minsuccess: minimum raid success % (e.g. 85) - setups below it are left out.
+// --minbelow 5: minimum success = your chart's success minus 5 points (instead of --minsuccess).
 // --boak: East/West Boak per player (E/W) when the chart has them unset (default: first 2 West, the rest East 0-T).
 // --horns: Soulflame horns in the raid (default 2 in 5s, 1 otherwise; 0 = none).
 // Searched: P1 chart, who has Lightbearer, purple DC, ring swap %, reds West/East DCs, horns (holder, P2/P3 use).
@@ -18,7 +19,7 @@ import { checkRow } from '../engine/chartform.js';
 
 const a = process.argv.slice(2);
 const o = { team: 5, set: 'A', rings: null, horns: null, bps: '', boak: '', p1top: 20, p1beam: 150, n1: 200, keep1: 10, n2: 250,
-  keepP2: 20, n3: 200, keep2: 24, final: 3000, top: 10, out: '', minsuccess: 0, nomine: 0 };
+  keepP2: 20, n3: 200, keep2: 24, final: 3000, editrounds: 2, editwidth: 3, top: 10, out: '', minsuccess: 0, nomine: 0, minbelow: null };
 o.chart = a[0];
 for (let i = 1; i < a.length; i++) { if (a[i] === '--nomine') { o.nomine = 1; continue; } const k = a[i].replace(/^--/, ''); if (k in o) o[k] = isNaN(Number(a[i + 1])) ? a[++i] : Number(a[++i]); }
 const fmt = (t) => { const s = t * 0.6; return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
@@ -53,6 +54,7 @@ if (!bpsFull.length) {
   console.log(`Room breakpoints from your chart's 10th/25th/50th percentile: ${bpsFull.map(fmtS).join(', ')} - the first is the target`);
 }
 const mine = evalFull(mineCfgs, o.team, o.final, 'final', bpsFull);
+if (o.minbelow != null) { o.minsuccess = Math.max(0, mine.k / mine.n * 100 - o.minbelow); console.log(`Minimum success: your chart ${pct(mine.k / mine.n)} - ${o.minbelow} = ${o.minsuccess.toFixed(1)}%`); }
 const bpsP2 = pctl(evalSetup(base, o.team, 1000, 'p2bp', []).ends, [0.10, 0.25, 0.50]);
 console.log(`${o.team}-man, ${rings} Lightbearer${rings === 1 ? '' : 's'}, ${horns} horn${horns === 1 ? '' : 's'} | your chart: success ${pct(mine.k / mine.n)}, `
   + `${bpsFull.map((b, j) => `<= ${fmtS(b)} ${pct(mine.under[j] / mine.n)}`).join(', ')}, everyone clawed ${pct(mine.all50 / mine.n)} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
@@ -61,7 +63,7 @@ console.log(`P2-end breakpoints for the early stages: ${bpsP2.map(fmtS).join(', 
 const t1 = Date.now();
 const res = await solveRoom(base, o.team, { rings, horns, bps: bpsP2, bpsFull, p1Top: o.p1top, p1Beam: o.p1beam, n1: o.n1, keep1: o.keep1,
   n2: o.n2, keepP2: o.keepP2, n3: o.n3, keep2: o.keep2, nFinal: o.final, top: o.top, minSuccess: (o.minsuccess || 0) / 100, log: (s) => console.log(s),
-  seeds: o.nomine ? [] : [{ cfg: mineCfgs, label: `Set ${o.set}` }] });
+  editRounds: o.editrounds, editWidth: o.editwidth, seeds: o.nomine ? [] : [{ cfg: mineCfgs, label: `Set ${o.set}` }] });
 const st = res.stats;
 if (!res.top.length) console.log(`No setup found${o.minsuccess ? ` with ${o.minsuccess}%+ success` : ''} - nothing to suggest`);
 if (o.minsuccess) console.log(`Minimum success ${o.minsuccess}%: ${st.succCut} setups cut at the screen, ${st.dcSucc} at reds DCs, ${st.finalSuccCut} on the final`);
@@ -78,7 +80,7 @@ const who = (cf, key) => names[cf.findIndex((c) => c[key])] ?? '-';
 const head = ['#', ...bpsFull.map((b) => `<= ${fmtS(b)}`), 'Success', ...(o.team === 2 ? ['Wipe'] : [])];
 const row = (lab, c) => [lab, ...bpsFull.map((_, j) => pct(c.under[j] / c.n)), pct(c.k / c.n), ...(o.team === 2 ? [pct(c.wipe / c.n)] : [])];
 let nr = 0;
-const lab = res.top.map((x) => (x.asCharted ? `Your ${x.seedLabel}` : `${++nr}${x.seedLabel ? ` (from your ${x.seedLabel})` : ''}`));
+const lab = res.top.map((x) => (x.asCharted ? `Your ${x.seedLabel}` : `${++nr}${x.seedLabel ? ` (${x.edited ? 'edited ' : ''}from your ${x.seedLabel})` : ''}`));
 const rows = res.top.map((x, i) => row(lab[i], x.c));
 const wd = head.map((h, j) => Math.max(h.length, ...rows.map((r) => r[j].length)));
 const lines = [];

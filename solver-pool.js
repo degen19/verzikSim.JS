@@ -64,6 +64,11 @@ export class SolverPool {
     if (this.local) return localEvaluator.p1(base, team, lb, opts);
     return this.task({ cmd: 'p1', base, team, lb, opts });
   }
+  async edits(cfg, team, plans, opts) {
+    if (this.local) return localEvaluator.edits(cfg, team, plans, opts);
+    const parts = await Promise.all(plans.map((p) => this.task({ cmd: 'edits', cfg, team, plans: [p], opts })));   // one plan per worker
+    return parts.flat();
+  }
   async p1sim(list, team, runs, seed) {
     if (this.local) return localEvaluator.p1sim(list, team, runs, seed);
     return Promise.all(list.map((cfgs) => this.task({ cmd: 'p1sim', list: [cfgs], team, runs, seed }).then((r) => r[0])));

@@ -310,7 +310,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const depth = ROOM_DEPTHS[s.depth] || ROOM_DEPTHS.standard;
     running = true; root.querySelector('#sv-go').disabled = true; root.querySelector('#sv-stop').disabled = false;
     const status = root.querySelector('#sv-status'), bar = root.querySelector('#sv-prog');
-    const STAGES = ['Planning', 'P1 charts', 'Screening', 'Ring swaps, purple and P2 horns', 'Reds DCs and P3 horns', 'Final check', 'Done'];
+    const STAGES = ['Planning', 'P1 charts', 'Editing your chart', 'Screening', 'Ring swaps, purple and P2 horns', 'Reds DCs and P3 horns', 'Final check', 'Done'];
     const t0 = performance.now();
     pool = new SolverPool();
     let last = { stage: 'Planning', raids: 0 };
@@ -436,7 +436,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     out.innerHTML = `${(results.skipped || []).map((t) => `<p class="warn">Your chart wasn't included - ${esc(t)}</p>`).join('')}${diffs.map(([l, m]) => `<p class="warn">Your ${esc(l)} has different settings from the form (${esc(m.diff.slice(0, 6).join(', '))}${m.diff.length > 6 ? ', ...' : ''}) - its rows use your chart's own settings, so they aren't a like-for-like comparison.</p>`).join('')}${fallback ? `<p class="warn">No setups met ${esc(minSucc)}% success rate - these are the next best options with the highest rates of success.</p>` : ''}
       <p class="muted small">Top ${n1} of the setups found${top.length > n1 ? ', plus your chart as charted' : ''}, ${(top[0].c.n).toLocaleString()} raids each (${stats.raids.toLocaleString()} raids in ${Math.round(secs)}s). Click a column to sort it best to worst, again to reverse; # goes back to the solver's order.</p>
       <div class="scroll"><table class="bt res" style="min-width:min(760px,100%)"><tr><th data-sort="#" style="cursor:pointer" title="The solver's order">#${sortCol ? '' : ' ▼'}</th>${cols.map((c) => `<th data-sort="${c.key}" style="cursor:pointer" title="${esc(c.help ? `${c.help}. ` : '')}Sort best to worst">${esc(c.label)}${arrow(c.key)}</th>`).join('')}<th></th></tr>
-      ${rows.map(({ x, i }) => `<tr><td style="white-space:nowrap">${x.asCharted ? `Your ${esc(x.seedLabel)}` : `${num.get(i)}${x.seedLabel ? ` <span class="muted small">(from your ${esc(x.seedLabel)})</span>` : ''}`}</td>${cols.map((c) => `<td>${pct(c.show ? c.show(x) : c.val(x))}</td>`).join('')}<td><button class="ghost sm" data-setup="${i}">${shownSetups.has(i) ? 'Hide setup' : 'See setup'}</button></td></tr>
+      ${rows.map(({ x, i }) => `<tr><td style="white-space:nowrap">${x.asCharted ? `Your ${esc(x.seedLabel)}` : `${num.get(i)}${x.seedLabel ? ` <span class="muted small">(${x.edited ? 'edited ' : ''}from your ${esc(x.seedLabel)})</span>` : ''}`}</td>${cols.map((c) => `<td>${pct(c.show ? c.show(x) : c.val(x))}</td>`).join('')}<td><button class="ghost sm" data-setup="${i}">${shownSetups.has(i) ? 'Hide setup' : 'See setup'}</button></td></tr>
         <tr id="sv-setup-${i}" ${shownSetups.has(i) ? '' : 'hidden'}><td colspan="${cols.length + 2}" style="text-align:left;white-space:normal">
           <div style="width:0;min-width:100%;overflow-x:auto">${setupHtml(x, nm)}</div></td></tr>`).join('')}</table></div>`;
   }

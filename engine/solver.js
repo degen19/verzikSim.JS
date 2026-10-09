@@ -149,6 +149,7 @@ export function placeRotation(ctx, plan, { maxTick = endOf(ctx) - 6 } = {}) {
   let prev = null;
   for (const sl of plan.slots) {
     let t = prev == null ? 1 : prev + 4;
+    if (sl.at) t = Math.max(t, sl.at);                             // a charted Dawn: not before its charted tick
     for (;; t++) {
       if (t > maxTick) return { ok: false, why: 'ran out of chart' };
       const err = advanceTo(t - 1); if (err) return { ok: false, why: err };
@@ -493,6 +494,73 @@ export function solve(ctx, { slots = 16, beam = 300, keepPerSlot = 40, onProgres
   }
   scored.sort((a, b) => a.score - b.score);
   return { tops: scored, tried };
+}
+
+// ------------------------------------------------------------------ editing a charted P1 (your chart as a start)
+/** The ticks each player dodges on a chart (X): the dodge sets a charted duo P1 is rebuilt with. */
+export const chartDodges = (cfgs) => cfgs.map((c) => Object.entries(c.actions || {}).filter(([, a]) => a === 'X').map(([t]) => Number(t)));
+
+/** A charted P1 as a plan: the Dawns in order (who holds each, and its charted tick as the earliest it goes on), each transfer (ST>n) on the receiver's last Dawn before
+ *  it, each player's first surge (P) on their last Dawn before it, start specs 95 / 100. Surges and transfers that don't
+ *  follow one of that player's Dawns aren't part of a plan (the rebuilt chart places surges after Dawns only). */
+export function planFromChart(cfgs) {
+  const dawns = [];
+  cfgs.forEach((c, k) => { for (const [t, a] of Object.entries(c.actions || {})) if (a === 'D') dawns.push([Number(t), k]); });
+  dawns.sort((x, y) => x[0] - y[0]);
+  const slots = dawns.map(([t, h]) => ({ h, st: null, surge: false, at: t }));
+  const lastDawn = (k, t) => { for (let j = dawns.length - 1; j >= 0; j--) if (dawns[j][1] === k && dawns[j][0] <= t) return j; return -1; };
+  cfgs.forEach((c, k) => {
+    let surged = false;
+    for (const [tt, a] of Object.entries(c.actions || {}).sort((x, y) => x[0] - y[0])) {
+      const t = Number(tt);
+      if (a === 'P' && !surged) { surged = true; const j = lastDawn(k, t); if (j >= 0 && !slots[j].surge) slots[j].surge = true; }
+      const m = /^ST>(\d)$/.exec(a);
+      if (m) { const to = Number(m[1]) - 1, j = lastDawn(to, t); if (j >= 0 && to !== k && slots[j].st == null) slots[j].st = k; }
+    }
+  });
+  return { start: cfgs.map((c) => (Number(c.startSpec) === 95 ? 95 : 100)), slots };
+}
+
+/** Plans one change away from `plan`: a Dawn to someone else, two Dawns' holders swapped (next to each other), a surge
+ *  moved / added / dropped, a transfer added / changed / dropped, a start spec flipped, the last Dawn dropped or another
+ *  one added, and every player's whole part handed to another player (all orders - who does what). Invalid ones are
+ *  left for placeRotation to reject. */
+export function planNeighbors(ctx, plan, { perms = true } = {}) {
+  const n = ctx.players.length, S = plan.slots, out = [];
+  const mk = (slots, start = plan.start) => ({ start: [...start], slots: slots.map((x) => ({ ...x })) });
+  const fix = (q) => { q.slots.forEach((x) => { if (x.st === x.h) x.st = null; }); return q; };
+  for (let j = 0; j < S.length; j++) {
+    for (let h = 0; h < n; h++) if (h !== S[j].h) { const q = mk(S); q.slots[j].h = h; out.push(fix(q)); }
+    if (j + 1 < S.length && S[j].h !== S[j + 1].h) { const q = mk(S); [q.slots[j].h, q.slots[j + 1].h] = [S[j + 1].h, S[j].h]; out.push(fix(q)); }
+    // surge: on this Dawn instead of the holder's other one (or added), or dropped
+    { const q = mk(S); const h = S[j].h; q.slots.forEach((x, i) => { if (x.h === h) x.surge = i === j ? !S[j].surge : false; }); out.push(q); }
+    // transfer onto this Dawn: from each other player (moved from their other one), or dropped
+    if (ctx.transfers) {
+      for (let g = 0; g < n; g++) {
+        if (g === S[j].h || S[j].st === g) continue;
+        const q = mk(S); q.slots.forEach((x) => { if (x.st === g) x.st = null; }); q.slots[j].st = g; out.push(q);
+      }
+      if (S[j].st != null) { const q = mk(S); q.slots[j].st = null; out.push(q); }
+    }
+  }
+  // timing: a Dawn (and every one after it) earlier or later; every Dawn as early as it can go
+  for (let j = 0; j < S.length; j++) for (const d of [-4, -2, -1, 1, 2, 4]) {
+    if (S[j].at == null) continue;
+    const q = mk(S); q.slots.forEach((x, i) => { if (i >= j && x.at != null) x.at = Math.max(1, x.at + d); }); out.push(q);
+  }
+  if (S.some((x) => x.at != null)) { const q = mk(S); q.slots.forEach((x) => { x.at = null; }); out.push(q); }
+  for (let k = 0; k < n; k++) { const st = [...plan.start]; st[k] = st[k] === 95 ? 100 : 95; out.push(mk(S, st)); }
+  if (S.length > 1) out.push(mk(S.slice(0, -1)));
+  for (let h = 0; h < n; h++) out.push(mk([...S, { h, st: null, surge: false, at: null }]));
+  if (perms && n <= 5) {
+    const perm = (arr) => (arr.length <= 1 ? [arr] : arr.flatMap((x, i) => perm([...arr.slice(0, i), ...arr.slice(i + 1)]).map((r) => [x, ...r])));
+    for (const p of perm([...Array(n).keys()])) {
+      if (p.every((x, i) => x === i)) continue;
+      const start = new Array(n); plan.start.forEach((v, k) => { start[p[k]] = v; });
+      out.push(fix({ start, slots: S.map((x) => ({ ...x, h: p[x.h], st: x.st == null ? null : p[x.st] })) }));
+    }
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ verification with the real simulation

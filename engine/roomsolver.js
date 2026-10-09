@@ -31,7 +31,7 @@ import { run_reds } from './reds.js';
 import { run_duo_reds } from './duo_reds.js';
 import { run_p3 } from './p3.js';
 import { Rng } from './rng.js';
-import { makeContext, solve, simP1, solveDuo, killTick } from './solver.js';
+import { makeContext, solve, simP1, solveDuo, killTick, buildChart, chartKey, typicalKill, planFromChart, planNeighbors, chartDodges } from './solver.js';
 
 export const CLAW_TOL = { early: 0.03, final: 0.02 };
 export const CLAW_FLOOR = 0.95;   // and never below this: everyone clawing is a hard constraint (else claw scratches)
@@ -41,9 +41,9 @@ export const RING_VALUES = [null, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];   //
 
 /** Search depth presets (raids per setup at each stage, setups kept between stages). */
 export const ROOM_DEPTHS = {
-  quick:    { label: 'Quick',    p1Top: 10, n1: 150, keep1: 6,  n2: 150, keepP2: 10, n3: 150, keep2: 14, nFinal: 1500 },
-  standard: { label: 'Standard', p1Top: 20, n1: 200, keep1: 10, n2: 250, keepP2: 20, n3: 200, keep2: 24, nFinal: 3000 },
-  thorough: { label: 'Thorough', p1Top: 20, n1: 400, keep1: 14, n2: 500, keepP2: 28, n3: 400, keep2: 32, nFinal: 8000 },
+  quick:    { label: 'Quick',    p1Top: 10, n1: 150, keep1: 6,  n2: 150, keepP2: 10, n3: 150, keep2: 14, nFinal: 1500, editRounds: 1, editWidth: 2 },
+  standard: { label: 'Standard', p1Top: 20, n1: 200, keep1: 10, n2: 250, keepP2: 20, n3: 200, keep2: 24, nFinal: 3000, editRounds: 2, editWidth: 3 },
+  thorough: { label: 'Thorough', p1Top: 20, n1: 400, keep1: 14, n2: 500, keepP2: 28, n3: 400, keep2: 32, nFinal: 8000, editRounds: 3, editWidth: 4 },
 };
 
 // ------------------------------------------------------------------ one raid
@@ -185,10 +185,25 @@ export function p1Candidates(base, team, lb, { beam = 150, top = 20, gap = 150, 
   return { cands, charts: charts.length, dropped: charts.length - cands.length };
 }
 
+/** Your chart's P1, edited: the charts one change away from each plan (planNeighbors), built with the same rules as
+ *  the solver's own (the plan's own included). The dodges come from the chart's X ticks (duos). Returns
+ *  [{plan, acts, cvar}], one per distinct chart. */
+export function editCandidates(cfg, team, plans, { sbOwner = null, perms = true } = {}) {
+  const ctx = makeContext(cfg, team, { sbOwner, dodge: team === 2 ? chartDodges(cfg) : null });
+  const upTo = ctx.duo ? ctx.end : typicalKill(ctx) + 8, out = [], seen = new Set();
+  for (const p of plans) for (const q of [p, ...planNeighbors(ctx, p, { perms })]) {
+    const b = buildChart(ctx, q); if (!b.ok) continue;
+    const key = chartKey(ctx, b.acts, upTo, q.start); if (seen.has(key)) continue; seen.add(key);
+    out.push({ plan: q, acts: b.acts, cvar: killTick(ctx, b.acts).cvar });
+  }
+  return out;
+}
+
 /** Runs everything in this process (the CLI). The page uses solver-pool.js, which has the same three calls. */
 export const localEvaluator = {
   async eval(kind, list, team, n, seed, bps) { return list.map((cfgs) => evalRange(kind, cfgs, team, 0, n, seed, bps)); },
   async p1(base, team, lb, opts) { return p1Candidates(base, team, lb, opts); },
+  async edits(cfg, team, plans, opts) { return editCandidates(cfg, team, plans, opts); },
   async p1sim(list, team, runs, seed) {
     return list.map((cfgs) => simP1(cfgs, team, cfgs.map((c) => c.actions), runs, seed, cfgs.map((c) => c.startSpec)));
   },
@@ -276,6 +291,34 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     if (!bps.length) bps = [0];
   }
 
+  // ---- 1b. your charts, edited: from each chart's own P1 plan, every chart one change away (who has which Dawn, its
+  // timing, surges, transfers, start specs, who does what) on P2 raids; the best few are edited again (o.editRounds
+  // rounds, o.editWidth at a time). The best o.editKeep go on with your chart's own settings, through every stage.
+  t0 = Date.now();
+  const edited = [];
+  const minE = o.minSuccess || 0;
+  const erank = (c) => (c.k / c.n >= minE - CLAW_TOL.early - 1e-9 ? 1 : 0) + score(c, true);   // the minimum success first
+  for (const sd of (o.editRounds ?? 2) > 0 ? o.seeds || [] : []) {
+    step('Editing your chart');
+    const lb = sd.cfg.map((c) => !!c.lightbearerOn), purple = Math.max(0, sd.cfg.findIndex((c) => c.PurpleDC));
+    const cfgOf = (x) => sd.cfg.map((c, k) => ({ ...c, actions: x.acts[k], startSpec: x.plan.start[k] }));
+    const seen = new Set(), done = new Set(), pool = [];
+    let frontier = [planFromChart(sd.cfg)];
+    for (let r = 0; r < (o.editRounds ?? 2) && frontier.length; r++) {
+      frontier.forEach((p) => done.add(JSON.stringify(p)));
+      const list = (await ev.edits(sd.cfg, team, frontier, { perms: r === 0 }))
+        .filter((x) => { const k = JSON.stringify([x.acts, x.plan.start]); if (seen.has(k)) return false; seen.add(k); return true; });
+      (await run('p2', list.map(cfgOf), o.nEdit ?? o.n1, 'edit')).forEach((c, i) => { list[i].c = c; });
+      pool.push(...list);
+      pool.sort((a, b) => erank(b.c) - erank(a.c));
+      frontier = pool.map((x) => x.plan).filter((p) => !done.has(JSON.stringify(p))).slice(0, o.editWidth ?? 3);
+      stats.edits = (stats.edits || 0) + list.length;
+    }
+    for (const x of pool.slice(0, o.editKeep ?? 3)) edited.push({ lb, cfg: cfgOf(x), seedLabel: sd.label, edited: true, purple });
+    log(`  ${sd.label} edited: ${pool.length} charts tried`);
+  }
+  T('edit', t0);
+
   // ---- 2. screen: every P1 chart x purple owner, default ring swaps
   t0 = Date.now();
   step('Screening');
@@ -293,7 +336,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   // the solver's own setups, and the as-charted version always runs in the final - so a result is never worse than it
   const seeds = (o.seeds || []).map((sd) => ({ lb: sd.cfg.map((c) => !!c.lightbearerOn), cfg: sd.cfg, seedLabel: sd.label,
     purple: Math.max(0, sd.cfg.findIndex((c) => c.PurpleDC)) }));
-  s1all.push(...seeds);
+  s1all.push(...seeds, ...edited);
   stats.setups1 = s1all.length;
   (await run('p2', s1all.map((x) => x.cfg), o.n1, 'screen')).forEach((c, i) => { s1all[i].c = c; });
   // everyone needs a claw in reds: the best rate sets the bar
@@ -488,8 +531,10 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   for (const x of s3) { const k = same(x); if (effSeen.has(k)) { stats.dcEquiv++; continue; } effSeen.add(k); fin.push(x); if (fin.length >= o.keep2) break; }
   // the best version of each of your charts the search found, and each one exactly as charted
   for (const sd of seeds) {
-    const best = s3.find((x) => x.seedLabel === sd.seedLabel);
-    if (best && !fin.includes(best)) fin.push(best);
+    for (const ed of [false, true]) {
+      const best = s3.find((x) => x.seedLabel === sd.seedLabel && !!x.edited === ed);
+      if (best && !fin.includes(best)) fin.push(best);
+    }
     fin.push({ ...sd, asCharted: true });
   }
   (await run('full', fin.map((x) => x.cfg), o.nFinal, 'final')).forEach((c, i) => { fin[i].c = c; });
