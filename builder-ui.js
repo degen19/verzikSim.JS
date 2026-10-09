@@ -334,6 +334,25 @@ export function createBuilder(root, { onChange }) {
       const ws = overlaySheet(tpl[t].ws, tpl[t].descs, state[t]);
       return { sheetnames: [`${t}-man`], load: async () => ws };
     },
+    /** Put values (e.g. a Verz Solver setup) into one set of the builder; that set is shown next time. */
+    async setSet(t, b, values) {
+      await ensure(t);
+      state[t][b] = { ...tpl[t].defaults[b], ...values };
+      block = b;                                                       // show the set that was just filled
+      save(state); onChange && onChange();
+    },
+    /** Save values as a named chart (Set A) in this browser's chart library. Returns false if the user said no. */
+    async saveChart(t, name, values) {
+      await ensure(t);
+      const list = (lib[t] = lib[t] || []);
+      let x = list.find((y) => y.name.toLowerCase() === name.toLowerCase());
+      if (x && !confirm(`Replace the saved ${t}-man chart "${x.name}"?`)) return false;
+      if (!x) { x = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name }; list.push(x); }
+      x.name = name; x.saved = Date.now();
+      x.sets = Object.fromEntries(BLOCKS.map((b) => [b, b === 'A' ? { ...tpl[t].defaults.A, ...values } : { ...tpl[t].defaults[b] }]));
+      if (!saveKey(LIB, lib)) throw new Error("Couldn't save - this browser's storage is full or turned off.");
+      return true;
+    },
     /** Copy an imported chart's values into the builder (both sets). */
     async importFrom(wb, t) {
       await ensure(t);

@@ -2,6 +2,13 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.17.0 - 2026-10-08
+- **Verz Solver** tab (`solver-ui.js`, `solver-pool.js`, `solver-worker.js`; engine `engine/solver.js` P1 charts + `engine/roomsolver.js` room search; CLI `cli/solveroom.mjs`, `cli/solve.mjs`). Inputs: gear / prayer / 3-tick / Has BP / Boak side + East pattern (3-5) / custom surge / Shadow (+ modes in 3-5) / mage gear, team thresholds, supplies and the rest from the template's fields; number of Lightbearers and horns; breakpoints, rank by, minimum success %, depth.
+- Searched: P1 chart (Dawn rotation, start spec 95/100, surges, spec transfers), Lightbearer assignment, ring swap % (blank or 10-100), purple DC, reds West/East DCs, horns (holder, P2/P3); duos: 2nd purple DC, shadow mode, Dawn / P2 last-hit threshold 1-5%. Everyone claws in reds (hard rule, 95%+ of raids). Same raids for every setup; identical-outcome options merged.
+- Results: breakpoints (equal or faster, tick times) + success (+ wipe rate in duos), sortable; See setup with Copy to Set A/B/C and Save as chart (builder `setSet` / `saveChart`).
+- Duo P1: dodge windows (no melee a-3..a+3, Dawnbringer only on a-1), Dawn autos mage only, ranger dodge pattern searched, pull-ups on the last auto before the kill.
+- Sim: players record the phases they'd have gone below 0 HP in (no behaviour change; same-seed results identical).
+
 ## v1.16.1 - 2026-10-08
 - 4 Claw Priority note (trio): better for a non-shadow player to push for 100% - give the last Dawn spec to a non-shadow player where possible (builder note + Mechanics sheet). `trio_shadow_alert` flipped: warns when the shadow player has the last Dawn (unless all have Shadow); it used to suggest moving Shadow onto the last-Dawn player. No sim behaviour change.
 

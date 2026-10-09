@@ -329,6 +329,7 @@ export function check_death(p, phase, L = null, t = null) {
   if (!FLAGS.DEATHS && p.hp <= 0) {
     const pd = p.pool.potential_deaths;
     pd[phase] = dget(pd, phase, 0) + 1;
+    (p.would_die ||= new Set()).add(String(phase).startsWith('P3') ? 'P3' : phase);   // tracking only (Verz Solver wipes)
     if (L) L.on && L(`t${rjust(t, 4)} ${p.name}: would be at ${p.hp} HP (${phase}) - kept at 1 HP`);
     p.hp = 1;
     return;

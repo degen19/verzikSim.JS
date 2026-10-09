@@ -1,6 +1,14 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.16.1';
+export const VERSION = '1.17.0';
 export const CHANGES = [
+  { version: '1.17.0', date: '2026-10-08', items: [
+    'New: the Verz Solver tab (next to Optimizer), every scale. Set the team\'s gear and settings (Team, Players and Advanced sections, saved per scale in this browser) - you don\'t chart anything. The solver writes the P1 chart and picks the start specs, who wears Lightbearer (from how many rings the team has), each Lightbearer player\'s ring swap %, the purple DC and the reds West/East DCs. 3-5 man: also who holds each Soulflame horn (2 in 5s, 1 otherwise by default) and whether it\'s used in P2, P3 or both. Duos: also the 2nd purple DC, the mage\'s shadow mode (Shadow camp, 3:1, Shadow while LB, or 3:1 + Shadow while LB) and the P1 Dawn and P2 last-hit thresholds (1-5%).',
+    'Everyone has to claw in reds: setups where a player misses their claw are never suggested. Custom surge timing: blank lets the solver place the surge in P1; filled, the surge is on cooldown until that room time.',
+    'Results like the Optimizer: breakpoints (a raid counts if it is equal or faster - times round down to a tick) and raid success, ranked by the breakpoint you pick or by success; click a column to sort it. Optional minimum success %: if no setup reaches it, the setups with the highest success are shown instead. Duos also show the wipe rate (both players die in P1 or P3), which counts as a failed raid.',
+    'See setup: the P1 chart and every choice the solver made. Copy to Set A, B or C puts it into Build chart on this page (to run reports or optimize it), and Save as chart keeps it, named, in your chart library.',
+    'Duo P1 charts follow the duo rules: no melee from 3 ticks before to 3 ticks after an auto you dodge, only the Dawnbringer the tick before it, Dawn autos for the mage, and pulling up on the last auto before the kill when it helps.',
+    'The search uses every core of your computer. Search depth: Quick, Standard or Thorough.',
+  ] },
   { version: '1.16.1', date: '2026-10-08', items: [
     '4 Claw Priority note (trios): it\'s better for a non-shadow player to push for 100% spec in reds, so where you can, give the last Dawn spec (the one most likely to go unused) to a non-shadow player. Added to the chart builder and Mechanics & behavior. The trio shadow alert now warns when the shadow player has the last Dawn spec (it used to suggest the opposite). No change to results.',
   ] },

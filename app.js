@@ -7,6 +7,7 @@ import { VERSION, CHANGES } from './engine/version.js';
 import { createBuilder } from './builder-ui.js';
 import { createOptimizer } from './optimizer-ui.js';
 import { createMechanics } from './mechanics-ui.js';
+import { createSolver } from './solver-ui.js';
 import { SimPool } from './pool.js';
 
 const $ = (id) => document.getElementById(id);
@@ -56,6 +57,7 @@ $('team').addEventListener('change', async () => {
   showRunBps();
   if (source === 'build') await builder.show(team());
   if (tab === 'opt') optimizer.refresh();
+  if (tab === 'solve') solver.refresh();
   prewarm();
 });
 $('file').addEventListener('change', async (e) => {
@@ -84,13 +86,24 @@ $('toBuilder').addEventListener('click', async () => {
 // ---- tabs
 const optimizer = createOptimizer($('tab-opt'), { getWorkbook, getTeam: team, runReport,
   getLabel: (b) => $(`lab${b}`).value || `Set ${b}` });                    // Run tab set labels
+const solver = createSolver($('tab-solve'), {
+  getTeam: team,
+  // a solver setup -> a set of "Build chart on this page" (which then becomes the chart source for Run / Optimizer)
+  toBuilder: async (t, b, values) => {
+    await builder.setSet(t, b, values);
+    if (source !== 'build') $('src').querySelector('[data-src="build"]').click();
+    else await builder.show(team());
+  },
+  saveChart: (t, name, values) => builder.saveChart(t, name, values),
+});
 for (const b of ['A', 'B', 'C']) $(`lab${b}`).addEventListener('change', () => { if (tab === 'opt') optimizer.refresh(); });
 $('tabs').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   tab = b.dataset.tab;
   [...$('tabs').children].forEach((x) => x.classList.toggle('on', x === b));
-  for (const t of ['run', 'opt', 'new']) $(`tab-${t}`).hidden = t !== tab;
+  for (const t of ['run', 'opt', 'solve', 'new']) $(`tab-${t}`).hidden = t !== tab;
   if (tab === 'opt') optimizer.refresh();
+  if (tab === 'solve') solver.refresh();
 });
 $('tab-new').innerHTML = `<h3>What's new</h3>${CHANGES.map((c) => `<h4>v${c.version} <span class="muted small">${c.date}</span></h4><ul class="news">${c.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}`;
 

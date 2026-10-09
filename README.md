@@ -65,6 +65,9 @@ Rates count all attempts, including failed ones. Only inputs that exist on the c
 
 **Reading the report:** the Splits table (Median / Top 10% / Top 25% / Bottom 25%), the histogram and the first "Finished by this time" chart use each set's **successful runs only** - a failed raid has no room time. The "% of all attempts" chart counts failed raids too, so it levels off at the success rate; it's your odds of a given time per attempt, the same way the Optimizer counts.
 
+### Verz Solver
+The **Solver** tab builds the chart for you. Fill in the **Team** (number of Lightbearers and horns, thresholds, breakpoints, rank by, optional minimum success %, search depth), the **Players** (gear, prayer, 3-tick weapon, Has BP, Boak side, custom surge, Shadow) and, if needed, **Advanced** (supplies and the rarer settings). **Start solver** writes the P1 chart and picks start specs, Lightbearers, ring swap %, the purple and reds DCs and the horns (duos: the 2nd purple, shadow mode and the Dawn / P2 last-hit thresholds). Every result's **See setup** shows the chart and choices, with **Copy to Set A/B/C** and **Save as chart**. Command line: `node cli/solveroom.mjs my_chart.xlsx --team 5 --bps "2:57,2:51"` (uses the chart's gear and settings).
+
 ### Multithreading
 Report runs are split into chunks of 2,000 raids that run in parallel Web Workers (`pool.js`). Everything still runs in your browser - nothing is sent anywhere.
 - **Threads:** every logical core (the page itself is idle while workers run), up to 32. The Run tab's status line shows the thread count and raids/second when a run finishes.
@@ -145,12 +148,14 @@ All three are free for a site like this. There's no server-side compute, because
 | `index.html`, `app.js` | The browser app (chart source, tabs, running the workers, drawing the report) |
 | `builder-ui.js` | "Build chart on this page" form |
 | `optimizer-ui.js` | Optimizer tab |
+| `solver-ui.js`, `solver-pool.js`, `solver-worker.js` | Verz Solver tab, its worker pool and worker |
 | `mechanics-ui.js` | "View mechanics & behavior" panel (reads the template's sheet) |
 | `pool.js` | Worker pool for report runs: reusable workers, chunk queue, progress, Stop, single-thread fallback |
 | `worker.js` | Web Worker: runs chunks of raids (report runs) and optimizer batches |
 | `tests/parity.mjs` | Multithreading checks: identical results across thread counts, match vs the old method, speed |
 | `cli/run.mjs`, `cli/worker.mjs` | Command-line runner (Node worker threads) |
-| `engine/` | The simulator: chart reader (`xlsx.js`, `sim.js`), phases (`p2.js`, `reds.js`, `duo_reds.js`, `p3.js`), supplies, gear, horn, RNG, report, optimizer search (`optimize.js`), parallel chunk plan + merge (`parallel.js`), chart form (`chartform.js`), spec planner (`planner.js`) and version / What's new (`version.js`) |
+| `cli/solveroom.mjs`, `cli/solve.mjs` | Verz Solver from the command line (full room / P1 chart only) |
+| `engine/` | The simulator: chart reader (`xlsx.js`, `sim.js`), phases (`p2.js`, `reds.js`, `duo_reds.js`, `p3.js`), supplies, gear, horn, RNG, report, optimizer search (`optimize.js`), Verz Solver (`solver.js` P1 charts, `roomsolver.js` room search), parallel chunk plan + merge (`parallel.js`), chart form (`chartform.js`), spec planner (`planner.js`) and version / What's new (`version.js`) |
 | `defaults/` | Default charts offered in the builder's Chart list (`index.json` + chart files) |
 | `CHANGELOG.md` | What changed in each version |
 | `verzik_chart_template.xlsx` | Blank input chart. The **Mechanics & behavior** sheet in it explains what the sim models. |
