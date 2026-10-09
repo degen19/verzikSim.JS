@@ -164,9 +164,20 @@ const withRings = (cfgs, lb) => cfgs.map((c, k) => ({ ...c, lightbearerOn: lb[k]
 
 /** The top P1 charts for one Lightbearer assignment, as full player configs (P1 chart + start spec filled in);
  *  charts where someone can't reach 50% by reds are dropped. Returns {cands: [cfgs], charts, dropped}. */
-export function p1Candidates(base, team, lb, { beam = 150, top = 20, gap = 150, sbOwner = null, clawRule = false } = {}) {
+export function p1Candidates(base, team, lb, { beam = 150, top = 20, gap = 150, sbOwner = null, clawRule = false, diverse = false } = {}) {
   const cf = withRings(base, lb);
   let charts;
+  if (diverse) {
+    // the fastest charts (as without it) + the fastest of each spec split
+    const fast = team === 2 ? null : solve(makeContext(cf, team, { sbOwner }), { beam, slots: 16 }).tops.slice(0, 20);
+    const div = diverseCharts(cf, team, { beam, top, sbOwner });
+    charts = fast ? [...fast, ...div] : div;
+    if (team === 2) { const all = solveDuo(cf, { beam, sbOwner }); charts = [...all.slice(0, 20), ...div]; }
+    const seenC = new Set();
+    charts = charts.filter((f) => { const k = JSON.stringify([f.built.acts, f.plan.start]); if (seenC.has(k)) return false; seenC.add(k); return true; });
+    const cands = charts.map((f) => cf.map((c, k) => ({ ...c, actions: f.built.acts[k], startSpec: f.plan.start[k] })));
+    return { cands, charts: charts.length, dropped: 0 };
+  }
   if (team === 2) {
     // duos: the best charts on the fastest raids AND the best on the typical raid (Dawns kept for longer P1s, e.g. a
     // spec transfer mid-P1) - the full raid decides between them
@@ -197,6 +208,35 @@ export function editCandidates(cfg, team, plans, { sbOwner = null, perms = true 
     out.push({ plan: q, acts: b.acts, cvar: killTick(ctx, b.acts).cvar });
   }
   return out;
+}
+
+/**
+ * P1 charts picked for the room, not just for P1: every chart the rotation search keeps (many more than the top few),
+ * within `slack` ticks of the fastest (analytic, fastest 10% of raids), grouped by how the spec ends up split at the end
+ * of P1 (each player's average spec over a short P1 sim, in 10% steps; duos: per dodge pattern too) - that decides who claws in reds. The fastest
+ * chart of each group goes on, fastest groups first, up to `top`.
+ */
+export function diverseCharts(cf, team, { beam = 150, top = 40, sbOwner = null, slack = 4, runs = 60, step = 10 } = {}) {
+  let all;
+  if (team === 2) all = solveDuo(cf, { beam, sbOwner, top: 200 });
+  else all = solve(makeContext(cf, team, { sbOwner }), { beam, slots: 16, keepPerSlot: beam }).tops;
+  if (!all.length) return [];
+  const best = all[0].score;
+  const groups = new Map();
+  for (const f of all) {
+    if (f.score > best + slack) break;
+    const cfg = cf.map((c, k) => ({ ...c, actions: f.built.acts[k], startSpec: f.plan.start[k], scope: 'p1' }));
+    const spec = cfg.map(() => 0); let n = 0;
+    for (let i = 0; i < runs; i++) {
+      const r = run_p1(cfg, team, new Rng(`div#${i}`));
+      if (r.end == null) continue;
+      n++; r.spec_p2.forEach((x, k) => { spec[k] += x; });
+    }
+    if (!n) continue;
+    const sig = `${f.pattern || ''}|${spec.map((x) => Math.round(x / n / step)).join(",")}`;   // duos: per dodge pattern too
+    if (!groups.has(sig)) groups.set(sig, f);                     // sorted fastest first: the first is the group's best
+  }
+  return [...groups.values()].slice(0, top);
 }
 
 /** Runs everything in this process (the CLI). The page uses solver-pool.js, which has the same three calls. */
@@ -272,7 +312,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   step('P1 charts');
   const lbSets = lbAssignments(base, o.rings);
   stats.lbSets = lbSets.length;
-  const p1 = await Promise.all(lbSets.map((lb) => ev.p1(base, team, lb, { beam: o.p1Beam ?? 150, top: o.p1Top, gap, sbOwner: o.sbOwner ?? null, clawRule })));
+  const p1 = await Promise.all(lbSets.map((lb) => ev.p1(base, team, lb, { beam: o.p1Beam ?? 150, top: o.p1Top, gap, sbOwner: o.sbOwner ?? null, clawRule, diverse: !!o.p1Diverse })));
   const cands = [];
   p1.forEach((r, i) => {
     stats.p1Charts += r.charts; stats.p1Dropped50 += r.dropped;
@@ -347,7 +387,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const ok50 = s1all.filter((x) => clawRate(x.c) >= bar - 1e-9);
   stats.cut50 = s1all.length - ok50.length; stats.clawBar = bestClaw;
   let minS = o.minSuccess || 0;
-  const okSucc = (c) => c.k / c.n >= minS - CLAW_TOL.early - 1e-9;   // early runs: small tolerance for noise
+  const okSucc = (c) => c.k / c.n >= minS - (o.succTol ?? CLAW_TOL.early) - 1e-9;   // early runs: tolerance for noise (and untuned settings)
   stats.succCut = ok50.filter((x) => !okSucc(x.c)).length;
   let s1 = ok50.filter((x) => okSucc(x.c));
   // nothing reaches the minimum success: carry on without it and rank by success first (the next best options)
