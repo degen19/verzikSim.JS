@@ -23,7 +23,9 @@ const CODE_BG = { S: '#8fd18f', D: '#c9b6e4', A: '#fff2a8', C: '#f8cbad', H: '#f
 const PLAYER_SETUP = ['Name', 'meleePrayer', 'Custom Surge Timing'];
 const PLAYER_GEAR = ['helm', 'body', 'legs', 'amulet', 'bloodFuryHp', 'has3Tick', 'Has BP', 'Shadow', '3:1', 'Shadow while LB', 'Shadow camp', 'Deep proc'];
 const ADV_GEAR = ['bouncedZCB', 'offPrayer', 'hornPriority', 'Phoenix necklaces', 'Pneck on P1', 'Redemption flick', 'Pass green if death'];
-const TEAM_MAIN = ['Deep proc HP %', 'Dawn threshold %', 'P2 Scythe last hit threshold', 'P3 halberd HP %'];
+// 3-5 man: the solver picks the Dawn threshold (1-6%)
+const TEAM_MAIN = ['Deep proc HP %', 'P2 Scythe last hit threshold', 'P3 halberd HP %'];
+const TEAM_SOLVED = ['Dawn threshold %'];
 // duos: the solver picks the Dawn and P2 last-hit thresholds (1-5%) and the shadow mode itself
 const DUO_MAIN = ['Number of Purples', 'Second purple %', 'Crab HP threshold', 'Perfect 1st set', 'Deep proc HP %', 'P3 halberd HP %'];
 const DUO_SOLVED = ['Dawn threshold %', 'P2 Scythe last hit threshold'];
@@ -155,14 +157,14 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         : 'Shadow modes need Shadow ticked.'} Custom surge blank: the solver places the surge in P1.</p>
       ${shadowRows.some(Boolean) && mage.length ? `<h4>Mage gear <span class="muted small">(Shadow players)</span></h4>${playerTable(mage.map((h) => ['mage', h]), (k) => shadowRows[k])}` : ''}`;
     const SUPPLIES = ['Brew sips', 'SCB sips', 'Restore sips', 'Sharks'];
-    const advTeam = d.tables.team.map((f) => f.header).filter((h) => !main.includes(h) && !SUPPLIES.includes(h) && h !== 'Death tick' && !(duo && DUO_SOLVED.includes(h)));
+    const advTeam = d.tables.team.map((f) => f.header).filter((h) => !main.includes(h) && !SUPPLIES.includes(h) && h !== 'Death tick' && !(duo ? DUO_SOLVED : TEAM_SOLVED).includes(h));
     const advBody = `<h4 style="margin-top:4px">Team supplies</h4>
       <div class="row wrap teamset">${SUPPLIES.map(teamField).join('')}</div>
       <h4>Players</h4>${playerTable([...ADV_GEAR.map((h) => ['gear', h]), ['gear', 'redCrab']].filter(([, h]) => h !== 'redCrab' || team === 2))}
       ${advTeam.length ? `<h4>Team</h4><div class="row wrap teamset">${advTeam.map(teamField).join('')}</div>` : ''}`;
     root.innerHTML = `<h3 style="margin-top:0">Verz Solver <span class="muted small">(${team}-man)</span></h3>
       <p class="muted small">Set the team's gear and settings. The solver writes the P1 chart and picks start specs, who wears Lightbearer, ring swap %,
-        the purple and reds DCs and ${duo ? 'the shadow mode and Dawn / P2 last-hit thresholds' : 'the horns'}. Settings are saved in this browser.</p>
+        the purple and reds DCs, ${duo ? 'the shadow mode and the Dawn / P2 last-hit thresholds' : 'the horns and the Dawn threshold (1-6%)'}. Settings are saved in this browser.</p>
       ${section('team', 'Team', teamBody, true)}
       ${section('players', 'Players', playersBody, true)}
       ${section('adv', 'Advanced', advBody, false)}
@@ -233,7 +235,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
    *  and not what the solver decides (or the form randomizes, horn priority). */
   function formDiff(mine, form) {
     const solved = new Set(['startSpec (%)', 'lightbearerOn', 'PurpleDC', '1st Purple DC', '2nd Purple DC', 'WestDC', 'EastDC', 'Ring switch %',
-      'Target spec', 'Horn', 'P2 horn', 'P3 horn', 'hornPriority', 'Name', ...(team === 2 ? [...DUO_SOLVED, 'Shadow camp', '3:1', 'Shadow while LB'] : [])]);
+      'Target spec', 'Horn', 'P2 horn', 'P3 horn', 'hornPriority', 'Name', ...(team === 2 ? [...DUO_SOLVED, 'Shadow camp', '3:1', 'Shadow while LB'] : TEAM_SOLVED)]);
     const shown = new Set([...PLAYER_SETUP, ...PLAYER_GEAR, ...ADV_GEAR, 'redCrab', 'East Boak', 'West Boak', 'East Pattern',
       ...tpl[team].desc.tables.team.map((f) => f.header).filter((h) => h !== 'Death tick')]);
     const out = new Set();
@@ -263,7 +265,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       put('gear', 'P2 horn', k, !!c.hornP2);
       put('gear', 'P3 horn', k, !!c.hornP3);
     });
-    if (team === 2) { put('team', 'Dawn threshold %', null, x.cfg[0].dawnThr ?? ''); put('team', 'P2 Scythe last hit threshold', null, x.cfg[0].lastHitThr ?? ''); }
+    put('team', 'Dawn threshold %', null, x.cfg[0].dawnThr ?? '');
+    if (team === 2) put('team', 'P2 Scythe last hit threshold', null, x.cfg[0].lastHitThr ?? '');
     for (const f of tpl[team].desc.fields.values()) {
       if (f.table !== 'chart') continue;
       out[f.key] = x.cfg[f.player].actions[Number(f.header)] || '';
@@ -394,9 +397,9 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       ...(results.team === 2 ? [
         ['2nd purple DC', cf.find((c) => c.Purple2DC) ? who('Purple2DC') : `${who('PurpleDC')} (both purples)`],
         ['Shadow mode', (() => { const m = cf.find((c) => c.shadow); return m ? [m.shadowCamp && 'Shadow camp', m.shadowLB && 'Shadow while LB', m.shadow31 && '3:1'].filter(Boolean).join(' + ') || 'Shadow' : '-'; })()],
-        ['Dawn threshold', `${cf[0].dawnThr ?? '-'}%`],
         ['P2 last-hit threshold', `${cf[0].lastHitThr ?? '-'}%`],
       ] : [['Horns', horns.join(', ') || 'none']]),
+      ['Dawn threshold', cf[0].dawnThr ? `${cf[0].dawnThr}%` : 'never'],
       ['Start spec', cf.map((c, k) => `${nm[k]} ${c.startSpec}%`).join(', ')],
       ['Average room time', x.c.k ? fmtT(x.c.sum / x.c.k) : '-'],
     ];

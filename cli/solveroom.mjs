@@ -95,7 +95,7 @@ res.top.forEach((x, i) => {
   const head1 = (`\n${lab[i]} setup: Lightbearer ${x.cfg.map((c, k) => (c.lightbearerOn ? names[k] : null)).filter(Boolean).join(', ')}`
     + ` | purple DC ${who(x.cfg, 'PurpleDC')} | reds DCs West ${who(x.cfg, 'WestDC')}, East ${who(x.cfg, 'EastDC')} | horns ${hornText(x.cfg)}`
     + ` | ring swap ${x.cfg.map((c, k) => (c.lightbearerOn ? `${names[k]} ${c.ringSwitch ?? 'default'}` : null)).filter(Boolean).join(', ')}`
-    + (o.team === 2 ? ` | 2nd purple ${who(x.cfg, 'Purple2DC')} | shadow ${(() => { const m = x.cfg.find((c) => c.shadow); return m ? [m.shadowCamp && 'camp', m.shadowLB && 'while LB', m.shadow31 && '3:1'].filter(Boolean).join(' + ') || 'plain' : '-'; })()} | Dawn thr ${x.cfg[0].dawnThr ?? '-'}% | P2 last hit ${x.cfg[0].lastHitThr ?? '-'}%` : '')
+    + (o.team === 2 ? ` | 2nd purple ${who(x.cfg, 'Purple2DC')} | shadow ${(() => { const m = x.cfg.find((c) => c.shadow); return m ? [m.shadowCamp && 'camp', m.shadowLB && 'while LB', m.shadow31 && '3:1'].filter(Boolean).join(' + ') || 'plain' : '-'; })()} | P2 last hit ${x.cfg[0].lastHitThr ?? '-'}%` : '') + ` | Dawn thr ${x.cfg[0].dawnThr ? `${x.cfg[0].dawnThr}%` : 'never'}`
     + ` | start spec ${x.cfg.map((c) => c.startSpec).join('/')} | room avg ${fmt(x.c.sum / x.c.k)}`);
   out(head1);
   const end = Math.min(66, x.p1.median + 2);

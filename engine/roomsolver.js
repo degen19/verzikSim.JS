@@ -270,6 +270,8 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const stats = { hornP2Tried: 0, hornP2Changed: 0, hornP3Tried: 0, hornP3Changed: 0, dcEquiv: 0, dcTried: 0, dcSame: 0, dcClaw: 0, dcSucc: 0,
     lbSets: 0, p1Charts: 0, p1Dropped50: 0, setups1: 0, cut50: 0, succCut: 0, ringTried: 0, ringSame: 0, ringCamp: 0, ringClaw: 0,
     purpleTried: 0, purpleChanged: 0, finalSame: 0, finalClawCut: 0, finalSuccCut: 0, raids: 0, t: {} };
+  // 3-5 man: the Dawn threshold is searched (1-6%); setups start at 3% until the Dawn threshold pass
+  if (team !== 2) base = base.map((c) => ({ ...c, dawnThr: c.dawnThr >= 1 && c.dawnThr <= 6 ? c.dawnThr : 3 }));
   const keys = twinKeys(base);
   const T = (k, t0) => { stats.t[k] = (stats.t[k] || 0) + (Date.now() - t0) / 1000; };
   let stage = '';
@@ -483,8 +485,14 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     return { s: best, changed };
   };
   const mageK = base.findIndex((c) => c.shadow);
+  // 3-5 man: the P1 Dawn threshold (1-6%) - spec saved at the end of P1 for the claws in reds
+  const DAWN_THR_3_5 = [1, 2, 3, 4, 5, 6];
   const duoPasses = async (s0) => {
-    if (team !== 2) return s0;
+    if (team !== 2) {
+      const r = await optionPass(s0, DAWN_THR_3_5.map((v) => (cf) => cf.map((c) => ({ ...c, dawnThr: v }))));
+      if (r.changed) stats.dawnChanged = (stats.dawnChanged || 0) + 1;
+      return r.changed ? ringPass(r.s) : r.s;
+    }
     let s = s0, any = false;
     const n2 = Number(base[0].nPurples || 1) === 2;
     const passes = [
