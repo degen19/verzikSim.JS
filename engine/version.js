@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.17.0';
+export const VERSION = '1.17.1';
 export const CHANGES = [
+  { version: '1.17.1', date: '2026-10-08', items: [
+    'Verz Solver: the team\'s supplies have their own group at the top of Advanced - Brew sips, Super combat sips, Restore sips and Sharks - editable in every scale (defaults as in the chart template; duos start at 32 brew sips).',
+  ] },
   { version: '1.17.0', date: '2026-10-08', items: [
     'New: the Verz Solver tab (next to Optimizer), every scale. Set the team\'s gear and settings (Team, Players and Advanced sections, saved per scale in this browser) - you don\'t chart anything. The solver writes the P1 chart and picks the start specs, who wears Lightbearer (from how many rings the team has), each Lightbearer player\'s ring swap %, the purple DC and the reds West/East DCs. 3-5 man: also who holds each Soulflame horn (2 in 5s, 1 otherwise by default) and whether it\'s used in P2, P3 or both. Duos: also the 2nd purple DC, the mage\'s shadow mode (Shadow camp, 3:1, Shadow while LB, or 3:1 + Shadow while LB) and the P1 Dawn and P2 last-hit thresholds (1-5%).',
     'Everyone has to claw in reds: setups where a player misses their claw are never suggested. Custom surge timing: blank lets the solver place the surge in P1; filled, the surge is on cooldown until that room time.',

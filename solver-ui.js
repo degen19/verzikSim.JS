@@ -31,7 +31,8 @@ const LABEL = {
   Name: 'Name', meleePrayer: 'Prayer', 'Custom Surge Timing': 'Custom surge (m:ss)', helm: 'Helm', body: 'Body', legs: 'Legs', amulet: 'Amulet',
   bloodFuryHp: 'Blood fury HP', has3Tick: '3-tick weapon', 'Has BP': 'Has BP', bouncedZCB: 'Bounced ZCB', offPrayer: 'Off prayer (P3)',
   hornPriority: 'Horn priority', 'Phoenix necklaces': 'Phoenix necklaces', 'Pneck on P1': 'Pneck on P1', 'Redemption flick': 'Redemption flick',
-  'Pass green if death': 'Pass green if death', redCrab: 'Red crab', 'P2 Scythe last hit threshold': 'P2 halberd: scythe below HP %',
+  'Pass green if death': 'Pass green if death', redCrab: 'Red crab', 'Brew sips': 'Brew sips', 'SCB sips': 'Super combat sips',
+  'Restore sips': 'Restore sips', Sharks: 'Sharks', 'P2 Scythe last hit threshold': 'P2 halberd: scythe below HP %',
 };
 const HELP = {
   'Custom Surge Timing': 'Blank: the solver places this player\'s surge in P1. Filled: their surge is on cooldown until this room time (m:ss) and is taken then.',
@@ -44,6 +45,8 @@ const HELP = {
   '3:1': 'Scythe, but the attack that would collide with Verzik becomes a shadow. Needs Shadow.',
   'Deep proc': 'Shadow from max distance below the Deep proc HP %. Needs Shadow.',
   offPrayer: 'Verzik P3 autos taken off prayer (0-9)',
+  'Brew sips': 'Saradomin brew sips the whole team brings', 'SCB sips': 'Super combat potion sips the whole team brings',
+  'Restore sips': 'Super restore sips the whole team brings', Sharks: 'Sharks the whole team brings',
 };
 
 export function createSolver(root, { getTeam, toBuilder = null, saveChart = null }) {
@@ -149,9 +152,12 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       <p class="muted small">${duo ? 'Tick Shadow for the mage (one player). The solver picks the shadow mode (camp, 3:1, Shadow while LB, or 3:1 + Shadow while LB) and the Dawn and P2 last-hit thresholds (1-5%).'
         : 'Shadow modes need Shadow ticked.'} Custom surge blank: the solver places the surge in P1.</p>
       ${shadowRows.some(Boolean) && mage.length ? `<h4>Mage gear <span class="muted small">(Shadow players)</span></h4>${playerTable(mage.map((h) => ['mage', h]), (k) => shadowRows[k])}` : ''}`;
-    const advTeam = d.tables.team.map((f) => f.header).filter((h) => !main.includes(h) && h !== 'Death tick' && !(duo && DUO_SOLVED.includes(h)));
-    const advBody = `${playerTable([...ADV_GEAR.map((h) => ['gear', h]), ['gear', 'redCrab']].filter(([, h]) => h !== 'redCrab' || team === 2))}
-      <div class="row wrap teamset">${advTeam.map(teamField).join('')}</div>`;
+    const SUPPLIES = ['Brew sips', 'SCB sips', 'Restore sips', 'Sharks'];
+    const advTeam = d.tables.team.map((f) => f.header).filter((h) => !main.includes(h) && !SUPPLIES.includes(h) && h !== 'Death tick' && !(duo && DUO_SOLVED.includes(h)));
+    const advBody = `<h4 style="margin-top:4px">Team supplies</h4>
+      <div class="row wrap teamset">${SUPPLIES.map(teamField).join('')}</div>
+      <h4>Players</h4>${playerTable([...ADV_GEAR.map((h) => ['gear', h]), ['gear', 'redCrab']].filter(([, h]) => h !== 'redCrab' || team === 2))}
+      ${advTeam.length ? `<h4>Team</h4><div class="row wrap teamset">${advTeam.map(teamField).join('')}</div>` : ''}`;
     root.innerHTML = `<h3 style="margin-top:0">Verz Solver <span class="muted small">(${team}-man)</span></h3>
       <p class="muted small">Set the team's gear and settings. The solver writes the P1 chart and picks start specs, who wears Lightbearer, ring swap %,
         the purple and reds DCs and ${duo ? 'the shadow mode and Dawn / P2 last-hit thresholds' : 'the horns'} - everyone always claws in reds. Settings are saved in this browser.</p>
