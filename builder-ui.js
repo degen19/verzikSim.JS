@@ -136,7 +136,7 @@ export function createBuilder(root, { onChange }) {
   }
   async function libPick(v) {
     if (!v) return;
-    if (block === 'A' && dirty() && !confirm('The chart on the page has unsaved changes. Load the other chart anyway?')) { render(); return; }
+    if (dirty() && !confirm(`Set ${block} on the page may have unsaved changes. Load the chart into Set ${block} anyway?`)) { render(); return; }
     try {
       let sets, kind, id, name;
       if (v.startsWith('s:')) {
@@ -146,17 +146,12 @@ export function createBuilder(root, { onChange }) {
         const i = Number(v.slice(2)), d = (await fetchDefaults())[i];
         sets = await readDefault(d); kind = 'default'; id = i; name = d.name;
       }
-      if (block === 'A') {
-        // Set A open: the whole chart (all its sets) replaces the page's chart
-        state[team] = withDefaults(sets); markCurrent(kind, id, name);
-        save(state); render(); onChange && onChange();
-      } else {
-        // Set B / C open: the chart's Set A goes into that set; the other sets stay as they are (a working copy now)
-        state[team][block] = { ...tpl[team].defaults[block], ...(sets.A || {}) };
-        delete cur[team]; saveKey(LIBCUR, cur);
-        save(state); render(); onChange && onChange();
-        const el = root.querySelector('#vz-libstat'); if (el) el.textContent = `Loaded "${name}" (its Set A) into Set ${block} - working copy not saved under a name`;
-      }
+      // the chart's Set A goes into the set that is open; the other sets stay as they are
+      state[team][block] = { ...tpl[team].defaults[block], ...(sets.A || {}) };
+      if (block === 'A' && BLOCKS.slice(1).every((x) => JSON.stringify(state[team][x]) === JSON.stringify(withDefaults(sets)[x]))) markCurrent(kind, id, name);
+      else { delete cur[team]; saveKey(LIBCUR, cur); }
+      save(state); render(); onChange && onChange();
+      const el = root.querySelector('#vz-libstat'); if (el && !cur[team]) el.textContent = `Loaded "${name}" into Set ${block}`;
     } catch (err) { render(); libMsg(err.message); }
   }
 

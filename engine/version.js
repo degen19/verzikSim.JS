@@ -5,7 +5,7 @@ export const CHANGES = [
     'Verz Solver, Advanced (each off by default): "Let the solver decide the shadow player" (3-5 man) - the shadow role, with its modes (3:1, Shadow while LB, Deep proc) and mage gear, is tried on every player slot; and "Let the solver decide who has a blowpipe" (every scale) - set how many blowpipes the team has and the solver tries every way of handing them out (who has one decides who can take the purple DC, and the P1 blowpipe fills). Results name the slot (e.g. Player 3): the player with the shadow gear or a blowpipe takes that slot. See setup lists the shadow player(s) and blowpipes, and Copy to set / Save as chart write them (with the mage gear) into the chart.',
     'Optimizer: new options to sweep who holds the Lightbearers, the blowpipes and (3-5 man) the shadow (with its modes and mage gear). Setups where the purple DC has no blowpipe are skipped.',
     'Verz Solver: P1 charts no longer give blowpipe hits (B) to a player without a blowpipe.',
-    'Chart builder: choosing a saved or default chart while Set B or C is open loads that chart\'s Set A into the open set and leaves the other sets as they are. With Set A open, the whole chart loads as before.',
+    'Chart builder: choosing a saved or default chart loads it into the set that is open (A, B or C); the other sets stay as they are.',
   ] },
   { version: '1.19.1', date: '2026-10-11', items: [
     'Verz Solver: with "Let the solver pick Boak sides" ticked (Advanced), the Boak side column under Players shows "Solver" instead of a choice, and every player\'s East pattern can be set (used if the solver puts them East).',
