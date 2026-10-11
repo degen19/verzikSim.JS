@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.19.0';
+export const VERSION = '1.19.1';
 export const CHANGES = [
+  { version: '1.19.1', date: '2026-10-11', items: [
+    'Verz Solver: with "Let the solver pick Boak sides" ticked (Advanced), the Boak side column under Players shows "Solver" instead of a choice, and every player\'s East pattern can be set (used if the solver puts them East).',
+  ] },
   { version: '1.19.0', date: '2026-10-10', items: [
     'New team setting, East bounce tech (3-5 man, 0-3, off by default): in P2 before reds, on the first that-many Verzik attacks the East Boak players line up with, they attack on her attack tick instead of waiting a tick, chancing her bounce (50% that one of them is bounced; certain if every player is chancing). The bounced player\'s swing still lands; their next attack is a ZCB with dragon ruby bolts (e) in their melee gear plus Blessed Dizana\'s quiver, Necklace of rupture and Rigour, then they scythe again on the same rhythm. It stops after 2 bounces. A 3:1 player who is chancing scythes that attack and goes back to 3:1 afterwards. In the chart builder (team settings), the chart template and Mechanics & behavior.',
     'Charts with East bounce tech at 0 (every existing chart) give exactly the same results as before with the same seed.',

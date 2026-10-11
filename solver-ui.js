@@ -161,8 +161,11 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       </div>
       <label class="row" style="margin-top:8px;gap:6px" title="Every filled set (A, B, C) of the chart on this page (imported or built) is run exactly as charted and always shown, and also goes through the same search (ring swap %, purple, DCs, ${duo ? 'shadow mode, thresholds' : 'horns'}) - so the results are never worse than your chart.">
         <input type="checkbox" data-s="mine" ${s.mine !== false ? 'checked' : ''}> Also try my chart (the sets on this page, as charted and improved)</label>`;
-    const boakCol = { custom: true, label: 'Boak side', help: 'Which side they move to for the purple crab', cell: (k) => sel(`boak:${k}`, [['West', 'West'], ['East', 'East']], s.boak[k]) };
-    const patCol = { custom: true, label: 'East pattern', help: 'East Boak pattern', cell: (k) => { const f = field('gear', 'East Pattern', k); return f && s.boak[k] === 'East' ? input(f) : '<span class="muted">-</span>'; } };
+    const pickSides = !duo && !!s.sideSearch;          // Advanced: the solver picks the Boak sides
+    const boakCol = { custom: true, label: 'Boak side', help: pickSides ? 'The solver picks the sides (Advanced: Let the solver pick Boak sides)' : 'Which side they move to for the purple crab',
+      cell: (k) => (pickSides ? '<span class="muted" title="The solver picks (Advanced)">Solver</span>' : sel(`boak:${k}`, [['West', 'West'], ['East', 'East']], s.boak[k])) };
+    const patCol = { custom: true, label: 'East pattern', help: pickSides ? 'East Boak pattern, used if the solver puts them East' : 'East Boak pattern',
+      cell: (k) => { const f = field('gear', 'East Pattern', k); return f && (pickSides || s.boak[k] === 'East') ? input(f) : '<span class="muted">-</span>'; } };
     const gearCols = [['setup', 'Name'], ['setup', 'meleePrayer'], ...PLAYER_GEAR.slice(0, 7).map((h) => ['gear', h])];
     const roleCols = duo ? [['setup', 'Custom Surge Timing'], ['gear', 'Shadow'], ['gear', 'Deep proc']]
       : [boakCol, patCol, ['setup', 'Custom Surge Timing'], ...PLAYER_GEAR.slice(7).map((h) => ['gear', h])];
@@ -224,7 +227,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     S()[key] = t.type === 'checkbox' ? t.checked : t.value;
     if (key === 'bps') { let now = false; try { now = bpsList().length > 0; } catch { /* shown on Start */ } if (!hadBps && now) S().rankBy = '0'; }
     persist();
-    if (key === 'bps') render();
+    if (key === 'bps' || key === 'sideSearch') render();
   });
   root.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.sec) open[d.dataset.sec] = d.open; }, true);
 
