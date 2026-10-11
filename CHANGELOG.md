@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.20.1 - 2026-10-11
+- Page: Minimize chart / Show chart toggle (`body.chart-min` hides #imp and #builder; localStorage `verzikSim.chartMin.v1`).
+
 ## v1.20.0 - 2026-10-11
 - Verz Solver `shadowSearch` (3-5; every k-slot placement of the team's shadow settings - shadow, 3:1, while LB, camp, deep proc, mage - option pass before the side search, `shadowSrc` for the mage-gear copy) and `bpSearch` / `nBP` (all scales; every nBP-subset of blowpipe holders, P1 candidates per BP x LB assignment). Twin keys per candidate. Core key includes hasBP / shadow / deepProc / shadowSrc. CLI `--shadow 1`, `--bp N`. Form: Has BP column shows "Solver" when searched; Blowpipes count select.
 - `makeContext`: no B in the attack table for a player without a blowpipe.

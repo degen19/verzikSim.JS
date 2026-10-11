@@ -39,6 +39,15 @@ async function getWorkbook() {
 }
 
 // ---- chart source
+// minimize: hides the import box / builder (the chart is still used); remembered in this browser
+const MIN_KEY = 'verzikSim.chartMin.v1';
+function setChartMin(on) {
+  document.body.classList.toggle('chart-min', on);
+  $('chartMin').textContent = on ? 'Show chart' : 'Minimize chart';
+  try { localStorage.setItem(MIN_KEY, on ? '1' : ''); } catch { /* storage off */ }
+}
+$('chartMin').addEventListener('click', () => setChartMin(!document.body.classList.contains('chart-min')));
+try { if (localStorage.getItem(MIN_KEY)) setChartMin(true); } catch { /* storage off */ }
 $('src').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   source = b.dataset.src;

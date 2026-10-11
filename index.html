@@ -24,6 +24,7 @@
     header h1 .ver { font-size: 12px; font-weight: 500; color: var(--ink2); background: var(--line); border-radius: 999px; padding: 2px 8px; }
     header p { margin: 6px 0 0; color: var(--ink2); font-size: 14px; }
     main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px; }
+    body.chart-min #imp, body.chart-min #builder { display: none !important; }   /* chart section minimized */
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 12px 0; }
     .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
     .row.between { justify-content: space-between; align-items: center; }
@@ -131,9 +132,12 @@
     <div class="card">
       <div class="row between">
         <div class="seg" id="src"><button data-src="import" class="on">Import chart (.xlsx)</button><button data-src="build">Build chart on this page</button></div>
+        <div class="row">
+        <button id="chartMin" class="ghost sm" title="Hide the chart (import / builder) to cut down scrolling - it is still used by Run, the Optimizer and the Solver">Minimize chart</button>
         <label>Scale
           <select id="team"><option value="2">2-man (duo)</option><option value="3">3-man</option><option value="4" selected>4-man</option><option value="5">5-man</option></select>
         </label>
+        </div>
       </div>
       <div id="imp" class="row" style="margin-top:12px">
         <label>Chart (.xlsx)<input id="file" type="file" accept=".xlsx"></label>

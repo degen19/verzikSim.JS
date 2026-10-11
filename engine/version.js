@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.20.0';
+export const VERSION = '1.20.1';
 export const CHANGES = [
+  { version: '1.20.1', date: '2026-10-11', items: [
+    'New "Minimize chart" button next to Scale: hides the import box / chart builder so Run report, the Optimizer and the Solver are right below (the chart is still used). "Show chart" brings it back; the choice is remembered in this browser.',
+  ] },
   { version: '1.20.0', date: '2026-10-11', items: [
     'Verz Solver, Advanced (each off by default): "Let the solver decide the shadow player" (3-5 man) - the shadow role, with its modes (3:1, Shadow while LB, Deep proc) and mage gear, is tried on every player slot; and "Let the solver decide who has a blowpipe" (every scale) - set how many blowpipes the team has and the solver tries every way of handing them out (who has one decides who can take the purple DC, and the P1 blowpipe fills). Results name the slot (e.g. Player 3): the player with the shadow gear or a blowpipe takes that slot. See setup lists the shadow player(s) and blowpipes, and Copy to set / Save as chart write them (with the mage gear) into the chart.',
     'Optimizer: new options to sweep who holds the Lightbearers, the blowpipes and (3-5 man) the shadow (with its modes and mage gear). Setups where the purple DC has no blowpipe are skipped.',
