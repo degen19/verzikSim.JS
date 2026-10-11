@@ -252,7 +252,8 @@ export const localEvaluator = {
 // ------------------------------------------------------------------ the search
 /** The settings that make a setup (everything the search chooses but the reds DCs). */
 const coreKey = (cfg) => JSON.stringify(cfg.map((c) => [c.lightbearerOn, c.PurpleDC, c.ringSwitch ?? null, c.startSpec, c.actions,
-  !!c.horn, !!c.hornP2, !!c.hornP3, !!c.Purple2DC, !!c.shadowCamp, !!c.shadow31, !!c.shadowLB, c.dawnThr ?? null, c.lastHitThr ?? null]));
+  !!c.horn, !!c.hornP2, !!c.hornP3, !!c.Purple2DC, !!c.shadowCamp, !!c.shadow31, !!c.shadowLB, c.dawnThr ?? null, c.lastHitThr ?? null, c.eastBounce || 0,
+  !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null]));
 const withHorn = (cfg, k, p2, p3) => cfg.map((c, j) => (j === k ? { ...c, horn: p2 || p3, hornP2: p2, hornP3: p3 } : c));
 const pctl = (ends, fs) => { const e = [...ends].filter((x) => x >= 0).sort((x, y) => x - y); return e.length ? fs.map((f) => e[Math.floor(e.length * f)] * 0.6) : []; };
 
@@ -488,10 +489,27 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   // 3-5 man: the P1 Dawn threshold (1-6%) - spec saved at the end of P1 for the claws in reds
   const DAWN_THR_3_5 = [1, 2, 3, 4, 5, 6];
   const duoPasses = async (s0) => {
+    if (team !== 2 && o.sideSearch) {
+      // who goes West / East for the purple (Boak sides), when asked for: every split with at least one player on each side
+      const opts = [];
+      for (let m = 1; m < (1 << team) - 1; m++) opts.push((cf) => cf.map((c, k) => {
+        const e = !!(m >> k & 1);
+        return { ...c, eastBoak: e, westBoak: !e, ...(e && !c.eastPattern ? { eastPattern: '0-T' } : {}) };
+      }));
+      const r = await optionPass(s0, opts);
+      if (r.changed) { stats.sideChanged = (stats.sideChanged || 0) + 1; s0 = await ringPass(r.s); }
+    }
     if (team !== 2) {
       const r = await optionPass(s0, DAWN_THR_3_5.map((v) => (cf) => cf.map((c) => ({ ...c, dawnThr: v }))));
       if (r.changed) stats.dawnChanged = (stats.dawnChanged || 0) + 1;
-      return r.changed ? ringPass(r.s) : r.s;
+      let s = r.s, any = r.changed;
+      // East bounce tech (0-3), when asked for (Advanced): it trades some success for speed, so it is opt-in
+      if (o.ebtSearch) {
+        const e = await optionPass(s, [0, 1, 2, 3].map((v) => (cf) => cf.map((c) => ({ ...c, eastBounce: v }))));
+        if (e.changed) stats.ebtChanged = (stats.ebtChanged || 0) + 1;
+        s = e.s; any = any || e.changed;
+      }
+      return any ? ringPass(s) : s;
     }
     let s = s0, any = false;
     const n2 = Number(base[0].nPurples || 1) === 2;

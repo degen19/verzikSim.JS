@@ -5,7 +5,7 @@ export { BLOCKS };
 
 export const TEAM_HEADERS = ['Number of Purples', 'Death tick', 'Deep proc HP %', 'P3 halberd HP %', 'Dawn threshold %', 'Second purple %',
   'Purple HP %', 'Tornado hit %', 'P2 Scythe last hit threshold', 'Crab HP threshold', 'Brew sips', 'SCB sips', 'Restore sips', 'Sharks',
-  'Perfect 1st set', 'Ducktank', '4 Claw Priority'];
+  'Perfect 1st set', 'Ducktank', '4 Claw Priority', 'East bounce tech'];
 export const COMPUTED = ['End spec', 'Purple crab', 'Room Time', 'LB swings', 'West/East DC +', 'Spec used', 'Time of regen'];
 const BOOLS = new Set(['lightbearerOn', '1st Purple DC', '2nd Purple DC', 'PurpleDC', 'WestDC', 'EastDC', 'bouncedZCB', 'Shadow', 'Shadow camp',
   '3:1', 'Shadow while LB', 'Deep proc', 'Horn', 'P2 horn', 'P3 horn', 'East Boak', 'West Boak', 'Pneck on P1', 'Redemption flick',
@@ -14,6 +14,7 @@ const SELECTS = {
   meleePrayer: ['Piety', 'Zeal'], helm: ['Torva full helm', 'Oathplate helm'], body: ['Torva platebody', 'Oathplate chest'],
   legs: ['Torva platelegs', 'Oathplate legs'], amulet: ['Rancour', 'Blood fury', 'Both'], redCrab: ['West', 'East', 'None'],
   has3Tick: ['No', 'Breaker', 'Ayak', 'Swift blade'], 'Number of Purples': [1, 2],
+  'East bounce tech': [0, 1, 2, 3],
   'East Pattern': ['A', '0-T'],                    // B, C and FLEX come later
   // mage helm Take off: no helm at all; None: keeps the melee helm on
   'mage helm': ['Ancestral', 'Virtus', 'Take off', 'None'], 'mage body': ['Ancestral', 'Virtus'], 'mage legs': ['Ancestral', 'Virtus'],

@@ -39,6 +39,24 @@ export function blowpipe_chance(p) {
   return [hit_chance(eff * (atk_b + 64), CRAB_DEF), atk_b];
 }
 
+// East bounce tech (3-5 man, P2 before reds): the East Boak players attack on Verzik's attack tick instead of waiting a
+// tick, chancing her bounce - 50% that one of them (random) is bounced, a sure bounce if every player is chancing. A bounced
+// player's next attack is a ZCB (dragon ruby bolts (e)) in their melee gear with Blessed Dizana's quiver, Necklace of
+// rupture and Rigour, then scythes again on the same rhythm (Bounced ZCB unticked: +4 ticks instead). Chanced on the
+// first N Verzik attacks they line up with (N = the chart's 'East bounce tech', 0-3), stopping after 2 bounces.
+export const EAST_BOUNCE_MAX = 2;
+export const QUIVER = { atk: 18 + 10, rstr: 3 + 1 };          // blessed quiver + its ammo bonus
+export const RUPTURE = { atk: 20, rstr: 8 };
+export const ZCB_RUBY = { atk: 110, rstr: 122, ruby: 0.066 }; // Zaryte crossbow, dragon ruby bolts (e), Kandarin hard diary
+/** Bounced ZCB in P2: [hit chance, max hit]. Melee helm/body/legs, Ferocious gloves, treads, quiver, rupture, ring; Rigour, rapid. */
+export function zcb_bounce(p) {
+  const gear = [ARMOUR[p.helm], ARMOUR[p.body], ARMOUR[p.legs], FIXED['Ferocious gloves'], FIXED['Avernic treads'], RINGS[p.ring]];
+  const atk = ZCB_RUBY.atk + QUIVER.atk + RUPTURE.atk + sum(gear.map((g) => g.atk[4]));
+  const rs = ZCB_RUBY.rstr + QUIVER.rstr + RUPTURE.rstr + sum(gear.map((g) => dget(g, 'rstr', 0)));
+  const ea = Math.floor(p.rng * 1.20) + 8, es = Math.floor(p.rng * 1.23) + 8;   // Rigour
+  return [hit_chance(ea * (atk + 64), P2_DEF[4]), Math.floor(0.5 + es * (rs + 64) / 640)];
+}
+
 export const SHADOW_DELAY_NEAR = 4;          // distance 2-4, +1 tick
 export const SHADOW_DELAY_DEEP = 6;          // max distance (10), +1 tick
 export const _shadow_cache = {};
@@ -142,6 +160,7 @@ export function run_p2(p1, team, rng, log = null) {
   const crab_stats = { spawned: 0, bp_shots: 0, healed: 0, dmg: 0, spawn_tick: null, pop_tick: null, spawns: [] };
   let purple_dc = players.find((p) => truthy(p.purple) && !p.dead) ?? null;
   let reds_tick = null;
+  const ebt = { n: Math.max(0, ...players.map((p) => p.east_bounce || 0)), chances: 0, bounces: 0, zcb: 0, ruby: 0, dmg: 0 };   // East bounce tech
   let hp_cross = null, hp_tick = null;
   let proc_tick = null, shield_tick = null;
   const shadow_stats = { casts: 0, dmg: 0, late_dmg: 0, deep_casts: 0 };
@@ -252,7 +271,8 @@ export function run_p2(p1, team, rng, log = null) {
     const landing = sorted(vq.filter((h) => h[0] === t), (h) => [h[1], h[2]]);
     vq = vq.filter((h) => h[0] !== t);
     for (const h of landing) {
-      const [, , , label, dmg, p] = h;
+      let [, , , label, dmg, p] = h;
+      if (label === 'ZCB ruby proc') { dmg = Math.min(110, floordiv(hp * 22, 100)); ebt.dmg += dmg; }   // 22% of her HP when it lands
       hp -= dmg;
       if (p != null) {
         p.p2_dmg += dmg;
@@ -341,6 +361,20 @@ export function run_p2(p1, team, rng, log = null) {
         L.on && L(`t${rjust(t, 4)} VERZIK attack #${n_att}: regular`);
       }
     }
+    // East bounce tech: who attacks on this Verzik attack tick, and who (if anyone) she bounces
+    if (verz_attack && team !== 2 && ebt.n > 0 && ebt.chances < ebt.n && ebt.bounces < EAST_BOUNCE_MAX) {
+      const ch = pid.filter((p) => !p.dead && p.boak === 'East' && p.mode === 'melee' && t >= p.next_attack && !p.boak_block.has(t)
+        && !p.ebt_zcb && !shadow_choice(p, hp, mx_hp)[0]);
+      if (ch.length) {
+        ebt.chances += 1;
+        for (const p of ch) p.ebt_chance = true;
+        const alive = players.filter((p) => !p.dead).length;
+        const b = ch.length === alive || rng.random() < 0.5 ? rng.choice(ch) : null;
+        if (b) { b.ebt_bounced = true; ebt.bounces += 1; }
+        L.on && L(`t${rjust(t, 4)} East bounce tech #${ebt.chances}: ${ch.map((p) => p.name).join(', ')} attack on her attack tick -> `
+          + (b ? `BOUNCES ${b.name}` : 'no bounce'));
+      }
+    }
     // ---- players
     for (const p of pid) {
       if (p.dead) {
@@ -401,7 +435,25 @@ export function run_p2(p1, team, rng, log = null) {
       }
       if (t >= p.next_attack) {
         const [sh, sh_delay, sh_why] = shadow_choice(p, hp, mx_hp);
-        if (p.mode === 'melee' && sh) {
+        if (p.ebt_zcb && p.mode === 'melee') {
+          // East bounce tech: bounced on the last swing - ZCB (ruby bolts) now, then scythes again
+          p.ebt_zcb = false;
+          const [ch, mx] = zcb_bounce(p);
+          ebt.zcb += 1;
+          if (rng.random() < ZCB_RUBY.ruby && p.hp > 1) {
+            ebt.ruby += 1;
+            p.hp -= floordiv(p.hp, 10);
+            supplies.check_death(p, 'P2', L, t);
+            vq.push([t + 3, rank.get(p), 0, 'ZCB ruby proc', null, p]);
+            L.on && L(`t${rjust(t, 4)} ${p.name}: ZCB (bounced) -> RUBY PROC (22% of current HP, cap 110)`);
+          } else {
+            const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
+            vq.push([t + 3, rank.get(p), 0, 'ZCB (bounced)', d, p]);
+            ebt.dmg += d;
+            L.on && L(`t${rjust(t, 4)} ${p.name}: ZCB (bounced, acc ${fx(ch * 100, 1)}%, max ${mx}) -> ${d}`);
+          }
+          p.next_attack = t + 5;
+        } else if (p.mode === 'melee' && sh) {
           const [ch, mx] = shadow_numbers(p);
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + sh_delay, rank.get(p), 0, `Shadow (${sh_why})`, d, p]);
@@ -415,7 +467,7 @@ export function run_p2(p1, team, rng, log = null) {
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
-        } else if (verz_attack && p.mode === 'melee' && truthy(ga(p, 'shadow31', false))) {
+        } else if (verz_attack && p.mode === 'melee' && truthy(ga(p, 'shadow31', false)) && !p.ebt_chance) {
           // 3:1 - the attack that would collide with Verzik becomes a shadow (no lost tick)
           const [ch, mx] = shadow_numbers(p);
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
@@ -426,7 +478,7 @@ export function run_p2(p1, team, rng, log = null) {
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
-        } else if (verz_attack && p.mode !== 'blowpipe') {
+        } else if (verz_attack && p.mode !== 'blowpipe' && !p.ebt_chance) {
           p.next_attack = t + 1;
           L.on && L(`t${rjust(t, 4)} ${p.name}: attack lines up with Verzik's attack -> +1t`);
         } else if (p.mode === 'blowpipe') {
@@ -459,6 +511,11 @@ export function run_p2(p1, team, rng, log = null) {
             vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
           });
           p.next_attack = t + 5;
+          if (p.ebt_bounced) {                           // East bounce tech: bounced on this swing
+            if (p.bzcb) p.ebt_zcb = true;
+            else p.next_attack += 4;
+            L.on && L(`t${rjust(t, 4)} ${p.name}: bounced - ${p.bzcb ? `ZCB next (t${p.next_attack})` : `+4t, back on t${p.next_attack}`}`);
+          }
           L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe (acc ${fx(ch * 100, 1)}%, max ${mx}, ring ${p.ring}) -> [${splats.join(', ')}]`);
           if (p.ring === 'Lightbearer') {
             p.lb_p2 = ga(p, 'lb_p2', 0) + 1;
@@ -472,6 +529,7 @@ export function run_p2(p1, team, rng, log = null) {
           }
         }
       }
+      p.ebt_chance = false; p.ebt_bounced = false;
       if (p.thrall_next != null && t === p.thrall_next) {
         vq.push([t + 1, rank.get(p), 9, 'Thrall', rng.randint(0, 3), p]);
         p.thrall_next = t + 4;
@@ -491,6 +549,6 @@ export function run_p2(p1, team, rng, log = null) {
   return {
     pid, K, proc_tick, shadow: shadow_stats, reds_tick, hp, hp_cross, hp_tick, max_hp: mx_hp, crab: crab_stats, flags, players,
     spec_reds: players.map((p) => p.spec), rings: players.map((p) => p.ring),
-    fallback: players.map((p) => p.fallback_on), purple: crab, regular, purple_dc,
+    fallback: players.map((p) => p.fallback_on), purple: crab, regular, purple_dc, east_bounce: ebt,
   };
 }

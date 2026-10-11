@@ -105,6 +105,22 @@ export function catalog(cfgs, team) {
   opts.push({ id: 'dc_e', group: 'Death charges', label: 'East crab DC (1st reds set)', kind: 'choice', choices: names,
     current: who((c) => c.EastDC), apply: (cf, v) => cf.forEach((c, i) => { c.EastDC = names[i] === v; }) });
 
+  // 3-5 man: who goes West / East for the purple (Boak sides; at least one player on each side), East bounce tech
+  if (team > 2) {
+    const side = (c) => (c.eastBoak && !c.westBoak ? 'E' : c.westBoak && !c.eastBoak ? 'W' : '?');
+    const sides = [];
+    for (let m = 1; m < (1 << team) - 1; m++) sides.push(cfgs.map((_, k) => (m >> k & 1 ? 'E' : 'W')).join(''));
+    opts.push({ id: 'boak', group: 'Team', label: `Boak sides (${names.join(', ')})`, kind: 'choice', choices: sides,
+      current: cfgs.map(side).join(''),
+      apply: (cf, v) => cf.forEach((c, i) => {
+        const e = v[i] === 'E';
+        if (e && !c.eastBoak) c.eastPattern = c.eastPattern || '0-T';     // moved East: 0-T unless they have a pattern
+        c.eastBoak = e; c.westBoak = !e;
+      }) });
+    opts.push({ id: 'ebt', group: 'Team', label: 'East bounce tech', kind: 'choice', choices: ['0', '1', '2', '3'],
+      current: String(cfgs[0].eastBounce || 0), apply: (cf, v) => cf.forEach((c) => { c.eastBounce = Number(v); }) });
+  }
+
   // deep proc (shadow player)
   const sh = cfgs.findIndex((c) => c.shadow);
   if (sh >= 0) {

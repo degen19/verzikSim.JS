@@ -6,6 +6,7 @@
 // --bps: full-room breakpoints (m:ss, rounded down to a tick; a raid counts if it is equal or faster). The first is
 //        the target the ranking uses, success is the tie-breaker. Blank = 10th/25th/50th percentile of your chart.
 // --minsuccess: minimum raid success % (e.g. 85) - setups below it are left out.
+// --ebt 1: also try East bounce tech 0-3 (3-5 man). --sides 1: also try every West/East Boak split (at least one each side).
 // --minbelow 5: minimum success = your chart's success minus 5 points (instead of --minsuccess).
 // --boak: East/West Boak per player (E/W) when the chart has them unset (default: first 2 West, the rest East 0-T).
 // --horns: Soulflame horns in the raid (default 2 in 5s, 1 otherwise; 0 = none).
@@ -19,7 +20,7 @@ import { checkRow } from '../engine/chartform.js';
 
 const a = process.argv.slice(2);
 const o = { team: 5, set: 'A', rings: null, horns: null, bps: '', boak: '', p1top: 20, p1beam: 150, n1: 200, keep1: 10, n2: 250,
-  keepP2: 20, n3: 200, keep2: 24, final: 3000, editrounds: 2, editwidth: 3, diverse: 0, succtol: 10, top: 10, out: '', minsuccess: 0, nomine: 0, minbelow: null };
+  keepP2: 20, n3: 200, keep2: 24, final: 3000, editrounds: 2, editwidth: 3, diverse: 0, succtol: 10, ebt: 0, sides: 0, top: 10, out: '', minsuccess: 0, nomine: 0, minbelow: null };
 o.chart = a[0];
 for (let i = 1; i < a.length; i++) { if (a[i] === '--nomine') { o.nomine = 1; continue; } const k = a[i].replace(/^--/, ''); if (k in o) o[k] = isNaN(Number(a[i + 1])) ? a[++i] : Number(a[++i]); }
 const fmt = (t) => { const s = t * 0.6; return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
@@ -63,7 +64,7 @@ console.log(`P2-end breakpoints for the early stages: ${bpsP2.map(fmtS).join(', 
 const t1 = Date.now();
 const res = await solveRoom(base, o.team, { rings, horns, bps: bpsP2, bpsFull, p1Top: o.p1top, p1Beam: o.p1beam, n1: o.n1, keep1: o.keep1,
   n2: o.n2, keepP2: o.keepP2, n3: o.n3, keep2: o.keep2, nFinal: o.final, top: o.top, minSuccess: (o.minsuccess || 0) / 100, log: (s) => console.log(s),
-  p1Diverse: !!o.diverse, succTol: o.succtol / 100, editRounds: o.editrounds, editWidth: o.editwidth, seeds: o.nomine ? [] : [{ cfg: mineCfgs, label: `Set ${o.set}` }] });
+  p1Diverse: !!o.diverse, ebtSearch: !!o.ebt, sideSearch: !!o.sides, succTol: o.succtol / 100, editRounds: o.editrounds, editWidth: o.editwidth, seeds: o.nomine ? [] : [{ cfg: mineCfgs, label: `Set ${o.set}` }] });
 const st = res.stats;
 if (!res.top.length) console.log(`No setup found${o.minsuccess ? ` with ${o.minsuccess}%+ success` : ''} - nothing to suggest`);
 if (o.minsuccess) console.log(`Minimum success ${o.minsuccess}%: ${st.succCut} setups cut at the screen, ${st.dcSucc} at reds DCs, ${st.finalSuccCut} on the final`);
@@ -96,6 +97,7 @@ res.top.forEach((x, i) => {
     + ` | purple DC ${who(x.cfg, 'PurpleDC')} | reds DCs West ${who(x.cfg, 'WestDC')}, East ${who(x.cfg, 'EastDC')} | horns ${hornText(x.cfg)}`
     + ` | ring swap ${x.cfg.map((c, k) => (c.lightbearerOn ? `${names[k]} ${c.ringSwitch ?? 'default'}` : null)).filter(Boolean).join(', ')}`
     + (o.team === 2 ? ` | 2nd purple ${who(x.cfg, 'Purple2DC')} | shadow ${(() => { const m = x.cfg.find((c) => c.shadow); return m ? [m.shadowCamp && 'camp', m.shadowLB && 'while LB', m.shadow31 && '3:1'].filter(Boolean).join(' + ') || 'plain' : '-'; })()} | P2 last hit ${x.cfg[0].lastHitThr ?? '-'}%` : '') + ` | Dawn thr ${x.cfg[0].dawnThr ? `${x.cfg[0].dawnThr}%` : 'never'}`
+    + (o.team === 2 ? '' : ` | Boak ${x.cfg.map((c) => (c.eastBoak ? `E(${c.eastPattern || 'A'})` : 'W')).join(' ')} | East bounce tech ${x.cfg[0].eastBounce || 0}`)
     + ` | start spec ${x.cfg.map((c) => c.startSpec).join('/')} | room avg ${fmt(x.c.sum / x.c.k)}`);
   out(head1);
   const end = Math.min(66, x.p1.median + 2);

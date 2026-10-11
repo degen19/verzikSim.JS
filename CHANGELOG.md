@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.19.0 - 2026-10-10
+- **East bounce tech** (`eastBounce`, team field 'East bounce tech' 0-3, 3-5 man; template column CW (4/5-man) / CZ (3-man), Sets A/B (C copies B); list validation 0-3; Mechanics row). P2 (p2.js): on a Verzik attack tick, East Boak players in melee mode, off cooldown, not Boak-blocked and not shadowing (camp / while LB / deep proc) attack instead of the +1 tick (3:1 skipped while chancing); 50% one of them is bounced (certain if all alive players chance); bounced: next attack `zcb_bounce` (melee helm/body/legs, Ferocious gloves, treads, ring + quiver +28/+4, rupture +20/+8, ZCB +110 / ruby dragon bolts +122, Rigour, rapid; lands t+3, 6.6% ruby proc 22% of current HP max 110 at landing, costs 10% HP), next attack t+5; `bouncedZCB` false: +4 ticks. First N chancing ticks, max 2 bounces. `r2.east_bounce` stats. Default 0: same-seed results identical (3/4/5-man test charts).
+- Optimizer catalog (3-5): `boak` (all W/E splits, at least one each side; moved East -> 0-T if no pattern) and `ebt` (0-3).
+- Verz Solver: `ebtSearch` / `sideSearch` (Advanced toggles, CLI `--ebt 1` / `--sides 1`): option passes over eastBounce 0-3 and every W/E split (ring swaps re-run on change); core key includes sides / pattern / eastBounce; chart values write East/West Boak, East Pattern, East bounce tech. Solver form: East Pattern defaults to 0-T for every player.
+
 ## v1.18.2 - 2026-10-09
 - Builder / Solver: redraws (Shadow and shadow-mode boxes) keep each `.scroll` table's horizontal scroll.
 

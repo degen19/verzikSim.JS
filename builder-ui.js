@@ -26,6 +26,7 @@ const HELP = {
   'Deep proc': 'Shadow from max distance below the Deep proc HP %. Needs Shadow.', redCrab: 'Red crab hit once during the reds shield',
   offPrayer: "Verzik P3 autos taken off prayer (0-9)",
   'Has BP': 'Has a blowpipe (default). Unticked: no blowpipe in P1 or for tick fills, and they can\'t pop the purple crab (the purple DC must have one).',
+  'East bounce tech': "East bounce tech (3-5 man): on the first N Verzik attacks in P2 before reds (0-3), the East Boak players attack on her attack tick instead of waiting a tick, chancing her bounce (50% one of them; certain if everyone is East). A bounced player's next attack is a ZCB with ruby bolts (melee gear + Blessed quiver, Necklace of rupture, Rigour; Bounced ZCB unticked: +4 ticks), then scythes again. Stops after 2 bounces. 0 = off.",
   '4 Claw Priority': "If Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status prioritises 100% spec for reds (both claws by r36, taking over the purple DC); the others prioritise 50%. Off: rings follow the chart.", has3Tick: 'Weapon used by H in the P1 chart',
 };
 

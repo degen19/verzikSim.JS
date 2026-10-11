@@ -39,6 +39,7 @@ const LABEL = {
 const HELP = {
   'Custom Surge Timing': 'Blank: the solver places this player\'s surge in P1. Filled: their surge is on cooldown until this room time (m:ss) and is taken then.',
   'P2 Scythe last hit threshold': 'Under this % of P2 HP an r40 halberd becomes a scythe',
+  'East bounce tech': "East bounce tech (3-5 man): on the first N Verzik attacks in P2 before reds (0-3), the East Boak players attack on her attack tick instead of waiting a tick, chancing her bounce (50% one of them; certain if everyone is East). A bounced player's next attack is a ZCB with ruby bolts (melee gear + Blessed quiver, Necklace of rupture, Rigour; Bounced ZCB unticked: +4 ticks), then scythes again. Stops after 2 bounces. 0 = off.",
   'Dawn threshold %': 'P1 HP % at or below which a Dawn spec becomes a scythe (blank = never)',
   'P3 halberd HP %': 'P3 HP % at or below which players halberd', 'Deep proc HP %': 'Shadow from max distance below this P2 HP % (Deep proc players)',
   hornPriority: 'Who gets a horn buff first (1 = first). All blank: a random order each run, no two players sharing a number.',
@@ -74,7 +75,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       state[t] = { v: dv, s: { rings: t, horns: t === 5 ? 2 : 1, sb: '', bps: '', rankBy: '0', minSucc: '', depth: 'standard',
         boak: Array.from({ length: t }, (_, k) => (k < 2 ? 'West' : 'East')) } };
       // default East pattern for East Boak players: 0-T
-      for (let k = 2; k < t; k++) if (tpl[t].desc.fields.has(`gear|East Pattern|${k}`)) state[t].v[`gear|East Pattern|${k}`] = '0-T';
+      for (let k = 0; k < t; k++) if (tpl[t].desc.fields.has(`gear|East Pattern|${k}`)) state[t].v[`gear|East Pattern|${k}`] = '0-T';
     }
     // 3-tick weapon: Eye of ayak by default (once for settings saved before this default, where it was left as the chart's default)
     if (!state[t].s.ayak) {
@@ -175,7 +176,11 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const advBody = `<h4 style="margin-top:4px">Team supplies</h4>
       <div class="row wrap teamset">${SUPPLIES.map(teamField).join('')}</div>
       <h4>Players</h4>${playerTable([...ADV_GEAR.map((h) => ['gear', h]), ['gear', 'redCrab']].filter(([, h]) => h !== 'redCrab' || team === 2))}
-      ${advTeam.length ? `<h4>Team</h4><div class="row wrap teamset">${advTeam.map(teamField).join('')}</div>` : ''}`;
+      ${advTeam.length ? `<h4>Team</h4><div class="row wrap teamset">${advTeam.map(teamField).join('')}</div>` : ''}
+      ${duo ? '' : `<label class="row" style="margin-top:8px;gap:6px" title="The solver also tries East bounce tech 0, 1, 2 and 3 for each setup (the East bounce tech value above is then only its starting point). It usually makes fast times more likely at the cost of some raid success.">
+        <input type="checkbox" data-s="ebtSearch" ${s.ebtSearch ? 'checked' : ''}> Let the solver try East bounce tech (0-3)</label>
+      <label class="row" style="margin-top:6px;gap:6px" title="The solver also tries every West / East split for the purple (at least one player on each side) - e.g. to find the best side for a shadow player. The Boak sides set under Players are then only its starting point. Players it moves East use their East pattern (0-T if none).">
+        <input type="checkbox" data-s="sideSearch" ${s.sideSearch ? 'checked' : ''}> Let the solver pick Boak sides (West / East)</label>`}`;
     root.innerHTML = `<h3 style="margin-top:0">Verz Solver <span class="muted small">(${team}-man)</span></h3>
       <p class="muted small">Set the team's gear and settings. The solver writes the P1 chart and picks start specs, who wears Lightbearer, ring swap %,
         the purple and reds DCs, ${duo ? 'the shadow mode and the Dawn / P2 last-hit thresholds' : 'the horns and the Dawn threshold (1-6%)'}. Settings are saved in this browser.</p>
@@ -280,6 +285,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       put('gear', 'P3 horn', k, !!c.hornP3);
     });
     put('team', 'Dawn threshold %', null, x.cfg[0].dawnThr ?? '');
+    if (team !== 2) put('team', 'East bounce tech', null, x.cfg[0].eastBounce || 0);
+    if (team !== 2) x.cfg.forEach((c, k) => { put('gear', 'East Boak', k, !!c.eastBoak); put('gear', 'West Boak', k, !!c.westBoak); if (c.eastBoak && c.eastPattern) put('gear', 'East Pattern', k, c.eastPattern); });
     if (team === 2) put('team', 'P2 Scythe last hit threshold', null, x.cfg[0].lastHitThr ?? '');
     for (const f of tpl[team].desc.fields.values()) {
       if (f.table !== 'chart') continue;
@@ -341,7 +348,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     try {
       const res = await solveRoom(cfgs, team, {
         rings: Number(s.rings), horns: team === 2 ? 0 : Number(s.horns), bpsFull: bps, rankBy: s.rankBy, minSuccess: minSucc,
-        sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show,
+        sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show, ebtSearch: team !== 2 && !!s.ebtSearch, sideSearch: team !== 2 && !!s.sideSearch,
         seeds: seeds.map(({ cfg, label }) => ({ cfg, label })),
       }, pool);
       const mine = Object.fromEntries(seeds.map((sd) => [sd.label, { values: sd.values, diff: formDiff(sd.values, lastValues) }]));
@@ -414,6 +421,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         ['P2 last-hit threshold', `${cf[0].lastHitThr ?? '-'}%`],
       ] : [['Horns', horns.join(', ') || 'none']]),
       ['Dawn threshold', cf[0].dawnThr ? `${cf[0].dawnThr}%` : 'never'],
+      ...(results.team === 2 ? [] : [['Boak sides', `West: ${cf.map((c, k) => (c.westBoak ? nm[k] : null)).filter(Boolean).join(', ') || '-'} | East: ${cf.map((c, k) => (c.eastBoak ? `${nm[k]} (${c.eastPattern || 'A'})` : null)).filter(Boolean).join(', ') || '-'}`]]),
+      ...(results.team === 2 ? [] : [['East bounce tech', cf[0].eastBounce ? `${cf[0].eastBounce} (East: ${cf.map((c, k) => (c.eastBoak ? nm[k] : null)).filter(Boolean).join(', ') || 'nobody'})` : 'off']]),
       ['Start spec', cf.map((c, k) => `${nm[k]} ${c.startSpec}%`).join(', ')],
       ['Average room time', x.c.k ? fmtT(x.c.sum / x.c.k) : '-'],
     ];
