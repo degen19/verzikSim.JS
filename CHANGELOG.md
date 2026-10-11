@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.20.4 - 2026-10-11
+- Breakpoint basis: Optimizer `score` / `finalScore(…, ofKills)` + #o-basis (remembered); Solver `ofKills` (score denominator = kills), form select `bpBasis`, columns "(of kills)", warning without a minimum success; CLI `--ofkills 1`.
+
 ## v1.20.3 - 2026-10-11
 - Report: best value per row bold (splits per column within each split: lowest; Odds: higher better except deaths / depths / ticks / fastest run (lower); fastest run frequency not compared).
 

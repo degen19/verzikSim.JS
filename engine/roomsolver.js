@@ -298,8 +298,9 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
    *  breakpoint doesn't rank on luck), success as the tie-breaker - or success first when ranking by success. */
   const score = (c, early = false) => {
     if (bySuccess || !c.under.length) return c.k / c.n + (c.under.length ? 1e-3 * c.under[0] / c.n : -1e-6 * c.sum / Math.max(1, c.k));
-    let s = c.under[0] / c.n;
-    if (early) c.under.forEach((x, j) => { if (j > 0) s += 0.1 * x / c.n; });
+    const d = o.ofKills ? Math.max(1, c.k) : c.n;                 // breakpoints of all attempts, or of the successful runs
+    let s = c.under[0] / d;
+    if (early) c.under.forEach((x, j) => { if (j > 0) s += 0.1 * x / d; });
     return s + 0.001 * c.k / c.n;
   };
 

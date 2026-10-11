@@ -157,6 +157,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       <div class="row wrap" style="margin-top:10px">
         <label title="Target room times (m:ss), rounded down to a tick. A raid counts if it is equal or faster.">Breakpoints<input data-s="bps" value="${esc(s.bps)}" placeholder="m:ss, comma-separated" style="width:210px"></label>
         <label>Rank by${sel('rankBy', ro, s.rankBy)}</label>
+        <label title="Breakpoint rates: share of all attempts (failed raids count, so success matters too) or share of the successful runs only (how fast the kills are)">Breakpoints count${sel('bpBasis', [['all', 'All attempts'], ['kills', 'Successful runs only']], s.bpBasis || 'all')}</label>
         <label title="Optional: setups below this raid success % are left out.">Minimum success %<input data-s="minSucc" type="number" min="0" max="100" step="any" value="${esc(s.minSucc)}" placeholder="optional"></label>
         <label>Search depth${sel('depth', Object.entries(ROOM_DEPTHS).map(([k, x]) => [k, x.label]), s.depth)}</label>
       </div>
@@ -368,12 +369,12 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     try {
       const res = await solveRoom(cfgs, team, {
         rings: Number(s.rings), horns: team === 2 ? 0 : Number(s.horns), bpsFull: bps, rankBy: s.rankBy, minSuccess: minSucc,
-        sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show, ebtSearch: team !== 2 && !!s.ebtSearch, sideSearch: team !== 2 && !!s.sideSearch, shadowSearch: team !== 2 && !!s.shadowSearch,
+        sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show, ofKills: s.bpBasis === 'kills', ebtSearch: team !== 2 && !!s.ebtSearch, sideSearch: team !== 2 && !!s.sideSearch, shadowSearch: team !== 2 && !!s.shadowSearch,
         bpSearch: !!s.bpSearch, nBP: s.bpSearch ? Number(s.nBP ?? bpCount()) : undefined,
         seeds: seeds.map(({ cfg, label }) => ({ cfg, label })),
       }, pool);
       const mine = Object.fromEntries(seeds.map((sd) => [sd.label, { values: sd.values, diff: formDiff(sd.values, lastValues) }]));
-      results = { ...res, bps, team, names: names(), minSucc: s.minSucc, secs: (performance.now() - t0) / 1000, values: lastValues, mine, skipped };
+      results = { ...res, bps, team, names: names(), minSucc: s.minSucc, ofKills: s.bpBasis === 'kills', secs: (performance.now() - t0) / 1000, values: lastValues, mine, skipped };
       sortCol = null; sortDir = 1; shownSetups.clear();
       show({ stage: 'Done', raids: res.stats.raids });
       bar.style.width = '100%';
@@ -474,7 +475,9 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       out.innerHTML = `<p class="err">No setup found${minSucc ? ` with ${esc(minSucc)}%+ success` : ''} - nothing to suggest.</p>`;
       return;
     }
-    const cols = [...bps.map((_, j) => ({ key: `b${j}`, label: `≤ ${fmtS(bps[j])}`, val: (x) => x.c.under[j] / x.c.n })), { key: 'succ', label: 'Success', val: (x) => x.c.k / x.c.n },
+    const ofK = !!results.ofKills;
+    const cols = [...bps.map((_, j) => ({ key: `b${j}`, label: `≤ ${fmtS(bps[j])}${ofK ? ' (of kills)' : ''}`, val: (x) => x.c.under[j] / (ofK ? Math.max(1, x.c.k) : x.c.n),
+      help: ofK ? 'Share of the successful runs' : 'Share of all attempts' })), { key: 'succ', label: 'Success', val: (x) => x.c.k / x.c.n },
       ...(results.team === 2 ? [{ key: 'wipe', label: 'Wipe', val: (x) => -(x.c.wipe || 0) / x.c.n, show: (x) => (x.c.wipe || 0) / x.c.n,
         help: 'Raids where both players die in P1 or P3 (counted as failed)' }] : [])];
     let rows = top.map((x, i) => ({ x, i }));
@@ -483,6 +486,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const arrow = (k) => (sortCol === k ? (sortDir === 1 ? ' ▼' : ' ▲') : '');
     const diffs = Object.entries(results.mine || {}).filter(([, m]) => m.diff.length);
     out.innerHTML = `${(results.skipped || []).map((t) => `<p class="warn">Your chart wasn't included - ${esc(t)}</p>`).join('')}${diffs.map(([l, m]) => `<p class="warn">Your ${esc(l)} has different settings from the form (${esc(m.diff.slice(0, 6).join(', '))}${m.diff.length > 6 ? ', ...' : ''}) - its rows use your chart's own settings, so they aren't a like-for-like comparison.</p>`).join('')}${fallback ? `<p class="warn">No setups met ${esc(minSucc)}% success rate - these are the next best options with the highest rates of success.</p>` : ''}
+      ${results.ofKills && !Number(minSucc) ? '<p class="warn">Breakpoints count the successful runs only, so a setup that rarely succeeds can still rank high - set a Minimum success % to rule those out.</p>' : ''}
       <p class="muted small">Top ${n1} of the setups found${top.length > n1 ? ', plus your chart as charted' : ''}, ${(top[0].c.n).toLocaleString()} raids each (${stats.raids.toLocaleString()} raids in ${Math.round(secs)}s). Click a column to sort it best to worst, again to reverse; # goes back to the solver's order.</p>
       <div class="scroll"><table class="bt res" style="min-width:min(760px,100%)"><tr><th data-sort="#" style="cursor:pointer" title="The solver's order">#${sortCol ? '' : ' ▼'}</th>${cols.map((c) => `<th data-sort="${c.key}" style="cursor:pointer" title="${esc(c.help ? `${c.help}. ` : '')}Sort best to worst">${esc(c.label)}${arrow(c.key)}</th>`).join('')}<th></th></tr>
       ${rows.map(({ x, i }) => `<tr><td style="white-space:nowrap">${x.asCharted ? `Your ${esc(x.seedLabel)}` : `${num.get(i)}${x.seedLabel ? ` <span class="muted small">(${x.edited ? 'edited ' : ''}from your ${esc(x.seedLabel)})</span>` : ''}`}</td>${cols.map((c) => `<td>${pct(c.show ? c.show(x) : c.val(x))}</td>`).join('')}<td><button class="ghost sm" data-setup="${i}">${shownSetups.has(i) ? 'Hide setup' : 'See setup'}</button></td></tr>

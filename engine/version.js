@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.20.3';
+export const VERSION = '1.20.4';
 export const CHANGES = [
+  { version: '1.20.4', date: '2026-10-11', items: [
+    'Optimizer and Verz Solver: new "Breakpoints count" choice next to Rank by - All attempts (default, failed raids count) or Successful runs only (how fast the kills are). It changes both the ranking and the breakpoint columns, which then read "(of kills)". Success always counts all attempts. Ranking on successful runs only can put a setup that rarely succeeds near the top, so the Solver reminds you to set a Minimum success % with it.',
+  ] },
   { version: '1.20.3', date: '2026-10-11', items: [
     'Report tables (with two or more sets): the best value in each row is bold - the fastest split times, the deepest reds procs, the earliest P3 20% tick and the highest success / breakpoint rates. Ties are all bold; nothing is bold when every set is equal.',
   ] },

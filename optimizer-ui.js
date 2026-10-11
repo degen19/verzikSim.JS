@@ -28,10 +28,11 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       <label title="Target room times for this scale, rounded down to a tick - a raid counts if it finishes at that time or faster. Leave blank to rank by success rate.">Breakpoints (m:ss)<input id="o-bps" placeholder="m:ss, comma-separated" style="width:200px"></label>
       <label title="How far each raid is simulated. Breakpoints and success then refer to the end of that phase.">Phases<select id="o-scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option><option value="p1">P1 only</option></select></label>
       <label>Rank by<select id="o-rank"></select></label>
+      <label title="Breakpoint rates: share of all attempts (failed raids count, so success matters too) or share of the successful runs only (how fast the kills are)">Breakpoints count<select id="o-basis"><option value="all">All attempts</option><option value="kills">Successful runs only</option></select></label>
       <label>Search depth<select id="o-depth">${Object.entries(DEPTHS).map(([k, d]) => `<option value="${k}" ${k === 'standard' ? 'selected' : ''}>${d.label}</option>`).join('')}</select></label>
     </div>
     <p class="muted small">Tick the inputs to vary and list the values to try. Every combination is tested on the same raids (same random rolls),
-      weak setups are dropped early, and the finalists are re-run on fresh raids so the winner isn't just a lucky one. Rates count all attempts, including failed ones.</p>
+      weak setups are dropped early, and the finalists are re-run on fresh raids so the winner isn't just a lucky one. Breakpoint rates count all attempts (failed raids included) or only the successful runs - your choice above; success always counts all attempts.</p>
     <div id="o-opts"></div>
     <div class="row between" style="margin-top:12px">
       <div id="o-est" class="muted"></div>
@@ -50,6 +51,9 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
   const rateId = () => `${team}:${scope()}:${CORES}`;
 
   const savedBps = (() => { try { return JSON.parse(localStorage.getItem(BPS_KEY)) || {}; } catch { return {}; } })();
+  const BASIS_KEY = 'verzikSim.optBasis.v1';
+  try { $('o-basis').value = localStorage.getItem(BASIS_KEY) || 'all'; } catch { /* storage off */ }
+  $('o-basis').addEventListener('change', () => { try { localStorage.setItem(BASIS_KEY, $('o-basis').value); } catch { /* ignore */ } });
   const keepBps = () => { savedBps[team] = $('o-bps').value; try { localStorage.setItem(BPS_KEY, JSON.stringify(savedBps)); } catch { /* ignore */ } };
   /** Breakpoints in seconds; [] when the box is blank (rank by success only); null (with a message) when it can't be read. */
   function bps() {
@@ -168,6 +172,8 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     }
     curBps = b;
     const metric = $('o-rank').value === 'success' ? 'success' : Number($('o-rank').value);
+    const ofK = $('o-basis').value === 'kills';
+    const sc = (c, m) => score(c, m, ofK), fsc = (c, m) => finalScore(c, m, ofK);
     const depth = DEPTHS[$('o-depth').value];
     const combos = enumerate(sweep());
     const total = planRaids(combos.length, $('o-depth').value) * sets.length;
@@ -208,10 +214,10 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       if (combos.length > depth.keep[1]) {
         let flat = perSet.flat(); let res = await stage(flat, 0, depth.n[0], seed, 'Round 1 (screening)');
         flat.forEach((x, i) => { x.counts = res[i]; });
-        perSet = perSet.map((l) => best(l, depth.keep[0], score));
+        perSet = perSet.map((l) => best(l, depth.keep[0], sc));
         flat = perSet.flat(); res = await stage(flat, depth.n[0], depth.n[0] + depth.n[1], seed, 'Round 2');
         flat.forEach((x, i) => { x.counts = mergeCounts(x.counts, res[i]); });
-        perSet = perSet.map((l) => best(l, depth.keep[1], score));
+        perSet = perSet.map((l) => best(l, depth.keep[1], sc));
       }
       perSet.forEach((l, k) => {                                   // each set's own chart is always in its final round
         l.forEach((x) => { if (isChart(x)) x.base = true; });
@@ -220,12 +226,12 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       const finals = perSet.flat();
       const res = await stage(finals, 0, depth.n[2], seed + 7777777, 'Final round (fresh raids)');
       finals.forEach((x, i) => { x.counts = res[i]; });
-      perSet = perSet.map((l) => l.slice().sort((a, c) => finalScore(c.counts, metric) - finalScore(a.counts, metric)));
+      perSet = perSet.map((l) => l.slice().sort((a, c) => fsc(c.counts, metric) - fsc(a.counts, metric)));
       $('o-prog').style.width = '100%';
       const secs = (performance.now() - t0) / 1000;
       if (secs > 20) { rate = total / secs; keepRate(rateId(), rate); }      // better estimates next time
       $('o-status').textContent = `Done in ${dur((performance.now() - t0) / 1000)} · final round: ${depth.n[2].toLocaleString()} fresh raids per setup.`;
-      renderResults(perSet, metric);
+      renderResults(perSet, metric, ofK);
     } catch (e) {
       $('o-err').textContent = e.message;
     } finally {
@@ -245,31 +251,31 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
   }
 
   /** perSet: [[setup, ...] per chosen set], each sorted best first. One table per set, or one combined ranking. */
-  function renderResults(perSet, metric) {
-    lastResults = [perSet, metric];
+  function renderResults(perSet, metric, ofKR = false) {
+    lastResults = [perSet, metric, ofKR];
     const pct = (x, n) => `${(x / n * 100).toFixed(x / n < 0.01 ? 2 : 1)}%`;
     const oneIn = (x, n) => (x ? `1 in ${Math.round(n / x).toLocaleString()}` : '-');
     const multi = perSet.length > 1;
     const succ = scope() === 'p1' ? 'P1 killed' : team === 2 ? '2-down success' : scope() === 'p2' ? 'P2 down' : 'Success';
-    const head = (withSet) => `<tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Setup</th><th>${succ}</th>${curBps.map((x) => `<th>${fmtS(x)} or faster</th>`).join('')}<th>Fastest run</th><th></th></tr>`;
+    const head = (withSet) => `<tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Setup</th><th>${succ}</th>${curBps.map((x) => `<th>${fmtS(x)} or faster${ofKR ? ' (of kills)' : ''}</th>`).join('')}<th>Fastest run</th><th></th></tr>`;
     const all = [];                                              // [setup, index for the report button]
     const row = (x, rank, withSet) => {
       const c = x.counts, idx = all.push(x) - 1;
       return `<tr class="${x.base ? 'base' : ''}"><td>${rank}</td>${withSet ? `<td><b>${esc(getLabel(x.set.block))}</b></td>` : ''}
         <td class="setup">${x.base ? (multi ? '<b>As charted</b>' : '<b>Your chart</b> (as charted)') : describeCombo(x.combo, x.set.opts)}</td>
-        <td>${pct(c.k, c.n)}</td>${c.under.map((u) => `<td>${pct(u, c.n)}<div class="muted small">${oneIn(u, c.n)}</div></td>`).join('')}
+        <td>${pct(c.k, c.n)}</td>${c.under.map((u) => { const d = ofKR ? c.k : c.n; return `<td>${pct(u, d)}<div class="muted small">${oneIn(u, d)}</div></td>`; }).join('')}
         <td>${c.fastest != null ? `${fmtT(c.fastest)}<div class="muted small">${c.fastestN}× in ${c.n.toLocaleString()}</div>` : '-'}</td>
         <td><button class="ghost sm" data-rep="${idx}" title="Full report: this setup vs ${esc(getLabel(x.set.block))} as charted">Full report</button></td></tr>`;
     };
     let body;
     if (multi && combineView) {
-      const merged = perSet.flat().sort((a, c) => finalScore(c.counts, metric) - finalScore(a.counts, metric));
+      const merged = perSet.flat().sort((a, c) => finalScore(c.counts, metric, ofKR) - finalScore(a.counts, metric, ofKR));
       body = `<h4>All sets, one ranking</h4><div class="scroll"><table class="bt res">${head(true)}${merged.map((x, i) => row(x, i + 1, true)).join('')}</table></div>`;
     } else {
       body = perSet.map((l) => `${multi ? `<h4>${esc(getLabel(l[0].set.block))}</h4>` : ''}<div class="scroll"><table class="bt res">${head(false)}${l.map((x, i) => row(x, i + 1, false)).join('')}</table></div>`).join('');
     }
     $('o-out').innerHTML = `<div class="row between"><h3>Results</h3>${multi ? `<label class="pick"><input type="checkbox" id="o-combine" ${combineView ? 'checked' : ''}>Combine into one ranked list</label>` : ''}</div>${body}
-      <p class="muted small">Highlighted values differ from that set's chart. Ranked by ${metric === 'success' ? 'success rate' : `rooms at ${fmtS(curBps[metric])} or faster`} in the final round${multi ? ' (every set\'s finalists ran on the same fresh raids, so sets compare fairly)' : ''}.
+      <p class="muted small">Highlighted values differ from that set's chart. Ranked by ${metric === 'success' ? 'success rate' : `rooms at ${fmtS(curBps[metric])} or faster${ofKR ? ' (of successful runs)' : ' (of all attempts)'}`} in the final round${multi ? ' (every set\'s finalists ran on the same fresh raids, so sets compare fairly)' : ''}.
       Differences under ~${(100 / Math.sqrt(DEPTHS[$('o-depth').value].n[2])).toFixed(1)} points (and much less for rare breakpoints) can be noise - use Thorough to separate close setups.</p>`;
     $('o-out').onclick = async (e) => {
       const b = e.target.closest('button[data-rep]'); if (!b) return;

@@ -228,15 +228,16 @@ export function planRaids(nCombos, depth) {
 
 /** Early-stage score: the chosen breakpoint, with small nudges from looser breakpoints and success so rare
  *  breakpoints (few rooms per setup at low raid counts) don't rank on pure luck. */
-export function score(c, metric) {
-  const rate = (x) => x / c.n;
+export function score(c, metric, ofKills = false) {
+  const rate = (x) => x / c.n, brate = (x) => x / (ofKills ? Math.max(1, c.k) : c.n);   // breakpoints: of all attempts, or of kills
   if (metric === 'success') return rate(c.k);
   const j = metric;
-  let s = rate(c.under[j]);
-  c.under.forEach((x, i) => { if (i !== j && x > c.under[j]) s += 0.1 * rate(x); });
+  let s = brate(c.under[j]);
+  c.under.forEach((x, i) => { if (i !== j && x > c.under[j]) s += 0.1 * brate(x); });
   return s + 0.01 * rate(c.k);
 }
-export const finalScore = (c, metric) => (metric === 'success' ? c.k / c.n : c.under[metric] / c.n);
+export const finalScore = (c, metric, ofKills = false) => (metric === 'success' ? c.k / c.n
+  : c.under[metric] / (ofKills ? Math.max(1, c.k) : c.n) + 1e-6 * c.k / c.n);   // ties: more success
 
 /** Parse "m:ss, m:ss, ..." into seconds, rounded down to a tick (sorted slowest first). */
 export function parseBreakpoints(text) {
