@@ -289,16 +289,45 @@ export const REPORT_CSS = `
 `;
 
 /** Report body (a <div class="vz-report">), for embedding in a page. */
+/** A table value as a number: m:ss times in seconds, otherwise the leading number (55.1% -> 55.1); NaN for '-'. */
+function numOf(v) {
+  const t = String(v).trim(), m = t.match(/^(\d+):(\d+(?:\.\d+)?)$/);
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
+  const x = t.match(/^-?\d+(?:\.\d+)?/);
+  return x ? Number(x[0]) : NaN;
+}
+/** Indexes of the best value(s) (dir 1: highest, -1: lowest); none when fewer than two values or all are equal. */
+function bestOf(vals, dir) {
+  const v = vals.map(numOf), ok = v.filter(Number.isFinite);
+  if (ok.length < 2) return new Set();
+  const best = dir > 0 ? Math.max(...ok) : Math.min(...ok);
+  if (ok.every((x) => x === best)) return new Set();
+  return new Set(v.map((x, i) => (x === best ? i : -1)).filter((i) => i >= 0));
+}
+/** Which way is better for an Odds row: 1 higher, -1 lower, 0 not compared. */
+function oddsDir(name) {
+  if (/frequency/i.test(name)) return 0;
+  if (/dies|depth|Deepest|tick$|Fastest completed run/i.test(name)) return -1;
+  return 1;
+}
+
 export function reportHtml(res, labels, team, runs, opts = {}) {
   const bps = opts.breakpoints || [];
   const legend = `<div class="legend">${labels.map((l, k) => `<span><i style="background:${COL[k]}"></i>${esc(l)}</span>`).join('')}</div>`;
   const kpis = res.map((r, k) => `<div class="kpi"><b style="color:${COL[k]}">${(r.succ * 100).toFixed(1)}%</b><span>${esc(labels[k])} success</span></div>`).join('');
   const sr = splitRows(res, labels);
+  // with several sets: the best value of each split column (times and depths: lowest) is bold
+  const n = res.length, boldS = new Set();
+  if (n > 1) for (let g = 0; g + n <= sr.length; g += n) for (let c = 2; c <= 5; c++) {
+    for (const i of bestOf(sr.slice(g, g + n).map((r) => r[c]), -1)) boldS.add(`${g + i},${c}`);
+  }
+  const cell = (v, bold) => `<td${bold ? ' style="font-weight:700;color:var(--ink)"' : ''}>${v}</td>`;
   const splits = `<table><tr><th>Split (successful runs only)</th><th>Set</th><th>Median</th><th>Top 10%</th><th>Top 25%</th><th>Bottom 25%</th></tr>${
-    sr.map((r) => `<tr><td>${r[0]}</td><td style="color:${COL[r[6]]};font-weight:600">${esc(r[1])}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td></tr>`).join('')}</table>`;
+    sr.map((r, i) => `<tr><td>${r[0]}</td><td style="color:${COL[r[6]]};font-weight:600">${esc(r[1])}</td>${[2, 3, 4, 5].map((c) => cell(r[c], boldS.has(`${i},${c}`))).join('')}</tr>`).join('')}</table>`;
   const od = oddsRows(res, team, bps);
   const odds = `<table><tr><th></th>${labels.map((l, k) => `<th style="color:${COL[k]}">${esc(l)}</th>`).join('')}</tr>${
-    od.map(([n, vals]) => `<tr><td>${n}</td>${vals.map((v) => `<td>${v}</td>`).join('')}</tr>`).join('')}</table>`;
+    od.map(([nm, vals]) => { const dir = oddsDir(nm), b = n > 1 && dir ? bestOf(vals, dir) : new Set();
+      return `<tr><td>${nm}</td>${vals.map((v, k) => cell(v, b.has(k))).join('')}</tr>`; }).join('')}</table>`;
   const scope = scopeOfRes(res);
   const what = scope === 'p1' ? 'success = P1 killed' : scope === 'p2'
     ? (team === 2 ? 'success = P2 down in two reds' : 'success = P2 down in reds')

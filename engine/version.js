@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.20.2';
+export const VERSION = '1.20.3';
 export const CHANGES = [
+  { version: '1.20.3', date: '2026-10-11', items: [
+    'Report tables (with two or more sets): the best value in each row is bold - the fastest split times, the deepest reds procs, the earliest P3 20% tick and the highest success / breakpoint rates. Ties are all bold; nothing is bold when every set is equal.',
+  ] },
   { version: '1.20.2', date: '2026-10-11', items: [
     'A Minimize button at the right of the Run report / Optimizer / Solver / What\'s new tabs hides that section (a running report or search keeps going). Click any tab, or Show, to bring it back; the choice is remembered in this browser.',
   ] },

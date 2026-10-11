@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.20.3 - 2026-10-11
+- Report: best value per row bold (splits per column within each split: lowest; Odds: higher better except deaths / depths / ticks / fastest run (lower); fastest run frequency not compared).
+
 ## v1.20.2 - 2026-10-11
 - Page: Minimize / Show button in the tab bar (`body.tabs-min` hides the tab sections; any tab click shows them; localStorage `verzikSim.tabsMin.v1`).
 
