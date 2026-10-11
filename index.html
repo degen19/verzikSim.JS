@@ -25,6 +25,8 @@
     header p { margin: 6px 0 0; color: var(--ink2); font-size: 14px; }
     main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px; }
     body.chart-min #imp, body.chart-min #builder { display: none !important; }   /* chart section minimized */
+    body.tabs-min #tab-run, body.tabs-min #tab-opt, body.tabs-min #tab-solve, body.tabs-min #tab-new { display: none !important; }
+    .tabs button.tabmin { margin-left: auto; font-size: 13px; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 12px 0; }
     .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
     .row.between { justify-content: space-between; align-items: center; }
@@ -147,7 +149,7 @@
     </div>
     <div id="builder" class="card" hidden></div>
 
-    <div class="tabs" id="tabs"><button data-tab="run" class="on">Run report</button><button data-tab="opt">Optimizer</button><button data-tab="solve">Solver</button><button data-tab="new">What's new</button></div>
+    <div class="tabs" id="tabs"><button data-tab="run" class="on">Run report</button><button data-tab="opt">Optimizer</button><button data-tab="solve">Solver</button><button data-tab="new">What's new</button><button class="tabmin" id="tabsMin" title="Hide this section (a running report or search keeps going); click any tab to show it again">Minimize</button></div>
     <section id="tab-run" class="card" style="border-top-left-radius:0">
       <div class="row">
         <label title="How far each raid is simulated. Times and success then refer to the end of that phase.">Phases<select id="scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option><option value="p1">P1 only</option></select></label>

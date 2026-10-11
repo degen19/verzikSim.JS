@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.20.1';
+export const VERSION = '1.20.2';
 export const CHANGES = [
+  { version: '1.20.2', date: '2026-10-11', items: [
+    'A Minimize button at the right of the Run report / Optimizer / Solver / What\'s new tabs hides that section (a running report or search keeps going). Click any tab, or Show, to bring it back; the choice is remembered in this browser.',
+  ] },
   { version: '1.20.1', date: '2026-10-11', items: [
     'New "Minimize chart" button next to Scale: hides the import box / chart builder so Run report, the Optimizer and the Solver are right below (the chart is still used). "Show chart" brings it back; the choice is remembered in this browser.',
   ] },

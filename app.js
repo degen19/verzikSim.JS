@@ -107,10 +107,19 @@ const solver = createSolver($('tab-solve'), {
   getWorkbook,                                                            // "Also try my chart": the chart on this page
 });
 for (const b of ['A', 'B', 'C']) $(`lab${b}`).addEventListener('change', () => { if (tab === 'opt') optimizer.refresh(); });
+const TABS_MIN_KEY = 'verzikSim.tabsMin.v1';
+function setTabsMin(on) {
+  document.body.classList.toggle('tabs-min', on);
+  $('tabsMin').textContent = on ? 'Show' : 'Minimize';
+  try { localStorage.setItem(TABS_MIN_KEY, on ? '1' : ''); } catch { /* storage off */ }
+}
+try { if (localStorage.getItem(TABS_MIN_KEY)) setTabsMin(true); } catch { /* storage off */ }
 $('tabs').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'tabsMin') { setTabsMin(!document.body.classList.contains('tabs-min')); return; }
+  if (document.body.classList.contains('tabs-min')) setTabsMin(false);   // picking a tab shows the section again
   tab = b.dataset.tab;
-  [...$('tabs').children].forEach((x) => x.classList.toggle('on', x === b));
+  [...$('tabs').children].forEach((x) => { if (x.dataset.tab) x.classList.toggle('on', x === b); });
   for (const t of ['run', 'opt', 'solve', 'new']) $(`tab-${t}`).hidden = t !== tab;
   if (tab === 'opt') optimizer.refresh();
   if (tab === 'solve') solver.refresh();

@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.20.2 - 2026-10-11
+- Page: Minimize / Show button in the tab bar (`body.tabs-min` hides the tab sections; any tab click shows them; localStorage `verzikSim.tabsMin.v1`).
+
 ## v1.20.1 - 2026-10-11
 - Page: Minimize chart / Show chart toggle (`body.chart-min` hides #imp and #builder; localStorage `verzikSim.chartMin.v1`).
 
