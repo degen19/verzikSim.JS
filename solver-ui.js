@@ -39,7 +39,7 @@ const LABEL = {
 const HELP = {
   'Custom Surge Timing': 'Blank: the solver places this player\'s surge in P1. Filled: their surge is on cooldown until this room time (m:ss) and is taken then.',
   'P2 Scythe last hit threshold': 'Under this % of P2 HP an r40 halberd becomes a scythe',
-  'East bounce tech': "East bounce tech (3-5 man): on the first N Verzik attacks in P2 before reds (0-3), the East Boak players attack on her attack tick instead of waiting a tick, chancing her bounce (50% one of them; certain if everyone is East). A bounced player's next attack is a ZCB with ruby bolts (melee gear + Blessed quiver, Necklace of rupture, Rigour; Bounced ZCB unticked: +4 ticks), then scythes again. Stops after 2 bounces. 0 = off.",
+  'East bounce tech': "East bounce tech (3-5 man): on the first N Verzik attacks in P2 before reds (0-3), the East Boak players attack on her attack tick instead of waiting a tick, chancing her bounce (50% one of them; certain if everyone is East). A bounced player's next attack is a ZCB with ruby bolts (melee gear + Blessed quiver, Necklace of rupture, Rigour), then scythes again. Stops after 2 bounces. 0 = off.",
   'Dawn threshold %': 'P1 HP % at or below which a Dawn spec becomes a scythe (blank = never)',
   'P3 halberd HP %': 'P3 HP % at or below which players halberd', 'Deep proc HP %': 'Shadow from max distance below this P2 HP % (Deep proc players)',
   hornPriority: 'Who gets a horn buff first (1 = first). All blank: a random order each run, no two players sharing a number.',

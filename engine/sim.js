@@ -340,7 +340,6 @@ export class Player {
     this.east_pattern = dget(cfg, 'eastPattern', null) || 'A';   // East Boak pattern: A (standard) or 0-T (no ticks lost)
     this.shadow_camp = dget(cfg, 'shadowCamp', false);   // duo: shadow every P2 attack until reds
     this.shadow31 = dget(cfg, 'shadow31', false);
-    this.bzcb = dget(cfg, 'bouncedZCB', true);       // bounced: ZCB (else +4 ticks); used by East bounce tech in P2
     this.east_bounce = Number(dget(cfg, 'eastBounce', 0)) || 0;   // East bounce tech: collisions chanced before reds (team-wide, 0-3)
     this.purple2_thr = dget(cfg, 'purple2Thr', 40);       // duo 3:1: shadow only on the attack that lines up with Verzik
     this.deep_proc = dget(cfg, 'deepProc', false);

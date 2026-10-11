@@ -42,7 +42,7 @@ export function blowpipe_chance(p) {
 // East bounce tech (3-5 man, P2 before reds): the East Boak players attack on Verzik's attack tick instead of waiting a
 // tick, chancing her bounce - 50% that one of them (random) is bounced, a sure bounce if every player is chancing. A bounced
 // player's next attack is a ZCB (dragon ruby bolts (e)) in their melee gear with Blessed Dizana's quiver, Necklace of
-// rupture and Rigour, then scythes again on the same rhythm (Bounced ZCB unticked: +4 ticks instead). Chanced on the
+// rupture and Rigour, then scythes again on the same rhythm (always - the Bounced ZCB setting is for reds). Chanced on the
 // first N Verzik attacks they line up with (N = the chart's 'East bounce tech', 0-3), stopping after 2 bounces.
 export const EAST_BOUNCE_MAX = 2;
 export const QUIVER = { atk: 18 + 10, rstr: 3 + 1 };          // blessed quiver + its ammo bonus
@@ -512,9 +512,8 @@ export function run_p2(p1, team, rng, log = null) {
           });
           p.next_attack = t + 5;
           if (p.ebt_bounced) {                           // East bounce tech: bounced on this swing
-            if (p.bzcb) p.ebt_zcb = true;
-            else p.next_attack += 4;
-            L.on && L(`t${rjust(t, 4)} ${p.name}: bounced - ${p.bzcb ? `ZCB next (t${p.next_attack})` : `+4t, back on t${p.next_attack}`}`);
+            p.ebt_zcb = true;
+            L.on && L(`t${rjust(t, 4)} ${p.name}: bounced - ZCB next (t${p.next_attack})`);
           }
           L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe (acc ${fx(ch * 100, 1)}%, max ${mx}, ring ${p.ring}) -> [${splats.join(', ')}]`);
           if (p.ring === 'Lightbearer') {
