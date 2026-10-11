@@ -91,7 +91,9 @@ export function catalog(cfgs, team) {
   const who = (pred) => { const i = cfgs.findIndex(pred); return i < 0 ? null : names[i]; };
 
   // death charges (team-wide: one owner each)
-  const bpNames = names.filter((_, i) => cfgs[i].hasBP !== false);   // popping the purple needs a blowpipe
+  // popping the purple needs a blowpipe: the blowpipe holders (everyone when they can be swept too - setups where the purple DC
+  // has no blowpipe are skipped, see validCfgs)
+  const bpNames = names.filter((_, i) => cfgs[i].hasBP !== false).length < team ? names : names.filter((_, i) => cfgs[i].hasBP !== false);
   opts.push({ id: 'dc_p1', group: 'Death charges', label: team === 2 ? '1st purple DC' : 'Purple DC', kind: 'choice', choices: bpNames,
     current: who((c) => c.PurpleDC), apply: (cf, v) => cf.forEach((c, i) => { c.PurpleDC = names[i] === v; }) });
   if (team === 2) {
@@ -119,6 +121,35 @@ export function catalog(cfgs, team) {
       }) });
     opts.push({ id: 'ebt', group: 'Team', label: 'East bounce tech', kind: 'choice', choices: ['0', '1', '2', '3'],
       current: String(cfgs[0].eastBounce || 0), apply: (cf, v) => cf.forEach((c) => { c.eastBounce = Number(v); }) });
+  }
+
+  // who holds what (tradeable before the room): Lightbearers, blowpipes, and (3-5 man) the shadow with its modes and mage
+  // gear - every way of handing out the same number, listed by the players who get them
+  const pick = (n, k) => { const out = []; const go = (st, acc) => { if (acc.length === k) { out.push(acc); return; } for (let i = st; i < n; i++) go(i + 1, [...acc, i]); }; go(0, []); return out; };
+  const label = (ks) => (ks.length ? ks.map((k) => names[k]).join(' + ') : 'nobody');
+  const holders = (key, test) => cfgs.map((c, k) => (test(c) ? k : -1)).filter((k) => k >= 0);
+  const lbK = holders('lb', (c) => c.lightbearerOn);
+  if (lbK.length && lbK.length < team) {
+    const ch = pick(team, lbK.length);
+    opts.push({ id: 'lbHolders', group: 'Team', label: 'Lightbearer holders', kind: 'choice', choices: ch.map(label), current: label(lbK),
+      apply: (cf, v) => { const ks = ch[ch.map(label).indexOf(v)]; cf.forEach((c, i) => { const was = c.lightbearerOn; c.lightbearerOn = ks.includes(i); if (!was && c.lightbearerOn) c.ringSwitch = null; }); } });
+  }
+  const bpK = holders('bp', (c) => c.hasBP !== false);
+  if (bpK.length && bpK.length < team) {
+    const ch = pick(team, bpK.length);
+    opts.push({ id: 'bpHolders', group: 'Team', label: 'Blowpipe holders', kind: 'choice', choices: ch.map(label), current: label(bpK),
+      apply: (cf, v) => { const ks = ch[ch.map(label).indexOf(v)]; cf.forEach((c, i) => { c.hasBP = ks.includes(i); }); } });
+  }
+  const shK = holders('sh', (c) => c.shadow);
+  if (team > 2 && shK.length && shK.length < team) {
+    const ch = pick(team, shK.length), KEYS = ['shadow', 'shadow31', 'shadowLB', 'shadowCamp', 'deepProc', 'mage'];
+    const src = shK.map((k) => Object.fromEntries(KEYS.map((x) => [x, structuredClone(cfgs[k][x])])));
+    opts.push({ id: 'shadowHolders', group: 'Team', label: 'Shadow player' + (shK.length > 1 ? 's' : '') + ' (with their modes and mage gear)', kind: 'choice', choices: ch.map(label), current: label(shK),
+      apply: (cf, v) => { const ks = ch[ch.map(label).indexOf(v)]; cf.forEach((c, i) => {
+        const j = ks.indexOf(i);
+        if (j >= 0) Object.assign(c, structuredClone(src[j]));
+        else Object.assign(c, { shadow: false, shadow31: false, shadowLB: false, shadowCamp: false, deepProc: false });
+      }); } });
   }
 
   // deep proc (shadow player)
@@ -170,7 +201,8 @@ export function applyCombo(cfgs, team, combo) {
 }
 
 /** False when a setup breaks the shadow rules (Shadow camp together with 3:1 or Shadow while LB). */
-export const validCfgs = (cfgs) => cfgs.every((c) => !(c.shadowCamp && (c.shadow31 || c.shadowLB)));
+export const validCfgs = (cfgs) => cfgs.every((c) => !(c.shadowCamp && (c.shadow31 || c.shadowLB))
+  && !((c.PurpleDC || c.Purple2DC) && c.hasBP === false));         // the purple DC needs a blowpipe
 
 /** All combinations of the chosen values: sweep = [{id, values: [...]}, ...]. */
 export function enumerate(sweep) {

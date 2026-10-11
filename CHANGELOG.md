@@ -2,6 +2,12 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.20.0 - 2026-10-11
+- Verz Solver `shadowSearch` (3-5; every k-slot placement of the team's shadow settings - shadow, 3:1, while LB, camp, deep proc, mage - option pass before the side search, `shadowSrc` for the mage-gear copy) and `bpSearch` / `nBP` (all scales; every nBP-subset of blowpipe holders, P1 candidates per BP x LB assignment). Twin keys per candidate. Core key includes hasBP / shadow / deepProc / shadowSrc. CLI `--shadow 1`, `--bp N`. Form: Has BP column shows "Solver" when searched; Blowpipes count select.
+- `makeContext`: no B in the attack table for a player without a blowpipe.
+- Optimizer catalog: `lbHolders`, `bpHolders`, `shadowHolders` (same count, every placement); `validCfgs` skips a purple DC without a blowpipe; purple DC choices are every player when some have no blowpipe.
+- Builder library: picking a chart with Set B / C open loads its Set A into the open set (others kept, working copy); Set A open: whole chart as before.
+
 ## v1.19.1 - 2026-10-11
 - Verz Solver form: Boak side column shows "Solver" when the side search is on; East pattern editable for every player then.
 

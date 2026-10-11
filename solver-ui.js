@@ -89,6 +89,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   const S = () => state[team].s, V = () => state[team].v;
   const persist = () => save(state);
   const field = (table, h, p) => tpl[team].desc.fields.get(`${table}|${h}|${p ?? 'team'}`);
+  const bpCount = () => Math.max(1, Array.from({ length: team }, (_, k) => V()[`gear|Has BP|${k}`] !== false).filter(Boolean).length);   // ticked Has BP
   const names = () => Array.from({ length: team }, (_, k) => V()[`setup|Name|${k}`] || `Player ${k + 1}`);
   const on = (h, k) => { const f = field('gear', h, k); return !!f && V()[f.key] === true; };
 
@@ -166,13 +167,15 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       cell: (k) => (pickSides ? '<span class="muted" title="The solver picks (Advanced)">Solver</span>' : sel(`boak:${k}`, [['West', 'West'], ['East', 'East']], s.boak[k])) };
     const patCol = { custom: true, label: 'East pattern', help: pickSides ? 'East Boak pattern, used if the solver puts them East' : 'East Boak pattern',
       cell: (k) => { const f = field('gear', 'East Pattern', k); return f && (pickSides || s.boak[k] === 'East') ? input(f) : '<span class="muted">-</span>'; } };
-    const gearCols = [['setup', 'Name'], ['setup', 'meleePrayer'], ...PLAYER_GEAR.slice(0, 7).map((h) => ['gear', h])];
+    const pickBP = !!s.bpSearch;                                  // Advanced: the solver hands out the blowpipes
+    const bpCol = { custom: true, label: 'Has BP', help: 'The solver hands out the blowpipes (Advanced)', cell: () => '<span class="muted" title="The solver hands out the blowpipes (Advanced)">Solver</span>' };
+    const gearCols = [['setup', 'Name'], ['setup', 'meleePrayer'], ...PLAYER_GEAR.slice(0, 7).map((h) => (h === 'Has BP' && pickBP ? bpCol : ['gear', h]))];
     const roleCols = duo ? [['setup', 'Custom Surge Timing'], ['gear', 'Shadow'], ['gear', 'Deep proc']]
       : [boakCol, patCol, ['setup', 'Custom Surge Timing'], ...PLAYER_GEAR.slice(7).map((h) => ['gear', h])];
     const mage = d.tables.mage.filter((h) => !['necklace', 'boots', 'gloves'].includes(h));
     const playersBody = `<h4 style="margin-top:4px">Gear</h4>${playerTable(gearCols)}<h4>Roles</h4>${playerTable(roleCols)}
       <p class="muted small">${duo ? 'Tick Shadow for the mage (one player). The solver picks the shadow mode (camp, 3:1, Shadow while LB, or 3:1 + Shadow while LB) and the Dawn and P2 last-hit thresholds (1-5%).'
-        : 'Shadow modes need Shadow ticked.'} Custom surge blank: the solver places the surge in P1.</p>
+        : 'Shadow modes need Shadow ticked.'}${!duo && s.shadowSearch ? ' The solver places the shadow player(s): the ticked Shadow settings and mage gear move with them to the slot it picks.' : ''} Custom surge blank: the solver places the surge in P1.</p>
       ${shadowRows.some(Boolean) && mage.length ? `<h4>Mage gear <span class="muted small">(Shadow players)</span></h4>${playerTable(mage.map((h) => ['mage', h]), (k) => shadowRows[k])}` : ''}`;
     const SUPPLIES = ['Brew sips', 'SCB sips', 'Restore sips', 'Sharks'];
     const advTeam = d.tables.team.map((f) => f.header).filter((h) => !main.includes(h) && !SUPPLIES.includes(h) && h !== 'Death tick' && !(duo ? DUO_SOLVED : TEAM_SOLVED).includes(h));
@@ -180,8 +183,14 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       <div class="row wrap teamset">${SUPPLIES.map(teamField).join('')}</div>
       <h4>Players</h4>${playerTable([...ADV_GEAR.map((h) => ['gear', h]), ['gear', 'redCrab']].filter(([, h]) => h !== 'redCrab' || team === 2))}
       ${advTeam.length ? `<h4>Team</h4><div class="row wrap teamset">${advTeam.map(teamField).join('')}</div>` : ''}
+      <div class="row wrap" style="margin-top:8px;gap:10px;align-items:center">
+        <label class="row" style="gap:6px" title="Blowpipes can be traded before the room: the solver tries every way of handing out this many (who has one decides who can take the purple DC, and the P1 blowpipe fills)">
+          <input type="checkbox" data-s="bpSearch" ${s.bpSearch ? 'checked' : ''}> Let the solver decide who has a blowpipe</label>
+        ${s.bpSearch ? `<label title="How many blowpipes the team has">Blowpipes${sel('nBP', Array.from({ length: team }, (_, i) => [i + 1, i + 1]), s.nBP ?? bpCount())}</label>` : ''}</div>
       ${duo ? '' : `<label class="row" style="margin-top:8px;gap:6px" title="The solver also tries East bounce tech 0, 1, 2 and 3 for each setup (the East bounce tech value above is then only its starting point). It usually makes fast times more likely at the cost of some raid success.">
         <input type="checkbox" data-s="ebtSearch" ${s.ebtSearch ? 'checked' : ''}> Let the solver try East bounce tech (0-3)</label>
+      <label class="row" style="margin-top:6px;gap:6px" title="The shadow player's role (Shadow, its modes and their mage gear) can be traded before the room: the solver tries it on every player slot. Results name the slot (e.g. Player 3) - the player with the shadow gear takes that slot.">
+        <input type="checkbox" data-s="shadowSearch" ${s.shadowSearch ? 'checked' : ''}> Let the solver decide the shadow player</label>
       <label class="row" style="margin-top:6px;gap:6px" title="The solver also tries every West / East split for the purple (at least one player on each side) - e.g. to find the best side for a shadow player. The Boak sides set under Players are then only its starting point. Players it moves East use their East pattern (0-T if none).">
         <input type="checkbox" data-s="sideSearch" ${s.sideSearch ? 'checked' : ''}> Let the solver pick Boak sides (West / East)</label>`}`;
     root.innerHTML = `<h3 style="margin-top:0">Verz Solver <span class="muted small">(${team}-man)</span></h3>
@@ -227,7 +236,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     S()[key] = t.type === 'checkbox' ? t.checked : t.value;
     if (key === 'bps') { let now = false; try { now = bpsList().length > 0; } catch { /* shown on Start */ } if (!hadBps && now) S().rankBy = '0'; }
     persist();
-    if (key === 'bps' || key === 'sideSearch') render();
+    if (['bps', 'sideSearch', 'bpSearch', 'shadowSearch'].includes(key)) render();
   });
   root.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.sec) open[d.dataset.sec] = d.open; }, true);
 
@@ -289,6 +298,14 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     });
     put('team', 'Dawn threshold %', null, x.cfg[0].dawnThr ?? '');
     if (team !== 2) put('team', 'East bounce tech', null, x.cfg[0].eastBounce || 0);
+    x.cfg.forEach((c, k) => {
+      put('gear', 'Has BP', k, c.hasBP !== false);
+      if (team === 2) return;
+      put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB); put('gear', 'Deep proc', k, !!c.deepProc);
+      if (c.shadowSrc != null && c.shadowSrc !== k) {           // the shadow moved here: their mage gear comes with it
+        for (const f of tpl[team].desc.fields.values()) if (f.table === 'mage' && f.player === c.shadowSrc) { const g = field('mage', f.header, k); if (g) out[g.key] = vals[f.key]; }
+      }
+    });
     if (team !== 2) x.cfg.forEach((c, k) => { put('gear', 'East Boak', k, !!c.eastBoak); put('gear', 'West Boak', k, !!c.westBoak); if (c.eastBoak && c.eastPattern) put('gear', 'East Pattern', k, c.eastPattern); });
     if (team === 2) put('team', 'P2 Scythe last hit threshold', null, x.cfg[0].lastHitThr ?? '');
     for (const f of tpl[team].desc.fields.values()) {
@@ -305,7 +322,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     try { bps = bpsList(); } catch (e) { err.textContent = `Breakpoints: ${e.message}`; return; }
     let cfgs;
     try { cfgs = await buildCfgs(); } catch (e) { err.textContent = e.message; return; }
-    if (!cfgs.some((c) => c.hasBP !== false)) { err.textContent = 'Nobody has a blowpipe - someone needs one to pop the purple crab.'; return; }
+    if (!s.bpSearch && !cfgs.some((c) => c.hasBP !== false)) { err.textContent = 'Nobody has a blowpipe - someone needs one to pop the purple crab.'; return; }
     if (team === 2 && cfgs.filter((c) => c.shadow).length !== 1) { err.textContent = 'Duos: tick Shadow for the mage (one player).'; return; }
     // your chart(s): every filled set on the page, with its own values (for Copy to set / Save as chart)
     const seeds = [], skipped = [];
@@ -351,7 +368,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     try {
       const res = await solveRoom(cfgs, team, {
         rings: Number(s.rings), horns: team === 2 ? 0 : Number(s.horns), bpsFull: bps, rankBy: s.rankBy, minSuccess: minSucc,
-        sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show, ebtSearch: team !== 2 && !!s.ebtSearch, sideSearch: team !== 2 && !!s.sideSearch,
+        sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show, ebtSearch: team !== 2 && !!s.ebtSearch, sideSearch: team !== 2 && !!s.sideSearch, shadowSearch: team !== 2 && !!s.shadowSearch,
+        bpSearch: !!s.bpSearch, nBP: s.bpSearch ? Number(s.nBP ?? bpCount()) : undefined,
         seeds: seeds.map(({ cfg, label }) => ({ cfg, label })),
       }, pool);
       const mine = Object.fromEntries(seeds.map((sd) => [sd.label, { values: sd.values, diff: formDiff(sd.values, lastValues) }]));
@@ -424,6 +442,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         ['P2 last-hit threshold', `${cf[0].lastHitThr ?? '-'}%`],
       ] : [['Horns', horns.join(', ') || 'none']]),
       ['Dawn threshold', cf[0].dawnThr ? `${cf[0].dawnThr}%` : 'never'],
+      ...(results.team === 2 ? [] : [['Shadow', cf.map((c, k) => (c.shadow ? `${nm[k]}${[c.shadow31 && '3:1', c.shadowLB && 'while LB', c.deepProc && 'deep proc'].filter(Boolean).map((x) => ` (${x})`).join('')}` : null)).filter(Boolean).join(', ') || 'nobody']]),
+      ['Blowpipes', cf.map((c, k) => (c.hasBP !== false ? nm[k] : null)).filter(Boolean).join(', ') || 'nobody'],
       ...(results.team === 2 ? [] : [['Boak sides', `West: ${cf.map((c, k) => (c.westBoak ? nm[k] : null)).filter(Boolean).join(', ') || '-'} | East: ${cf.map((c, k) => (c.eastBoak ? `${nm[k]} (${c.eastPattern || 'A'})` : null)).filter(Boolean).join(', ') || '-'}`]]),
       ...(results.team === 2 ? [] : [['East bounce tech', cf[0].eastBounce ? `${cf[0].eastBounce} (East: ${cf.map((c, k) => (c.eastBoak ? nm[k] : null)).filter(Boolean).join(', ') || 'nobody'})` : 'off']]),
       ['Start spec', cf.map((c, k) => `${nm[k]} ${c.startSpec}%`).join(', ')],

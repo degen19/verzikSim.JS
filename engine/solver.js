@@ -390,7 +390,7 @@ export function makeContext(cfgs, team, { sbOwner = null, blowpipe = true, trans
   const end = duo ? DUO_END : CHART_END;
   const dodges = (dodge || cfgs.map((_, k) => (duo ? (k === mage ? autoTicks(end) : DUO_RANGER_DODGES.even(end)) : []))).map((d) => new Set(d));
   return { team, hp: P1_HP[team], players, sb: sb >= 0 ? sb : null, transfers, duo, mage, dodge: dodges, end,
-    atk: players.map((pl, i) => attackTable(pl.p, { sb: i === sb, bp: blowpipe, duo })) };
+    atk: players.map((pl, i) => attackTable(pl.p, { sb: i === sb, bp: blowpipe && pl.p.has_bp !== false, duo })) };   // no blowpipe: no B
 }
 
 /** Each player's part in a plan so far (start spec once used, Dawn slots held, transfers given, surge), as a string. */

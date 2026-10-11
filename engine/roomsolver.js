@@ -253,7 +253,12 @@ export const localEvaluator = {
 /** The settings that make a setup (everything the search chooses but the reds DCs). */
 const coreKey = (cfg) => JSON.stringify(cfg.map((c) => [c.lightbearerOn, c.PurpleDC, c.ringSwitch ?? null, c.startSpec, c.actions,
   !!c.horn, !!c.hornP2, !!c.hornP3, !!c.Purple2DC, !!c.shadowCamp, !!c.shadow31, !!c.shadowLB, c.dawnThr ?? null, c.lastHitThr ?? null, c.eastBounce || 0,
-  !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null]));
+  !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null, c.hasBP !== false, !!c.shadow, !!c.deepProc, c.shadowSrc ?? null]));
+/** Every k-player subset of 0..n-1 (sorted). */
+export const combos = (n, k) => { const out = []; const go = (s, acc) => { if (acc.length === k) { out.push(acc); return; } for (let i = s; i < n; i++) go(i + 1, [...acc, i]); }; go(0, []); return out; };
+const SHADOW_KEYS = ['shadow', 'shadow31', 'shadowLB', 'shadowCamp', 'deepProc', 'mage'];
+const shadowOf = (c) => Object.fromEntries(SHADOW_KEYS.map((k) => [k, c[k]]));
+const NO_SHADOW = { shadow: false, shadow31: false, shadowLB: false, shadowCamp: false, deepProc: false };
 const withHorn = (cfg, k, p2, p3) => cfg.map((c, j) => (j === k ? { ...c, horn: p2 || p3, hornP2: p2, hornP3: p3 } : c));
 const pctl = (ends, fs) => { const e = [...ends].filter((x) => x >= 0).sort((x, y) => x - y); return e.length ? fs.map((f) => e[Math.floor(e.length * f)] * 0.6) : []; };
 
@@ -273,7 +278,6 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     purpleTried: 0, purpleChanged: 0, finalSame: 0, finalClawCut: 0, finalSuccCut: 0, raids: 0, t: {} };
   // 3-5 man: the Dawn threshold is searched (1-6%); setups start at 3% until the Dawn threshold pass
   if (team !== 2) base = base.map((c) => ({ ...c, dawnThr: c.dawnThr >= 1 && c.dawnThr <= 6 ? c.dawnThr : 3 }));
-  const keys = twinKeys(base);
   const T = (k, t0) => { stats.t[k] = (stats.t[k] || 0) + (Date.now() - t0) / 1000; };
   let stage = '';
   const step = (s) => { stage = s; o.progress && o.progress({ stage, raids: stats.raids }); };
@@ -313,14 +317,21 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
 
   // ---- 1. P1 candidates per Lightbearer assignment (in parallel)
   step('P1 charts');
-  const lbSets = lbAssignments(base, o.rings);
-  stats.lbSets = lbSets.length;
-  const p1 = await Promise.all(lbSets.map((lb) => ev.p1(base, team, lb, { beam: o.p1Beam ?? 150, top: o.p1Top, gap, sbOwner: o.sbOwner ?? null, clawRule, diverse: !!o.p1Diverse })));
+  // who has a blowpipe: as given, or (o.bpSearch) every way of handing out o.nBP of them - the P1 charts depend on it
+  const nBP = Math.max(1, Math.min(team, o.nBP ?? base.filter((c) => c.hasBP !== false).length));
+  const bpSets = o.bpSearch && nBP < team ? combos(team, nBP).map((ks) => base.map((_, k) => ks.includes(k))) : [base.map((c) => c.hasBP !== false)];
+  const jobs = [];
+  for (const bp of bpSets) {
+    const b2 = base.map((c, k) => ({ ...c, hasBP: bp[k] }));
+    for (const lb of lbAssignments(b2, o.rings)) jobs.push({ bp, lb, b2 });
+  }
+  stats.lbSets = jobs.length;
+  const p1 = await Promise.all(jobs.map((j) => ev.p1(j.b2, team, j.lb, { beam: o.p1Beam ?? 150, top: o.p1Top, gap, sbOwner: o.sbOwner ?? null, clawRule, diverse: !!o.p1Diverse })));
   const cands = [];
   p1.forEach((r, i) => {
     stats.p1Charts += r.charts; stats.p1Dropped50 += r.dropped;
-    for (const cfg of r.cands) cands.push({ lb: lbSets[i], cfg });
-    log(`  LB ${lbSets[i].map((x) => (x ? 1 : 0)).join('')}: ${r.charts} P1 charts`);
+    for (const cfg of r.cands) cands.push({ lb: jobs[i].lb, cfg });
+    log(`  LB ${jobs[i].lb.map((x) => (x ? 1 : 0)).join('')}${bpSets.length > 1 ? ` BP ${jobs[i].bp.map((x) => (x ? 1 : 0)).join('')}` : ''}: ${r.charts} P1 charts`);
   });
   T('p1', t0);
   if (!cands.length) return { top: [], stats, gap, fallback: false, bps: [] };
@@ -367,10 +378,10 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   step('Screening');
   const s1all = [];
   for (const cd of cands) {
-    const tried = new Set();
+    const tried = new Set(), ck = twinKeys(cd.cfg);
     for (let o2 = 0; o2 < team; o2++) {
       if (cd.cfg[o2].hasBP === false) continue;
-      const tk = keys[o2] + cd.lb[o2];                                // identical players: one of them
+      const tk = ck[o2] + cd.lb[o2];                                  // identical players: one of them
       if (tried.has(tk)) continue; tried.add(tk);
       s1all.push({ ...cd, cfg: cd.cfg.map((c, k) => ({ ...c, PurpleDC: k === o2, Purple2DC: false })), purple: o2 });
     }
@@ -440,10 +451,10 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     return { ...s, cfg: cur, c2: best };
   };
   const purplePass = async (s) => {
-    const tried = new Set([keys[s.purple] + s.lb[s.purple]]), owners = [];
+    const sk = twinKeys(s.cfg), tried = new Set([sk[s.purple] + s.lb[s.purple]]), owners = [];
     for (let o2 = 0; o2 < team; o2++) {
       if (s.cfg[o2].hasBP === false) continue;
-      const tk = keys[o2] + s.lb[o2];
+      const tk = sk[o2] + s.lb[o2];
       if (tried.has(tk)) continue; tried.add(tk);
       owners.push(o2);
     }
@@ -486,9 +497,19 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     return { s: best, changed };
   };
   const mageK = base.findIndex((c) => c.shadow);
+  const shadowSrc = base.map((c, k) => (c.shadow ? k : -1)).filter((k) => k >= 0);
   // 3-5 man: the P1 Dawn threshold (1-6%) - spec saved at the end of P1 for the claws in reds
   const DAWN_THR_3_5 = [1, 2, 3, 4, 5, 6];
   const duoPasses = async (s0) => {
+    if (team !== 2 && o.shadowSearch && shadowSrc.length && shadowSrc.length < team) {
+      // who has the shadow (with its modes and mage gear), when asked for: every placement of the team's shadow players
+      const opts = combos(team, shadowSrc.length).map((ks) => (cf) => cf.map((c, j) => {
+        const i = ks.indexOf(j);
+        return i >= 0 ? { ...c, ...shadowOf(base[shadowSrc[i]]), shadowSrc: shadowSrc[i] } : { ...c, ...NO_SHADOW, shadowSrc: null };
+      }));
+      const r = await optionPass(s0, opts);
+      if (r.changed) { stats.shadowChanged = (stats.shadowChanged || 0) + 1; s0 = await ringPass(r.s); }
+    }
     if (team !== 2 && o.sideSearch) {
       // who goes West / East for the purple (Boak sides), when asked for: every split with at least one player on each side
       const opts = [];

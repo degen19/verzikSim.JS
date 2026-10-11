@@ -136,16 +136,27 @@ export function createBuilder(root, { onChange }) {
   }
   async function libPick(v) {
     if (!v) return;
-    if (dirty() && !confirm('The chart on the page has unsaved changes. Load the other chart anyway?')) { render(); return; }
+    if (block === 'A' && dirty() && !confirm('The chart on the page has unsaved changes. Load the other chart anyway?')) { render(); return; }
     try {
+      let sets, kind, id, name;
       if (v.startsWith('s:')) {
         const x = charts().find((y) => y.id === v.slice(2)); if (!x) return;
-        state[team] = withDefaults(x.sets); markCurrent('saved', x.id, x.name);
+        sets = x.sets; kind = 'saved'; id = x.id; name = x.name;
       } else {
         const i = Number(v.slice(2)), d = (await fetchDefaults())[i];
-        state[team] = withDefaults(await readDefault(d)); markCurrent('default', i, d.name);
+        sets = await readDefault(d); kind = 'default'; id = i; name = d.name;
       }
-      block = 'A'; save(state); render(); onChange && onChange();
+      if (block === 'A') {
+        // Set A open: the whole chart (all its sets) replaces the page's chart
+        state[team] = withDefaults(sets); markCurrent(kind, id, name);
+        save(state); render(); onChange && onChange();
+      } else {
+        // Set B / C open: the chart's Set A goes into that set; the other sets stay as they are (a working copy now)
+        state[team][block] = { ...tpl[team].defaults[block], ...(sets.A || {}) };
+        delete cur[team]; saveKey(LIBCUR, cur);
+        save(state); render(); onChange && onChange();
+        const el = root.querySelector('#vz-libstat'); if (el) el.textContent = `Loaded "${name}" (its Set A) into Set ${block} - working copy not saved under a name`;
+      }
     } catch (err) { render(); libMsg(err.message); }
   }
 
