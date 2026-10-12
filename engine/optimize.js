@@ -1,7 +1,7 @@
 // Optimizer: sweeps chart inputs (ring %, death charges, deep proc, gear, toggles) and finds the setups that
 // most often beat the user's breakpoints. Used by the web page's Optimizer tab (via worker.js).
 import { Rng } from './rng.js';
-import { run_p1 } from './sim.js';
+import { run_p1, Player } from './sim.js';
 import { run_p2 } from './p2.js';
 import { run_reds } from './reds.js';
 import { run_duo_reds } from './duo_reds.js';
@@ -13,8 +13,11 @@ const wiped = (players, phases) => players.every((p) => p.dead || (p.would_die &
 /** One raid. Returns the room-complete tick, or null if the raid failed (duos: a P1 or P3 wipe fails it).
  *  Same RNG use as simulate(). */
 export function runOne(cfgs, team, rng) {
+  return runAfterP1(run_p1(cfgs, team, rng), cfgs, team, rng);
+}
+/** The rest of a raid after P1 (r1 = run_p1's result, rng right after it). */
+function runAfterP1(r1, cfgs, team, rng) {
   const scope = cfgs[0] && cfgs[0].scope;                    // 'p1' / 'p2' stop at that phase's end (see simulate.js)
-  const r1 = run_p1(cfgs, team, rng);
   if (r1.players.every((p) => p.dead)) return null;
   if (team === 2 && wiped(r1.players, ['P1'])) return null;
   if (scope === 'p1') return r1.end ?? null;
@@ -28,6 +31,35 @@ export function runOne(cfgs, team, rng) {
   return r4.kill == null ? null : r4.end;
 }
 
+// settings P1 never uses (it plays out the same with any value of them): the reds DCs, Boak sides / pattern, East bounce
+// tech, deep proc and the P2 shadow modes, and in 4-5 man the purple DCs (the trio's 4 Claw Priority reads the purple DC
+// at the end of P1). Checked: every result is identical to playing each setup's P1 on its own.
+const P2_ONLY = ['WestDC', 'EastDC', 'eastBoak', 'westBoak', 'eastPattern', 'eastBounce', 'deepProc', 'deepThr', 'shadow31', 'shadowLB', 'shadowCamp', 'scope'];
+const p1Key = (cfgs, team) => JSON.stringify(cfgs.map((c) => Object.fromEntries(Object.entries(c).filter(([k]) =>
+  !P2_ONLY.includes(k) && !(team >= 4 && (k === 'PurpleDC' || k === 'Purple2DC')) && k !== 'name'))));
+/** Player fields that differ between two setups of the same P1 group (from their settings): [[key, value], ...] per player. */
+function playerPatch(repCfgs, cfgs) {
+  if (repCfgs === cfgs) return cfgs.map(() => []);
+  return cfgs.map((c, k) => {
+    const a = new Player(k + 1, repCfgs[k]), b = new Player(k + 1, c), diff = [];
+    for (const key of Object.keys(b)) if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) diff.push([key, b[key]]);
+    return diff;
+  });
+}
+/** Deep copy that keeps classes (prototypes) and shared references (the team's supply pool, the players list). */
+function cloneGraph(x, seen = new Map()) {
+  if (x === null || typeof x !== 'object') return x;
+  if (seen.has(x)) return seen.get(x);
+  let y;
+  if (Array.isArray(x)) { y = new Array(x.length); seen.set(x, y); for (let i = 0; i < x.length; i++) y[i] = cloneGraph(x[i], seen); return y; }
+  if (x instanceof Map) { y = new Map(); seen.set(x, y); for (const [k, v] of x) y.set(cloneGraph(k, seen), cloneGraph(v, seen)); return y; }
+  if (x instanceof Set) { y = new Set(); seen.set(x, y); for (const v of x) y.add(cloneGraph(v, seen)); return y; }
+  if (ArrayBuffer.isView(x)) { y = x.slice(); seen.set(x, y); return y; }
+  y = Object.create(Object.getPrototypeOf(x)); seen.set(x, y);
+  for (const k of Object.keys(x)) y[k] = cloneGraph(x[k], seen);
+  return y;
+}
+
 /** Raid i always uses the same random rolls, so every setup is tested on identical raids. */
 export const raidRng = (seed, i) => new Rng(seed + i * 7919);
 
@@ -36,24 +68,38 @@ export const raidRng = (seed, i) => new Rng(seed + i * 7919);
  * Breakpoints are in seconds (tick times); a room counts if it finishes on the breakpoint or faster.
  */
 export function countBatch(variants, team, from, to, seed, bpSecs, onProgress = null) {
-  const out = [];
   const total = variants.length * (to - from);
   let done = 0;
-  for (const cfgs of variants) {
-    const c = { n: 0, k: 0, fastest: null, fastestN: 0, under: bpSecs.map(() => 0) };
-    for (let i = from; i < to; i++) {
-      c.n++;
-      const end = runOne(cfgs, team, raidRng(seed, i));
-      if (end != null) {
-        c.k++;
-        const s = end * 0.6;
-        bpSecs.forEach((b, j) => { if (s <= b + 1e-9) c.under[j]++; });
-        if (c.fastest == null || end < c.fastest) { c.fastest = end; c.fastestN = 1; } else if (end === c.fastest) c.fastestN++;
-      }
-      if (onProgress && ++done % 200 === 0) onProgress(done, total);
+  const out = variants.map(() => ({ n: 0, k: 0, fastest: null, fastestN: 0, under: bpSecs.map(() => 0), sig: 0 }));
+  const add = (c, end) => {
+    c.n++;
+    c.sig = (Math.imul(c.sig, 1000003) + (end == null ? 65535 : end) + 1) >>> 0;   // raid-by-raid signature (identical setups)
+    if (end == null) return;
+    c.k++;
+    const s = end * 0.6;
+    bpSecs.forEach((b, j) => { if (s <= b + 1e-9) c.under[j]++; });
+    if (c.fastest == null || end < c.fastest) { c.fastest = end; c.fastestN = 1; } else if (end === c.fastest) c.fastestN++;
+  };
+  // setups whose P1 settings are the same play P1 identically on a raid (same rolls): P1 runs once per group and each
+  // setup continues from a copy of it, with its own P2-on settings written into the players
+  const groups = new Map();
+  variants.forEach((cfgs, v) => { const key = p1Key(cfgs, team); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(v); });
+  const plan = [...groups.values()].map((vs) => ({ vs, rep: variants[vs[0]], patch: vs.map((v) => playerPatch(variants[vs[0]], variants[v])) }));
+  for (let i = from; i < to; i++) {
+    for (const g of plan) {
+      if (g.vs.length === 1) { add(out[g.vs[0]], runOne(g.rep, team, raidRng(seed, i))); done++; continue; }
+      const rng = raidRng(seed, i), r1 = run_p1(g.rep, team, rng);
+      g.vs.forEach((v, j) => {
+        const last = j === g.vs.length - 1;
+        const st = last ? { r1, rng } : cloneGraph({ r1, rng });
+        g.patch[j].forEach((pp, k) => { const pl = st.r1.players[k]; for (const [key, val] of pp) pl[key] = cloneGraph(val); });
+        add(out[v], runAfterP1(st.r1, variants[v], team, st.rng));
+        done++;
+      });
     }
-    out.push(c);
+    if (onProgress && (i - from) % 20 === 19) onProgress(done, total);
   }
+  for (const c of out) c.sig = c.sig.toString(36);
   if (onProgress) onProgress(total, total);
   return out;
 }
@@ -62,7 +108,7 @@ export function mergeCounts(a, b) {
   if (!a) return b;
   const f = a.fastest == null ? b.fastest : b.fastest == null ? a.fastest : Math.min(a.fastest, b.fastest);
   return {
-    n: a.n + b.n, k: a.k + b.k, under: a.under.map((x, j) => x + b.under[j]), fastest: f,
+    n: a.n + b.n, k: a.k + b.k, under: a.under.map((x, j) => x + b.under[j]), fastest: f, sig: `${a.sig ?? ''}.${b.sig ?? ''}`,
     fastestN: (a.fastest === f ? a.fastestN : 0) + (b.fastest === f ? b.fastestN : 0),
   };
 }

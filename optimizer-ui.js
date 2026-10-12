@@ -177,7 +177,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     const sc = (c, m) => score(c, m, ofK), fsc = (c, m) => finalScore(c, m, ofK);
     const depth = DEPTHS[$('o-depth').value];
     const combos = enumerate(sweep());
-    const total = planRaids(combos.length, $('o-depth').value) * sets.length;
+    let total = planRaids(combos.length, $('o-depth').value) * sets.length;
     let doneBefore = 0, stageLabel = '';
     const prog = (d) => {
       const done = doneBefore + d, el = (performance.now() - t0) / 1000;
@@ -212,9 +212,40 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
         }
         return out;
       });
+      // options changed from the set's chart (identical setups: keep the one closest to the chart)
+      const nChanged = (x) => Object.entries(x.combo).filter(([id, v]) => { const o = x.set.opts.find((y) => y.id === id); return o && String(o.current) !== String(v); }).length;
+      const dedupe = (l) => {                                      // setups that played every raid the same are the same setup
+        const by = new Map();
+        for (const x of l) { const y = by.get(x.counts.sig); if (!y || nChanged(x) < nChanged(y)) by.set(x.counts.sig, x); }
+        return [...by.values()];
+      };
+      // drop setups that are clearly behind the set's leader: more than 4 standard errors below it
+      const RACE = 300;
+      const race = (l) => {
+        if (l.length <= depth.keep[0]) return l;
+        const ofKr = ofK && metric !== 'success';
+        const ev = (c, j) => (j === 'success' ? c.k : c.under[j]);
+        const pr = (c, j) => { const d = j === 'success' || !ofKr ? c.n : Math.max(1, c.k); return [ev(c, j) / d, d]; };
+        const lead = best(l, 1, sc)[0].counts;
+        let j = metric;                                             // too rare to judge yet: use a looser breakpoint / success
+        while (j !== 'success' && ev(lead, j) < 30) j = j > 0 ? j - 1 : 'success';
+        const [pL, nL] = pr(lead, j);
+        const keep = l.filter((x) => { const [p, n] = pr(x.counts, j); return pL - p <= 4 * Math.sqrt(pL * (1 - pL) / nL + p * (1 - p) / n); });
+        return keep.length >= depth.keep[0] ? keep : best(l, depth.keep[0], sc);
+      };
       if (combos.length > depth.keep[1]) {
-        let flat = perSet.flat(); let res = await stage(flat, 0, depth.n[0], seed, 'Round 1 (screening)');
+        let flat = perSet.flat();
+        const early = depth.n[0] >= RACE * 1.5 ? RACE : depth.n[0];
+        let res = await stage(flat, 0, early, seed, 'Round 1 (screening)');
         flat.forEach((x, i) => { x.counts = res[i]; });
+        perSet = perSet.map((l) => race(dedupe(l)));
+        if (early < depth.n[0]) {
+          const left = perSet.flat();
+          total -= (flat.length - left.length) * (depth.n[0] - early);
+          res = await stage(left, early, depth.n[0], seed, 'Round 1 (screening)');
+          left.forEach((x, i) => { x.counts = mergeCounts(x.counts, res[i]); });
+          perSet = perSet.map(dedupe);
+        }
         perSet = perSet.map((l) => best(l, depth.keep[0], sc));
         flat = perSet.flat(); res = await stage(flat, depth.n[0], depth.n[0] + depth.n[1], seed, 'Round 2');
         flat.forEach((x, i) => { x.counts = mergeCounts(x.counts, res[i]); });

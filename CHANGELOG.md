@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.20.5 - 2026-10-12
+- Optimizer speed: `countBatch` runs raid-major and plays P1 once per raid for setups with the same P1 settings (`p1Key` drops reds DCs, Boak, East bounce tech, deep proc, P2 shadow modes, 4-5 man purple DCs), continuing each from a `cloneGraph` copy with its own Player fields patched (`playerPatch`); results identical. Counts carry a per-raid signature (`sig`); round 1 runs 300 raids, merges setups with identical signatures (keeps the one closest to the chart), drops setups more than 4 standard errors behind the set's leader (looser breakpoint / success when the ranked one has under 30 hits), then finishes round 1 for the rest.
+
 ## v1.20.4 - 2026-10-11
 - Breakpoint basis: Optimizer `score` / `finalScore(…, ofKills)` + #o-basis (remembered); Solver `ofKills` (score denominator = kills), form select `bpBasis`, columns "(of kills)", warning without a minimum success; CLI `--ofkills 1`.
 
