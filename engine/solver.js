@@ -113,6 +113,7 @@ class Energy {
  * Returns {ok, why, dawnTicks: [[t, h]], codes: [{tick: 'D'|'P'|'ST>n'} per player], energy}.
  */
 export function placeRotation(ctx, plan, { maxTick = endOf(ctx) - 6 } = {}) {
+  if (ctx.dawnLimit != null && dawnTransfers(plan) > ctx.dawnLimit) return { ok: false, why: `more than ${ctx.dawnLimit} Dawn transfers` };
   const n = ctx.players.length, en = new Energy(ctx.players, plan.start);
   const codes = Array.from({ length: n }, () => ({}));
   const actions = new Map();                       // tick -> [{k, code, to?, optional?}]
@@ -175,6 +176,23 @@ export function placeRotation(ctx, plan, { maxTick = endOf(ctx) - 6 } = {}) {
   return { ok: true, dawnTicks, codes, energy: en };
 }
 
+/** Dawn transfers in a plan: how often the Dawnbringer changes hands (the first holder starts with it). */
+export const dawnTransfers = (plan) => plan.slots.reduce((a, x, j) => a + (j > 0 && x.h !== plan.slots[j - 1].h ? 1 : 0), 0);
+
+/** Claw scratch on 4t transfer: the attack a player makes right before picking up the Dawnbringer from someone else is
+ *  a Claw scratch, not Sulphur blades (both 4 ticks; picking up and speccing is easier with claws equipped). */
+function clawOnPickup(ctx, acts, dawnTicks) {
+  if (!ctx.clawPickup) return acts;
+  dawnTicks.forEach(([t, h], j) => {
+    if (j === 0 || dawnTicks[j - 1][1] === h) return;
+    const a = acts[h];
+    let last = null;
+    for (const tt in a) if (Number(tt) < t && ctx.atk[h][a[tt]] && a[tt] !== 'D' && (last == null || Number(tt) > last)) last = Number(tt);
+    if (last != null && a[last] === 'SB') a[last] = 'C';
+  });
+  return acts;
+}
+
 // ------------------------------------------------------------------ filling the gaps
 /** Best attack sequence for ticks [a, b): starts only at or before lastStart and not on a blocked tick (P / ST),
  *  every attack finished by b. Returns [expected damage, [[tick, code], ...]]. */
@@ -226,7 +244,7 @@ export function buildChart(ctx, plan, r = null) {
     for (const [tt, c] of seq) out[tt] = c;
     acts.push(out);
   }
-  return { ok: true, acts, dawnTicks: r.dawnTicks };
+  return { ok: true, acts: clawOnPickup(ctx, acts, r.dawnTicks), dawnTicks: r.dawnTicks };
 }
 
 /**
@@ -288,7 +306,7 @@ function buildDuo(ctx, r) {
     for (const [tt, c] of fillD(a, endOf(ctx))[1]) out[tt] = c;
     acts.push(out);
   }
-  return { ok: true, acts, dawnTicks: r.dawnTicks };
+  return { ok: true, acts: clawOnPickup(ctx, acts, r.dawnTicks), dawnTicks: r.dawnTicks };
 }
 
 /**
@@ -389,7 +407,10 @@ export function makeContext(cfgs, team, { sbOwner = null, blowpipe = true, trans
   const mage = duo ? Math.max(0, cfgs.findIndex((c) => c.shadow)) : null;
   const end = duo ? DUO_END : CHART_END;
   const dodges = (dodge || cfgs.map((_, k) => (duo ? (k === mage ? autoTicks(end) : DUO_RANGER_DODGES.even(end)) : []))).map((d) => new Set(d));
-  return { team, hp: P1_HP[team], players, sb: sb >= 0 ? sb : null, transfers, duo, mage, dodge: dodges, end,
+  // Solver team settings (on every config): the most Dawn transfers allowed (none = no limit), Claw scratch on 4t transfer
+  const lim = cfgs[0] && cfgs[0].dawnLimit;
+  const dawnLimit = lim == null || lim === '' ? null : Number(lim), clawPickup = !!(cfgs[0] && cfgs[0].clawPickup);
+  return { team, hp: P1_HP[team], players, sb: sb >= 0 ? sb : null, transfers, duo, mage, dodge: dodges, end, dawnLimit, clawPickup,
     atk: players.map((pl, i) => attackTable(pl.p, { sb: i === sb, bp: blowpipe && pl.p.has_bp !== false, duo })) };   // no blowpipe: no B
 }
 
@@ -441,7 +462,10 @@ export function solve(ctx, { slots = 16, beam = 300, keepPerSlot = 40, onProgres
   for (let s = 0; s < slots; s++) {
     const next = new Map();
     for (const st of states) {
+      const lastH = st.plan.slots.length ? st.plan.slots[st.plan.slots.length - 1].h : null;
+      const capped = ctx.dawnLimit != null && lastH != null && dawnTransfers(st.plan) >= ctx.dawnLimit;
       for (let h = 0; h < n; h++) {
+        if (capped && h !== lastH) continue;                       // Dawn transfer limit used up: the holder keeps it
         // symmetry: two players with the same setup are interchangeable while their part in the plan so far is the
         // same too (start spec, Dawns held, transfers given, surge) - then only the lower one is tried
         const sig = roleSigs(st.plan, n);

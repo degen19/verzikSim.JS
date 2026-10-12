@@ -152,6 +152,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         <label title="How many Lightbearer rings the team has. The solver decides who wears them.">Lightbearers${sel('rings', Array.from({ length: team + 1 }, (_, i) => [i, i]), s.rings)}</label>
         ${duo ? '' : `<label title="How many Soulflame horns the team has. The solver decides who holds them and whether they're used in P2, P3 or both.">Horns${sel('horns', Array.from({ length: team + 1 }, (_, i) => [i, i]), s.horns)}</label>`}
         <label title="Only one player can use Sulphur blades in P1.">Sulphur blades${sel('sb', [['', 'None'], ...nm.map((n, k) => [k, n])], s.sb)}</label>
+        <label title="The most times the Dawnbringer may be passed to another player in P1 (the first holder starts with it). Fewer transfers means players spec several times in a row instead of passing the staff back and forth. Blank = no limit.">Dawn transfer limit<input data-s="dawnLimit" type="number" min="0" max="30" step="1" value="${esc(s.dawnLimit ?? '')}" placeholder="no limit" style="width:80px"></label>
+        <label title="The attack a player makes right before picking up the Dawnbringer from another player is a Claw scratch instead of Sulphur blades (both 4 ticks) - picking up the Dawn and speccing is easier with claws equipped.">Claw scratch on 4t transfer<input type="checkbox" data-s="clawPickup" ${s.clawPickup ? 'checked' : ''} style="width:auto;align-self:flex-start;margin:8px 0 0"></label>
         ${main.map(teamField).join('')}
       </div>
       <div class="row wrap" style="margin-top:10px">
@@ -369,7 +371,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     try {
       const res = await solveRoom(cfgs, team, {
         rings: Number(s.rings), horns: team === 2 ? 0 : Number(s.horns), bpsFull: bps, rankBy: s.rankBy, minSuccess: minSucc,
-        sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show, ofKills: s.bpBasis === 'kills', ebtSearch: team !== 2 && !!s.ebtSearch, sideSearch: team !== 2 && !!s.sideSearch, shadowSearch: team !== 2 && !!s.shadowSearch,
+        sbOwner: s.sb === '' ? null : Number(s.sb), ...depth, top: 10, seed: `solve${Date.now()}`, progress: show, ofKills: s.bpBasis === 'kills', dawnLimit: s.dawnLimit === '' || s.dawnLimit == null ? null : Math.max(0, Math.floor(Number(s.dawnLimit))), clawPickup: !!s.clawPickup, ebtSearch: team !== 2 && !!s.ebtSearch, sideSearch: team !== 2 && !!s.sideSearch, shadowSearch: team !== 2 && !!s.shadowSearch,
         bpSearch: !!s.bpSearch, nBP: s.bpSearch ? Number(s.nBP ?? bpCount()) : undefined,
         seeds: seeds.map(({ cfg, label }) => ({ cfg, label })),
       }, pool);

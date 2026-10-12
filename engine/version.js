@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.20.5';
+export const VERSION = '1.21.0';
 export const CHANGES = [
+  { version: '1.21.0', date: '2026-10-12', items: [
+    'Verz Solver, Team settings: new "Dawn transfer limit" - the most times the Dawnbringer may be passed to another player in P1 (blank = no limit). With a limit, players spec several times in a row instead of passing the staff back and forth. A chart of yours with more transfers than the limit is still run as charted for comparison, and its edited versions are cut down to the limit first.',
+    'Verz Solver, Team settings: new "Claw scratch on 4t transfer" - the attack right before a player picks up the Dawnbringer from someone else is always a Claw scratch instead of Sulphur blades (picking up the Dawn and speccing is easier with claws equipped).',
+  ] },
   { version: '1.20.4', date: '2026-10-11', items: [
     'Optimizer and Verz Solver: new "Breakpoints count" choice next to Rank by - All attempts (default, failed raids count) or Successful runs only (how fast the kills are). It changes both the ranking and the breakpoint columns, which then read "(of kills)". Success always counts all attempts. Ranking on successful runs only can put a setup that rarely succeeds near the top, so the Solver reminds you to set a Minimum success % with it.',
   ] },

@@ -31,7 +31,7 @@ import { run_reds } from './reds.js';
 import { run_duo_reds } from './duo_reds.js';
 import { run_p3 } from './p3.js';
 import { Rng } from './rng.js';
-import { makeContext, solve, simP1, solveDuo, killTick, buildChart, chartKey, typicalKill, planFromChart, planNeighbors, chartDodges } from './solver.js';
+import { makeContext, solve, simP1, solveDuo, killTick, buildChart, chartKey, typicalKill, planFromChart, planNeighbors, chartDodges, dawnTransfers } from './solver.js';
 
 export const CLAW_TOL = { early: 0.03, final: 0.02 };
 export const CLAW_FLOOR = 0.95;   // and never below this: everyone clawing is a hard constraint (else claw scratches)
@@ -196,6 +196,22 @@ export function p1Candidates(base, team, lb, { beam = 150, top = 20, gap = 150, 
   return { cands, charts: charts.length, dropped: charts.length - cands.length };
 }
 
+/** A plan cut down to at most `lim` Dawn transfers: the shortest run of Dawns by one holder goes to the holder before it
+ *  (or after it, for the first run) until it fits. Spec transfers onto a Dawn from its new holder are dropped. */
+export function fitTransfers(plan, lim) {
+  if (lim == null) return plan;
+  const q = { start: [...plan.start], slots: plan.slots.map((x) => ({ ...x })) };
+  while (dawnTransfers(q) > lim) {
+    const runs = [];
+    q.slots.forEach((x, j) => { if (j === 0 || x.h !== q.slots[j - 1].h) runs.push([j, j + 1]); else runs[runs.length - 1][1] = j + 1; });
+    let r = 0;
+    runs.forEach(([a, b], i) => { if (b - a < runs[r][1] - runs[r][0]) r = i; });
+    const to = r > 0 ? q.slots[runs[r - 1][0]].h : q.slots[runs[r + 1][0]].h;
+    for (let j = runs[r][0]; j < runs[r][1]; j++) { q.slots[j].h = to; if (q.slots[j].st === to) q.slots[j].st = null; }
+  }
+  return q;
+}
+
 /** Your chart's P1, edited: the charts one change away from each plan (planNeighbors), built with the same rules as
  *  the solver's own (the plan's own included). The dodges come from the chart's X ticks (duos). Returns
  *  [{plan, acts, cvar}], one per distinct chart. */
@@ -278,6 +294,11 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     purpleTried: 0, purpleChanged: 0, finalSame: 0, finalClawCut: 0, finalSuccCut: 0, raids: 0, t: {} };
   // 3-5 man: the Dawn threshold is searched (1-6%); setups start at 3% until the Dawn threshold pass
   if (team !== 2) base = base.map((c) => ({ ...c, dawnThr: c.dawnThr >= 1 && c.dawnThr <= 6 ? c.dawnThr : 3 }));
+  // P1 rules from the Solver's team settings: Dawn transfer limit (none = no limit) and Claw scratch on 4t transfer.
+  // They ride on every config so each P1 search (here or in a worker) builds charts with them; the sim ignores them.
+  const p1Rules = { dawnLimit: o.dawnLimit ?? null, clawPickup: !!o.clawPickup };
+  base = base.map((c) => ({ ...c, ...p1Rules }));
+  if (o.seeds) o = { ...o, seeds: o.seeds.map((sd) => ({ ...sd, cfg: sd.cfg.map((c) => ({ ...c, ...p1Rules })) })) };
   const T = (k, t0) => { stats.t[k] = (stats.t[k] || 0) + (Date.now() - t0) / 1000; };
   let stage = '';
   const step = (s) => { stage = s; o.progress && o.progress({ stage, raids: stats.raids }); };
@@ -358,7 +379,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     const lb = sd.cfg.map((c) => !!c.lightbearerOn), purple = Math.max(0, sd.cfg.findIndex((c) => c.PurpleDC));
     const cfgOf = (x) => sd.cfg.map((c, k) => ({ ...c, actions: x.acts[k], startSpec: x.plan.start[k] }));
     const seen = new Set(), done = new Set(), pool = [];
-    let frontier = [planFromChart(sd.cfg)];
+    let frontier = [fitTransfers(planFromChart(sd.cfg), p1Rules.dawnLimit)];   // over the Dawn transfer limit: cut down to it first
     for (let r = 0; r < (o.editRounds ?? 2) && frontier.length; r++) {
       frontier.forEach((p) => done.add(JSON.stringify(p)));
       const list = (await ev.edits(sd.cfg, team, frontier, { perms: r === 0 }))
@@ -391,7 +412,9 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   // the solver's own setups, and the as-charted version always runs in the final - so a result is never worse than it
   const seeds = (o.seeds || []).map((sd) => ({ lb: sd.cfg.map((c) => !!c.lightbearerOn), cfg: sd.cfg, seedLabel: sd.label,
     purple: Math.max(0, sd.cfg.findIndex((c) => c.PurpleDC)) }));
-  s1all.push(...seeds, ...edited);
+  // a chart with more Dawn transfers than the limit only runs as charted (for comparison); its edits (cut to the limit) go on
+  const overLimit = (sd) => p1Rules.dawnLimit != null && dawnTransfers(planFromChart(sd.cfg)) > p1Rules.dawnLimit;
+  s1all.push(...seeds.filter((sd) => !overLimit(sd)), ...edited);
   stats.setups1 = s1all.length;
   (await run('p2', s1all.map((x) => x.cfg), o.n1, 'screen')).forEach((c, i) => { s1all[i].c = c; });
   // everyone needs a claw in reds: the best rate sets the bar

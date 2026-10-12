@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.21.0 - 2026-10-12
+- Solver P1 rules (team settings, carried on every config as `dawnLimit` / `clawPickup`; solveRoom `o.dawnLimit` / `o.clawPickup`, CLI `--dawnlimit N` / `--clawpickup 1`): `placeRotation` rejects plans with more Dawn transfers (`dawnTransfers`: holder changes between Dawn slots) than the limit, and the beam stops handing the staff on once it is used up; `buildChart` / duo fills turn the receiver's last attack before a handed-over Dawn from SB into C (`clawOnPickup`). Your chart over the limit: run as charted only; editing starts from `fitTransfers` (shortest holder runs merged into a neighbour until it fits).
+
 ## v1.20.5 - 2026-10-12
 - Optimizer speed: `countBatch` runs raid-major and plays P1 once per raid for setups with the same P1 settings (`p1Key` drops reds DCs, Boak, East bounce tech, deep proc, P2 shadow modes, 4-5 man purple DCs), continuing each from a `cloneGraph` copy with its own Player fields patched (`playerPatch`); results identical. Counts carry a per-raid signature (`sig`); round 1 runs 300 raids, merges setups with identical signatures (keeps the one closest to the chart), drops setups more than 4 standard errors behind the set's leader (looser breakpoint / success when the ranked one has under 30 hits), then finishes round 1 for the rest.
 
