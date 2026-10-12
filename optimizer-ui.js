@@ -1,7 +1,8 @@
 // Optimizer tab: choose inputs to vary, set breakpoints, see the estimated run time, run a staged search.
 import { parse_chart } from './engine/sim.js';
 import { threadCount, workersAvailable } from './pool.js';
-import { catalog, applyCombo, validCfgs, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts } from './engine/optimize.js';
+import { catalog, applyCombo, validCfgs, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts, cfgsToFields } from './engine/optimize.js';
+import { describe, readValues, withSetC } from './engine/chartform.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtT = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).padStart(4, '0')}`;
@@ -14,7 +15,7 @@ const RATE_KEY = 'verzikSim.rate.v2';   // v2: engine got ~1.4x faster in v1.6.0
 const rates = (() => { try { return JSON.parse(localStorage.getItem(RATE_KEY)) || {}; } catch { return {}; } })();
 const keepRate = (key, r) => { rates[key] = r; try { localStorage.setItem(RATE_KEY, JSON.stringify(rates)); } catch { /* ignore */ } };
 
-export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabel = (b) => `Set ${b}` }) {
+export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabel = (b) => `Set ${b}`, toBuilder = null }) {
   // cfgs / opts: the first chosen set's chart and the union of every chosen set's options (a sweep is applied to each set)
   let cfgs = null, team = 0, opts = [], rate = null, rateKey = '', pool = null, stopped = false;
   let filledSets = [], chosen = new Set(['A']), sets = [];   // sets: [{block, cfgs, opts}] for the chosen, filled sets
@@ -265,7 +266,9 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
         <td class="setup">${x.base ? (multi ? '<b>As charted</b>' : '<b>Your chart</b> (as charted)') : describeCombo(x.combo, x.set.opts)}</td>
         <td>${pct(c.k, c.n)}</td>${c.under.map((u) => { const d = ofKR ? c.k : c.n; return `<td>${pct(u, d)}<div class="muted small">${oneIn(u, d)}</div></td>`; }).join('')}
         <td>${c.fastest != null ? `${fmtT(c.fastest)}<div class="muted small">${c.fastestN}× in ${c.n.toLocaleString()}</div>` : '-'}</td>
-        <td><button class="ghost sm" data-rep="${idx}" title="Full report: this setup vs ${esc(getLabel(x.set.block))} as charted">Full report</button></td></tr>`;
+        <td style="white-space:nowrap"><button class="ghost sm" data-rep="${idx}" title="Full report: this setup vs ${esc(getLabel(x.set.block))} as charted">Full report</button>
+          ${toBuilder ? `<div class="row" style="gap:4px;margin-top:4px">${['A', 'B', 'C'].map((b) => `<button class="ghost sm" data-copy="${idx}" data-to="${b}" title="Put this setup into Set ${b} of Build chart on this page">→ ${b}</button>`).join('')}</div>` : ''}
+          <div class="muted small" id="o-msg-${idx}"></div></td></tr>`;
     };
     let body;
     if (multi && combineView) {
@@ -278,6 +281,20 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       <p class="muted small">Highlighted values differ from that set's chart. Ranked by ${metric === 'success' ? 'success rate' : `rooms at ${fmtS(curBps[metric])} or faster${ofKR ? ' (of successful runs)' : ' (of all attempts)'}`} in the final round${multi ? ' (every set\'s finalists ran on the same fresh raids, so sets compare fairly)' : ''}.
       Differences under ~${(100 / Math.sqrt(DEPTHS[$('o-depth').value].n[2])).toFixed(1)} points (and much less for rare breakpoints) can be noise - use Thorough to separate close setups.</p>`;
     $('o-out').onclick = async (e) => {
+      const cb = e.target.closest('button[data-copy]');
+      if (cb) {
+        const x = all[Number(cb.dataset.copy)], msg = $(`o-msg-${cb.dataset.copy}`);
+        try {
+          // the set's own chart values, with this setup's choices written over them
+          const wb = await getWorkbook(); if (!wb) throw new Error('No chart on the page');
+          const ws = withSetC(await wb.load(`${team}-man`)), desc = describe(ws, team, x.set.block);
+          const vals = readValues(ws, desc);
+          for (const [t, h, k, v] of cfgsToFields(x.cfgs, team)) { const key = `${t}|${h}|${k ?? 'team'}`; if (desc.fields.has(key)) vals[key] = v; }
+          await toBuilder(team, cb.dataset.to, vals);
+          msg.textContent = `Copied to Set ${cb.dataset.to}`;
+        } catch (err) { msg.textContent = err.message; }
+        return;
+      }
       const b = e.target.closest('button[data-rep]'); if (!b) return;
       const x = all[Number(b.dataset.rep)], lab = getLabel(x.set.block);
       $('o-report').innerHTML = '<p class="muted">Running the full report...</p>';

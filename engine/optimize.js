@@ -81,6 +81,43 @@ const TOGGLES = [
 ];
 
 /**
+ * A setup as chart-form changes: [[table, header, player (null = team), value], ...] for every input the optimizer can
+ * vary (DCs, Lightbearers, ring swap %, amulet, Boak sides / pattern, blowpipes, shadow + modes + mage gear, deep proc,
+ * East bounce tech, toggles). Written over the set's own form values, it gives the chart of that setup.
+ */
+export function cfgsToFields(cfgs, team) {
+  const out = [];
+  const put = (t, h, k, v) => out.push([t, h, k, v]);
+  cfgs.forEach((c, k) => {
+    put('setup', 'lightbearerOn', k, !!c.lightbearerOn);
+    put('setup', 'PurpleDC', k, !!c.PurpleDC); put('setup', '1st Purple DC', k, !!c.PurpleDC); put('setup', '2nd Purple DC', k, !!c.Purple2DC);
+    put('setup', 'WestDC', k, !!c.WestDC); put('setup', 'EastDC', k, !!c.EastDC);
+    put('setup', 'Ring switch %', k, c.ringSwitch ?? '');
+    if (c.amulet_mode || c.amulet) put('gear', 'amulet', k, c.amulet);
+    put('gear', 'Has BP', k, c.hasBP !== false);
+    put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB);
+    put('gear', 'Shadow camp', k, !!c.shadowCamp); put('gear', 'Deep proc', k, !!c.deepProc);
+    if ('pneckP1' in c) put('gear', 'Pneck on P1', k, !!c.pneckP1);
+    if (team > 2) {
+      if (c.eastBoak != null || c.westBoak != null) { put('gear', 'East Boak', k, !!c.eastBoak); put('gear', 'West Boak', k, !!c.westBoak); }
+      if (c.eastPattern) put('gear', 'East Pattern', k, c.eastPattern);
+    }
+    if (c.shadow && c.mage) {
+      const mg = c.mage;
+      if (mg.helm) put('mage', 'mage helm', k, labelOf(MAGE_HELM, mg.helm, 'Ancestral'));
+      if (mg.body) put('mage', 'mage body', k, labelOf(MAGE_BODY, mg.body, 'Ancestral'));
+      if (mg.legs) put('mage', 'mage legs', k, labelOf(MAGE_LEGS, mg.legs, 'Ancestral'));
+      if (mg.cape) put('mage', 'mage cape', k, /nfernal/.test(mg.cape) ? 'Infernal' : 'Imbued sara');
+    }
+  });
+  if (cfgs[0]) {
+    if (cfgs[0].deepThr != null) put('team', 'Deep proc HP %', null, cfgs[0].deepThr);
+    if (team > 2) put('team', 'East bounce tech', null, cfgs[0].eastBounce || 0);
+  }
+  return out;
+}
+
+/**
  * Every input the optimizer can vary for this chart. Each option:
  *  {id, group, label, kind: 'num'|'choice', current, choices?, apply(cfgs, value)}
  * 'num' values are numbers or 'off'; 'choice' values are strings from `choices`.

@@ -93,8 +93,14 @@ $('toBuilder').addEventListener('click', async () => {
 });
 
 // ---- tabs
-const optimizer = createOptimizer($('tab-opt'), { getWorkbook, getTeam: team, runReport,
+const optimizer = createOptimizer($('tab-opt'), { getWorkbook, getTeam: team, runReport, toBuilder: (t, b, values) => solverToBuilder(t, b, values),
   getLabel: (b) => $(`lab${b}`).value || `Set ${b}` });                    // Run tab set labels
+/** Put chart values into a set of "Build chart on this page" (which then becomes the chart source for Run / Optimizer). */
+async function solverToBuilder(t, b, values) {
+  await builder.setSet(t, b, values);
+  if (source !== 'build') $('src').querySelector('[data-src="build"]').click();
+  else await builder.show(team());
+}
 const solver = createSolver($('tab-solve'), {
   getTeam: team,
   // a solver setup -> a set of "Build chart on this page" (which then becomes the chart source for Run / Optimizer)
