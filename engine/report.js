@@ -277,7 +277,7 @@ function attemptsSvg(res, labels, bps) {
 }
 
 export const REPORT_CSS = `
-.vz-report{--ink:#0b0b0b;--ink2:#52514e;--grid:#e6e5e0;--surf:#fcfcfb;--th:#f3f2ee;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--surf);padding:16px;border-radius:10px}
+.vz-report{--ink:#181a1e;--ink2:#50545c;--grid:#c2c7cd;--surf:#e4e6ea;--th:#d5d8dd;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--surf);padding:16px;border-radius:10px}
 .vz-report h2{margin:0 0 4px;font-size:20px}.vz-report .sub{color:var(--ink2);font-size:13px;margin-bottom:12px}
 .vz-report .kpis{display:flex;gap:28px;flex-wrap:wrap;margin:8px 0 14px}.vz-report .kpi b{font-size:30px;display:block}.vz-report .kpi span{color:var(--ink2);font-size:12px}
 .vz-report h3{font-size:15px;margin:18px 0 6px}.vz-report .scroll{overflow-x:auto}
@@ -349,6 +349,6 @@ export function reportHtml(res, labels, team, runs, opts = {}) {
 /** A complete standalone HTML file. */
 export function reportPage(res, labels, team, runs, opts = {}) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Verzik ${team}-man report</title><style>body{margin:0;padding:16px;background:#fcfcfb}${REPORT_CSS}</style></head>
+<title>Verzik ${team}-man report</title><style>body{margin:0;padding:16px;background:#dadde0}${REPORT_CSS}</style></head>
 <body>${reportHtml(res, labels, team, runs, opts)}</body></html>`;
 }
