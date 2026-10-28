@@ -49,7 +49,7 @@ if (process.argv.includes('--full')) {
   s(ends); s(m1); s(m2);
   const mmss = (t) => { const sec = t * 0.6; return `${Math.floor(sec / 60)}:${(sec % 60).toFixed(1).padStart(4, '0')}`; };
   console.log(`FULL ${team}-man, entry i${entry}: room time 10% ${mmss(qq(ends, 0.1))} | median ${mmss(qq(ends, 0.5))} | 90% ${mmss(qq(ends, 0.9))} | fastest ${mmss(ends[0])} (t${ends[0]})`);
-  console.log(`  maze 1 median t${qq(m1, 0.5)}, maze 2 median t${qq(m2, 0.5)} | per raid: player deaths ${(deaths / N).toFixed(2)} (in stalls ${(stallDeaths / ends.length).toFixed(2)}), phoenix necklaces used ${(pn / ends.length).toFixed(2)}, sharks for orbs ${(sh / N).toFixed(2)}${fails ? ` | ${fails} raids wiped` : ''}`);
+  console.log(`  maze 1 median t${qq(m1, 0.5)}, maze 2 median t${qq(m2, 0.5)} | per raid: player deaths ${(deaths / N).toFixed(2)} (in stalls ${(stallDeaths / ends.length).toFixed(2)}), phoenix necklaces used ${(pn / ends.length).toFixed(2)}, sharks eaten ${(sh / N).toFixed(2)}${fails ? ` | ${fails} raids wiped` : ''}`);
   const DT = Object.values(dm).reduce((x, y) => x + y, 0);
   console.log(`  damage: ${Object.entries(dm).map(([k, v]) => `${k} ${(v / DT * 100).toFixed(1)}%`).join(', ')} | per raid: mauls ${(sp.maul / ends.length).toFixed(2)} (hit ${(sp.maulHit / Math.max(1, sp.maul) * 100).toFixed(0)}%), claw specs ${(sp.claw / ends.length).toFixed(2)}`);
 }

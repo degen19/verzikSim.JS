@@ -204,31 +204,16 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     attackable = m + 9; nextAttack = m + 10;
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
     const runners = live.filter((p) => p !== under);
-    // Heal Other at the proc: a player at 50 or less (can't veng safely) heals a runner in stall danger if that leaves
-    // neither of them needing a shark
-    for (const c of live) {
-      if (c.hp > ORB_MAX) continue;
-      for (const q of runners.filter((x) => x !== c && stallDead(x.hp, x, runners.length))) {
-        const give = Math.min(Math.floor(c.hp * 0.75), 99 - q.hp);
-        if (give <= 0) continue;
-        const cOk = c === under ? c.hp - give >= 17 : !stallDead(c.hp - give, c, runners.length);
-        if (cOk && !stallDead(q.hp + give, q, runners.length)) {
-          c.hp -= give; q.hp += give;
-          L.on && L(`t${t} ${c.name} heals other ${q.name} (+${give}) before the stall: ${c.name} ${c.hp}, ${q.name} ${q.hp}`);
-          break;
-        }
-      }
-    }
     for (const p of runners) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10; p.thrallBack = true;
       // in a danger zone for the skip: one shark at most, after the teleport and before stepping on (no eating in the stall)
       if (p.sharks > 0 && stallSkip(p.hp, team, p.pnecks > 0, true, runners.length).dead) {
-        const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--;
+        const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--; st.sharks++;
         L.on && L(`t${t} ${p.name} eats a shark before the stall: ${old} -> ${p.hp} (${p.sharks} left)`);
       }
     }
-    if (under) { under.next = t + 19; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
+    if (under) { under.next = t + 19; under.healFrom = t + 20; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
     pendingStall = { at: m + 8, runners };
   };
   let pendingStall = null;
@@ -269,7 +254,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
    *  otherwise the sharks are kept for a dangerous stall. */
   const afterPneck = (t, p) => {
     if (p.sharks > 2 - mazes.length) {
-      const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--;
+      const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--; st.sharks++;
       L.on && L(`t${t} ${p.name} eats a shark with the phoenix necklace: ${old} -> ${p.hp} (${p.sharks} left)`);
     }
   };
@@ -286,21 +271,6 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     const ticks = new Set(); let last = Infinity;
     for (const x of xs) if (x + PRAYER_OFF < last && x >= offUntil) { ticks.add(x); last = x; }
     return { ticks, unprayed: mine.length - ticks.size };
-  };
-  /** Orbs coming they can't pray (a close pair) and not enough HP to take them all (50 each) - or at 50 or less with more
-   *  sharks than stalls still to come: they eat a shark (one every 3 ticks; their next attack is never sooner than 3
-   *  ticks after eating). Not in a stall. */
-  const eatForOrbs = (t) => {
-    for (const p of alive()) {
-      if (p.sharks <= 0 || t < (p.eatReady || 0) || (p.stallAt && t >= p.stallAt - 8 && t < p.stallAt)) continue;
-      const n = prayPlan(p, t + 1, p.prayOffUntil).unprayed;
-      const spare = p.sharks > Math.max(0, upTo - 1 - mazes.length) && !blocked;     // more sharks than stalls still to come
-      if (p.hp > ORB_MAX * Math.max(1, n) || (!n && !spare)) continue;
-      const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--; p.eatReady = t + 3;
-      if (p.next < t + 3) { p.next = t + 3; if (isHerTick(p.next + 1)) p.next++; }
-      st.sharks++;
-      L.on && L(`t${t} ${p.name} eats a shark (${n ? `${n} orb${n > 1 ? 's' : ''} coming they can't pray` : 'low, a spare shark'}): ${old} -> ${p.hp} (${p.sharks} left)`);
-    }
   };
   for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
     if (blocked && t >= attackable) blocked = false;
@@ -323,28 +293,34 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const other = alive().find((q) => q !== p && !q.veng && t < q.vengReady && t >= q.noVengUntil);
       if (other) { other.veng = true; p.vengReady = t + VENG_CD; L.on && L(`t${t} ${p.name} casts veng on ${other.name}`); }
     }
-    // ---- Heal Other (75% of the caster's HP, capped at the target's missing HP; no attack delay; not in a stall):
-    // a player without veng up - before the second maze only if they're on veng cooldown or at 50 or less - lifts a
-    // teammate with veng up from 50 or less to above 50 - only one with an orb heading at them (lowest HP first);
-    // nobody like that: no Heal Other.
-    // Before the second maze they won't go below 17, or into a stall-danger HP, while a maze is still to come.
-    if (!blocked || mazes.length) {
-      const after2 = mazes.length >= 2, targeted = new Set(orbs.filter((o) => o[0] > t).map((o) => o[1]));
+    // ---- Heal Other (75% of the caster's HP, capped at the target's missing HP; no attack delay): only in an attack phase
+    // (never between a proc and the stall); the under player not until after their first swing after the maze.
+    // Caster: not one who can veng safely themselves (veng up and above 50). Target (lowest HP first), only if the heal:
+    //  - lifts a teammate with veng up from 50 or less to above 50 (so they can veng safely) - one with an orb heading at
+    //    them, or
+    //  - with a maze still to come, takes a teammate out of a stall-danger HP, or
+    //  - lifts a teammate with orbs coming they can't pray (a close pair) above what those can hit.
+    // The caster won't go to 50 or less with orbs coming at them they can't pray; before the second maze not below 17, or
+    // into a stall-danger HP.
+    if (!blocked) {
+      const after2 = mazes.length >= 2, targeted = new Set(orbs.filter((o) => o[0] >= t).map((o) => o[1]));
+      const runnersNext = alive().length - 1;
       for (const c of alive()) {
-        if (c.veng || t < c.noVengUntil || (blocked && c.stallAt && t < c.stallAt)) continue;
-        if (!after2 && !(t < c.vengReady || c.hp <= ORB_MAX)) continue;
-        // also a player out of sharks with orbs coming they can't pray and too little HP for them
-        const need = (q) => ORB_MAX * Math.max(1, prayPlan(q, t, q.prayOffUntil).unprayed);
-        const danger = (q) => q.sharks <= 0 && prayPlan(q, t, q.prayOffUntil).unprayed > 0 && q.hp <= need(q);
-        const cands = alive().filter((q) => q !== c && t >= q.noVengUntil && ((q.veng && q.hp <= ORB_MAX && targeted.has(q)) || danger(q)))
-          .sort((a, b) => a.hp - b.hp);                              // only someone an orb is heading at; lowest HP first
+        if ((c.veng && c.hp > ORB_MAX) || t < (c.healFrom || 0)) continue;
         const cUnprayed = prayPlan(c, t, c.prayOffUntil).unprayed;
+        const pairNeed = (q) => ORB_MAX * prayPlan(q, t, q.prayOffUntil).unprayed;   // HP an unprayable pair can take
+        const cands = alive().filter((q) => q !== c && (
+          (q.veng && q.hp <= ORB_MAX && targeted.has(q)) || (!after2 && stallDead(q.hp, q, runnersNext)) || q.hp <= pairNeed(q)))
+          .sort((a, b) => a.hp - b.hp);
         for (const q of cands) {
           const give = Math.min(Math.floor(c.hp * 0.75), 99 - q.hp), left = c.hp - give;
-          if (q.hp + give <= need(q) || left <= 0) continue;          // no gain
-          if (cUnprayed && left <= ORB_MAX * cUnprayed) continue;      // not with orbs coming at them they can't pray
-          if (left <= ORB_MAX && c.sharks <= 0 && !(mazes.length >= 2 && hp <= MAX * chanceAt)) continue;   // no shark to come back with
-          if (!after2 && (left < 17 || stallDead(left, c, alive().length - 1))) continue;
+          if (give <= 0 || left <= 0) continue;
+          const vengGain = q.veng && q.hp <= ORB_MAX && targeted.has(q) && q.hp + give > ORB_MAX;
+          const mazeGain = !after2 && stallDead(q.hp, q, runnersNext) && !stallDead(q.hp + give, q, runnersNext);
+          const pairGain = q.hp <= pairNeed(q) && q.hp + give > pairNeed(q);
+          if (!vengGain && !mazeGain && !pairGain) continue;           // no gain
+          if (cUnprayed && left <= ORB_MAX * cUnprayed) continue;      // orbs coming at them they can't pray
+          if (!after2 && (left < 17 || stallDead(left, c, runnersNext))) continue;
           c.hp = left; q.hp += give;
           L.on && L(`t${t} ${c.name} heals other ${q.name} (+${give}): ${c.name} ${c.hp}, ${q.name} ${q.hp}`);
           break;
@@ -425,7 +401,6 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         L.on && L(`t${t} SOTETSEG magic orb -> ${tgt.name}, lands t${t + ORB_DELAY}`);
       }
     }
-    eatForOrbs(t);
     // ---- spec regen (10% per 50 ticks below 100) and thralls (0-3 every 4 ticks, landing a tick later; not in a maze)
     for (const p of alive()) {
       if (p.spec < 100) { if (++p.regen >= 50) { p.regen = 0; p.spec = Math.min(100, p.spec + 10); } } else p.regen = 0;
