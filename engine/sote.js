@@ -17,11 +17,15 @@
 //    then (specs - to come) scythes every 5 ticks, lined up on her attack ticks so she never melees (the "flinch").
 //    Shadow Barrage drains 15% of her Defence (once until the next maze, floor 100).
 //
-// Solver (to come), every scale: Lightbearer (and for how many cycles, 1-5), 95 / 100 start spec (95: first regen the
-// tick after their first spec), horn, mauls / claws / ZCB specs, Shadow Barrage prefire in place of a maul, skipping a
-// maul once one lands, who specs in which phase - and the room entry instance. Output: top 10 (as Verzik), each with
-// the entry instance tick and a phase-by-phase breakdown of the procedure. Spec resets each room; the surge cooldown
-// carries over (the full raid solver weighs Sotetseg against Verzik).
+// Solver (to come), every scale: prefires, Lightbearer (who, and for how many cycles, 1-5 - no more players than the
+// Lightbearers in the raid), surges (no more than the room's surge limit), 95 / 100 start spec (95: first regen the
+// tick after their first spec), horn (phase 1: on t8 as now; phase 2: horn + mauls after the players' first scythe
+// swing off the maze - not in the stall), mauls / claws / ZCB specs, Shadow Barrage prefire in place of a maul,
+// skipping a maul once one lands, who specs in which phase - and the room entry instance. Output: top 10 (as Verzik),
+// each with the entry instance tick, a phase-by-phase breakdown of the procedure, and the times (median / top 10%):
+// P1, first maze, P2, second maze, total. Spec resets each room; the surge cooldown carries over (the full raid solver
+// weighs Sotetseg against Verzik). Off-grid idea to test: delaying the phase 2 mauls 2-3 ticks off the maze so the
+// horn goes off first and they're guaranteed.
 //
 // Assumptions to confirm (constants below): prefire attack ticks / hit delays, player stats (super combat 118 Atk /
 // Str / Def, range potted 112 Ranged, 99 Magic, Piety or Zeal for melee, Rigour / Augury for prefires).
@@ -244,6 +248,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   let hp = MAX, defLvl = SOTE.def, drained = false, phase = 0, stopAt = marks[0];
   let blocked = false;                          // she can't be damaged (maze) until `attackable`
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
+  const back = [];                              // the tick she's interactable again after each maze
   const mazes = [];
   const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, restores: 0, locator: 0, runs: [], stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
@@ -285,7 +290,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     blocked = true; hits = []; orbs = []; for (const p of ps) { p.pending = []; p.thrallNext = null; }   // thralls stop until they attack again
     defLvl = SOTE.def; drained = false;
     let m = t + 5; while (instanceOf(m, entry) !== 0) m++;           // runners: click on the first i3 from T+4, move on the i0 after
-    attackable = m + 9; nextAttack = m + 10;
+    attackable = m + 9; nextAttack = m + 10; back.push(attackable);
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
     if (live.some((p) => p.how[mazes.length - 1] === 'run')) { runMaze(t, m, live, under); return; }   // anyone runs: all run
     const runners = live.filter((p) => p !== under);
@@ -331,7 +336,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     const light = t + 4 + u, leave = Math.max(t + 7, light + 1), onFirst = leave + r - 1;
     const go = light + 1 + (r > 3 ? 1 : 0), onN = onFirst + mz.toN;
     let c = onN; while (instanceOf(c, entry) !== 3) c++;
-    attackable = c + 2; nextAttack = c + 3;
+    attackable = c + 2; nextAttack = c + 3; back[back.length - 1] = attackable;
     for (const p of live) { p.next = c + 3; p.thrallBack = true; p.mazeEatTill = c + 3; p.eatKeep = 0; p.noVengUntil = 0; }
     if (under) under.healFrom = c + 3;
     const lost = (c + 1) - (mSkip + 8);
@@ -680,7 +685,11 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
   }
   if (kill != null) end = kill + anim;
-  return { end, kill, anim, mazes, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, role: p.role, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks, spec: p.spec, surgeAt: p.surgeAt, lbOffAt: p.lbOffAt })) };
+  // report split: P1 (to the first proc), first maze (proc to the end of the last cycle before she's interactable),
+  // P2 (interactable to the second proc), second maze, P3 (to the end of the room)
+  const split = mazes.length >= 2 && back.length >= 2 && end != null
+    ? { p1: mazes[0], maze1: back[0] - mazes[0], p2: mazes[1] - back[0], maze2: back[1] - mazes[1], p3: end - back[1], total: end } : null;
+  return { end, kill, anim, mazes, split, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, role: p.role, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks, spec: p.spec, surgeAt: p.surgeAt, lbOffAt: p.lbOffAt })) };
 }
 
 /** Phase 1 only (start to the first maze): runSote stopped there. */

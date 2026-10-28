@@ -12,7 +12,7 @@ import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { bestWorn, bonuses } from './engine/loadout.js';
 import { defaultMazes, MAZE_HOW } from './engine/sote.js';
 
-const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}
+const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
 const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: kept for this page */ } };
@@ -54,6 +54,10 @@ export function createSote(root, { getTeam }) {
     const mazesOf = (p, k) => (Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), hasOrb(k), team()));
     // notices
     const notes = [], tips = [];
+    const surgeLimit = Number.isInteger(st.surgeLimit) ? st.surgeLimit : team(), lbRings = Number.isInteger(st.lbRings) ? st.lbRings : team();
+    const surgers = st.players.filter((p) => p.surge).length, lbers = st.players.filter((p) => Number(p.lbCycles || 0) > 0).length;
+    if (surgers > surgeLimit) notes.push(`${surgers} players drink a surge, but only ${surgeLimit} surge potion${surgeLimit === 1 ? '' : 's'} can be used here.`);
+    if (lbers > lbRings) notes.push(`${lbers} players wear Lightbearer, but there ${lbRings === 1 ? 'is' : 'are'} only ${lbRings} in the raid.`);
     const all = st.players.map((p, k) => ({ k, n: Number(p.pnecks || 0), m: mazesOf(p, k) }));
     for (const { k, n, m } of all) {
       const pn = m.filter((x) => x === 'pneck').length;
@@ -99,6 +103,8 @@ export function createSote(root, { getTeam }) {
       <p class="muted small">Room settings for each player. The Sotetseg sim is being built - these are saved in this browser and will be used by it (and by Full raid).
         Gear comes from the Gear tab; a prefire needs that weapon in the Gear set (Shadow Barrage: a Shadow ancient sceptre).</p>
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>Gear set ${x}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
+        <label title="Surge potions the team can use in this room (the solver won't use more - keep some back for another room)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label title="Lightbearer rings in the raid: no more players than this can wear one">Lightbearers<select data-rset="lbRings">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === lbRings ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
 </div>
       ${notes.map((x) => `<div class="warn small" style="margin-bottom:4px">${esc(x)}</div>`).join('')}
       ${tips.map((x) => `<div class="muted small" style="margin-bottom:4px">Recommended: ${esc(x)}</div>`).join('')}
@@ -113,6 +119,7 @@ export function createSote(root, { getTeam }) {
   root.addEventListener('change', (e) => {
     const t = e.target, st = tstate();
     if (t.dataset.gearset != null) { st.gearSet = t.value; persist(); render(); return; }
+    if (t.dataset.rset) { st[t.dataset.rset] = Number(t.value); persist(); render(); return; }
     if (t.dataset.maze != null) {
       const [k, i] = t.dataset.maze.split('|').map(Number), p = st.players[k];
       const g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null;

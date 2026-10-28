@@ -40,12 +40,13 @@ if (process.argv.includes('--full')) {
   const pneckArg = process.argv.find((x) => x.startsWith('--pnecks=')), pnArr = pneckArg ? pneckArg.split('=')[1].split(',').map(Number) : null;
   const full = players.map((p, k) => ({ ...p, pnecks: pnArr ? (pnArr[k] ?? 2) : 2, sharks: pnArr && (pnArr[k] ?? 2) < 2 ? 3 : 4, rests: 4, ...(mz && mz[k] ? { mazes: mz[k] } : {}) }));
   if (showLog) { const log = []; runSote(full, team, new Rng('full#0'), log, { entry, plan }); console.log('\n--- full raid log ---\n' + log.filter((l) => /MAZE|under|stall|shark|DIES|overkill|necklace|dies|^t(3[5-9]|4\d|5[0-9]) /.test(l)).join('\n')); }
-  const ends = [], m1 = [], m2 = []; let deaths = 0, runs = 0, runLost = 0, loc = 0, rd = 0, rdDead = 0, sh = 0, sk = 0, skDead = 0, rs = 0, pn = 0, fails = 0, stallDeaths = 0; const surges = {}, dm = {}, sp = { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0 };
+  const ends = [], m1 = [], m2 = []; let deaths = 0, runs = 0, runLost = 0, loc = 0, rd = 0, rdDead = 0, sh = 0, sk = 0, skDead = 0, rs = 0, pn = 0, fails = 0, stallDeaths = 0; const splits = {}, surges = {}, dm = {}, sp = { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0 };
   for (let i = 0; i < N; i++) {
     const r = runSote(full, team, new Rng(`full#${i}`), null, { entry, plan });
     deaths += r.players.filter((p) => p.dead).length; sh += r.sharks;
     if (r.end == null) { fails++; continue; }
     ends.push(r.end); m1.push(r.mazes[0]); m2.push(r.mazes[1]);
+    if (r.split) for (const k in r.split) (splits[k] ||= []).push(r.split[k]);
     pn += r.players.reduce((a, p, k) => a + ((full[k].pnecks) - p.pnecks), 0); sk += r.sharkSkips.length; rd += r.stalls.filter((x) => x.redemption).length; for (const x of r.runs) { runs++; runLost += x.lost; } loc += r.locator; rdDead += r.stalls.filter((x) => x.redemption && x.dead).length; skDead += r.sharkSkips.filter((x) => x.dead).length; rs += r.rests;
     stallDeaths += r.stalls.filter((x) => x.dead).length;
     r.players.forEach((q) => { if (q.surgeAt != null) (surges[`${q.name} (${q.role})`] ||= []).push(q.surgeAt); });
@@ -58,5 +59,9 @@ if (process.argv.includes('--full')) {
   console.log(`  maze 1 median t${qq(m1, 0.5)}, maze 2 median t${qq(m2, 0.5)} | per raid: player deaths ${(deaths / N).toFixed(2)} (in stalls ${(stallDeaths / ends.length).toFixed(2)}), phoenix necklaces used ${(pn / ends.length).toFixed(2)}${rd ? `, redemption skips ${(rd / N).toFixed(2)} (deaths ${rdDead}), locator heals ${(loc / N).toFixed(2)}` : ''}${runs ? `, maze runs ${(runs / N).toFixed(2)} (${(runLost / runs).toFixed(1)} ticks after a skip on average)` : ''}${sk ? `, shark skips ${(sk / N).toFixed(2)} (deaths ${skDead})` : ''}, sharks eaten ${(sh / N).toFixed(2)}, rests ${(rs / N).toFixed(2)}${fails ? ` | ${fails} raids wiped` : ''}`);
   const DT = Object.values(dm).reduce((x, y) => x + y, 0);
   console.log(`  damage: ${Object.entries(dm).map(([k, v]) => `${k} ${(v / DT * 100).toFixed(1)}%`).join(', ')} | per raid: mauls ${(sp.maul / ends.length).toFixed(2)} (hit ${(sp.maulHit / Math.max(1, sp.maul) * 100).toFixed(0)}%), claw specs ${(sp.claw / ends.length).toFixed(2)}, ZCB specs ${(sp.zcb / ends.length).toFixed(2)}, horns ${(sp.horn / ends.length).toFixed(2)}`);
+  // report: median and top 10% (the fastest tenth) of each part
+  const sec = (t) => { const x = t * 0.6; return x >= 60 ? `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}` : `${x.toFixed(1)}s`; };
+  const part = (k, lab) => { const v = s(splits[k] || []); return v.length ? `  ${lab.padEnd(12)} median ${sec(v[Math.floor(v.length / 2)]).padStart(6)} (${v[Math.floor(v.length / 2)]}t) | top 10% ${sec(v[Math.floor(v.length * 0.1)]).padStart(6)} (${v[Math.floor(v.length * 0.1)]}t)` : ''; };
+  console.log([['p1', 'P1'], ['maze1', 'First maze'], ['p2', 'P2'], ['maze2', 'Second maze'], ['p3', 'P3'], ['total', 'Room']].map(([k, l]) => part(k, l)).join('\n'));
   if (Object.keys(surges).length) console.log(`  surge drunk (median tick): ${Object.entries(surges).map(([k, v]) => `${k} t${s(v)[Math.floor(v.length / 2)]}`).join(', ')}`);
 }
