@@ -120,6 +120,8 @@ function clawSpec(p, defLvl, rng) {
 // isn't at the floor), and in phase 3 the backups use spare spec: maul if she isn't fully reduced, otherwise claws.
 export const SPEC_PLAN = { A: { maul: [0, 1] }, B: { maul: [1, 2] }, C: { maul: [0, 2] }, D: { backup: 0 }, E: { backup: 1 } };
 const ROLES = ['A', 'B', 'C', 'D', 'E'];
+// 3s: A mauls in phases 1 and 2, B in 1 and 3, C in 2 and 3 (as early as possible; no backups).
+export const SPEC_PLAN_3 = { A: { maul: [0, 1] }, B: { maul: [0, 2] }, C: { maul: [1, 2] } };
 // Spec plan 2 (5s; 4s the same without D), by player:
 //  A: Soulflame horn on t8 (after the prefire, running in: A and B), Elder maul in phase 1; maul in phase 2
 //  Surges (A, C, D): drunk straight after their first spec (A: the horn).
@@ -196,6 +198,7 @@ export const SHARK_HEAL = 20;
  */
 export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1 } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
+  const plan1Of = team === 3 ? SPEC_PLAN_3 : SPEC_PLAN;
   const roleOf = (i) => (plan === 2 && ROLES_2[team] ? ROLES_2[team][i] : ROLES[i]);
   const MAX = SOTE_HP[team] || 4000;
   const marks = [Math.floor(MAX * MAZE_AT[0]), Math.floor(MAX * MAZE_AT[1]), 0];
@@ -485,7 +488,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // ---- melee hits on players, then player attacks
     const floored = () => defLvl <= SOTE.defFloor;
     const maulPending = () => hits.some((h) => h[4] === 'maul');
-    const plannedLeft = (ph) => alive().some((q) => (SPEC_PLAN[q.role]?.maul || []).includes(ph) && !q.mauled[ph] && q.spec >= 50);
+    const plannedLeft = (ph) => alive().some((q) => (plan1Of[q.role]?.maul || []).includes(ph) && !q.mauled[ph] && q.spec >= 50);
     for (const p of alive()) {
       for (const [, d] of p.pending.filter((x) => x[0] === t)) { if (d > 0) { hurt(t, p, d); vengHit(t, p, d, 'melee'); } }
       p.pending = p.pending.filter((x) => x[0] !== t);
@@ -496,7 +499,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       let act = 'scythe';
       if (plan === 2) act = plan2Act(p, t, ph, has);
       p.swings[ph]++;
-      const plan1 = plan === 1 ? (SPEC_PLAN[p.role] || {}) : {};
+      const plan1 = plan === 1 ? (plan1Of[p.role] || {}) : {};
       if (plan === 1 && p.spec >= 50 && has('Elder maul') && !floored()) {
         if ((plan1.maul || []).includes(ph) && !p.mauled[ph]) act = 'maul';
         else if ((plan1.backup === ph || (ph === 2 && plan1.backup != null)) && p.mauled[ph] < 2 && !plannedLeft(ph) && !maulPending()) act = 'maul';
