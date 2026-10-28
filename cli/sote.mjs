@@ -34,13 +34,15 @@ console.log(`  damage share: ${Object.entries(tot).map(([k, v]) => `${k} ${(v / 
 if (process.argv.includes('--full')) {
   const entry = Number((process.argv.find((x) => x.startsWith('--entry=')) || '--entry=0').split('=')[1]);
   const planArg = process.argv.find((x) => x.startsWith('--plan=')), plan = planArg ? Number(planArg.split('=')[1]) : undefined;
-  const skipArg = process.argv.find((x) => x.startsWith('--skip=')), skip = skipArg ? skipArg.split('=')[1] : 'stall';
+  // --mazes=ps,pp,... per player, first and second maze: p necklace, r redemption, s shark, u run (default by necklaces)
+  const LET = { p: 'pneck', r: 'redemption', s: 'shark', u: 'run' };
+  const mzArg = process.argv.find((x) => x.startsWith('--mazes=')), mz = mzArg ? mzArg.split('=')[1].split(',').map((x) => [...x].map((c) => LET[c])) : null;
   const pneckArg = process.argv.find((x) => x.startsWith('--pnecks=')), pnArr = pneckArg ? pneckArg.split('=')[1].split(',').map(Number) : null;
-  const full = players.map((p, k) => ({ ...p, pnecks: pnArr ? (pnArr[k] ?? 2) : 2, sharks: pnArr && (pnArr[k] ?? 2) < 2 ? 3 : 4, rests: 4 }));
-  if (showLog) { const log = []; runSote(full, team, new Rng('full#0'), log, { entry, plan, skip }); console.log('\n--- full raid log ---\n' + log.filter((l) => /MAZE|under|stall|shark|DIES|overkill|necklace|dies|^t(3[5-9]|4\d|5[0-9]) /.test(l)).join('\n')); }
+  const full = players.map((p, k) => ({ ...p, pnecks: pnArr ? (pnArr[k] ?? 2) : 2, sharks: pnArr && (pnArr[k] ?? 2) < 2 ? 3 : 4, rests: 4, ...(mz && mz[k] ? { mazes: mz[k] } : {}) }));
+  if (showLog) { const log = []; runSote(full, team, new Rng('full#0'), log, { entry, plan }); console.log('\n--- full raid log ---\n' + log.filter((l) => /MAZE|under|stall|shark|DIES|overkill|necklace|dies|^t(3[5-9]|4\d|5[0-9]) /.test(l)).join('\n')); }
   const ends = [], m1 = [], m2 = []; let deaths = 0, loc = 0, rd = 0, rdDead = 0, sh = 0, sk = 0, skDead = 0, rs = 0, pn = 0, fails = 0, stallDeaths = 0; const surges = {}, dm = {}, sp = { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0 };
   for (let i = 0; i < N; i++) {
-    const r = runSote(full, team, new Rng(`full#${i}`), null, { entry, plan, skip });
+    const r = runSote(full, team, new Rng(`full#${i}`), null, { entry, plan });
     deaths += r.players.filter((p) => p.dead).length; sh += r.sharks;
     if (r.end == null) { fails++; continue; }
     ends.push(r.end); m1.push(r.mazes[0]); m2.push(r.mazes[1]);

@@ -207,15 +207,22 @@ export function redemptionSkip(hp, team, runners = team - 1) {
   const end = hp + REDEMPTION_HEAL - n * hp;
   return { hp: end, dead: end <= 0 };
 }
+/** Default way across each maze, by phoenix necklaces: 2+ both on a necklace; 1 - with a locator orb (1-4s) a necklace
+ *  then a redemption skip (vengs the first phase freely), else a shark skip then the necklace; none - redemption skips
+ *  with a locator orb, else shark skips. Solos: a necklace before a redemption skip. */
+export function defaultMazes(pnecks, locator, team) {
+  const red = locator && team <= 4;
+  if (pnecks >= 2) return ['pneck', 'pneck'];
+  if (pnecks === 1) return red ? ['pneck', 'redemption'] : ['shark', 'pneck'];
+  return red ? ['redemption', 'redemption'] : ['shark', 'shark'];
+}
+export const MAZE_HOW = [['pneck', 'Pneck'], ['redemption', 'Redemption'], ['shark', 'Shark'], ['run', 'Run']];
 export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0, null])[1];
 
 /**
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
- * pnecks, sharks, rests?, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor)}]. opts: {skip: 'stall' (default) |
- * 'shark' (one player shark skips - sharkSkipper (index), else the one with fewest phoenix necklaces: with 1 necklace
- * the first maze, with none both) | 'redemption' (3-4s; players with a locator orb (gear.locator) only - redemption: player
- * indexes who redemption skip both mazes; default the
- * players with fewer than 2 phoenix necklaces)}, {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
+ * pnecks, sharks, rests?, restores?, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor), mazes? (how they
+ * cross each maze: ['pneck' | 'redemption' | 'shark' | 'run', ...]; default defaultMazes())}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
  * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
@@ -227,7 +234,7 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1, skip = 'stall', sharkSkipper = null, redemption = null } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1 } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const plan1Of = team === 3 ? SPEC_PLAN_3 : SPEC_PLAN;
   const roleOf = (i) => (plan === 2 && ROLES_2[team] ? ROLES_2[team][i] : ROLES[i]);
@@ -245,14 +252,16 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     role: c.role || roleOf(i), mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   for (const p of ps) p.regenHold = p.spec < 100;
-  if (skip === 'shark') {                                             // who shark skips which mazes
-    // one shark skipper at most: the one picked (sharkSkipper: player index), else the player with fewest necklaces
-    const p = ps[sharkSkipper] || ps.filter((q) => q.pnecks < 2).sort((a, b) => a.pnecks - b.pnecks)[0];
-    if (p) p.sharkMazes = p.pnecks === 0 ? [0, 1] : p.pnecks === 1 ? [0] : [];
-  }
-  if (skip === 'redemption' && team <= 4) for (const [k, p] of ps.entries()) p.redeem = !!p.gear.locator && (redemption ? redemption.includes(k) : p.pnecks < 2);   // not in 5s; needs a locator orb
+  // how each player crosses each maze (redemption: 1-4s with a locator orb, else a stall)
+  ps.forEach((p, i) => {
+    p.how = (players[i].mazes || defaultMazes(p.pnecks, !!p.gear.locator, team)).slice(0, 2)
+      .map((h) => (h === 'redemption' && !(p.gear.locator && team <= 4) ? 'pneck' : h));
+    p.sharkMazes = [0, 1].filter((k) => p.how[k] === 'shark');
+  });
   /** Shark skipping the next maze (they keep their HP for it: no veng orbs, Heal Other to above 50). */
-  const sharkNext = (p) => p.sharkMazes.includes(mazes.length);                    // under 100 at the start: first regen the tick after their first spec
+  const sharkNext = (p) => p.sharkMazes.includes(mazes.length);
+  /** A redemption skip still to come (they want 1 HP anyway: no Heal Other to them). */
+  const redeemAhead = (p) => p.how.slice(mazes.length).includes('redemption');                    // under 100 at the start: first regen the tick after their first spec
   const alive = () => ps.filter((p) => !p.dead);
   const spend = (p, n, t) => {
     p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; }
@@ -293,7 +302,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     for (const p of stallers) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10; p.thrallBack = true;
-      p.redeemNow = !!p.redeem && p.restores >= 1;                   // no restore sip left: a normal stall
+      p.redeemNow = p.how[mazes.length - 1] === 'redemption' && p.restores >= 1;   // no restore sip left: a normal stall
       if (p.redeemNow) {                                                 // redemption skip: orb down to 1 HP; prayers back a tick late
         L.on && L(`t${t} ${p.name} orbs down to ${REDEMPTION_HP} HP for a redemption skip (from ${p.hp})`);
         p.hp = REDEMPTION_HP; p.next = m + 11; continue;
@@ -464,9 +473,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         const cUnprayed = prayPlan(c, t, c.prayOffUntil).unprayed;
         const pairNeed = (q) => ORB_MAX * prayPlan(q, t, q.prayOffUntil).unprayed;   // HP an unprayable pair can take
         // maze danger: a staller who'd die on the stall; a shark skipper at 50 or less (more than 2 sharks for the skip)
-        const mazeDanger = (q, h) => (q.redeem ? false : sharkNext(q) ? h <= ORB_MAX : stallDead(h, q, runnersNext));   // a redemption skipper orbs down anyway
+        const mazeDanger = (q, h) => (q.how[mazes.length] === 'redemption' ? false : sharkNext(q) ? h <= ORB_MAX : stallDead(h, q, runnersNext));   // a redemption skipper orbs down anyway
         const skipUp = (q) => (mazes.length === 1 && sharkNext(q) && q.hp <= ORB_MAX ? 1 : 0);   // between the mazes: a shark skipper still to reach 51+
-        const cands = alive().filter((q) => q !== c && !(q.redeem && mazes.length < 2) && (   // a redemption skipper wants 1 HP
+        const cands = alive().filter((q) => q !== c && !redeemAhead(q) && (   // a redemption skipper wants 1 HP
           (q.veng && q.hp <= ORB_MAX && targeted.has(q)) || (!after2 && mazeDanger(q, q.hp)) || q.hp <= pairNeed(q)))
           .sort((a, b) => (skipUp(b) - skipUp(a)) || a.hp - b.hp);      // a shark skipper first, then lowest HP
         for (const q of cands) {
@@ -494,7 +503,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // below, but closest to, 50. Between swings (not on their attack tick, once a swing), only with no orb landing on
     // them in the next 3 ticks, and with a restore sip left (after their first swing; sips 3 ticks apart).
     if (!blocked && mazes.length >= 2 && kill == null) {
-      for (const p of alive().filter((q) => q.redeem && q.restores >= 1 && q.hp < REDEMPTION_HP + REDEMPTION_HEAL)) {
+      for (const p of alive().filter((q) => q.gear.locator && q.how.includes('redemption') && q.restores >= 1 && q.hp < REDEMPTION_HP + REDEMPTION_HEAL)) {
         if (t === p.next || t < p.cycleAfter || t < (p.sipReady || 0) || !p.swings[2] || t < (p.healFrom || 0) || t < p.noVengUntil) continue;
         if (orbs.some((o) => o[1] === p && o[0] >= t && o[0] <= t + 3)) continue;
         const q = alive().filter((x) => x !== p && x.veng && x.hp < ORB_MAX).sort((a, b) => b.hp - a.hp)[0];
