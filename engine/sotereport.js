@@ -44,9 +44,6 @@ export function soteReportHtml(res, team, opts = {}) {
   const under = (sec) => res.total.filter((t) => t * 0.6 <= sec + 1e-9).length;
   const fastest = res.total.length ? Math.min(...res.total) : null;
   const odds = [
-    ['Kills (all raids)', pct(res.total.length, res.runs)],
-    ['Raids with a player death', pct(res.raidsWithDeath, res.runs)],
-    ['Player deaths per raid', (res.deaths / Math.max(1, res.runs)).toFixed(2)],
     ...(res.mazeRuns ? [['Maze runs: ticks after a skip (average)', (res.runLost / res.mazeRuns).toFixed(1)]] : []),
     ['Fastest room', fastest != null ? fmt(fastest) : '-'],
     ['Fastest room frequency', fastest != null ? (() => { const n = res.total.filter((x) => x === fastest).length; return `${n.toLocaleString()} of ${res.runs.toLocaleString()} (1 in ${Math.round(res.runs / n).toLocaleString()})`; })() : '-'],
@@ -58,8 +55,8 @@ export function soteReportHtml(res, team, opts = {}) {
   return `<div class="vz-report">
 <h2>${team}-man Sotetseg: room time</h2>
 <div class="sub">${res.runs.toLocaleString()} raids · entry instance ${opts.entry ?? 0} · each maze runs from its proc to the end of the last cycle before she's interactable · sim v${VERSION}</div>
-<div class="kpis"><div class="kpi"><b style="color:#2a78d6">${med}</b><span>median room</span></div><div class="kpi"><b style="color:#2a78d6">${fastest != null ? fmt(fastest) : '-'}</b><span>fastest</span></div><div class="kpi"><b style="color:#2a78d6">${pct(res.total.length, res.runs)}</b><span>kills</span></div></div>
-<h3>Splits</h3><div class="sub">Of the raids that killed her (${res.total.length.toLocaleString()} of ${res.runs.toLocaleString()}).</div>${splits}
+<div class="kpis"><div class="kpi"><b style="color:#2a78d6">${med}</b><span>median room</span></div><div class="kpi"><b style="color:#2a78d6">${fastest != null ? fmt(fastest) : '-'}</b><span>fastest</span></div></div>
+<h3>Splits</h3>${splits}
 <h3>Odds</h3>${oddsT}
 <h3>How often each room time happens (per second, % of kills)</h3><div class="scroll">${histogramSvg(r1, labs)}</div>
 <h3>Finished by this time or faster - % of kills</h3><div class="scroll">${cumulativeSvg(r1, labs)}</div>
