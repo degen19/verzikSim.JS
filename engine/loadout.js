@@ -195,3 +195,46 @@ export function mergeChartValues(pl, values, k) {
   if (cape) q.mage.cape = cape === 'Infernal' ? 'none' : 'Imbued saradomin cape';
   return q;
 }
+
+// ------------------------------------------------------------------ best gear for a style (Sotetseg prefires etc.)
+/** How good a worn set is for one hit with this weapon: (accuracy bonus + 64) x (strength + 64) for ranged (elite void
+ *  x1.10 / x1.125), (magic attack + 64) x (100 + magic damage %) for magic (the shadow triples both, damage capped at +100%). */
+export function setScore(set, style, weapon) {
+  const b = bonuses(set);
+  if (style === 'range') { const v = b.eliteVoid ? 1.10 * 1.125 : 1; return (b.atk[4] + 64) * (b.rstr + 64) * v; }
+  const shadow = ITEMS[weapon] && ITEMS[weapon].spell === 'shadow';
+  const a = shadow ? b.atk[3] * 3 : b.atk[3], d = shadow ? Math.min(100, b.mdmg * 3) : b.mdmg;
+  return (a + 64) * (100 + d);
+}
+/** The best set a player can wear for a style with a weapon: each slot from their ranged item, magic item, melee item or
+ *  nothing (slot by slot, a few passes, plus the full elite void set if they have it). Returns {set, score}. */
+export function bestWorn(pl, style, weapon) {
+  const two = isTwoHanded(weapon);
+  const options = (s) => {
+    const o = new Set(['']);
+    for (const st of ['range', 'mage', 'melee']) { const v = pl[st][s]; if (isItem(v) || (st === 'melee' && v)) o.add(v); }
+    if (s === 'shield' && two) return [''];
+    return [...o];
+  };
+  const set = { weapon };
+  for (const [s] of SLOTS) set[s] = slotItem(pl, style, s);       // start from what they'd wear anyway
+  if (two) set.shield = '';
+  if (style === 'range' && ITEMS[weapon]) { if (ITEMS[weapon].bow) set.ammo = pl.arrows || 'Dragon arrow'; else if (ITEMS[weapon].crossbow) set.ammo = pl.bolts || 'Ruby dragon bolts (e)'; }
+  let best = setScore(set, style, weapon);
+  for (let pass = 0; pass < 3; pass++) {
+    let changed = false;
+    for (const [s] of SLOTS) for (const v of options(s)) {
+      const t = { ...set, [s]: v }, sc = setScore(t, style, weapon);
+      if (sc > best + 1e-9) { Object.assign(set, t); best = sc; changed = true; }
+    }
+    if (!changed) break;
+  }
+  if (style === 'range') {                                          // the full elite void set, if every piece is theirs
+    const vs = { ...set }; let ok = true;
+    for (const [s, n] of [['head', 'Void ranger helm'], ['body', 'Elite void top'], ['legs', 'Elite void robe'], ['hands', 'Void knight gloves']]) {
+      if (options(s).includes(n)) vs[s] = n; else ok = false;
+    }
+    if (ok && setScore(vs, style, weapon) > best) { Object.assign(set, vs); best = setScore(vs, style, weapon); }
+  }
+  return { set, score: best };
+}

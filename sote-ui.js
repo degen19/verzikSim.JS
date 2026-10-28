@@ -1,6 +1,14 @@
 // Sotetseg tab: per-player room settings for 2-5 man (the Sotetseg sim comes next). Saved in this browser.
 // Gear comes from the Gear tab (the Gear set picked here); the prefire choices need the weapon in that Gear set.
+// Rules for the sim (agreed):
+//  - Start spec 95 or 100 (default 100). A 95% start gets its first regen the tick after their first special attack,
+//    then regens as normal.
+//  - Surge: they drink a surge with their first special attack.
+//  - LB regens: how many Lightbearer regens they take in the room (none, 1-4). The solver will pick Surge / LB regens too.
+//  - Prefires with the Twisted bow / ZCB are made in their best ranged gear, Shadow / Shadow Barrage in their best magic
+//    gear (each slot: their ranged, magic or melee item, or nothing - loadout.js bestWorn).
 import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
+import { bestWorn, bonuses } from './engine/loadout.js';
 
 const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, players: [{startSpec, pnecks, sharks, prefire}]}}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -15,7 +23,9 @@ export const PREFIRES = [
   ['Shadow Barrage', 'Shadow Barrage', 'Shadow ancient sceptre'],
   ["Tumeken's shadow", "Tumeken's shadow", "Tumeken's shadow"],
 ];
-const blank = () => ({ startSpec: 100, pnecks: 0, sharks: 0, prefire: '' });
+const STYLE = { 'Twisted bow': 'range', 'Zaryte crossbow': 'range', 'Shadow ancient sceptre': 'mage', "Tumeken's shadow": 'mage' };
+const blank = () => ({ startSpec: 100, surge: false, lbRegens: 0, pnecks: 0, sharks: 0, prefire: '' });
+const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
 export function createSote(root, { getTeam }) {
   let state = load();
@@ -39,19 +49,29 @@ export function createSote(root, { getTeam }) {
         return `<option value="${esc(v)}" ${v === (p.prefire || '') ? 'selected' : ''} ${ok ? '' : 'disabled'}>${esc(lab)}${ok ? '' : ` (no ${need})`}</option>`;
       }).join('');
       const need = (PREFIRES.find(([v]) => v === p.prefire) || [])[2];
-      const warn = need && !owns(k, need) ? `<div class="warn small">Gear set ${esc(st.gearSet)} has no ${esc(need)} for them</div>` : '';
+      let note = '';
+      if (need && !owns(k, need)) note = `<div class="warn small">Gear set ${esc(st.gearSet)} has no ${esc(need)} for them</div>`;
+      else if (need && gp) {                                         // the best gear they have for it
+        const style = STYLE[need], { set: ws } = bestWorn(gp[k], style, need), b = bonuses(ws);
+        const items = Object.entries(ws).filter(([sl, v]) => v && sl !== 'weapon' && sl !== 'ammo').map(([, v]) => v);
+        const nums = style === 'range' ? `ranged ${sign(b.atk[4])} / str ${sign(b.rstr)}${b.eliteVoid ? ' (elite void)' : ''}` : `magic ${sign(b.atk[3])} / dmg ${sign(b.mdmg)}%`;
+        note = `<div class="muted small" title="${esc(items.join(', '))}">best gear: ${esc(nums)}</div>`;
+      }
+      const sel = (key, list, v) => `<select data-s="${k}|${key}">${list.map(([x, lab]) => `<option value="${x}" ${String(x) === String(v) ? 'selected' : ''}>${lab}</option>`).join('')}</select>`;
       return `<tr><td class="rl">${esc(name(k))}</td>
-        <td><input type="number" min="0" max="100" step="1" data-s="${k}|startSpec" value="${esc(p.startSpec)}"></td>
+        <td>${sel('startSpec', [[100, '100'], [95, '95']], p.startSpec === 95 ? 95 : 100)}</td>
+        <td style="text-align:center"><input type="checkbox" data-s="${k}|surge" ${p.surge ? 'checked' : ''}></td>
+        <td>${sel('lbRegens', [[0, 'None'], [1, '1'], [2, '2'], [3, '3'], [4, '4']], p.lbRegens || 0)}</td>
         <td><input type="number" min="0" step="1" data-s="${k}|pnecks" value="${esc(p.pnecks)}"></td>
         <td><input type="number" min="0" step="1" data-s="${k}|sharks" value="${esc(p.sharks)}"></td>
-        <td><select data-s="${k}|prefire">${opts}</select>${warn}</td></tr>`;
+        <td><select data-s="${k}|prefire">${opts}</select>${note}</td></tr>`;
     };
     root.innerHTML = `<h3 style="margin-top:0">Sotetseg <span class="muted small">(${team()}-man)</span></h3>
       <p class="muted small">Room settings for each player. The Sotetseg sim is being built - these are saved in this browser and will be used by it (and by Full raid).
         Gear comes from the Gear tab; a prefire needs that weapon in the Gear set (Shadow Barrage: a Shadow ancient sceptre).</p>
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>Gear set ${x}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label></div>
       <div class="scroll"><table class="bt">
-        <tr><th></th><th title="Spec % at the start of the room">Start spec (%)</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Their first attack, before the room starts">Prefire</th></tr>
+        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="Lightbearer regens they take in the room">LB regens</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Their first attack, before the room starts">Prefire</th></tr>
         ${st.players.map(row).join('')}
       </table></div>`;
   }
@@ -61,7 +81,7 @@ export function createSote(root, { getTeam }) {
     if (t.dataset.gearset != null) { st.gearSet = t.value; persist(); render(); return; }
     if (!t.dataset.s) return;
     const [k, key] = t.dataset.s.split('|');
-    st.players[Number(k)][key] = key === 'prefire' ? t.value : (t.value === '' ? '' : Number(t.value));
+    st.players[Number(k)][key] = key === 'prefire' ? t.value : key === 'surge' ? t.checked : (t.value === '' ? '' : Number(t.value));
     persist(); render();
   });
 
