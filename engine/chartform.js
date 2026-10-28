@@ -13,7 +13,7 @@ const BOOLS = new Set(['lightbearerOn', '1st Purple DC', '2nd Purple DC', 'Purpl
 const SELECTS = {
   meleePrayer: ['Piety', 'Zeal'], helm: ['Torva full helm', 'Oathplate helm'], body: ['Torva platebody', 'Oathplate chest'],
   legs: ['Torva platelegs', 'Oathplate legs'], amulet: ['Rancour', 'Blood fury', 'Both'], redCrab: ['West', 'East', 'None'],
-  has3Tick: ['No', 'Breaker', 'Ayak', 'Swift blade'], 'Number of Purples': [1, 2],
+  has3Tick: ['No', 'Obligator', 'Ayak', 'Swift blade'], 'Number of Purples': [1, 2],
   'East bounce tech': [0, 1, 2, 3],
   'East Pattern': ['A', '0-T'],                    // B, C and FLEX come later
   // mage helm Take off: no helm at all; None: keeps the melee helm on

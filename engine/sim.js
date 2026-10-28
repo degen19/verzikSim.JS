@@ -37,7 +37,7 @@ export const WEAPONS = {
   'C': { name: 'Claw scratch', idx: 1, atk: [41, 57, -4, 0, 0], str: 56, speed: 4, delay: 1 },
   'H': { name: 'Swift blade', idx: 1, atk: [0, 0, 0, 0, 0], str: 0, speed: 3, delay: 1 },
   'H_Swift blade': { name: 'Swift blade', idx: 1, atk: [0, 0, 0, 0, 0], str: 0, speed: 3, delay: 1 },
-  'H_Breaker': { name: 'Breaker', idx: 2, atk: [0, 0, 120, 0, 0], str: 40, speed: 3, delay: 1 },
+  'H_Obligator': { name: 'Obligator', idx: 2, atk: [0, 0, 120, 0, 0], str: 40, speed: 3, delay: 1 },
   'H_Ayak': { name: 'Eye of ayak', idx: 3, atk: [0, 0, 0, 30, 0], speed: 3, delay: 2, base_minus: 6 },
   'E': { name: 'Eye of ayak', idx: 3, atk: [0, 0, 0, 30, 0], speed: 3, delay: 2, base_minus: 6 },
   'SB': { name: 'Sulphur blades', idx: 1, atk: [11, 72, 0, 0, 0], str: 64, speed: 4, delay: 1 },   // 2 hits, max split
@@ -333,6 +333,7 @@ export class Player {
     this.has_bp = dget(cfg, 'hasBP', true) !== false;   // no blowpipe: no B in P1, no blowpipe fills, can't pop the purple
     this.purple2nd = dget(cfg, 'Purple2DC', false);
     this.has3 = dget(cfg, 'has3Tick') || false;
+    if (this.has3 === 'Breaker') this.has3 = 'Obligator';   // its old name
     this.shadow = dget(cfg, 'shadow', false);
     this.shadow_lb = dget(cfg, 'shadowLB', false);
     this.east_boak = dget(cfg, 'eastBoak');        // 3-5 man purple movement side (null = not filled in)
@@ -552,7 +553,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A') {
       let v9 = get('has3Tick');
       if (v9 != null) {
         v9 = capitalize(pystr(v9).trim());
-        v9 = dget({ 'Breaker': 'Breaker', 'Ayak': 'Ayak', 'Swift blade': 'Swift blade', 'Yes': 'Breaker' }, v9, false);
+        v9 = dget({ 'Obligator': 'Obligator', 'Breaker': 'Obligator', 'Ayak': 'Ayak', 'Swift blade': 'Swift blade', 'Yes': 'Obligator' }, v9, false);   // Breaker: its old name
         cfgs[k].has3Tick = v9;
       }
       if (isPyNum(get('Phoenix necklaces'))) cfgs[k].pneck = pyint(get('Phoenix necklaces'));

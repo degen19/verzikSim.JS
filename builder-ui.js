@@ -167,6 +167,7 @@ export function createBuilder(root, { onChange }) {
       return `<input type="checkbox" ${k} ${v === true && !why ? 'checked' : ''} ${why ? `disabled title="${esc(why)}"` : ''}>`;
     }
     if (f.type === 'select') {
+      if (f.header === 'has3Tick' && v === 'Breaker') v = 'Obligator';   // its old name
       const ch = [...f.choices]; if (v !== '' && !ch.map(String).includes(String(v))) ch.push(v);
       return `<select ${k}>${ch.map((c) => `<option ${String(c) === String(v) ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
     }

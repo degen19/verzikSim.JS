@@ -265,7 +265,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
   players.forEach((p, i) => {
     p.next_attack = Kp + 6;
     const h3 = dget(cfgs[i], 'has3Tick', false);
-    p.has3 = ['Breaker', 'Ayak', 'Swift blade'].includes(h3) ? h3 : (h3 === true ? 'Breaker' : false);
+    p.has3 = h3 === 'Breaker' ? 'Obligator' : ['Obligator', 'Ayak', 'Swift blade'].includes(h3) ? h3 : (h3 === true ? 'Obligator' : false);   // Breaker: its old name
     if (!truthy(p.has3)) {
       p.has3 = DUO_DEFAULT_3T;                         // every scale: Eye of ayak unless the chart says otherwise
     }
@@ -720,9 +720,9 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           spec_at(others[0], t, V['ev'] === 'auto' ? (V['a9'] || V['at']) + 5 : V['at'] - 2) >= 30;
         if (nt_h) {
           use = 'S';                                  // duo drag path: the drag lines them up
-        } else if (p.spec >= 30 && (duo || p.has3 !== 'Breaker')) {
+        } else if (p.spec >= 30 && (duo || p.has3 !== 'Obligator')) {
           use = 'H'; st['tank_early_chally'] = true; p.resync_after = true;
-        } else if (duo && p.has3 !== 'Breaker' && p.hp < 40 && truthy(p.pool.take('shark'))) {
+        } else if (duo && p.has3 !== 'Obligator' && p.hp < 40 && truthy(p.pool.take('shark'))) {
           use = 'F'; p.resync_after = true;           // duo: under 40 HP, a shark in those 3 ticks instead
         } else {
           use = '3'; p.resync_after = true;           // 3-tick weapon (Eye of ayak unless set)
