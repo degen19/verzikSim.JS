@@ -42,10 +42,44 @@ export const ITEMS = {
   'Imbued saradomin cape': item('cape', [0, 0, 0, 15, 0], [3, 3, 3, 15, 0], { mdmg: 2 }),
   'Magus ring':           item('ring', [0, 0, 0, 15, 0], undefined, { mdmg: 2 }),
   "Elidinis' ward (f)":   item('shield', [0, 0, 0, 25, 0], [53, 55, 73, 2, 52], { mdmg: 5, pray: 4 }),
+  "Book of the dead":     item('shield', [0, 0, 0, 6, 0]),                      // thralls: worn or carried
+  // ---- ranged armour (OSRS Wiki)
+  'Masori mask (f)':      item('head', [0, 0, 0, -1, 12], [8, 10, 12, 12, 9], { rstr: 2, pray: 1 }),
+  'Masori body (f)':      item('body', [0, 0, 0, -4, 43], [59, 52, 64, 74, 60], { rstr: 4, pray: 1 }),
+  'Masori chaps (f)':     item('legs', [0, 0, 0, -2, 27], [35, 30, 39, 46, 37], { rstr: 2, pray: 1 }),
+  'Void ranger helm':     item('head', undefined, [6, 6, 6, 6, 6], { void: true }),
+  'Elite void top':       item('body', undefined, [45, 45, 45, 45, 45], { pray: 3, void: true }),
+  'Elite void robe':      item('legs', undefined, [30, 30, 30, 30, 30], { pray: 3, void: true }),
+  'Void knight gloves':   item('hands', undefined, [6, 6, 6, 4, 6], { void: true }),
+  'Zaryte vambraces':     item('hands', [-8, -8, -8, 0, 18], [8, 8, 8, 5, 8], { rstr: 2, pray: 1 }),
+  "Blessed dizana's quiver": item('cape', [0, 0, 0, 0, 18], undefined, { rstr: 3, quiver: { atk: 10, rstr: 1 } }),   // +10 / +1 on arrows and bolts
+  'Necklace of anguish':  item('neck', [0, 0, 0, 0, 15], undefined, { rstr: 5, pray: 2 }),
+  'Necklace of rupture':  item('neck', [0, 0, 0, 0, 20], undefined, { rstr: 8, pray: 3 }),
+  'Venator ring':         item('ring', [0, 0, 0, 0, 10], undefined, { rstr: 2 }),
+  // ---- ammo
+  'Dragon arrow':         item('ammo', undefined, undefined, { rstr: 60, arrow: true }),
+  'Seeking dragon arrow': item('ammo', [0, 0, 0, 0, 20], undefined, { rstr: 60, arrow: true, bowAtkOnly: true, minHit: 3 }),   // +20 ranged attack with bows only; min hit 3
+  'Ruby dragon bolts (e)': item('ammo', undefined, undefined, { rstr: 122, bolt: true }),
   // ---- weapons
   "Tumeken's shadow":     item('weapon', [0, 0, 0, 35, 0], [0, 0, 0, 20, 0], { pray: 1, speed: 5, two_handed: true,
                                  spell: 'shadow' }),
+  "Zorya's tome":         item('weapon', [0, 0, 0, 45, 0], [1, 5, 5, 10, 0], { mdmg: 15, pray: 2, speed: 3, two_handed: true, base: 18,
+                                 spec: { cost: 50, acc: 2.5, dmg: 1.6, buffed: 3, chain: 5, buffSpeed: 2, keepTicks: 50 } }),   // Zorya's flow: +150% acc, +60% dmg
+  'Eye of ayak':          item('weapon', [0, 0, 0, 30, 0], [1, 5, 5, 10, 0], { pray: 2, speed: 3 }),
+  'Sanguinesti staff':    item('weapon', [0, 0, 0, 25, -4], [2, 3, 1, 15, 0], { speed: 4 }),
+  'Smoke ancient sceptre': item('weapon', [20, -1, 50, 20, 0], [2, 3, 1, 15, 0], { str: 60, mdmg: 10, pray: -1, speed: 5, ancients: 0.10 }),   // smoke spells +10%
+  'Smoke Barrage':        { slot: 'spell', base: 27, speed: 5, aoe: 3, poison: 1 / 8, level: 86 },   // Ancient Magicks, 3x3
+  'Twisted bow':          item('weapon', [0, 0, 0, 0, 70], undefined, { rstr: 20, speed: 5, two_handed: true, bow: true }),
+  'Toxic blowpipe':       item('weapon', [0, 0, 0, 0, 30], undefined, { rstr: 55, speed: 2, two_handed: true }),   // dragon darts included
+  'Zaryte crossbow':      item('weapon', [0, 0, 0, 0, 110], undefined, { speed: 5, crossbow: true }),
+  'Scythe of vitur':      item('weapon', [70, 125, 30, -6, 0], undefined, { str: 75, speed: 5, two_handed: true }),   // attack stats as the sim uses them
+  'Dragon claws':         item('weapon', [41, 57, -4, 0, 0], undefined, { str: 56, speed: 4 }),
+  'Sulphur blades':       item('weapon', [11, 72, 0, 0, 0], undefined, { str: 64, speed: 4 }),
+  'Obligator':            item('weapon', [0, 0, 120, 0, 0], undefined, { str: 40, speed: 3 }),   // formerly "Breaker"
+  'Swift blade':          item('weapon', undefined, undefined, { speed: 3 }),
 };
+// elite void set effects (all four pieces): ranged +10% accuracy, +12.5% damage
+export const ELITE_VOID_RANGED = { acc: 1.10, dmg: 1.125 };
 
 export const MAGE_SET = ['Ancestral hat', 'Ancestral robe top', 'Ancestral robe bottom', 'Occult necklace',
   'Imbued saradomin cape', 'Confliction gauntlets', 'Avernic treads (max)'];
