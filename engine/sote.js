@@ -214,11 +214,19 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } 
     p.veng = false;
     damage(t, Math.floor(dmg * 0.75), `${p.name} veng (${src} ${dmg})`, 'veng');
   };
+  /** A phoenix necklace just procced: with more sharks than mazes still to come, they eat one the same tick (+20);
+   *  otherwise the sharks are kept for a dangerous stall. */
+  const afterPneck = (t, p) => {
+    if (p.sharks > 2 - mazes.length) {
+      const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--;
+      L.on && L(`t${t} ${p.name} eats a shark with the phoenix necklace: ${old} -> ${p.hp} (${p.sharks} left)`);
+    }
+  };
   /** Damage to a player: a phoenix necklace procs at 1-19 (heals 29). */
   const hurt = (t, p, d) => {
     p.hp -= d;
     if (p.hp <= 0) { p.dead = true; L.on && L(`t${t} ${p.name} dies`); return; }
-    if (p.hp <= PNECK_AT && p.pnecks > 0) { p.pnecks--; p.hp += PNECK_HEAL; L.on && L(`t${t} ${p.name} phoenix necklace -> ${p.hp} HP (${p.pnecks} left)`); }
+    if (p.hp <= PNECK_AT && p.pnecks > 0) { p.pnecks--; p.hp += PNECK_HEAL; L.on && L(`t${t} ${p.name} phoenix necklace -> ${p.hp} HP (${p.pnecks} left)`); afterPneck(t, p); }
   };
   for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
     if (blocked && t >= attackable) blocked = false;
@@ -230,6 +238,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } 
         if (r.dead) p.dead = true;
         st.stalls.push({ hp: before, after: r.hp, pneck: r.pneck, dead: r.dead });
         L.on && L(`t${t} ${p.name} out of the stall: ${before} -> ${r.dead ? 'DEAD' : r.hp}${r.pneck ? ' (phoenix necklace)' : ''}`);
+        if (r.pneck) afterPneck(t, p);
       }
       pendingStall = null;
     }
