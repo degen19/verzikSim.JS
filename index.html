@@ -113,6 +113,12 @@
     table.mech td.what { white-space: normal; min-width: 420px; max-width: 640px; line-height: 1.4; }
     table.mech td.inp { white-space: normal; min-width: 160px; max-width: 260px; color: var(--ink2); }
     table.mech td.rl { white-space: normal; min-width: 130px; }
+    .rooms { display: flex; flex-wrap: wrap; gap: 6px; align-items: end; margin: 8px 0 4px; }
+    .rooms button { font-size: 16px; padding: 10px 20px; background: var(--card); color: var(--ink2); border: 1px solid var(--line); }
+    .rooms button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .rooms button:disabled { opacity: .55; cursor: default; }
+    .rooms .soon { font-size: 11px; font-weight: 500; margin-left: 4px; }
+    .rooms .scale { margin-left: auto; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -133,14 +139,23 @@
     </details>
   </header>
   <main>
+    <nav class="rooms" id="rooms">
+      <button data-room="gear">Gear</button>
+      <button data-room="verzik" class="on">Verzik</button>
+      <button disabled title="Coming soon">Sotetseg <span class="soon">soon</span></button>
+      <button disabled title="Coming soon">Xarpus <span class="soon">soon</span></button>
+      <button disabled title="Coming soon: the three rooms in order">Full raid <span class="soon">soon</span></button>
+      <label class="scale">Scale
+        <select id="team"><option value="2">2-man (duo)</option><option value="3">3-man</option><option value="4" selected>4-man</option><option value="5">5-man</option></select>
+      </label>
+    </nav>
+    <section id="room-gear" class="card" hidden></section>
+    <div id="room-verzik">
     <div class="card">
       <div class="row between">
         <div class="seg" id="src"><button data-src="import" class="on">Import chart (.xlsx)</button><button data-src="build">Build chart on this page</button></div>
         <div class="row">
         <button id="chartMin" class="ghost sm" title="Hide the chart (import / builder) to cut down scrolling - it is still used by Run, the Optimizer and the Solver">Minimize chart</button>
-        <label>Scale
-          <select id="team"><option value="2">2-man (duo)</option><option value="3">3-man</option><option value="4" selected>4-man</option><option value="5">5-man</option></select>
-        </label>
         </div>
       </div>
       <div id="imp" class="row" style="margin-top:12px">
@@ -151,7 +166,7 @@
     </div>
     <div id="builder" class="card" hidden></div>
 
-    <div class="tabs" id="tabs"><button data-tab="gear">Gear</button><button data-tab="run" class="on">Run report</button><button data-tab="opt">Optimizer</button><button data-tab="solve">Solver</button><button data-tab="new">What's new</button><button class="tabmin" id="tabsMin" title="Hide this section (a running report or search keeps going); click any tab to show it again">Minimize</button></div>
+    <div class="tabs" id="tabs"><button data-tab="run" class="on">Run report</button><button data-tab="opt">Optimizer</button><button data-tab="solve">Solver</button><button data-tab="new">What's new</button><button class="tabmin" id="tabsMin" title="Hide this section (a running report or search keeps going); click any tab to show it again">Minimize</button></div>
     <section id="tab-run" class="card" style="border-top-left-radius:0">
       <div class="row">
         <label title="How far each raid is simulated. Times and success then refer to the end of that phase.">Phases<select id="scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option><option value="p1">P1 only</option></select></label>
@@ -170,10 +185,10 @@
       <div id="err" class="err"></div>
       <div id="out"></div>
     </section>
-    <section id="tab-gear" class="card" hidden></section>
     <section id="tab-opt" class="card" hidden></section>
     <section id="tab-solve" class="card" hidden></section>
     <section id="tab-new" class="card" hidden></section>
+    </div>
   </main>
   <script type="module" src="app.js"></script>
 </body>

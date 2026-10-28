@@ -8,7 +8,7 @@
 // P1 tick fixes (blowpipe, Sang, Eye of ayak, 3-tick hits) are made in melee gear; only duo Dawn autos use the mage setup.
 import { ITEMS } from './gear.js';
 
-export const BOTH_AMULETS = 'Rancour + Blood fury';           // brings both: swaps to Blood fury below an HP (Blood fury HP)
+export const BOTH_AMULETS = 'Rancour + Blood fury';           // brings both: swaps to Blood fury below the room's Blood fury HP
 /** The registry item for a slot value (the two-amulet choice counts as Rancour for bonuses). */
 export const itemOf = (v) => (v === BOTH_AMULETS ? 'Amulet of rancour' : v);
 export const SLOTS = [
@@ -53,7 +53,7 @@ export const isTwoHanded = (w) => !!(ITEMS[w] && ITEMS[w].two_handed);
 export function blankPlayer(i) {
   const slots = (style, f) => Object.fromEntries(SLOTS.map(([s]) => [s, f(style, s)]));
   return {
-    name: `Player ${i + 1}`, prayer: 'Piety', bloodFuryHp: '',
+    name: `Player ${i + 1}`, prayer: 'Piety',
     melee: { head: 'Torva full helm', cape: 'Infernal cape', neck: 'Amulet of rancour', body: 'Oathplate chest', legs: 'Oathplate legs',
       hands: 'Ferocious gloves', feet: 'Avernic treads (max)', ring: 'Ultor ring', shield: '' },
     range: slots('range', () => 'none'),
@@ -130,7 +130,6 @@ export function fromChartCfg(cfg, i) {
   pl.prayer = cfg.meleePrayer || 'Piety';
   for (const [k, s] of [['helm', 'head'], ['body', 'body'], ['legs', 'legs']]) if (cfg[k]) pl.melee[s] = cfg[k];
   pl.melee.neck = AMULET_OF[cfg.amulet] || 'Amulet of rancour';
-  pl.bloodFuryHp = cfg.bloodFuryHp ?? '';
   const mg = cfg.mage || {};
   Object.assign(pl.mage, MAGE_DEFAULT);
   if (mg.helm === 'off') pl.mage.head = 'takeoff'; else if (mg.helm === 'melee') pl.mage.head = 'none'; else if (mg.helm) pl.mage.head = mg.helm;
@@ -154,12 +153,12 @@ export function mageList(pl) {
 }
 
 /** A parsed chart config with the player's gear applied (helm / body / legs, amulet, prayer, blowpipe, 3-tick weapon,
+ *  (Blood fury HP stays the chart's: it's a room setting)
  *  the magic set used for the shadow). */
 export function applyToCfg(cfg, pl) {
   const out = { ...cfg };
   out.helm = pl.melee.head || 'Torva full helm'; out.body = pl.melee.body || 'Oathplate chest'; out.legs = pl.melee.legs || 'Oathplate legs';
   out.amulet = AMULET_TO[pl.melee.neck] || 'Rancour';
-  if (pl.bloodFuryHp !== '' && pl.bloodFuryHp != null) out.bloodFuryHp = Number(pl.bloodFuryHp); else delete out.bloodFuryHp;
   out.meleePrayer = pl.prayer || 'Piety';
   out.hasBP = (pl.weapons || []).includes('Toxic blowpipe');
   const t = threeTick(pl) || ((pl.weapons || []).includes('Swift blade') ? 'Swift blade' : null);
@@ -176,7 +175,6 @@ export function mergeChartValues(pl, values, k) {
   if (v('setup', 'meleePrayer') != null && v('setup', 'meleePrayer') !== '') q.prayer = v('setup', 'meleePrayer');
   for (const [h, s] of [['helm', 'head'], ['body', 'body'], ['legs', 'legs']]) if (v('gear', h)) q.melee[s] = v('gear', h);
   if (AMULET_OF[v('gear', 'amulet')]) q.melee.neck = AMULET_OF[v('gear', 'amulet')];
-  if (v('gear', 'bloodFuryHp') != null) q.bloodFuryHp = v('gear', 'bloodFuryHp');
   const w = new Set(q.weapons || []);
   if (v('gear', 'Has BP') != null) { if (v('gear', 'Has BP') === true) w.add('Toxic blowpipe'); else w.delete('Toxic blowpipe'); }
   if (v('gear', 'Shadow') === true) w.add("Tumeken's shadow");

@@ -69,7 +69,7 @@ $('team').addEventListener('change', async () => {
   if (source === 'build') await builder.show(team());
   if (tab === 'opt') optimizer.refresh();
   if (tab === 'solve') solver.refresh();
-  if (tab === 'gear') gear.refresh();
+  if (room === 'gear') gear.refresh();
   prewarm();
 });
 $('file').addEventListener('change', async (e) => {
@@ -92,7 +92,7 @@ $('file').addEventListener('change', async (e) => {
     }
     $('status').textContent = `Loaded ${f.name} (${tabs.join(', ')}). Pick a scale, then Run or open the Optimizer.`
       + (copied.length ? ` Its gear was copied into the Gear tab (${copied.join(', ')}).` : '');
-    if (tab === 'gear') gear.refresh();
+    if (room === 'gear') gear.refresh();
     $('toBuilder').disabled = false;
     if (tab === 'opt') optimizer.refresh();
     prewarm();
@@ -130,7 +130,23 @@ const solver = createSolver($('tab-solve'), {
   getWorkbook,                                                            // "Also try my chart": the chart on this page
 });
 for (const b of ['A', 'B', 'C']) $(`lab${b}`).addEventListener('change', () => { if (tab === 'opt') optimizer.refresh(); });
-const gear = createGear($('tab-gear'), { getTeam: team });
+const gear = createGear($('room-gear'), { getTeam: team });
+// top-level tabs: Gear / Verzik (Sotetseg, Xarpus and Full raid come later). Remembered in the address (#gear) and this browser.
+const ROOM_KEY = 'verzikSim.room.v1';
+let room = 'verzik';
+function showRoom(r, push = true) {
+  room = r === 'gear' ? 'gear' : 'verzik';
+  [...$('rooms').querySelectorAll('[data-room]')].forEach((b) => b.classList.toggle('on', b.dataset.room === room));
+  $('room-gear').hidden = room !== 'gear';
+  $('room-verzik').hidden = room !== 'verzik';
+  if (room === 'gear') gear.refresh();
+  else { if (tab === 'opt') optimizer.refresh(); if (tab === 'solve') solver.refresh(); }
+  try { localStorage.setItem(ROOM_KEY, room); } catch { /* storage off */ }
+  if (push && location.hash !== `#${room}`) history.replaceState(null, '', `#${room}`);
+}
+$('rooms').addEventListener('click', (e) => { const b = e.target.closest('button[data-room]'); if (b) showRoom(b.dataset.room); });
+window.addEventListener('hashchange', () => showRoom(location.hash.slice(1), false));
+{ let r0 = location.hash.slice(1); if (!r0) { try { r0 = localStorage.getItem(ROOM_KEY) || ''; } catch { r0 = ''; } } showRoom(r0 || 'verzik', false); }
 const TABS_MIN_KEY = 'verzikSim.tabsMin.v1';
 function setTabsMin(on) {
   document.body.classList.toggle('tabs-min', on);
@@ -144,10 +160,9 @@ $('tabs').addEventListener('click', (e) => {
   if (document.body.classList.contains('tabs-min')) setTabsMin(false);   // picking a tab shows the section again
   tab = b.dataset.tab;
   [...$('tabs').children].forEach((x) => { if (x.dataset.tab) x.classList.toggle('on', x === b); });
-  for (const t of ['gear', 'run', 'opt', 'solve', 'new']) $(`tab-${t}`).hidden = t !== tab;
+  for (const t of ['run', 'opt', 'solve', 'new']) $(`tab-${t}`).hidden = t !== tab;
   if (tab === 'opt') optimizer.refresh();
   if (tab === 'solve') solver.refresh();
-  if (tab === 'gear') gear.refresh();
 });
 $('tab-new').innerHTML = `<h3>What's new</h3>${CHANGES.map((c) => `<h4>v${c.version} <span class="muted small">${c.date}</span></h4><ul class="news">${c.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}`;
 

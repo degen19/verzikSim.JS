@@ -4,12 +4,17 @@ import { ITEMS } from './engine/gear.js';
 import { SLOTS, STYLES, CHOICES, WEAPONS_OWNED, ARROWS, BOLTS, BOTH_AMULETS, blankPlayer, slotItem, worn, bonuses, threeTick, isTwoHanded } from './engine/loadout.js';
 import { loadGear, saveGear, linkOf, GEAR_SETS } from './engine/gearstore.js';
 
+const TEAMS = 'verzikSim.gearTeams.v1';        // saved teams: {team: [{id, name, saved, players}]}
+const loadTeams = () => { try { return JSON.parse(localStorage.getItem(TEAMS)) || {}; } catch { return {}; } };
+const saveTeams = (v) => { try { localStorage.setItem(TEAMS, JSON.stringify(v)); return true; } catch { return false; } };
+const when = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
 export function createGear(root, { getTeam }) {
   let state = loadGear();
-  let cur = 0, gset = 'A';
+  let cur = 0, gset = 'A', teamPick = '', msg = '';
+  let teams = loadTeams();
   const team = () => Number(getTeam()) || 4;
   const tstate = () => (state[team()] ||= { sets: {}, link: {} });
   /** The open Gear set's players (a new set starts as a copy of Gear set A, or blank). */
@@ -54,6 +59,21 @@ export function createGear(root, { getTeam }) {
     return rows.join('');
   }
 
+  /** Saved teams: the open Gear set's players and gear under a name (per scale), loaded back into any Gear set. */
+  function teamBar() {
+    const list = teams[team()] || [];
+    return `<div class="row wrap" style="gap:10px;align-items:end;margin:4px 0 8px">
+      <label>Saved teams<select data-team="pick"><option value="">(choose a team)</option>${list.map((x) => `<option value="${x.id}" ${x.id === teamPick ? 'selected' : ''}>${esc(x.name)} · ${when(x.saved)}</option>`).join('')}</select></label>
+      <button class="ghost sm" data-act="teamload" ${teamPick ? '' : 'disabled'} title="Replace Gear set ${gset} with this team">Load into Gear set ${gset}</button>
+      <button class="ghost sm" data-act="teamdel" ${teamPick ? '' : 'disabled'}>Delete</button>
+      <label>Name<input data-team="name" placeholder="e.g. Main team" style="width:150px"></label>
+      <button class="sm" data-act="teamsave" title="Save Gear set ${gset} (every player's gear and weapons) under this name">Save team</button>
+      <button class="ghost sm" data-act="teamfile">Save to file</button>
+      <label class="ghost sm filebtn">Open file<input type="file" accept=".json" data-team="file" hidden></label>
+      <span class="muted small">${esc(msg)}</span>
+    </div>`;
+  }
+
   function render() {
     const ps = players();
     if (cur >= ps.length) cur = 0;
@@ -69,6 +89,7 @@ export function createGear(root, { getTeam }) {
         <div class="seg">${GEAR_SETS.map((g) => `<button data-gset="${g}" class="${g === gset ? 'on' : ''}">Gear set ${g}${ts.sets[g] ? '' : ' (empty)'}</button>`).join('')}</div>
         <div class="row" style="gap:8px">${GEAR_SETS.filter((g) => g !== gset).map((g) => `<button class="ghost sm" data-act="copyset" data-to="${g}">Copy Gear set ${gset} to ${g}</button>`).join('')}</div>
       </div>
+      ${teamBar()}
       <p class="small" style="margin:0 0 10px">${used.length ? `Used by Verzik ${used.map((b) => `Set ${b}`).join(', ')}` : '<span class="muted">No Verzik set uses this Gear set (pick it in the chart builder, next to Set A / B / C)</span>'}.</p>
       <div class="row between" style="margin-bottom:8px">
         <div class="seg">${ps.map((p, k) => `<button data-p="${k}" class="${k === cur ? 'on' : ''}">${esc(p.name)}</button>`).join('')}</div>
@@ -80,7 +101,6 @@ export function createGear(root, { getTeam }) {
       <div class="row" style="gap:14px">
         <label>Name<input data-g="name" value="${esc(pl.name)}" style="width:160px"></label>
         <label>Melee prayer<select data-g="prayer">${['Piety', 'Zeal'].map((x) => `<option ${x === (pl.prayer || 'Piety') ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
-        ${['Amulet of blood fury', BOTH_AMULETS].includes(pl.melee.neck) ? `<label title="${pl.melee.neck === BOTH_AMULETS ? 'Swap to Blood fury below this HP' : 'Blood fury HP setting (as on the chart)'}">Blood fury HP<input data-g="bloodFuryHp" type="number" min="1" max="99" value="${esc(pl.bloodFuryHp ?? '')}" style="width:80px"></label>` : ''}
       </div>
       <div class="scroll"><table class="bt gear">
         <tr><th>Slot</th>${STYLES.map(([, l]) => `<th>${l}</th>`).join('')}</tr>
@@ -106,6 +126,34 @@ export function createGear(root, { getTeam }) {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.p != null) { cur = Number(b.dataset.p); render(); return; }
     if (b.dataset.gset) { gset = b.dataset.gset; render(); return; }
+    if (b.dataset.act === 'teamsave') {
+      const name = (root.querySelector('[data-team="name"]').value || '').trim() || (teams[team()] || []).find((x) => x.id === teamPick)?.name || '';
+      if (!name) { msg = 'Type a name for the team first.'; render(); return; }
+      const list = (teams[team()] ||= []);
+      const old = list.find((x) => x.name === name);
+      const entry = { id: old ? old.id : `t${Date.now()}`, name, saved: Date.now(), players: structuredClone(players()) };
+      if (old) Object.assign(old, entry); else list.push(entry);
+      teamPick = entry.id;
+      msg = saveTeams(teams) ? `Saved "${name}" (${old ? 'updated' : 'new'}).` : 'Could not save (browser storage is off).';
+      render(); return;
+    }
+    if (b.dataset.act === 'teamload' || b.dataset.act === 'teamdel') {
+      const list = teams[team()] || [], x = list.find((y) => y.id === teamPick); if (!x) return;
+      if (b.dataset.act === 'teamload') {
+        tstate().sets[gset] = { players: structuredClone(x.players) }; persist();
+        msg = `Loaded "${x.name}" into Gear set ${gset}.`;
+      } else {
+        teams[team()] = list.filter((y) => y !== x); teamPick = ''; saveTeams(teams);
+        msg = `Deleted "${x.name}".`;
+      }
+      render(); return;
+    }
+    if (b.dataset.act === 'teamfile') {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'team', team: team(), players: players() }, null, 1)], { type: 'application/json' }));
+      a.download = `verzik_team_${team()}man.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      return;
+    }
     if (b.dataset.act === 'copyset') { tstate().sets[b.dataset.to] = { players: structuredClone(players()) }; persist(); render(); return; }
     const ps = players();
     if (b.dataset.act === 'copyall') {
@@ -116,14 +164,26 @@ export function createGear(root, { getTeam }) {
       ps[cur] = { ...blankPlayer(cur), name: ps[cur].name }; persist(); render();
     }
   });
-  root.addEventListener('change', (e) => {
+  root.addEventListener('change', async (e) => {
     const t = e.target, pl = players()[cur];
+    if (t.dataset.team === 'pick') { teamPick = t.value; msg = ''; render(); return; }
+    if (t.dataset.team === 'name') return;
+    if (t.dataset.team === 'file') {
+      try {
+        const j = JSON.parse(await t.files[0].text());
+        if (j.kind !== 'team' || !Array.isArray(j.players)) throw new Error('not a saved team file');
+        if (Number(j.team) !== team()) throw new Error(`it's a ${j.team}-man team - pick that scale first`);
+        tstate().sets[gset] = { players: j.players }; persist();
+        msg = `Opened ${t.files[0].name} into Gear set ${gset}.`;
+      } catch (err) { msg = `Couldn't open that file: ${err.message}`; }
+      render(); return;
+    }
     if (t.dataset.w) {
       const w = t.dataset.w, set = new Set(pl.weapons || []);
       if (t.checked) set.add(w); else set.delete(w);
       pl.weapons = [...set];
     } else if (t.dataset.g === 'name') pl.name = t.value || `Player ${cur + 1}`;
-    else if (['arrows', 'bolts', 'prayer', 'bloodFuryHp'].includes(t.dataset.g)) pl[t.dataset.g] = t.value;
+    else if (['arrows', 'bolts', 'prayer'].includes(t.dataset.g)) pl[t.dataset.g] = t.value;
     else if (t.dataset.g) { const [style, slot] = t.dataset.g.split('|'); pl[style][slot] = t.value; }
     else return;
     persist(); render();

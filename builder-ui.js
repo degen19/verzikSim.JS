@@ -17,7 +17,7 @@ const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); re
 const when = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 // gear columns: set in the Gear tab now (the chart's own values only seed a Gear set the first time it runs)
-const GEAR_HEADERS = new Set(['meleePrayer', 'helm', 'body', 'legs', 'amulet', 'bloodFuryHp', 'has3Tick', 'Has BP']);
+const GEAR_HEADERS = new Set(['meleePrayer', 'helm', 'body', 'legs', 'amulet', 'has3Tick', 'Has BP']);
 const HELP = {
   'startSpec (%)': 'Spec % at the start of the room', lightbearerOn: 'Starts the room on Lightbearer',
   'Custom Surge Timing': 'Room time of a surge pot without a P in the chart (m:ss)', 'Target spec': 'Spec used in P2 (the ring-swap target if no Ring switch %)',
