@@ -29,6 +29,7 @@ import { hit_chance } from './sim.js';
 import { ITEMS } from './gear.js';
 import { worn, bonuses, bestWorn } from './loadout.js';
 import { REDEMPTION_HEAL } from './supplies.js';
+import { rollMaze, underToStart, runnersToStart } from './sotemaze.js';
 
 export const SOTE_HP = { 5: 4000, 4: 3500, 3: 3000, 2: 3000, 1: 3000 };
 export const SOTE = { def: 200, defFloor: 100, mag: 250, rng: 250, atk: 250, str: 250,
@@ -244,7 +245,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   let blocked = false;                          // she can't be damaged (maze) until `attackable`
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
   const mazes = [];
-  const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, restores: 0, locator: 0, stalls: [], sharkSkips: [] };
+  const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, restores: 0, locator: 0, runs: [], stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: (plan === 2 && (c.gear.weapons || []).includes('Zaryte crossbow') && SPEC_PLAN_2[c.role || roleOf(i)]?.prefire) || c.prefire || '',
     pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? (plan === 2 ? SPEC_PLAN_2[c.role || roleOf(i)]?.start : undefined) ?? 100), regen: 0,
@@ -286,6 +287,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     let m = t + 5; while (instanceOf(m, entry) !== 0) m++;           // runners: click on the first i3 from T+4, move on the i0 after
     attackable = m + 9; nextAttack = m + 10;
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
+    if (live.some((p) => p.how[mazes.length - 1] === 'run')) { runMaze(t, m, live, under); return; }   // anyone runs: all run
     const runners = live.filter((p) => p !== under);
     const skippers = runners.filter((p) => p.sharkMazes.includes(mazes.length - 1));
     const stallers = runners.filter((p) => !skippers.includes(p));
@@ -313,10 +315,29 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         L.on && L(`t${t} ${p.name} eats a shark before the stall: ${old} -> ${p.hp} (${p.sharks} left)`);
       }
     }
-    if (under) { under.underTill = t + 19; under.next = t + 19; under.healFrom = t + 20; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
+    if (under) { under.mazeEatTill = t + 19; under.eatKeep = 1; under.next = t + 19; under.healFrom = t + 20; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
     pendingStall = { at: m + 8, runners: stallers };
   };
   let pendingStall = null, pendingSharks = [];
+  /** Running the maze (everyone, if anyone picked Run): a real maze is rolled. Everyone's first move is on T+5. The
+   *  player under (teleported to column 6, two south of row A) reaches the first tile in 1-3 ticks by its column - a
+   *  light shows there - and runs the best route from the next tick (a tick later on columns 12-13, so the runners are
+   *  no more than 3 ticks behind). Runners: south of 3A on T+5, south of 5A on T+6, then from the tick after the light
+   *  to the first tile (1-4 ticks by column) and along the same route; on row N they wait and click off on the next i3,
+   *  are off on the i0, she's attackable on the i1 and everyone swings on the i2. No maze damage; veng allowed; a shark
+   *  whenever below 85 HP. */
+  const runMaze = (t, mSkip, live, under) => {
+    const mz = rollMaze(rng), u = underToStart(mz.start), r = runnersToStart(mz.start);
+    const light = t + 4 + u, leave = Math.max(t + 7, light + 1), onFirst = leave + r - 1;
+    const go = light + 1 + (r > 3 ? 1 : 0), onN = onFirst + mz.toN;
+    let c = onN; while (instanceOf(c, entry) !== 3) c++;
+    attackable = c + 2; nextAttack = c + 3;
+    for (const p of live) { p.next = c + 3; p.thrallBack = true; p.mazeEatTill = c + 3; p.eatKeep = 0; p.noVengUntil = 0; }
+    if (under) under.healFrom = c + 3;
+    const lost = (c + 1) - (mSkip + 8);
+    st.runs.push({ start: mz.start, ticks: mz.ticks, off: c + 1, lost });
+    L.on && L(`t${t} maze ${mazes.length} RUN: first tile column ${mz.start}, best route ${mz.ticks} ticks (seed ${mz.seed.join(' ')}); ${under ? `${under.name} on the first tile t${light}, runs t${go}-t${go + mz.ticks - 1}; ` : ''}runners on the first tile t${onFirst}, row N t${onN}, click off t${c} (i3), off t${c + 1}, swing t${c + 3} - ${lost} ticks after a skip`);
+  };
   /** Would this player die on the skip at this HP? */
   const stallDead = (h, p, runners) => stallSkip(h, team, p.pnecks > 0, true, runners).dead;
   const damage = (t, amt, label, kind) => {
@@ -403,12 +424,12 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
     if (blocked && t >= attackable) blocked = false;
     // ---- coming out of a stall: the stall damage, in order (a phoenix necklace clears the rest)
-    // ---- the player under eats through the maze: a shark whenever below 85 HP (one every 3 ticks, none that would
-    // push their first swing back); when the others skip they keep one shark back just in case
+    // ---- in the maze, the player under (and everyone, running it) eats: a shark whenever below 85 HP (one every 3 ticks,
+    // none that would push their first swing back); under while the others skip, they keep one shark back just in case
     for (const p of alive()) {
-      if (!(p.underTill > t) || t + 3 > p.underTill || t < (p.eatReady || 0) || p.hp >= UNDER_EAT_BELOW || p.sharks <= 1) continue;
+      if (!(p.mazeEatTill > t) || t + 3 > p.mazeEatTill || t < (p.eatReady || 0) || p.hp >= UNDER_EAT_BELOW || p.sharks <= (p.eatKeep || 0)) continue;
       const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--; st.sharks++; p.eatReady = t + 3;
-      L.on && L(`t${t} ${p.name} (under) eats a shark: ${old} -> ${p.hp} (${p.sharks} left)`);
+      L.on && L(`t${t} ${p.name} eats a shark in the maze: ${old} -> ${p.hp} (${p.sharks} left)`);
     }
     // ---- shark skips: a maze hit a tick on m+2..m+8 (sized from their HP, capped at it), food after it (tick eat)
     for (const sk of pendingSharks) {

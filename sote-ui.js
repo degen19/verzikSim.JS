@@ -30,7 +30,7 @@ const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 0, sha
 /** How each player crosses each maze (First maze / Second maze; default by their phoenix necklaces - defaultMazes):
  *  Pneck: stall on the maze with a phoenix necklace. Redemption (1-4s, with a locator orb from the Gear tab): orb down to
  *  1 HP and stall with Redemption (a restore sip a maze; they swing a tick late). Shark (one player at most): skip away
- *  from the others, eating sharks / Guthix rests through it. Run: everyone runs that maze (slower; to come). */
+ *  from the others, eating sharks / Guthix rests through it. Run: everyone runs that maze (slower). */
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
 export function createSote(root, { getTeam }) {
@@ -102,7 +102,7 @@ export function createSote(root, { getTeam }) {
 </div>
       ${notes.map((x) => `<div class="warn small" style="margin-bottom:4px">${esc(x)}</div>`).join('')}
       ${tips.map((x) => `<div class="muted small" style="margin-bottom:4px">Recommended: ${esc(x)}</div>`).join('')}
-      ${runs.length ? `<div class="muted small" style="margin-bottom:4px">Run: every player runs the ${runs.map((i) => (i ? 'second' : 'first')).join(' and ')} maze instead of skipping it - slower (to come).</div>` : ''}
+      ${runs.length ? `<div class="muted small" style="margin-bottom:4px">Run: every player runs the ${runs.map((i) => (i ? 'second' : 'first')).join(' and ')} maze instead of skipping it - a real maze each time; usually 4-12 ticks slower than a skip.</div>` : ''}
       <style>.sote-cfg th{white-space:normal !important;max-width:96px;vertical-align:bottom}</style>
       <div class="scroll"><table class="bt sote-cfg">
         <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Guthix rest sips they bring (a 4 dose = 4 sips): heal 5 a sip, on the potion delay (can go with a shark on the same tick)">Guthix rest sips</th><th title="Prayer restore sips they bring (default 3): a redemption skip takes one a maze; after the second maze a redemption skipper uses spares on locator orb Redemption procs to Heal Other">Restore sips</th><th title="Their first attack, before the room starts">Prefire</th><th title="How they cross the first maze. Pneck: stall with a phoenix necklace. Redemption: orb down to 1 HP and stall with Redemption (locator orb; 1-4s). Shark: skip away from the others, eating through it (one player). Run: everyone runs it">First maze</th><th title="How they cross the second maze">Second maze</th></tr>
