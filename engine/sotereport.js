@@ -2,7 +2,7 @@
 // (median / top 10% / top 25% / bottom 25% / fastest) - with the Verzik report's charts and breakpoints.
 import { runSote } from './sote.js';
 import { Rng } from './rng.js';
-import { histogramSvg, cumulativeSvg, attemptsSvg, REPORT_CSS } from './report.js';
+import { histogramSvg, cumulativeSvg, REPORT_CSS } from './report.js';
 import { VERSION } from './version.js';
 
 const fmt = (t) => { const s = t * 0.6; return s >= 60 ? `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}` : `${s.toFixed(1)}s`; };
@@ -47,7 +47,7 @@ export function soteReportHtml(res, team, opts = {}) {
     ...(res.mazeRuns ? [['Maze runs: ticks after a skip (average)', (res.runLost / res.mazeRuns).toFixed(1)]] : []),
     ['Fastest room', fastest != null ? fmt(fastest) : '-'],
     ['Fastest room frequency', fastest != null ? (() => { const n = res.total.filter((x) => x === fastest).length; return `${n.toLocaleString()} of ${res.runs.toLocaleString()} (1 in ${Math.round(res.runs / n).toLocaleString()})`; })() : '-'],
-    ...bps.flatMap((b) => [[`${fmtSec(b)} or faster (all raids)`, pct(under(b), res.runs)], [`${fmtSec(b)} or faster (of kills)`, pct(under(b), res.total.length)]]),
+    ...bps.map((b) => [`${fmtSec(b)} or faster`, pct(under(b), res.total.length)]),
   ];
   const oddsT = `<table>${odds.map(([n, v]) => `<tr><td>${n}</td><td>${v}</td></tr>`).join('')}</table>`;
   const r1 = [{ total: res.total, runs: res.runs }], labs = [label];
@@ -58,9 +58,8 @@ export function soteReportHtml(res, team, opts = {}) {
 <div class="kpis"><div class="kpi"><b style="color:#2a78d6">${med}</b><span>median room</span></div><div class="kpi"><b style="color:#2a78d6">${fastest != null ? fmt(fastest) : '-'}</b><span>fastest</span></div></div>
 <h3>Splits</h3>${splits}
 <h3>Odds</h3>${oddsT}
-<h3>How often each room time happens (per second, % of kills)</h3><div class="scroll">${histogramSvg(r1, labs)}</div>
-<h3>Finished by this time or faster - % of kills</h3><div class="scroll">${cumulativeSvg(r1, labs)}</div>
-<h3>Finished by this time or faster - % of all raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${attemptsSvg(r1, labs, bps)}</div>
+<h3>How often each room time happens (per second, % of raids)</h3><div class="scroll">${histogramSvg(r1, labs).replace('% of successful runs', '% of raids')}</div>
+<h3>Finished by this time or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${cumulativeSvg(r1, labs, bps).replace('% of successful runs finished by this time', '% of raids finished by this time')}</div>
 </div>`;
 }
 
