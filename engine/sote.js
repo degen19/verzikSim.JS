@@ -172,6 +172,21 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } 
     attackable = m + 9; nextAttack = m + 10;
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
     const runners = live.filter((p) => p !== under);
+    // Heal Other at the proc: a player at 50 or less (can't veng safely) heals a runner in stall danger if that leaves
+    // neither of them needing a shark
+    for (const c of live) {
+      if (c.hp > ORB_MAX) continue;
+      for (const q of runners.filter((x) => x !== c && stallDead(x.hp, x, runners.length))) {
+        const give = Math.min(Math.floor(c.hp * 0.75), 99 - q.hp);
+        if (give <= 0) continue;
+        const cOk = c === under ? c.hp - give > 0 : !stallDead(c.hp - give, c, runners.length);
+        if (cOk && !stallDead(q.hp + give, q, runners.length)) {
+          c.hp -= give; q.hp += give;
+          L.on && L(`t${t} ${c.name} heals other ${q.name} (+${give}) before the stall: ${c.name} ${c.hp}, ${q.name} ${q.hp}`);
+          break;
+        }
+      }
+    }
     for (const p of runners) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10;
@@ -185,6 +200,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } 
     pendingStall = { at: m + 8, runners };
   };
   let pendingStall = null;
+  /** Would this player die on the skip at this HP? */
+  const stallDead = (h, p, runners) => stallSkip(h, team, p.pnecks > 0, true, runners).dead;
   const damage = (t, amt, label, kind) => {
     if (blocked || kill != null || amt <= 0) return;
     const real = Math.min(amt, hp - stopAt);
@@ -248,6 +265,27 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } 
       if (!p.veng) { p.veng = true; p.vengReady = t + VENG_CD; L.on && L(`t${t} ${p.name} casts veng`); continue; }
       const other = alive().find((q) => q !== p && !q.veng && t < q.vengReady && t >= q.noVengUntil);
       if (other) { other.veng = true; p.vengReady = t + VENG_CD; L.on && L(`t${t} ${p.name} casts veng on ${other.name}`); }
+    }
+    // ---- Heal Other (75% of the caster's HP, capped at the target's missing HP; no attack delay; not in a stall):
+    // a player without veng up - before the second maze only if they're on veng cooldown or at 50 or less - lifts a
+    // teammate with veng up from 50 or less to above 50 (one with an orb heading at them first, then the lowest HP).
+    // Before the second maze they won't go below 17, or into a stall-danger HP, while a maze is still to come.
+    if (!blocked || mazes.length) {
+      const after2 = mazes.length >= 2, targeted = new Set(orbs.filter((o) => o[0] > t).map((o) => o[1]));
+      for (const c of alive()) {
+        if (c.veng || t < c.noVengUntil || (blocked && c.stallAt && t < c.stallAt)) continue;
+        if (!after2 && !(t < c.vengReady || c.hp <= ORB_MAX)) continue;
+        const cands = alive().filter((q) => q !== c && q.veng && q.hp <= ORB_MAX && t >= q.noVengUntil)
+          .sort((a, b) => (targeted.has(b) - targeted.has(a)) || a.hp - b.hp);
+        for (const q of cands) {
+          const give = Math.min(Math.floor(c.hp * 0.75), 99 - q.hp), left = c.hp - give;
+          if (q.hp + give <= ORB_MAX || left <= 0) continue;          // no gain
+          if (!after2 && (left < 17 || stallDead(left, c, alive().length - 1))) continue;
+          c.hp = left; q.hp += give;
+          L.on && L(`t${t} ${c.name} heals other ${q.name} (+${give}): ${c.name} ${c.hp}, ${q.name} ${q.hp}`);
+          break;
+        }
+      }
     }
     // ---- damage on her this tick
     const landing = hits.filter((x) => x[0] === t); hits = hits.filter((x) => x[0] !== t);
