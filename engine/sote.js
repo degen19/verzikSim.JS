@@ -125,12 +125,18 @@ function playerDef(p, style) {
   return (d + 8) * (b.dfn[style === 'range' ? 4 : 2] + 64);
 }
 
-/** The maze cycle: her 4-tick instances, i1 on every tick divisible by 4 (until room entry timing is a setting). */
-export const instanceOf = (t, offset = 0) => (((t - offset) % 4) + 4) % 4 + 1;   // 1..4
+/** Her 4-tick instance (0-3) on room tick t for a room entered on instance `entry` (0-3): entering on i0, tick 27
+ *  (16.2s) is i0 and tick 38 (22.8s) is i3. Only shifts the maze cycle. A maze proc on i3 loses no ticks; on i2 1, i1 2,
+ *  i0 3 (the runners wait for the i0 to move). */
+export const instanceOf = (t, entry = 0) => (t + entry + 1) % 4;
+/** Ticks lost at a maze proc on tick t. */
+export const ticksLost = (t, entry = 0) => (3 - instanceOf(t, entry) + 4) % 4;
+export const SHARK_HEAL = 20;
 
 /**
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
- * pnecks}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); offset: instance shift}.
+ * pnecks, sharks}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
+ * instance 0-3 (default 0)}.
  *
  * Mazes (skip / stall): the hit that reaches 66.6% / 33.3% (tick T) teleports everyone (T..T+4). One random player goes
  * under: no maze damage, first swing on T+19 (lands T+20). The others click on the first i3 from T+4, move on the i4
@@ -140,7 +146,7 @@ export const instanceOf = (t, offset = 0) => (((t - offset) % 4) + 4) % 4 + 1;  
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, offset = 0 } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const MAX = SOTE_HP[team] || 4000;
   const marks = [Math.floor(MAX * MAZE_AT[0]), Math.floor(MAX * MAZE_AT[1]), 0];
@@ -150,7 +156,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, offset = 0 }
   const mazes = [];
   const st = { dmg: { prefire: 0, scythe: 0, veng: 0, ruby: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, stalls: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear, prefire: c.prefire || '',
-    pnecks: Number(c.pnecks ?? 0), hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
+    pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   const alive = () => ps.filter((p) => !p.dead);
   let hits = [];                      // [tick, player, amount, label, kind] damage landing on her
@@ -162,13 +168,18 @@ export function runSote(players, team, rng, log = null, { upTo = 3, offset = 0 }
     L.on && L(`t${t} *** MAZE ${mazes.length} (${mazes.length === 1 ? '66.6' : '33.3'}%) ***`);
     blocked = true; hits = []; orbs = []; for (const p of ps) p.pending = [];
     defLvl = SOTE.def; drained = false;
-    let m = t + 5; while (instanceOf(m, offset) !== 4) m++;          // runners: click on the first i3 from T+4, move on the i4
+    let m = t + 5; while (instanceOf(m, entry) !== 0) m++;           // runners: click on the first i3 from T+4, move on the i0 after
     attackable = m + 9; nextAttack = m + 10;
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
     const runners = live.filter((p) => p !== under);
     for (const p of runners) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10;
+      // in a danger zone for the skip: one shark (at most) after the teleport, before stepping on
+      if (p.sharks > 0 && stallSkip(p.hp, team, p.pnecks > 0, true, runners.length).dead) {
+        const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--;
+        L.on && L(`t${t} ${p.name} eats a shark before the stall: ${old} -> ${p.hp} (${p.sharks} left)`);
+      }
     }
     if (under) { under.next = t + 19; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
     pendingStall = { at: m + 8, runners };
@@ -304,7 +315,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, offset = 0 }
     }
   }
   if (kill != null) end = kill + anim;
-  return { end, kill, anim, mazes, hp, ...st, players: ps.map((p) => ({ name: p.name, hp: p.hp, dead: p.dead, pnecks: p.pnecks })) };
+  return { end, kill, anim, mazes, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks })) };
 }
 
 /** Phase 1 only (start to the first maze): runSote stopped there. */
