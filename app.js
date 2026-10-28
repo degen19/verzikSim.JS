@@ -9,6 +9,7 @@ import { createOptimizer } from './optimizer-ui.js';
 import { createMechanics } from './mechanics-ui.js';
 import { createSolver } from './solver-ui.js';
 import { createGear } from './gear-ui.js';
+import { createSote } from './sote-ui.js';
 import { withGear, importGear, absorbValues } from './engine/gearstore.js';
 import { SimPool } from './pool.js';
 
@@ -68,6 +69,7 @@ $('src').addEventListener('click', async (e) => {
 $('team').addEventListener('change', async () => {
   soloMode();
   if (team() === 1) return;                                              // solos: only the Gear tab for now
+  if (room === 'sote') sote.refresh();
   showRunBps();
   if (source === 'build') await builder.show(team());
   if (tab === 'opt') optimizer.refresh();
@@ -134,24 +136,30 @@ const solver = createSolver($('tab-solve'), {
 });
 for (const b of ['A', 'B', 'C']) $(`lab${b}`).addEventListener('change', () => { if (tab === 'opt') optimizer.refresh(); });
 const gear = createGear($('room-gear'), { getTeam: team });
+const sote = createSote($('room-sote'), { getTeam: team });
 // top-level tabs: Gear / Verzik (Sotetseg, Xarpus and Full raid come later). Remembered in the address (#gear) and this browser.
 const ROOM_KEY = 'verzikSim.room.v1';
 let room = 'verzik';
 /** Solo: only the Gear tab so far - Verzik is greyed out ("soon") like the other rooms. */
 function soloMode() {
-  const solo = team() === 1, b = $('rooms').querySelector('[data-room="verzik"]');
-  b.disabled = solo;
-  b.innerHTML = solo ? 'Verzik <span class="soon">soon</span>' : 'Verzik';
-  b.title = solo ? 'Solos are coming soon - the Gear tab works for them already' : '';
+  const solo = team() === 1;
+  for (const [r, label] of [['verzik', 'Verzik'], ['sote', 'Sotetseg']]) {
+    const b = $('rooms').querySelector(`[data-room="${r}"]`);
+    b.disabled = solo;
+    b.innerHTML = solo ? `${label} <span class="soon">soon</span>` : label;
+    b.title = solo ? 'Solos are coming soon - the Gear tab works for them already' : '';
+  }
   if (solo && room !== 'gear') showRoom('gear');
 }
 function showRoom(r, push = true) {
-  room = r === 'gear' || team() === 1 ? 'gear' : 'verzik';
+  room = r === 'gear' || team() === 1 ? 'gear' : r === 'sote' ? 'sote' : 'verzik';
   [...$('rooms').querySelectorAll('[data-room]')].forEach((b) => b.classList.toggle('on', b.dataset.room === room));
   $('room-gear').hidden = room !== 'gear';
+  $('room-sote').hidden = room !== 'sote';
+  if (room === 'sote') sote.refresh();
   $('room-verzik').hidden = room !== 'verzik';
   if (room === 'gear') gear.refresh();
-  else { if (source === 'build') builder.show(team()); if (tab === 'opt') optimizer.refresh(); if (tab === 'solve') solver.refresh(); }
+  else if (room === 'verzik') { if (source === 'build') builder.show(team()); if (tab === 'opt') optimizer.refresh(); if (tab === 'solve') solver.refresh(); }
   try { localStorage.setItem(ROOM_KEY, room); } catch { /* storage off */ }
   if (push && location.hash !== `#${room}`) history.replaceState(null, '', `#${room}`);
 }
