@@ -39,6 +39,25 @@ export const DEATH_ANIM = 5, DEATH_ANIM_OVERKILL = 4;
 export function mazeDmg(hp) {
   return hp >= 106 ? 22 : hp >= 90 ? 21 : hp >= 75 ? 20 : hp >= 60 ? 19 : hp >= 45 ? 18 : hp >= 30 ? 17 : 16;
 }
+// phoenix necklace: a hit that leaves them on 1-19 HP heals 29 and clears every hit still queued
+export const PNECK_AT = 19, PNECK_HEAL = 29, STALL_TICKS = 7;
+/**
+ * A maze skip (stall) for one player: 7 dangerous ticks, every hit worked out from their HP on entering - the first tick
+ * a maze hit plus a splash from each other maze runner (team - 2: the player under isn't on the tiles), then a maze hit
+ * on each of the other 6 ticks - all queued and taken in order when they come out. A phoenix necklace procs on the
+ * first hit that leaves them on 1-19 (heals 29, clears the rest). Returns {hp, pneck: used one, dead}.
+ */
+export function stallSkip(hp, team, hasPneck = true, splash = true) {
+  const q = [mazeDmg(hp), ...(splash ? Array(Math.max(0, team - 2)).fill(splashDmg(hp)) : [])];
+  for (let i = 1; i < STALL_TICKS; i++) q.push(mazeDmg(hp));
+  let cur = hp;
+  for (const d of q) {
+    cur -= d;
+    if (cur <= 0) return { hp: cur, pneck: false, dead: true };
+    if (hasPneck && cur <= PNECK_AT) return { hp: cur + PNECK_HEAL, pneck: true, dead: false };
+  }
+  return { hp: cur, pneck: false, dead: false };
+}
 /** Splash damage bounced to a nearby player, by HP. */
 export function splashDmg(hp) {
   return hp >= 120 ? 16 : hp >= 100 ? 15 : hp >= 80 ? 14 : hp >= 60 ? 13 : hp >= 40 ? 12 : hp >= 20 ? 11 : 10;
