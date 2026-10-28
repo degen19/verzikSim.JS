@@ -12,7 +12,8 @@ import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { bestWorn, bonuses, blankPlayer } from './engine/loadout.js';
 import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './engine/sotereport.js';
 import { parseBreakpoints } from './engine/optimize.js';
-import { defaultMazes, MAZE_HOW } from './engine/sote.js';
+import { defaultMazes, MAZE_HOW, defaultSpecs, SPECS, SPEC_COST } from './engine/sote.js';
+import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
 
 const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -100,6 +101,32 @@ export function createSote(host, { getTeam }) {
     const sharkers = all.filter(({ m }) => m.includes('shark')).map(({ k }) => pname(k));
     if (sharkers.length > 1) notes.push(`Only one player can shark skip (${sharkers.join(', ')}).`);
     const runs = [0, 1].filter((i) => all.some(({ m }) => m[i] === 'run'));
+    const hasHorn = (k) => !!(gp && gp[k] && gp[k].horn);
+    const specsOf = (p, k) => (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[k] || [{}, {}, {}]));
+    const specCell = (p, k, ph) => {
+      const sp = specsOf(p, k)[ph] || {};
+      return `<select data-sp="${k}|${ph}|spec">${SPECS.map(([v, lab]) => `<option value="${v}" ${v === (sp.spec || 'none') ? 'selected' : ''}>${lab}</option>`).join('')}</select>
+        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Backup: scythe first; once the phase's mauls have landed, maul if her Defence isn't at the floor - otherwise their spec"><input type="checkbox" data-sp="${k}|${ph}|backup" ${sp.backup ? 'checked' : ''}>Backup</label>
+        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="${hasHorn(k) ? 'Soulflame horn: they and the first other player mauling this phase can\'t miss their next hit. P1: on t8; P2-P3: after their first scythe off the maze' : 'No Soulflame horn (Gear tab)'}"><input type="checkbox" data-sp="${k}|${ph}|horn" ${sp.horn && hasHorn(k) ? 'checked' : ''} ${hasHorn(k) ? '' : 'disabled'}>Horn</label>`;
+    };
+    // spec planner: the projection on typical phase times for the scale, or the last report's medians
+    const times = st.lastTimes || TYPICAL_TIMES[team()] || TYPICAL_TIMES[5];
+    const ft = (t) => { const x = t * 0.6; return `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}`; };
+    const KIND = { maul: 'Maul', claws: 'Claws', zcb: 'ZCB', horn: 'Horn' };
+    const planRow = (p, k) => {
+      const pr = projectPlayer({ startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, lbCycles: Number(p.lbCycles || 0),
+        specs: specsOf(p, k).map((x) => ({ ...x, horn: !!x.horn && hasHorn(k) })) }, times);
+      const cells = [0, 1, 2].map((ph) => pr.items.filter((it) => it.ph === ph).map((it) => {
+        const name = `${KIND[it.kind]}${it.backup ? ' (backup, if needed)' : ''}`;
+        if (it.at == null) return `<div class="warn small">${name}: not enough spec</div>`;
+        const wait = it.at - it.earliest;
+        return `<div class="small">${name} ${ft(it.at)}${wait > 0 ? ` <span class="${wait >= 10 ? 'warn' : 'muted'}">(${(wait * 0.6).toFixed(1)}s late, waiting for spec)</span>` : ''}${it.surge ? ' <span class="muted">+ surge</span>' : ''}</div>`;
+      }).join('') || '<span class="muted small">-</span>');
+      const short = pr.items.some((it) => it.at == null);
+      if (short) notes.push(`${pname(k)} won't have the spec for: ${pr.items.filter((it) => it.at == null).map((it) => `P${it.ph + 1} ${KIND[it.kind]}`).join(', ')} (see the spec planner).`);
+      return `<tr><td class="rl">${esc(pname(k))}</td>${cells.map((c) => `<td>${c}</td>`).join('')}<td>${pr.endSpec}%</td><td class="small">${pr.regens.map(ft).join(', ') || '-'}</td></tr>`;
+    };
+    const planRows = st.players.map(planRow).join('');
     const mazeSel = (p, k, i) => `<select data-maze="${k}|${i}">${MAZE_HOW.map(([v, lab]) => `<option value="${v}" ${v === mazesOf(p, k)[i] ? 'selected' : ''} ${v === 'redemption' && team() >= 5 ? 'disabled' : ''}>${lab}${v === 'redemption' && team() >= 5 ? ' (not in 5s)' : ''}</option>`).join('')}</select>`;
     const name = (k) => (gp && gp[k] && gp[k].name) || `Player ${k + 1}`;
     const owns = (k, w) => !!(gp && gp[k] && (gp[k].weapons || []).includes(w));
@@ -143,13 +170,28 @@ export function createSote(host, { getTeam }) {
       <div class="scroll"><table class="bt sote-cfg">
         <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Guthix rest sips they bring (a 4 dose = 4 sips): heal 5 a sip, on the potion delay (can go with a shark on the same tick)">Guthix rest sips</th><th title="Prayer restore sips they bring (default 3): a redemption skip takes one a maze; after the second maze a redemption skipper uses spares on locator orb Redemption procs to Heal Other">Restore sips</th><th title="Their first attack, before the room starts">Prefire</th><th title="How they cross the first maze. Pneck: stall with a phoenix necklace. Redemption: orb down to 1 HP and stall with Redemption (locator orb; 1-4s). Shark: skip away from the others, eating through it (one player). Run: everyone runs it">First maze</th><th title="How they cross the second maze">Second maze</th></tr>
         ${st.players.map(row).join('')}
-      </table></div>`;
+      </table></div>
+      <details class="video" data-specs ${st.specsOpen === false ? '' : 'open'} style="margin-top:14px"><summary>Specs</summary>
+        <p class="muted small" style="margin-top:8px">What each player specs in each phase. Planned specs go off as early as possible (P1 mauls on their first hit after the prefire, a ZCB once the phase's mauls have gone off, claws once they've landed); a spec they can't afford yet waits for a regen. Horn needs a Soulflame horn in the Gear tab.</p>
+        <div class="scroll"><table class="bt"><tr><th></th><th>P1</th><th>P2</th><th>P3</th></tr>
+          ${st.players.map((p, k) => `<tr><td class="rl">${esc(pname(k))}</td>${[0, 1, 2].map((ph) => `<td style="white-space:nowrap">${specCell(p, k, ph)}</td>`).join('')}</tr>`).join('')}
+        </table></div>
+        <h4 style="margin:12px 0 4px">Spec planner</h4>
+        <p class="muted small" style="margin:0 0 6px">When each planned spec can go off, from their start spec, Lightbearer cycles and surge, on ${st.lastTimes ? 'the phase times of your last report (medians)' : `typical ${team()}-man phase times`} (P1 ${ft(times.p1)}, mazes ${(times.maze1 * 0.6).toFixed(1)}s / ${(times.maze2 * 0.6).toFixed(1)}s, P2 ${(times.p2 * 0.6).toFixed(1)}s, P3 ${(times.p3 * 0.6).toFixed(1)}s). Times are room time.</p>
+        <div class="scroll"><table class="bt"><tr><th></th><th>P1</th><th>P2</th><th>P3</th><th>End spec</th><th>Regens</th></tr>${planRows}</table></div>
+      </details>`;
   }
 
   root.addEventListener('change', (e) => {
     const t = e.target, st = tstate();
     if (t.dataset.gearset != null) { st.gearSet = t.value; persist(); render(); return; }
     if (t.dataset.rset) { st[t.dataset.rset] = Number(t.value); persist(); render(); return; }
+    if (t.dataset.sp) {
+      const [k, ph, f] = t.dataset.sp.split('|'), p = st.players[Number(k)];
+      p.specs = (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[Number(k)] || [{}, {}, {}])).map((x) => ({ spec: 'none', backup: false, horn: false, ...x }));
+      p.specs[Number(ph)][f] = f === 'spec' ? t.value : t.checked;
+      persist(); render(); return;
+    }
     if (t.dataset.maze != null) {
       const [k, i] = t.dataset.maze.split('|').map(Number), p = st.players[k];
       const g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null;
@@ -175,7 +217,8 @@ export function createSote(host, { getTeam }) {
       const gear = gp ? gp[k] : blankPlayer(k), orb = !!gear.locator;
       return { name: gear.name || `Player ${k + 1}`, gear, own: true, prefire: p.prefire || '', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge,
         lbCycles: Number(p.lbCycles || 0), pnecks: Number(p.pnecks || 0), sharks: Number(p.sharks || 0), rests: Number(p.rests || 0), restores: Number(p.restores ?? 3),
-        mazes: Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), orb, team()) };
+        mazes: Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), orb, team()),
+        specs: (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[k] || [])).map((x) => ({ ...x, horn: !!x.horn && !!gear.horn })) };
     });
   };
   rep.addEventListener('click', (e) => {
@@ -201,6 +244,8 @@ export function createSote(host, { getTeam }) {
         if (!res.runs) { status.textContent = 'Stopped.'; return; }
         const opts = { breakpoints: bps, entry: r.entry };
         out.innerHTML = soteReportHtml(res, t, opts); lastPage = soteReportPage(res, t, opts); btn('dl').disabled = false;
+        const med = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
+        if (res.total.length) { tstate().lastTimes = Object.fromEntries(Object.entries(res.split).map(([k2, v]) => [k2, med(v)])); persist(); render(); }
         status.textContent = `${me.stop ? 'Stopped at' : 'Done:'} ${res.runs.toLocaleString()} raids.`;
         return;
       }

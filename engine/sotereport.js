@@ -12,7 +12,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const q = (v, f) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * f) - 1))];
 
 /** An empty result to add raids into. */
-export const newSoteResult = () => ({ runs: 0, total: [], split: { p1: [], maze1: [], p2: [], maze2: [], p3: [] }, deaths: 0, raidsWithDeath: 0, wipes: 0, mazeRuns: 0, runLost: 0 });
+export const newSoteResult = () => ({ missed: {}, runs: 0, total: [], split: { p1: [], maze1: [], p2: [], maze2: [], p3: [] }, deaths: 0, raidsWithDeath: 0, wipes: 0, mazeRuns: 0, runLost: 0 });
 
 /** Play raids [from, to) into `res` (seeds '<seed>#i'). */
 export function addSoteRaids(res, players, team, from, to, { seed = 'sote', entry = 0 } = {}) {
@@ -22,6 +22,7 @@ export function addSoteRaids(res, players, team, from, to, { seed = 'sote', entr
     const dead = r.players.filter((p) => p.dead).length;
     res.deaths += dead; if (dead) res.raidsWithDeath++;
     for (const x of r.runs || []) { res.mazeRuns++; res.runLost += x.lost; }
+    for (const x of new Set((r.specMissed || []).map((m) => `${players[m.i]?.name || `Player ${m.i + 1}`}: P${m.ph + 1} ${{ maul: 'maul', claws: 'claws', zcb: 'ZCB', horn: 'horn' }[m.kind] || m.kind}`))) res.missed[x] = (res.missed[x] || 0) + 1;
     if (r.end == null || !r.split) { res.wipes++; continue; }
     res.total.push(r.end);
     for (const k of Object.keys(res.split)) res.split[k].push(r.split[k]);
@@ -49,6 +50,8 @@ export function soteReportHtml(res, team, opts = {}) {
     ['Fastest room frequency', fastest != null ? (() => { const n = res.total.filter((x) => x === fastest).length; return `${n.toLocaleString()} of ${res.runs.toLocaleString()} (1 in ${Math.round(res.runs / n).toLocaleString()})`; })() : '-'],
     ...bps.map((b) => [`${fmtSec(b)} or faster`, pct(under(b), res.total.length)]),
   ];
+  const miss = Object.entries(res.missed || {}).sort((a, b) => b[1] - a[1]);
+  const missT = miss.length ? `<h3>Planned specs that didn't go off</h3><div class="sub">Share of raids where a planned (not backup) spec or horn never happened in its phase - not enough spec in time, or the phase ended first.</div><table>${miss.map(([n, c]) => `<tr><td>${esc(n)}</td><td>${pct(c, res.runs)}</td></tr>`).join('')}</table>` : '';
   const oddsT = `<table>${odds.map(([n, v]) => `<tr><td>${n}</td><td>${v}</td></tr>`).join('')}</table>`;
   const r1 = [{ total: res.total, runs: res.runs }], labs = [label];
   const med = res.total.length ? fmt(res.total.slice().sort((a, b) => a - b)[Math.floor(res.total.length / 2)]) : '-';
@@ -57,7 +60,7 @@ export function soteReportHtml(res, team, opts = {}) {
 <div class="sub">${res.runs.toLocaleString()} raids · entry instance ${opts.entry ?? 0} · each maze runs from its proc to the end of the last cycle before she's interactable · sim v${VERSION}</div>
 <div class="kpis"><div class="kpi"><b style="color:#2a78d6">${med}</b><span>median room</span></div><div class="kpi"><b style="color:#2a78d6">${fastest != null ? fmt(fastest) : '-'}</b><span>fastest</span></div></div>
 <h3>Splits</h3>${splits}
-<h3>Odds</h3>${oddsT}
+<h3>Odds</h3>${oddsT}${missT}
 <h3>How often each room time happens (per second, % of raids)</h3><div class="scroll">${histogramSvg(r1, labs).replace('% of successful runs', '% of raids')}</div>
 <h3>Finished by this time or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${cumulativeSvg(r1, labs, bps).replace('% of successful runs finished by this time', '% of raids finished by this time')}</div>
 </div>`;
