@@ -80,7 +80,7 @@ export function createGear(root, { getTeam }) {
     const pl = ps[cur];
     const three = threeTick(pl);
     const ts = tstate(), used = usedBy();
-    root.innerHTML = `<h3 style="margin-top:0">Gear <span class="muted small">(${team()}-man)</span></h3>
+    root.innerHTML = `<h3 style="margin-top:0">Gear <span class="muted small">(${team() === 1 ? 'solo' : `${team()}-man`})</span></h3>
       <p class="muted small">What each player wears for melee, ranged and magic, slot by slot, and the weapons they bring. Ranged / Magic slots:
         <b>none</b> = no switch for that slot (they wear the other style's item if it has one, otherwise their melee item), <b>take off</b> = nothing in that slot.
         A two-handed weapon leaves the shield slot empty. P1 tick fixes are made in melee gear; the shadow and duo Dawn autos use the magic setup.
@@ -90,11 +90,11 @@ export function createGear(root, { getTeam }) {
         <div class="row" style="gap:8px">${GEAR_SETS.filter((g) => g !== gset).map((g) => `<button class="ghost sm" data-act="copyset" data-to="${g}">Copy Gear set ${gset} to ${g}</button>`).join('')}</div>
       </div>
       ${teamBar()}
-      <p class="small" style="margin:0 0 10px">${used.length ? `Used by Verzik ${used.map((b) => `Set ${b}`).join(', ')}` : '<span class="muted">No Verzik set uses this Gear set (pick it in the chart builder, next to Set A / B / C)</span>'}.</p>
+      <p class="small" style="margin:0 0 10px">${team() === 1 ? '<span class="muted">Solos: the rooms are coming soon - set up the gear now and it carries over</span>' : used.length ? `Used by Verzik ${used.map((b) => `Set ${b}`).join(', ')}` : '<span class="muted">No Verzik set uses this Gear set (pick it in the chart builder, next to Set A / B / C)</span>'}.</p>
       <div class="row between" style="margin-bottom:8px">
         <div class="seg">${ps.map((p, k) => `<button data-p="${k}" class="${k === cur ? 'on' : ''}">${esc(p.name)}</button>`).join('')}</div>
         <div class="row" style="gap:8px">
-          <button class="ghost sm" data-act="copyall" title="Give every player this player's gear and weapons (names stay)">Copy to all players</button>
+          ${team() === 1 ? '' : `<button class="ghost sm" data-act="copyall" title="Give every player this player's gear and weapons (names stay)">Copy to all players</button>`}
           <button class="ghost sm" data-act="reset" title="Back to the default melee gear, no switches">Reset this player</button>
         </div>
       </div>
@@ -151,7 +151,7 @@ export function createGear(root, { getTeam }) {
     if (b.dataset.act === 'teamfile') {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'team', team: team(), players: players() }, null, 1)], { type: 'application/json' }));
-      a.download = `verzik_team_${team()}man.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      a.download = team() === 1 ? 'verzik_solo_gear.json' : `verzik_team_${team()}man.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       return;
     }
     if (b.dataset.act === 'copyset') { tstate().sets[b.dataset.to] = { players: structuredClone(players()) }; persist(); render(); return; }

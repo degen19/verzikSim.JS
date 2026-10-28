@@ -66,6 +66,8 @@ $('src').addEventListener('click', async (e) => {
   if (tab === 'opt') optimizer.refresh();
 });
 $('team').addEventListener('change', async () => {
+  soloMode();
+  if (team() === 1) return;                                              // solos: only the Gear tab for now
   showRunBps();
   if (source === 'build') await builder.show(team());
   if (tab === 'opt') optimizer.refresh();
@@ -135,8 +137,16 @@ const gear = createGear($('room-gear'), { getTeam: team });
 // top-level tabs: Gear / Verzik (Sotetseg, Xarpus and Full raid come later). Remembered in the address (#gear) and this browser.
 const ROOM_KEY = 'verzikSim.room.v1';
 let room = 'verzik';
+/** Solo: only the Gear tab so far - Verzik is greyed out ("soon") like the other rooms. */
+function soloMode() {
+  const solo = team() === 1, b = $('rooms').querySelector('[data-room="verzik"]');
+  b.disabled = solo;
+  b.innerHTML = solo ? 'Verzik <span class="soon">soon</span>' : 'Verzik';
+  b.title = solo ? 'Solos are coming soon - the Gear tab works for them already' : '';
+  if (solo && room !== 'gear') showRoom('gear');
+}
 function showRoom(r, push = true) {
-  room = r === 'gear' ? 'gear' : 'verzik';
+  room = r === 'gear' || team() === 1 ? 'gear' : 'verzik';
   [...$('rooms').querySelectorAll('[data-room]')].forEach((b) => b.classList.toggle('on', b.dataset.room === room));
   $('room-gear').hidden = room !== 'gear';
   $('room-verzik').hidden = room !== 'verzik';
@@ -147,7 +157,7 @@ function showRoom(r, push = true) {
 }
 $('rooms').addEventListener('click', (e) => { const b = e.target.closest('button[data-room]'); if (b) showRoom(b.dataset.room); });
 window.addEventListener('hashchange', () => showRoom(location.hash.slice(1), false));
-{ let r0 = location.hash.slice(1); if (!r0) { try { r0 = localStorage.getItem(ROOM_KEY) || ''; } catch { r0 = ''; } } showRoom(r0 || 'verzik', false); }
+{ let r0 = location.hash.slice(1); if (!r0) { try { r0 = localStorage.getItem(ROOM_KEY) || ''; } catch { r0 = ''; } } showRoom(r0 || 'verzik', false); soloMode(); }
 const TABS_MIN_KEY = 'verzikSim.tabsMin.v1';
 function setTabsMin(on) {
   document.body.classList.toggle('tabs-min', on);
@@ -172,6 +182,7 @@ const pool = new SimPool();
 let lastInfo = null;
 /** Warm the report workers for the current chart (in the background; any error is ignored here). */
 async function prewarm() {
+  if (team() === 1) return;                                              // solos: no Verzik yet
   try {
     const wb = await getWorkbook(); if (!wb) return;
     const c = withGear(await parse_chart(wb, team(), null, 'A', { deferBP: true }), team(), 'A');
