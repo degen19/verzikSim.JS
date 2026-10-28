@@ -9,7 +9,15 @@ export const P3_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625 };
 export const P3_20 = { 5: 700, 4: 612, 3: 525, 2: 525 };
 export const P3_DEF_LVL = 150, P3_SLASH = 30;
 export const P3_DEF = { 1: (P3_DEF_LVL + 9) * (P3_SLASH + 64) };   // slash 14,946 (15,604 once a tornado hit boosts her stats 5%)
-export const VERZ_ATK_LVL = 300, VERZ_ATK_BONUS = 80;
+export const VERZ_ATK_LVL = 300, VERZ_ATK_BONUS = 80;      // Ranged / Magic 300 (Attack and Strength 400: her melee is always avoided)
+export const VERZ_RSTR = 5, VERZ_MDMG = 5;                    // her ranged strength / magic damage % bonuses
+/** Verzik's P3 max hit off prayer, the player formula at her Ranged / Magic level (+5% each after a tornado hit):
+ *  ranged floor(0.5 + (lvl + 9) x (5 + 64) / 640) = 33 (35 boosted); magic floor(0.5 + (lvl + 9) x 64 / 640) + 5% = 32 (33).
+ *  Protection prayers halve it, rounded down. */
+export function verz_max(style, lvl = VERZ_ATK_LVL) {
+  if (style === 'ranged') return Math.floor(0.5 + (lvl + 9) * (VERZ_RSTR + 64) / 640);
+  return floordiv(Math.floor(0.5 + (lvl + 9) * 64 / 640) * (100 + VERZ_MDMG), 100);
+}
 export const AUTO_DELAY = 2;                                  // assumed, same as P1
 export const N_AUTOS = 9;
 export const MAX_ATTACKS = 10;                                // 9 autos + one last attack (62 + 7 = 69, or 5 after a 20% proc)
@@ -499,9 +507,9 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           for (const p of players) {
             if (p.dead) continue;
             const due = sum(p.pending.filter((x) => typeof x[1] === 'number' && x[0] <= t + AUTO_DELAY).map((x) => x[1]));
-            const off = p.veng_active && p.off_used < p.off_prayer && p.hp - due > 34;
+            const off = p.veng_active && p.off_used < p.off_prayer && p.hp - due > Math.max(verz_max('ranged', atk_lvl), verz_max('magic', atk_lvl));
             if (off) p.off_used += 1;
-            const mxh = (off || truthy(p.prayer_down)) ? 34 : 17;
+            const full = verz_max(style, atk_lvl), mxh = (off || truthy(p.prayer_down)) ? full : floordiv(full, 2);
             const ch = hit_chance(a_roll, player_def_roll(p, style));
             const d = rng.random() < ch ? rng.randint(0, mxh) : 0;
             p.pending.push([t + AUTO_DELAY, d]);
@@ -635,10 +643,10 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         }
       }
       // last resort: no super combat to follow a normal brew, but brews left - brew only as much as it takes to
-      // survive the next Verzik auto (max 17 on prayer, 34 with prayers down); restoring prayer after redemption first
+      // survive the next Verzik auto (her max hit of either style, halved on prayer); restoring prayer after redemption first
       if (!truthy(p.need_restore) && t >= p.sip_ready && p.sc_at == null && p.pool.left['brew'] > 0 &&
           !truthy(supplies.scb_ok(p, players, brew_at))) {
-        const mxh_ = truthy(p.prayer_down) ? 34 : 17;
+        const top = Math.max(verz_max('ranged', atk_lvl), verz_max('magic', atk_lvl)), mxh_ = truthy(p.prayer_down) ? top : floordiv(top, 2);
         if (0 < p.hp && p.hp <= mxh_ && truthy(p.pool.take('brew'))) {
           const old = p.hp;
           supplies.drink_brew(p); p.sip_ready = t + 3;
