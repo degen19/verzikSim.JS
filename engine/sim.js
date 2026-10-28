@@ -6,6 +6,7 @@ import {
 import * as supplies from './supplies.js';
 import * as horn from './horn.js';
 import { ITEMS } from './gear.js';
+import { multiPicks } from './chartform.js';
 
 export const TICK = 0.6;
 
@@ -111,11 +112,12 @@ export function custom_surge(p, t, L, tag = '') {
 }
 
 
-/** Rancour + Blood fury (amulet 'Both' with a Blood fury HP), each tick of P2 / reds / P3: in a phase ticked for them,
- *  Blood fury below that HP and Rancour above it (at it: no change); otherwise Rancour. Never in P1. */
+/** Rancour + Blood fury (amulet 'Both' with a threshold), each tick: in a part picked under 'Blood fury in'
+ *  ('P2 crabs' = reds, 'P2 Verzik', 'P3') Blood fury below the threshold and Rancour above it (at it: no change);
+ *  otherwise Rancour. Never in P1. */
 export function bf_swap(p, phase, L, t, tag = '') {
   if (p.amulet_mode !== 'Both' || !p.bf_hp || p.dead) return;
-  const on = phase === 'P3' ? p.bf_p3 : p.bf_p2;
+  const on = p.bf_in.has(phase);
   const want = !on ? 'Rancour' : p.hp < p.bf_hp ? 'Blood fury' : p.hp > p.bf_hp ? 'Rancour' : p.amulet;
   if (want === p.amulet) return;
   p.amulet = want;
@@ -344,11 +346,11 @@ export class Player {
     this.legs = dget(cfg, 'legs', 'Oathplate legs');
     this.amulet_mode = dget(cfg, 'amulet', 'Rancour');
     this.amulet = this.amulet_mode === 'Blood fury' ? 'Blood fury' : 'Rancour';
-    this.bf_hp = dget(cfg, 'bloodFuryHp');
-    // bringing both amulets: in a ticked phase (P2 includes reds) they wear Blood fury below Blood fury HP and Rancour
-    // above it; never in P1 (blank = ticked)
-    this.bf_p2 = dget(cfg, 'bfP2', true) !== false;
-    this.bf_p3 = dget(cfg, 'bfP3', true) !== false;
+    this.bf_hp = dget(cfg, 'bloodFuryHp');          // bloodFuryThreshold on the chart
+    // bringing both amulets: in the parts picked under 'Blood fury in' (P2 red crabs, P2 Verzik, P3; default all) they wear
+    // Blood fury below the threshold and Rancour above it; never in P1
+    const bfIn = dget(cfg, 'bfIn', null);
+    this.bf_in = new Set(Array.isArray(bfIn) ? bfIn : ['P2 crabs', 'P2 Verzik', 'P3']);
     this.prayer = dget(cfg, 'meleePrayer', 'Piety');
     this.lb = dget(cfg, 'lightbearerOn', false);
     this.ring = this.lb ? 'Lightbearer' : 'Ultor';
@@ -576,7 +578,13 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
       for (const key of ['helm', 'body', 'legs', 'amulet']) {
         if (pybool(get(key))) cfgs[k][key] = get(key);
       }
-      if (get('bloodFuryHp') != null) cfgs[k].bloodFuryHp = pyint(get('bloodFuryHp'));
+      const bft = get('bloodFuryThreshold') ?? get('bloodFuryHp');      // bloodFuryHp: its old name
+      if (bft != null && pystr(bft).trim() !== '') cfgs[k].bloodFuryHp = pyint(bft);
+      if (has(gc, 'Blood fury in')) cfgs[k].bfIn = multiPicks('Blood fury in', get('Blood fury in'));
+      else if (has(gc, 'Blood fury P2') || has(gc, 'Blood fury P3')) {          // early test columns
+        const on = (h) => get(h) == null || pystr(get(h)).trim() === '' || yes(get(h));
+        cfgs[k].bfIn = [...(on('Blood fury P2') ? ['P2 crabs', 'P2 Verzik'] : []), ...(on('Blood fury P3') ? ['P3'] : [])];
+      }
       if (pybool(get('redCrab'))) cfgs[k].redCrab = title(pystr(get('redCrab')).trim());
       if (get('bouncedZCB') != null) cfgs[k].bouncedZCB = yes(get('bouncedZCB'));
       if (get('offPrayer') != null) cfgs[k].offPrayer = pyint(get('offPrayer'));
@@ -593,7 +601,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
         ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
         ['horn', 'Horn'], ['hornP2', 'P2 horn'], ['hornP3', 'P3 horn'],
         ['eastBoak', 'East Boak'], ['westBoak', 'West Boak'], ['redemptionFlick', 'Redemption flick'], ['pneckP1', 'Pneck on P1'], ['passGreen', 'Pass green if death'],
-        ['hasBP', 'Has BP'], ['bfP2', 'Blood fury P2'], ['bfP3', 'Blood fury P3']]) {
+        ['hasBP', 'Has BP']]) {
         if (get(h) != null && pystr(get(h)).trim() !== '') cfgs[k][key] = yes(get(h));
       }
       // Has BP (blank / no column = has one): popping the purple crab needs a blowpipe

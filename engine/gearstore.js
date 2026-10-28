@@ -44,7 +44,8 @@ export function withGearSet(cfgs, team, letter) {
   if (!t.sets[letter]) { t.sets[letter] = { players: cfgs.map((c, k) => fromChartCfg(c, k)) }; saveGear(s); }
   const ps = playersOf(t.sets[letter], team);
   const out = cfgs.map((c, k) => applyToCfg(c, ps[k]));
-  if (cfgs.notes) out.notes = cfgs.notes;
+  out.notes = [...(cfgs.notes || [])];
+  cfgs.forEach((c, k) => { if (c.shadow && !out[k].shadow) out.notes.push(`${c.name || `P${k + 1}`}: Shadow is ticked but Gear set ${letter} has no Tumeken's shadow for them - their shadow settings are ignored.`); });
   const nm = (k) => cfgs[k].name || `P${k + 1}`;
   out.forEach((c, k) => {
     if ((c.PurpleDC || c.Purple2DC) && !c.hasBP) {
@@ -86,6 +87,11 @@ export function blowpipes(team, letter) {
   return set ? playersOf(set, team).filter((p) => (p.weapons || []).includes('Toxic blowpipe')).length : null;
 }
 
+/** The gear-derived settings of each player of Gear set `letter` (null if it doesn't exist yet). */
+export function gearOfLetter(team, letter) {
+  const set = gearSet(loadGear(), team, letter);
+  return set ? playersOf(set, team).map((p) => applyToCfg({}, p)) : null;
+}
 /** The gear-derived settings of each player for a Verzik set ({has3Tick, hasBP, ...}), or null if its Gear set doesn't
  *  exist yet (then the chart's own columns still count). */
 export function gearOfSet(team, block) {

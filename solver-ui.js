@@ -3,8 +3,8 @@
 // The inputs come from the chart template's own fields (engine/chartform.js), so defaults match the chart.
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart } from './engine/sim.js';
-import { withGear, withGearSet, GEAR_SETS, blowpipes } from './engine/gearstore.js';
-import { describe, readValues, overlaySheet, shadowBlock, SHADOW_MODES } from './engine/chartform.js';
+import { withGear, withGearSet, GEAR_SETS, blowpipes, gearOfLetter } from './engine/gearstore.js';
+import { describe, readValues, overlaySheet, shadowBlock, SHADOW_MODES, multiInput, multiFromBox, migrateKeys } from './engine/chartform.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { solveRoom, evalRange, ROOM_DEPTHS } from './engine/roomsolver.js';
 import { SolverPool } from './solver-pool.js';
@@ -15,14 +15,14 @@ const fmtS = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0'
 const fmtT = (t) => fmtS(t * 0.6);
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const tickTime = (sec) => Math.floor(sec / 0.6 + 1e-6) * 0.6;
-const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
+const load = () => { try { return migrateKeys(JSON.parse(localStorage.getItem(STORE))) || {}; } catch { return {}; } };
 const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off */ } };
 const CODE_BG = { S: '#8fd18f', D: '#c9b6e4', A: '#fff2a8', C: '#f8cbad', H: '#f4b183', E: '#b4c7e7', SB: '#ffd966', B: '#d9a6e0',
   T: '#8eb4e3', P: '#ff66cc', R: '#ffffff', X: '#595959' };
 
 // which template fields go where (the rest are decided by the solver, or not used)
 const PLAYER_SETUP = ['Name', 'meleePrayer', 'Custom Surge Timing'];
-const PLAYER_GEAR = ['helm', 'body', 'legs', 'amulet', 'bloodFuryHp', 'has3Tick', 'Has BP', 'Shadow', '3:1', 'Shadow while LB', 'Shadow camp', 'Deep proc'];
+const PLAYER_GEAR = ['helm', 'body', 'legs', 'amulet', 'bloodFuryThreshold', 'has3Tick', 'Has BP', 'Shadow', '3:1', 'Shadow while LB', 'Shadow camp', 'Deep proc'];
 const ADV_GEAR = ['bouncedZCB', 'offPrayer', 'hornPriority', 'Phoenix necklaces', 'Pneck on P1', 'Redemption flick', 'Pass green if death'];
 // 3-5 man: the solver picks the Dawn threshold (1-6%)
 const TEAM_MAIN = ['Deep proc HP %', 'P2 Scythe last hit threshold', 'P3 halberd HP %'];
@@ -32,7 +32,7 @@ const DUO_MAIN = ['Number of Purples', 'Second purple %', 'Crab HP threshold', '
 const DUO_SOLVED = ['Dawn threshold %', 'P2 Scythe last hit threshold'];
 const LABEL = {
   Name: 'Name', meleePrayer: 'Prayer', 'Custom Surge Timing': 'Custom surge (m:ss)', helm: 'Helm', body: 'Body', legs: 'Legs', amulet: 'Amulet',
-  bloodFuryHp: 'Blood fury HP', has3Tick: '3-tick weapon', 'Has BP': 'Has BP', bouncedZCB: 'Bounced ZCB', offPrayer: 'Off prayer (P3)',
+  bloodFuryThreshold: 'Blood fury threshold', has3Tick: '3-tick weapon', 'Has BP': 'Has BP', bouncedZCB: 'Bounced ZCB', offPrayer: 'Off prayer (P3)',
   hornPriority: 'Horn priority', 'Phoenix necklaces': 'Phoenix necklaces', 'Pneck on P1': 'Pneck on P1', 'Redemption flick': 'Redemption flick',
   'Pass green if death': 'Pass green if death', redCrab: 'Red crab', 'Brew sips': 'Brew sips', 'SCB sips': 'Super combat sips',
   'Restore sips': 'Restore sips', Sharks: 'Sharks', 'P2 Scythe last hit threshold': 'P2 halberd: scythe below HP %',
@@ -94,8 +94,21 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   const names = () => Array.from({ length: team }, (_, k) => V()[`setup|Name|${k}`] || `Player ${k + 1}`);
   const on = (h, k) => { const f = field('gear', h, k); return !!f && V()[f.key] === true; };
 
+  /** Why a player setting can't be used with the team's Gear set ('' = it can). */
+  function gearBlock(f) {
+    if (f.player == null) return '';
+    const letter = S().gearSet || 'A', g = gearOfLetter(team, letter), p = g && g[f.player];
+    if (!p) return '';
+    if ((f.header === 'Shadow' || SHADOW_MODES.includes(f.header)) && !p.hasShadow && !S().shadowSearch) return `No Tumeken's shadow in Gear set ${letter} (Gear tab)`;
+    if ((f.header === 'bloodFuryThreshold' || f.header === 'Blood fury in') && p.amulet !== 'Both') return `Needs Rancour + Blood fury in Gear set ${letter} (Gear tab)`;
+    return '';
+  }
   function input(f) {
-    const v = V()[f.key] ?? f.def, k = `data-key="${esc(f.key)}"`;
+    let v = V()[f.key] ?? f.def;
+    const k = `data-key="${esc(f.key)}"`, gb = gearBlock(f);
+    if (f.type === 'multi') return multiInput(f, v, esc, gb);
+    if (gb && f.type === 'bool') return `<input type="checkbox" ${k} disabled title="${esc(gb)}">`;
+    if (gb) return `<input type="${f.type === 'number' ? 'number' : 'text'}" ${k} value="${esc(v)}" disabled title="${esc(gb)}">`;
     if (f.type === 'bool') {
       const why = f.player != null ? shadowBlock(f.header, (h) => on(h, f.player)) : '';
       return `<input type="checkbox" ${k} ${v === true && !why ? 'checked' : ''} ${why ? `disabled title="${esc(why)}"` : ''}>`;
@@ -175,10 +188,10 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const pickBP = !!s.bpSearch;                                  // Advanced: the solver hands out the blowpipes
     const bpCol = { custom: true, label: 'Has BP', help: 'The solver hands out the blowpipes (Advanced)', cell: () => '<span class="muted" title="The solver hands out the blowpipes (Advanced)">Solver</span>' };
     // gear (helm / body / legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab
-    const BF = [['gear', 'bloodFuryHp'], ['gear', 'Blood fury P2'], ['gear', 'Blood fury P3']];
+    const BF = [['gear', 'bloodFuryThreshold'], ['gear', 'Blood fury in']];
     const roleCols = duo ? [['setup', 'Name'], ['setup', 'Custom Surge Timing'], ...BF, ['gear', 'Shadow'], ['gear', 'Deep proc']]
       : [['setup', 'Name'], boakCol, patCol, ['setup', 'Custom Surge Timing'], ...BF, ...(pickBP ? [bpCol] : []), ...PLAYER_GEAR.slice(7).map((h) => ['gear', h])];
-    const playersBody = `<p class="muted small" style="margin-top:4px">Gear (helm, body, legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab; Blood fury HP is set here - Gear set ${esc(s.gearSet || 'A')}.</p>${playerTable(roleCols)}
+    const playersBody = `<p class="muted small" style="margin-top:4px">Gear (helm, body, legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab; the Blood fury threshold is set here - Gear set ${esc(s.gearSet || 'A')}.</p>${playerTable(roleCols)}
       <p class="muted small">${duo ? 'Tick Shadow for the mage (one player). The solver picks the shadow mode (camp, 3:1, Shadow while LB, or 3:1 + Shadow while LB) and the Dawn and P2 last-hit thresholds (1-5%).'
         : 'Shadow modes need Shadow ticked.'}${!duo && s.shadowSearch ? ' The solver places the shadow player(s): the ticked Shadow settings and mage gear move with them to the slot it picks.' : ''} Custom surge blank: the solver places the surge in P1.</p>
       `;
@@ -218,6 +231,13 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   // ---- inputs
   root.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.dataset.mkey) {                                              // multi-choice checklist (Blood fury in)
+      const [mk, text] = multiFromBox(t, root);
+      V()[mk] = text;
+      const n = text === 'None' ? 0 : text.split(' / ').length;
+      t.closest('details').querySelector('summary').textContent = n === 3 ? 'All' : n ? text.replace(/ \/ /g, ' + ') : 'None';
+      persist(); return;
+    }
     if (t.dataset.key) {
       const f = tpl[team].desc.fields.get(t.dataset.key);
       let v = t.type === 'checkbox' ? t.checked : t.value;

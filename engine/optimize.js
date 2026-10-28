@@ -2,6 +2,7 @@
 // most often beat the user's breakpoints. Used by the web page's Optimizer tab (via worker.js).
 import { Rng } from './rng.js';
 import { ITEMS } from './gear.js';
+import { multiPicks, multiText } from './chartform.js';
 import { run_p1, Player } from './sim.js';
 import { run_p2 } from './p2.js';
 import { run_reds } from './reds.js';
@@ -124,8 +125,10 @@ const labelOf = (map, item, def) => Object.keys(map).find((k) => map[k] === item
 const MAGE_CAPES = ['Infernal cape', 'Imbued saradomin cape'];
 const TOGGLES = [
   ['shadowLB', 'Shadow while on Lightbearer'], ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
-  ['pneckP1', 'Pneck on P1'], ['bfP2', 'Blood fury in P2'], ['bfP3', 'Blood fury in P3'],
+  ['pneckP1', 'Pneck on P1'],
 ];
+// Blood fury in: where the threshold swap is used (players with both amulets and a threshold)
+const BF_COMBOS = ['P2 crabs / P2 Verzik / P3', 'P2 Verzik / P3', 'P2 crabs / P3', 'P3', 'P2 crabs / P2 Verzik', 'P2 Verzik', 'P2 crabs', 'None'];
 
 /**
  * A setup as chart-form changes: [[table, header, player (null = team), value], ...] for every input the optimizer can
@@ -145,8 +148,7 @@ export function cfgsToFields(cfgs, team) {
     put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB);
     put('gear', 'Shadow camp', k, !!c.shadowCamp); put('gear', 'Deep proc', k, !!c.deepProc);
     if ('pneckP1' in c) put('gear', 'Pneck on P1', k, !!c.pneckP1);
-    if ('bfP2' in c) put('gear', 'Blood fury P2', k, c.bfP2 !== false);
-    if ('bfP3' in c) put('gear', 'Blood fury P3', k, c.bfP3 !== false);
+    if (Array.isArray(c.bfIn)) put('gear', 'Blood fury in', k, multiText('Blood fury in', c.bfIn));
     if (team > 2) {
       if (c.eastBoak != null || c.westBoak != null) { put('gear', 'East Boak', k, !!c.eastBoak); put('gear', 'West Boak', k, !!c.westBoak); }
       if (c.eastPattern) put('gear', 'East Pattern', k, c.eastPattern);
@@ -269,10 +271,14 @@ export function catalog(cfgs, team) {
       if (c.eastBoak) opts.push({ id: `epat_${i}`, group: g, label: 'East Pattern', kind: 'choice', choices: ['A', '0-T'], current: c.eastPattern || 'A',
         apply: (cf, v) => { cf[i].eastPattern = v; } });
     }
+    if (c.amulet === 'Both' && c.bloodFuryHp) {
+      opts.push({ id: `bfin_${i}`, group: g, label: 'Blood fury in', kind: 'choice', choices: BF_COMBOS,
+        current: multiText('Blood fury in', Array.isArray(c.bfIn) ? c.bfIn : multiPicks('Blood fury in', '')),
+        apply: (cf, v) => { cf[i].bfIn = multiPicks('Blood fury in', v); } });
+    }
     for (const [key, label] of TOGGLES) {
       if (!(key in c)) continue;                                  // only toggles the chart actually has
       if ((key.startsWith('shadow')) && !c.shadow) continue;
-      if (key.startsWith('bf') && !(c.amulet === 'Both' && c.bloodFuryHp)) continue;   // only with both amulets and a Blood fury HP
       opts.push({ id: `${key}_${i}`, group: g, label, kind: 'choice', choices: ['On', 'Off'], current: c[key] ? 'On' : 'Off',
         apply: (cf, v) => { cf[i][key] = v === 'On'; } });
     }

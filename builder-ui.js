@@ -1,6 +1,6 @@
 // "Build chart on this page": the chart template's inputs as a form, for the selected scale. Saved in this browser.
 import { readXlsx } from './engine/xlsx.js';
-import { describe, readValues, overlaySheet, checkRow, withSetC, shadowBlock, SHADOW_MODES, BLOCKS, CODES, CODE_HELP, isAutoTick } from './engine/chartform.js';
+import { describe, readValues, overlaySheet, checkRow, withSetC, shadowBlock, SHADOW_MODES, BLOCKS, CODES, CODE_HELP, isAutoTick, multiInput, multiFromBox, migrateKeys } from './engine/chartform.js';
 import { readPlanInputs, plan } from './engine/planner.js';
 import { loadGear, linkOf, setLink, gearOfSet, GEAR_SETS, gearSet } from './engine/gearstore.js';
 
@@ -10,7 +10,7 @@ const LIBCUR = 'verzikSim.libcur.v1';        // which saved / default chart each
 const CODE_BG = { S: '#8fd18f', D: '#c9b6e4', A: '#fff2a8', C: '#f8cbad', H: '#f4b183', E: '#b4c7e7', SB: '#ffd966', B: '#d9a6e0', T: '#8eb4e3',
   P: '#ff66cc', R: '#ffffff', X: '#595959', 'ST>n': '#33cc33' };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
+const load = () => { try { return migrateKeys(JSON.parse(localStorage.getItem(STORE))) || {}; } catch { return {}; } };
 const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: keep in memory */ } };
 const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
@@ -28,9 +28,8 @@ const HELP = {
   'Shadow camp': 'Duo: shadow every P2 attack until reds. Needs Shadow; not with 3:1 or Shadow while LB (camp already covers them).',
   'Deep proc': 'Shadow from max distance below the Deep proc HP %. Needs Shadow.', redCrab: 'Red crab hit once during the reds shield',
   offPrayer: "Verzik P3 autos taken off prayer (0-9)",
-  bloodFuryHp: 'With Rancour + Blood fury (Gear tab): the HP they swap to Blood fury below, and back to Rancour above, in the phases ticked under Blood fury P2 / P3. Never in P1.',
-  'Blood fury P2': 'Swap Rancour / Blood fury by Blood fury HP in P2 (and reds). Unticked: Rancour all P2.',
-  'Blood fury P3': 'Swap Rancour / Blood fury by Blood fury HP in P3. Unticked: Rancour all P3.',
+  bloodFuryThreshold: 'With Rancour + Blood fury (Gear tab): below this HP they wear Blood fury, above it Rancour - in the parts picked under Blood fury in. Never in P1.',
+  'Blood fury in': 'Where the Blood fury threshold is used: P2 red crabs, P2 Verzik and / or P3 (default all). Elsewhere they wear Rancour.',
   'Has BP': 'Has a blowpipe (default). Unticked: no blowpipe in P1 or for tick fills, and they can\'t pop the purple crab (the purple DC must have one).',
   'East bounce tech': "East bounce tech (3-5 man): on the first N Verzik attacks in P2 before reds (0-3), the East Boak players attack on her attack tick instead of waiting a tick, chancing her bounce (50% one of them; certain if everyone is East). A bounced player's next attack is a ZCB with ruby bolts (melee gear + Blessed quiver, Necklace of rupture, Rigour), then scythes again. Stops after 2 bounces. 0 = off.",
   '4 Claw Priority': "If Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status prioritises 100% spec for reds (both claws by r36, taking over the purple DC); the others prioritise 50%. Off: rings follow the chart.", has3Tick: 'Weapon used by H in the P1 chart',
@@ -41,7 +40,7 @@ export function createBuilder(root, { onChange }) {
   const tpl = {};                 // team -> {ws, descs: {A, B}, defaults: {A, B}}
   let state = load();             // team -> {A: {key: value}, B: {...}}
   let team = 4, block = 'A', timer = null;
-  let lib = loadKey(LIB);         // team -> [{id, name, saved, sets}]
+  let lib = migrateKeys(loadKey(LIB));   // team -> [{id, name, saved, sets}]
   let cur = loadKey(LIBCUR);      // team -> {kind: 'saved'|'default', id, name, snap}
   let defaults = null;            // [{name, team, file, note}] from defaults/index.json (null = not fetched yet)
 
@@ -97,7 +96,7 @@ export function createBuilder(root, { onChange }) {
     }
     const j = await res.json();
     if (j.app !== 'verzikSim' || !j.sets) throw new Error(`"${d.name}" isn't a chart saved from this page`);
-    return j.sets;
+    return migrateKeys(j.sets);
   }
   const withDefaults = (sets) => Object.fromEntries(BLOCKS.map((b) => [b, { ...tpl[team].defaults[b], ...(sets[b] || {}) }]));
   function markCurrent(kind, id, name) { cur[team] = { kind, id, name, snap: snapOf() }; saveKey(LIBCUR, cur); }
@@ -166,8 +165,22 @@ export function createBuilder(root, { onChange }) {
     for (const t of ['gear', 'setup']) { const fd = field(t, header, player); if (fd) return vals()[fd.key] === true || (vals()[fd.key] ?? fd.def) === true; }
     return false;
   };
+  /** Why a player setting can't be used with their Gear set ('' = it can). */
+  function gearBlock(f) {
+    if (f.player == null) return '';
+    const g = gearOfSet(team, block), p = g && g[f.player];
+    if (!p) return '';
+    const letter = linkOf(loadGear(), team, block);
+    if ((f.header === 'Shadow' || SHADOW_MODES.includes(f.header)) && !p.hasShadow) return `No Tumeken's shadow in Gear set ${letter} (Gear tab)`;
+    if ((f.header === 'bloodFuryThreshold' || f.header === 'Blood fury in') && p.amulet !== 'Both') return `Needs Rancour + Blood fury in Gear set ${letter} (Gear tab)`;
+    return '';
+  }
   function input(f, v) {
     const k = `data-key="${esc(f.key)}"`;
+    const gb = gearBlock(f);
+    if (f.type === 'multi') return multiInput(f, v, esc, gb);
+    if (gb && f.type === 'bool') return `<input type="checkbox" ${k} disabled title="${esc(gb)}">`;
+    if (gb) return `<input type="${f.type === 'number' ? 'number' : 'text'}" ${k} value="${esc(v)}" disabled title="${esc(gb)}">`;
     if (f.type === 'bool') {
       const why = f.player != null ? shadowBlock(f.header, (h) => ticked(h, f.player)) : '';
       return `<input type="checkbox" ${k} ${v === true && !why ? 'checked' : ''} ${why ? `disabled title="${esc(why)}"` : ''}>`;
@@ -273,6 +286,14 @@ export function createBuilder(root, { onChange }) {
   }
 
   root.addEventListener('input', (e) => {
+    if (e.target.dataset && e.target.dataset.mkey) {                  // multi-choice checklist (e.g. Blood fury in)
+      const [mk, text] = multiFromBox(e.target, root);
+      vals()[mk] = text;
+      const sum = e.target.closest('details').querySelector('summary');
+      const n = text === 'None' ? 0 : text.split(' / ').length;
+      sum.textContent = n === 3 ? 'All' : n ? text.replace(/ \/ /g, ' + ') : 'None';
+      persist(); refreshDerived(); return;
+    }
     const key = e.target.dataset && e.target.dataset.key; if (!key) return;
     let v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (e.target.classList.contains('code')) {
@@ -346,7 +367,7 @@ export function createBuilder(root, { onChange }) {
       const j = JSON.parse(await e.target.files[0].text());
       if (j.app !== 'verzikSim' || !j.sets) throw new Error("That file isn't a saved chart from this page");
       if (j.team !== team) throw new Error(`That file is a ${j.team}-man chart - switch Scale to ${j.team}-man first`);
-      state[team] = withDefaults(j.sets);
+      state[team] = withDefaults(migrateKeys(j.sets));
       delete cur[team]; saveKey(LIBCUR, cur);
       render(); persist();
     } catch (err) { alertMsg(err.message); }
@@ -366,6 +387,7 @@ export function createBuilder(root, { onChange }) {
     },
     /** Put values (e.g. a Verz Solver setup) into one set of the builder; that set is shown next time. */
     async setSet(t, b, values) {
+      migrateKeys(values);
       await ensure(t);
       state[t][b] = { ...tpl[t].defaults[b], ...values };
       block = b;                                                       // show the set that was just filled

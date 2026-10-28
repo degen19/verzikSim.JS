@@ -309,7 +309,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       } else {
         p.regen_timer = 0;
       }
-      custom_surge(p, t, L, `r${r} `); auto_surge(p, t, L, `r${r} `); bf_swap(p, 'P2', L, t, `r${r} `);
+      custom_surge(p, t, L, `r${r} `); auto_surge(p, t, L, `r${r} `); bf_swap(p, 'P2 crabs', L, t, `r${r} `);
       if (swap_due(p)) {
         p.ring = 'Ultor'; p.regen_timer = 0; p.ring_swapped_at = t;
         L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? '(4 Claw Priority goal still reachable on Ultor)' : '>= target') + ' -> swaps to Ultor');

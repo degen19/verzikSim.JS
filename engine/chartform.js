@@ -9,7 +9,7 @@ export const TEAM_HEADERS = ['Number of Purples', 'Death tick', 'Deep proc HP %'
 export const COMPUTED = ['End spec', 'Purple crab', 'Room Time', 'LB swings', 'West/East DC +', 'Spec used', 'Time of regen'];
 const BOOLS = new Set(['lightbearerOn', '1st Purple DC', '2nd Purple DC', 'PurpleDC', 'WestDC', 'EastDC', 'bouncedZCB', 'Shadow', 'Shadow camp',
   '3:1', 'Shadow while LB', 'Deep proc', 'Horn', 'P2 horn', 'P3 horn', 'East Boak', 'West Boak', 'Pneck on P1', 'Redemption flick',
-  'Pass green if death', 'Perfect 1st set', 'Ducktank', '4 Claw Priority', 'Has BP', 'Blood fury P2', 'Blood fury P3']);
+  'Pass green if death', 'Perfect 1st set', 'Ducktank', '4 Claw Priority', 'Has BP']);
 const SELECTS = {
   meleePrayer: ['Piety', 'Zeal'], helm: ['Torva full helm', 'Oathplate helm'], body: ['Torva platebody', 'Oathplate chest'],
   legs: ['Torva platelegs', 'Oathplate legs'], amulet: ['Rancour', 'Blood fury', 'Both'], redCrab: ['West', 'East', 'None'],
@@ -22,6 +22,41 @@ const SELECTS = {
 };
 const FIXED = new Set(['necklace', 'boots', 'gloves']);           // mage gear the sim always assumes
 const TEXT = new Set(['Name', 'Custom Surge Timing']);
+// several choices in one cell ("P2 crabs / P3"; 'None' = none of them; blank = all)
+export const MULTI = { 'Blood fury in': ['P2 crabs', 'P2 Verzik', 'P3'] };
+/** A multi-choice cell's picks (blank = all of them). */
+export function multiPicks(header, v) {
+  const all = MULTI[header];
+  if (v == null || String(v).trim() === '') return all.slice();
+  if (String(v).trim().toLowerCase() === 'none') return [];
+  const got = String(v).split(/[/,+]/).map((x) => x.trim().toLowerCase());
+  return all.filter((x) => got.includes(x.toLowerCase()));
+}
+/** Picks -> the cell text (all picked = 'P2 crabs / P2 Verzik / P3', none = 'None'). */
+/** A compact multi-choice control: a summary button that opens a small checklist (checkboxes carry data-mkey). */
+export function multiInput(f, v, esc, disabled = '') {
+  const picks = multiPicks(f.header, v), all = MULTI[f.header];
+  const sum = picks.length === all.length ? 'All' : picks.length ? picks.join(' + ') : 'None';
+  if (disabled) return `<span class="muted" title="${esc(disabled)}">${esc(sum)}</span>`;
+  return `<details class="multi"><summary>${esc(sum)}</summary><div class="multi-pop">${all.map((x) =>
+    `<label class="pick"><input type="checkbox" data-mkey="${esc(f.key)}" value="${esc(x)}" ${picks.includes(x) ? 'checked' : ''}>${esc(x)}</label>`).join('')}</div></details>`;
+}
+/** Where a multi-choice checklist's ticks go: [key, cell text] from the changed checkbox. */
+export function multiFromBox(box, root) {
+  const key = box.dataset.mkey, hdr = key.split('|')[1];
+  const picks = [...root.querySelectorAll(`input[data-mkey="${CSS.escape(key)}"]`)].filter((x) => x.checked).map((x) => x.value);
+  return [key, multiText(hdr, picks)];
+}
+/** Stored chart values saved under old column names -> the current ones (bloodFuryHp -> bloodFuryThreshold). */
+export function migrateKeys(o) {
+  if (!o || typeof o !== 'object') return o;
+  for (const k of Object.keys(o)) {
+    const v = o[k];
+    if (k.includes('|bloodFuryHp|')) { const nk = k.replace('|bloodFuryHp|', '|bloodFuryThreshold|'); if (!(nk in o)) o[nk] = v; delete o[k]; } else migrateKeys(v);
+  }
+  return o;
+}
+export const multiText = (header, picks) => (picks.length ? MULTI[header].filter((x) => picks.includes(x)).join(' / ') : 'None');
 
 export const CODES = ['S', 'D', 'A', 'C', 'H', 'E', 'SB', 'B', 'T', 'P', 'R', 'X', 'ST>1', 'ST>2', 'ST>3', 'ST>4', 'ST>5'];
 export const CODE_HELP = {
@@ -32,7 +67,7 @@ export const CODE_HELP = {
 const SPEED = { S: 5, D: 4, A: 4, C: 4, T: 4, SB: 4, H: 3, E: 3, B: 2 };
 export const isAutoTick = (t) => t >= 19 && (t - 19) % 14 === 0;
 
-const typeOf = (h) => (BOOLS.has(h) ? 'bool' : h in SELECTS ? 'select' : FIXED.has(h) ? 'fixed' : TEXT.has(h) ? 'text' : 'number');
+const typeOf = (h) => (BOOLS.has(h) ? 'bool' : h in SELECTS ? 'select' : h in MULTI ? 'multi' : FIXED.has(h) ? 'fixed' : TEXT.has(h) ? 'text' : 'number');
 
 /**
  * Describe a block (A/B) of a tab. Returns {tables: {setup, team, gear, mage, chart}, fields: Map(key -> field)}.

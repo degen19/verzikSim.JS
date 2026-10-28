@@ -119,6 +119,11 @@
     .rooms button:disabled { opacity: .55; cursor: default; }
     .rooms .soon { font-size: 11px; font-weight: 500; margin-left: 4px; }
     .rooms .scale { margin-left: auto; }
+    details.multi { display: inline-block; }
+    details.multi summary { cursor: pointer; list-style: none; border: 1px solid var(--line); background: var(--field); border-radius: 6px; padding: 4px 8px; font-size: 13px; white-space: nowrap; }
+    details.multi summary::after { content: ' \25BE'; color: var(--ink2); }
+    details.multi .multi-pop { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; margin-top: 4px; text-align: left; }   /* opens inside the cell (tables scroll, so a floating list would be cut off) */
+    details.multi .multi-pop label.pick { display: flex; flex-direction: row; gap: 6px; align-items: center; white-space: nowrap; padding: 3px 0; color: var(--ink); }
     [hidden] { display: none !important; }
   </style>
 </head>

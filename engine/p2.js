@@ -408,7 +408,7 @@ export function run_p2(p1, team, rng, log = null) {
         L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? `(4 Claw Priority: Ultor still makes ${p.claw_goal === 'two' ? (p.claw_fallback ? '80% by r40' : 'both claws by r36') : 'one claw by r36'})` : p.target_spec == null ? '(regen landed, default swap)' : `>= target ${fx(Number(p.target_spec))}%`) + ' -> swaps to Ultor ' +
           `(regen timer reset, now 50t)`);
       }
-      custom_surge(p, t, L); auto_surge(p, t, L); bf_swap(p, 'P2', L, t);
+      custom_surge(p, t, L); auto_surge(p, t, L); bf_swap(p, 'P2 Verzik', L, t);
       // supplies: under 90 HP, brew between swings and super combat before the next one (never attack drained)
       if (ga(p, 'sc_at', null) === t) {
         p.sc_at = null;

@@ -141,7 +141,7 @@ function showRoom(r, push = true) {
   $('room-gear').hidden = room !== 'gear';
   $('room-verzik').hidden = room !== 'verzik';
   if (room === 'gear') gear.refresh();
-  else { if (tab === 'opt') optimizer.refresh(); if (tab === 'solve') solver.refresh(); }
+  else { if (source === 'build') builder.show(team()); if (tab === 'opt') optimizer.refresh(); if (tab === 'solve') solver.refresh(); }
   try { localStorage.setItem(ROOM_KEY, room); } catch { /* storage off */ }
   if (push && location.hash !== `#${room}`) history.replaceState(null, '', `#${room}`);
 }
