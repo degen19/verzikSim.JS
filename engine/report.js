@@ -112,7 +112,7 @@ function oddsRows(res, team, bps = []) {
     .map((row) => (scope === 'p2' && row[0] === 'Success (all runs)' ? ['P2 down in reds (all runs)', row[1]] : row));
 }
 
-function histogramSvg(res, labels) {
+export function histogramSvg(res, labels) {
   const all = res.flatMap((r) => r.total.map((t) => Math.round(t * 0.6))).sort((a, b) => a - b);
   if (!all.length) return '<p>No successful runs to chart.</p>';
   const lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];
@@ -190,7 +190,7 @@ function placeLabels(items, { curves = [], dots = [], box }) {
   return out;
 }
 
-function cumulativeSvg(res, labels) {
+export function cumulativeSvg(res, labels) {
   const all = res.flatMap((r) => r.total.map((t) => Math.round(t * 0.6))).sort((a, b) => a - b);
   if (!all.length) return '';
   const lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];
@@ -228,7 +228,7 @@ function cumulativeSvg(res, labels) {
 
 /** Same curve as cumulativeSvg, but as a share of ALL attempts (failed raids included), so it levels off at the
  *  success rate instead of 100%. Dashed line = each set's success rate; vertical lines = the breakpoints. */
-function attemptsSvg(res, labels, bps) {
+export function attemptsSvg(res, labels, bps) {
   const all = res.flatMap((r) => r.total.map((t) => Math.round(t * 0.6))).sort((a, b) => a - b);
   if (!all.length) return '';
   const lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];

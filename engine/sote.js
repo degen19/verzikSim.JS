@@ -226,7 +226,8 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
 
 /**
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
- * pnecks, sharks, rests?, restores?, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor), mazes? (how they
+ * pnecks, sharks, rests?, restores?, own? (true: their own prefire / start spec / surge - the Sotetseg tab's - over the
+ * spec plan's), surge?, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor), mazes? (how they
  * cross each maze: ['pneck' | 'redemption' | 'shark' | 'run', ...]; default defaultMazes())}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
  * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
@@ -252,8 +253,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const mazes = [];
   const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, restores: 0, locator: 0, runs: [], stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
-    prefire: (plan === 2 && (c.gear.weapons || []).includes('Zaryte crossbow') && SPEC_PLAN_2[c.role || roleOf(i)]?.prefire) || c.prefire || '',
-    pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? (plan === 2 ? SPEC_PLAN_2[c.role || roleOf(i)]?.start : undefined) ?? 100), regen: 0,
+    prefire: c.own ? (c.prefire || '') : (plan === 2 && (c.gear.weapons || []).includes('Zaryte crossbow') && SPEC_PLAN_2[c.role || roleOf(i)]?.prefire) || c.prefire || '',
+    pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.own ? (c.startSpec ?? 100) : c.startSpec ?? (plan === 2 ? SPEC_PLAN_2[c.role || roleOf(i)]?.start : undefined) ?? 100),
+    surgePlan: c.own ? !!c.surge : plan === 2 && !!SPEC_PLAN_2[c.role || roleOf(i)]?.surge, regen: 0,
     hornUntil: -1, surged: false, surgeAt: null, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
     role: c.role || roleOf(i), mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
@@ -271,7 +273,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const alive = () => ps.filter((p) => !p.dead);
   const spend = (p, n, t) => {
     p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; }
-    if (plan === 2 && SPEC_PLAN_2[p.role]?.surge && !p.surged) {      // surge straight after their first spec
+    if (p.surgePlan && !p.surged) {                                  // surge straight after their first spec
       const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++;
       L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`);
     }

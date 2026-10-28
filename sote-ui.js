@@ -9,7 +9,9 @@
 //  - Prefires with the Twisted bow / ZCB are made in their best ranged gear, Shadow / Shadow Barrage in their best magic
 //    gear (each slot: their ranged, magic or melee item, or nothing - loadout.js bestWorn).
 import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
-import { bestWorn, bonuses } from './engine/loadout.js';
+import { bestWorn, bonuses, blankPlayer } from './engine/loadout.js';
+import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './engine/sotereport.js';
+import { parseBreakpoints } from './engine/optimize.js';
 import { defaultMazes, MAZE_HOW } from './engine/sote.js';
 
 const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}
@@ -33,8 +35,23 @@ const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 0, sha
  *  from the others, eating sharks / Guthix rests through it. Run: everyone runs that maze (slower). */
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
-export function createSote(root, { getTeam }) {
+export function createSote(host, { getTeam }) {
   let state = load();
+  host.innerHTML = `<div data-cfg></div>
+    <details class="video" data-rep open style="margin-top:14px"><summary>Report</summary>
+      <div class="row" style="margin-top:10px">
+        <label>Raids<input data-r="raids" type="number" min="100" step="500" style="width:90px"></label>
+        <label title="The 4-tick instance the room is entered on (shifts the maze cycle)">Entry instance<select data-r="entry">${[0, 1, 2, 3].map((x) => `<option value="${x}">i${x}</option>`).join('')}</select></label>
+        <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
+        <label title="Target room times (m:ss), rounded down to a tick. Marked on the % of all raids chart and added to Odds.">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
+        <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-act="dl" class="ghost" disabled>Download report</button>
+      </div>
+      <div data-rstatus class="muted" style="margin-top:8px"></div>
+      <div data-rerr class="err"></div>
+      <div data-rout style="margin-top:8px"></div>
+    </details>`;
+  const root = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]');
+  const $r = (k) => rep.querySelector(`[data-r="${k}"]`);
   const team = () => Number(getTeam()) || 4;
   const tstate = () => {
     const t = team(), st = (state[t] ||= { gearSet: 'A', players: [] });
@@ -132,5 +149,55 @@ export function createSote(root, { getTeam }) {
     persist(); render();
   });
 
-  return { refresh: () => { state = load(); render(); } };
+  // ---- report: the players as set up here (gear from the Gear set), raids in batches so the page stays responsive
+  let job = null, lastPage = null;
+  const repState = () => { const st = tstate(); st.report ||= { raids: 2000, entry: 0, seed: '', bps: '' }; return st.report; };
+  const showRep = () => { const r = repState(); $r('raids').value = r.raids; $r('entry').value = r.entry; $r('seed').value = r.seed; $r('bps').value = r.bps; };
+  rep.addEventListener('input', (e) => { const k = e.target.dataset.r; if (!k) return; const r = repState(); r[k] = k === 'raids' || k === 'entry' ? Number(e.target.value) : e.target.value; persist(); });
+  rep.addEventListener('change', (e) => { const k = e.target.dataset.r; if (!k) return; const r = repState(); r[k] = k === 'raids' || k === 'entry' ? Number(e.target.value) : e.target.value; persist(); });
+  const btn = (a) => rep.querySelector(`[data-act="${a}"]`);
+  const playersNow = () => {
+    const st = tstate(), g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null;
+    return st.players.map((p, k) => {
+      const gear = gp ? gp[k] : blankPlayer(k), orb = !!gear.locator;
+      return { name: gear.name || `Player ${k + 1}`, gear, own: true, prefire: p.prefire || '', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge,
+        lbCycles: Number(p.lbCycles || 0), pnecks: Number(p.pnecks || 0), sharks: Number(p.sharks || 0), rests: Number(p.rests || 0), restores: Number(p.restores ?? 3),
+        mazes: Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), orb, team()) };
+    });
+  };
+  rep.addEventListener('click', (e) => {
+    const a = e.target.dataset.act; if (!a) return;
+    if (a === 'stop') { if (job) job.stop = true; return; }
+    if (a === 'dl' && lastPage) {
+      const url = URL.createObjectURL(new Blob([lastPage], { type: 'text/html' })), el = document.createElement('a');
+      el.href = url; el.download = `sotetseg-${team()}man-report.html`; el.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); return;
+    }
+    if (a !== 'run' || job) return;
+    const r = repState(), err = rep.querySelector('[data-rerr]'), status = rep.querySelector('[data-rstatus]'), out = rep.querySelector('[data-rout]');
+    err.textContent = '';
+    let bps = [];
+    try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
+    const n = Math.max(100, Number(r.raids) || 2000), t = team(), players = playersNow();
+    const seed = String(r.seed || '').trim() || `r${Date.now()}`, res = newSoteResult();
+    job = { stop: false }; const me = job;
+    btn('run').disabled = true; btn('stop').disabled = false;
+    let i = 0;
+    const step = () => {
+      if (me.stop || i >= n) {
+        job = null; btn('run').disabled = false; btn('stop').disabled = true;
+        if (!res.runs) { status.textContent = 'Stopped.'; return; }
+        const opts = { breakpoints: bps, entry: r.entry };
+        out.innerHTML = soteReportHtml(res, t, opts); lastPage = soteReportPage(res, t, opts); btn('dl').disabled = false;
+        status.textContent = `${me.stop ? 'Stopped at' : 'Done:'} ${res.runs.toLocaleString()} raids.`;
+        return;
+      }
+      const to = Math.min(n, i + 50);
+      try { addSoteRaids(res, players, t, i, to, { seed, entry: Number(r.entry) || 0 }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
+      i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids`;
+      setTimeout(step, 0);
+    };
+    step();
+  });
+
+  return { refresh: () => { state = load(); render(); showRep(); } };
 }
