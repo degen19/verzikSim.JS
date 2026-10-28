@@ -188,7 +188,7 @@ function playerDef(p, style) {
 export const instanceOf = (t, entry = 0) => (t + entry + 1) % 4;
 /** Ticks lost at a maze proc on tick t. */
 export const ticksLost = (t, entry = 0) => (3 - instanceOf(t, entry) + 4) % 4;
-export const SHARK_HEAL = 20, REST_HEAL = 5;
+export const SHARK_HEAL = 20, REST_HEAL = 5, UNDER_EAT_BELOW = 85;   // under / running the maze: a shark below 85 HP
 // ---- shark skip (one player at most): a player short of phoenix necklaces skips the maze away from the others (no splash either way),
 // eating through it. The maze hits land one a tick on m+2..m+8, each sized from their HP then (mazeDmg) and capped at
 // it; a shark / Guthix rest eaten on a tick lands before the death check, so a hit that takes them to 0 that tick is
@@ -313,7 +313,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         L.on && L(`t${t} ${p.name} eats a shark before the stall: ${old} -> ${p.hp} (${p.sharks} left)`);
       }
     }
-    if (under) { under.next = t + 19; under.healFrom = t + 20; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
+    if (under) { under.underTill = t + 19; under.next = t + 19; under.healFrom = t + 20; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
     pendingStall = { at: m + 8, runners: stallers };
   };
   let pendingStall = null, pendingSharks = [];
@@ -403,6 +403,13 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
     if (blocked && t >= attackable) blocked = false;
     // ---- coming out of a stall: the stall damage, in order (a phoenix necklace clears the rest)
+    // ---- the player under eats through the maze: a shark whenever below 85 HP (one every 3 ticks, none that would
+    // push their first swing back); when the others skip they keep one shark back just in case
+    for (const p of alive()) {
+      if (!(p.underTill > t) || t + 3 > p.underTill || t < (p.eatReady || 0) || p.hp >= UNDER_EAT_BELOW || p.sharks <= 1) continue;
+      const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--; st.sharks++; p.eatReady = t + 3;
+      L.on && L(`t${t} ${p.name} (under) eats a shark: ${old} -> ${p.hp} (${p.sharks} left)`);
+    }
     // ---- shark skips: a maze hit a tick on m+2..m+8 (sized from their HP, capped at it), food after it (tick eat)
     for (const sk of pendingSharks) {
       const { p, m, eats } = sk, o = t - m;
