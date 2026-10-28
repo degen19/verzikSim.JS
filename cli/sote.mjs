@@ -1,5 +1,5 @@
 // Sotetseg phase 1 from the command line: node cli/sote.mjs [team] [raids] [prefire] [--log]
-// Players: default gear (Torva / Oathplate melee) plus Masori + quiver + rupture for ranged and Ancestral for magic,
+// Players: default gear (Torva / Oathplate melee, Zeal, super combats always active) plus Masori + quiver + rupture for ranged and Ancestral for magic,
 // every weapon, all prefiring the same (default Twisted bow).
 import { runSotePhase1, runSote, SOTE_HP } from '../engine/sote.js';
 import { blankPlayer } from '../engine/loadout.js';
@@ -8,7 +8,7 @@ import { Rng } from '../engine/rng.js';
 const a = process.argv.slice(2).filter((x) => x !== '--log');
 const team = Number(a[0] || 5), N = Number(a[1] || 2000), prefire = a[2] ?? 'Twisted bow', showLog = process.argv.includes('--log');
 const players = Array.from({ length: team }, (_, k) => {
-  const g = blankPlayer(k);
+  const g = blankPlayer(k); g.prayer = 'Zeal';
   Object.assign(g.range, { cape: "Blessed dizana's quiver", neck: 'Necklace of rupture', body: 'Masori body (f)', legs: 'Masori chaps (f)', head: 'Masori mask (f)', hands: 'Zaryte vambraces' });
   Object.assign(g.mage, { head: 'Ancestral hat', body: 'Ancestral robe top', legs: 'Ancestral robe bottom', neck: 'Occult necklace', hands: 'Confliction gauntlets', cape: 'Imbued saradomin cape' });
   g.weapons.push('Elder maul', 'Twisted bow', 'Zaryte crossbow', "Tumeken's shadow", 'Shadow ancient sceptre');
