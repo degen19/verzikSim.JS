@@ -1,4 +1,4 @@
-// Sotetseg - phase 1: room start to the first maze (66.6%). Tick by tick.
+// Sotetseg - the whole room, tick by tick: phase 1, maze (skip), phase 2, maze (skip), the kill.
 //
 // Rules (agreed with the chart author):
 //  - HP 4000 (5s), 3500 (4s), 3000 (3s and duos). Defence 200, floor 100; reset after each maze. Magic 250, Ranged 250.
@@ -47,8 +47,8 @@ export const PNECK_AT = 19, PNECK_HEAL = 29, STALL_TICKS = 7;
  * on each of the other 6 ticks - all queued and taken in order when they come out. A phoenix necklace procs on the
  * first hit that leaves them on 1-19 (heals 29, clears the rest). Returns {hp, pneck: used one, dead}.
  */
-export function stallSkip(hp, team, hasPneck = true, splash = true) {
-  const q = [mazeDmg(hp), ...(splash ? Array(Math.max(0, team - 2)).fill(splashDmg(hp)) : [])];
+export function stallSkip(hp, team, hasPneck = true, splash = true, runners = team - 1) {
+  const q = [mazeDmg(hp), ...(splash ? Array(Math.max(0, runners - 1)).fill(splashDmg(hp)) : [])];   // a splash from each other runner
   for (let i = 1; i < STALL_TICKS; i++) q.push(mazeDmg(hp));
   let cur = hp;
   for (const d of q) {
@@ -125,29 +125,69 @@ function playerDef(p, style) {
   return (d + 8) * (b.dfn[style === 'range' ? 4 : 2] + 64);
 }
 
+/** The maze cycle: her 4-tick instances, i1 on every tick divisible by 4 (until room entry timing is a setting). */
+export const instanceOf = (t, offset = 0) => (((t - offset) % 4) + 4) % 4 + 1;   // 1..4
+
 /**
- * One raid of phase 1. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key), startSpec}].
- * Returns {maze, hp, dmg: {prefire, scythe, veng, ruby}, orbs: {taken, prayed, vengd}, melees, players}.
+ * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
+ * pnecks}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); offset: instance shift}.
+ *
+ * Mazes (skip / stall): the hit that reaches 66.6% / 33.3% (tick T) teleports everyone (T..T+4). One random player goes
+ * under: no maze damage, first swing on T+19 (lands T+20). The others click on the first i3 from T+4, move on the i4
+ * after (m), land on the maze on m+1 and stall 7 ticks (no veng casts), taking the stall damage (stallSkip) as they
+ * come out on m+8 (i4). She's attackable on m+9 (i1); the runners attack on m+10 (i2, landing m+11) and her attacks
+ * restart then, every 5 ticks. Her Defence resets (and can be drained again). Hits and her attacks still on the way at
+ * the proc are dropped (assumed).
+ * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSotePhase1(players, team, rng, log = null) {
+export function runSote(players, team, rng, log = null, { upTo = 3, offset = 0 } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
-  const MAX = SOTE_HP[team] || 4000, stopAt = Math.floor(MAX * MAZE_AT[0]);
-  let hp = MAX, defLvl = SOTE.def, drained = false, maze = null;
-  const st = { dmg: { prefire: 0, scythe: 0, veng: 0, ruby: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0 };
+  const MAX = SOTE_HP[team] || 4000;
+  const marks = [Math.floor(MAX * MAZE_AT[0]), Math.floor(MAX * MAZE_AT[1]), 0];
+  let hp = MAX, defLvl = SOTE.def, drained = false, phase = 0, stopAt = marks[0];
+  let blocked = false;                          // she can't be damaged (maze) until `attackable`
+  let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
+  const mazes = [];
+  const st = { dmg: { prefire: 0, scythe: 0, veng: 0, ruby: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, stalls: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear, prefire: c.prefire || '',
-    hp: 99, dead: false, veng: true, vengReady: 0, prayOffUntil: 0, lastMelee: -9, next: null, pending: [] }));
+    pnecks: Number(c.pnecks ?? 0), hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
+    lastMelee: -9, next: null, pending: [] }));
   const alive = () => ps.filter((p) => !p.dead);
-  const hits = [];                    // [tick, player, amount, label] damage landing on her
-  const orbs = [];                    // [tick, player, style, split]
-  /** Damage to her, stopped at the maze threshold (the hit that reaches it starts the maze). */
+  let hits = [];                      // [tick, player, amount, label, kind] damage landing on her
+  let orbs = [];                      // [tick, player, style, split]
+  /** Her attack ticks from `from`: the first one at or after tick t. */
+  const herTickFrom = (t) => { let x = nextAttack; while (x < t) x += ATTACK_EVERY; return x; };
+  const startMaze = (t) => {
+    mazes.push(t);
+    L.on && L(`t${t} *** MAZE ${mazes.length} (${mazes.length === 1 ? '66.6' : '33.3'}%) ***`);
+    blocked = true; hits = []; orbs = []; for (const p of ps) p.pending = [];
+    defLvl = SOTE.def; drained = false;
+    let m = t + 5; while (instanceOf(m, offset) !== 4) m++;          // runners: click on the first i3 from T+4, move on the i4
+    attackable = m + 9; nextAttack = m + 10;
+    const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
+    const runners = live.filter((p) => p !== under);
+    for (const p of runners) {
+      p.noVengUntil = m + 8;                                         // no veng casts while stalling
+      p.stallAt = m + 8; p.next = m + 10;
+    }
+    if (under) { under.next = t + 19; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
+    pendingStall = { at: m + 8, runners };
+  };
+  let pendingStall = null;
   const damage = (t, amt, label, kind) => {
-    if (maze != null || amt <= 0) return;
+    if (blocked || kill != null || amt <= 0) return;
     const real = Math.min(amt, hp - stopAt);
     hp -= real; st.dmg[kind] += real;
     L.on && L(`t${t} ${label} ${amt}${real < amt ? ` (stops at ${real})` : ''} -> Sotetseg ${hp}`);
-    if (hp <= stopAt) { maze = t; L.on && L(`t${t} *** MAZE (66.6%) ***`); }
+    if (hp > stopAt) return;
+    if (phase < 2) {
+      phase++; stopAt = marks[phase];
+      if (mazes.length + 1 >= upTo) { mazes.push(t); blocked = true; return; }   // stopping here (upTo)
+      startMaze(t); return;
+    }
+    kill = t; L.on && L(`t${t} *** SOTETSEG DIES ***`);
   };
-  // ---- prefires and the first scythe tick (lined up on her attack ticks)
+  // ---- prefires; first scythes on 11 (lined up on her attack ticks)
   for (const p of ps) {
     let after = 0;
     if (p.prefire && PREFIRE[p.prefire]) {
@@ -155,26 +195,44 @@ export function runSotePhase1(players, team, rng, log = null) {
       hits.push([pf.tick + pf.delay, p, null, `prefire ${p.prefire}`, p.prefire]);
       after = pf.tick + 5;
     }
-    // first scythe: the first of her attack ticks (from 11) they can make - 11 after any prefire, and 11 without one
     let t = FIRST_ATTACK + ATTACK_EVERY; while (t < after) t += ATTACK_EVERY;
     p.next = t;
   }
   const vengHit = (t, p, dmg, src) => {
     if (!p.veng || dmg <= 0) return;
     p.veng = false;
-    const v = Math.floor(dmg * 0.75);
-    damage(t, v, `${p.name} veng (${src} ${dmg})`, 'veng');
+    damage(t, Math.floor(dmg * 0.75), `${p.name} veng (${src} ${dmg})`, 'veng');
   };
-  for (let t = 1; t <= 400 && maze == null; t++) {
+  /** Damage to a player: a phoenix necklace procs at 1-19 (heals 29). */
+  const hurt = (t, p, d) => {
+    p.hp -= d;
+    if (p.hp <= 0) { p.dead = true; L.on && L(`t${t} ${p.name} dies`); return; }
+    if (p.hp <= PNECK_AT && p.pnecks > 0) { p.pnecks--; p.hp += PNECK_HEAL; L.on && L(`t${t} ${p.name} phoenix necklace -> ${p.hp} HP (${p.pnecks} left)`); }
+  };
+  for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
+    if (blocked && t >= attackable) blocked = false;
+    // ---- coming out of a stall: the stall damage, in order (a phoenix necklace clears the rest)
+    if (pendingStall && t === pendingStall.at) {
+      for (const p of pendingStall.runners.filter((q) => !q.dead)) {
+        const before = p.hp, r = stallSkip(p.hp, team, p.pnecks > 0, true, pendingStall.runners.filter((q) => !q.dead).length);
+        p.hp = r.hp; if (r.pneck) p.pnecks--;
+        if (r.dead) p.dead = true;
+        st.stalls.push({ hp: before, after: r.hp, pneck: r.pneck, dead: r.dead });
+        L.on && L(`t${t} ${p.name} out of the stall: ${before} -> ${r.dead ? 'DEAD' : r.hp}${r.pneck ? ' (phoenix necklace)' : ''}`);
+      }
+      pendingStall = null;
+    }
     // ---- veng casts: own first, else on a teammate without one (only if the caster's own is up)
     for (const p of alive()) {
-      if (t < p.vengReady) continue;
+      if (t < p.vengReady || t < p.noVengUntil) continue;
       if (!p.veng) { p.veng = true; p.vengReady = t + VENG_CD; L.on && L(`t${t} ${p.name} casts veng`); continue; }
-      const other = alive().find((q) => q !== p && !q.veng && t < q.vengReady);
+      const other = alive().find((q) => q !== p && !q.veng && t < q.vengReady && t >= q.noVengUntil);
       if (other) { other.veng = true; p.vengReady = t + VENG_CD; L.on && L(`t${t} ${p.name} casts veng on ${other.name}`); }
     }
     // ---- damage on her this tick
-    for (const h of hits.filter((x) => x[0] === t)) {
+    const landing = hits.filter((x) => x[0] === t); hits = hits.filter((x) => x[0] !== t);
+    for (const h of landing) {
+      if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${h[1].name} ${h[3]} lands after the kill (overkill)`); } break; }
       const [, p, , label, kind] = h;
       if (kind && PREFIRE[kind]) {
         const n = prefireNumbers(p, kind, defLvl);
@@ -189,39 +247,38 @@ export function runSotePhase1(players, team, rng, log = null) {
         } else L.on && L(`t${t} ${p.name} ${label} misses`);
       } else damage(t, h[2], `${p.name} ${label}`, 'scythe');
     }
-    if (maze != null) break;
+    if (mazes.length >= upTo) continue;
     // ---- orbs landing on players
-    const landing = orbs.filter((o) => o[0] === t);
+    const now = orbs.filter((o) => o[0] === t);
     for (const p of alive()) {
-      const mine = landing.filter((o) => o[1] === p); if (!mine.length) continue;
+      const mine = now.filter((o) => o[1] === p); if (!mine.length) continue;
       const later = orbs.filter((o) => o[1] === p && o[0] > t && o[0] <= t + PRAYER_OFF).length;
       const off = p.veng && p.hp > ORB_MAX && !later && mine.length === 1;   // take this one off prayer for veng
-      const prayStyle = off ? null : mine[mine.length - 1][2];              // otherwise pray against it
+      const prayStyle = off ? null : mine[mine.length - 1][2];
       for (const o of mine) {
+        if (p.dead) break;
         const prayed = !off && t >= p.prayOffUntil && o[2] === prayStyle;
         let d = 0;
         if (prayed) st.orbs.prayed++;
         else {
           st.orbs.taken++; if (off) st.orbs.vengd++;
-          const roll = (SOTE.mag + 9) * (SOTE.accMagic + 64);
-          if (rng.random() < hit_chance(roll, playerDef(p, o[2]))) d = rng.randint(0, ORB_MAX);
-          p.hp -= d;
+          if (rng.random() < hit_chance((SOTE.mag + 9) * (SOTE.accMagic + 64), playerDef(p, o[2]))) d = rng.randint(0, ORB_MAX);
         }
-        L.on && L(`t${t} ${o[3] ? 'split ' : ''}${o[2]} orb -> ${p.name}: ${prayed ? 'prayed' : `${d}${off ? ' (off prayer, veng)' : ''}`} (HP ${p.hp})`);
-        if (!prayed) vengHit(t, p, d, 'orb');
-        if (p.hp <= 0) { p.dead = true; L.on && L(`t${t} ${p.name} dies`); }
+        L.on && L(`t${t} ${o[3] ? 'split ' : ''}${o[2]} orb -> ${p.name}: ${prayed ? 'prayed' : `${d}${off ? ' (off prayer, veng)' : ''}`} (HP ${p.hp - d})`);
+        if (!prayed && d > 0) { hurt(t, p, d); vengHit(t, p, d, 'orb'); }
       }
       p.prayOffUntil = t + PRAYER_OFF + 1;
-      // the first orb on a player splits to up to 2 others (one Ranged, one Magic), landing 7 ticks later
-      for (const o of mine.filter((x) => !x[3])) {
+      for (const o of mine.filter((x) => !x[3])) {                    // the first orb on a player splits
         const others = rng.shuffle(alive().filter((q) => q !== p)).slice(0, 2);
         const styles = rng.random() < 0.5 ? ['range', 'mage'] : ['mage', 'range'];
         others.forEach((q, j) => orbs.push([t + ORB_DELAY, q, styles[j], true]));
         if (others.length) L.on && L(`t${t} orb splits -> ${others.map((q, j) => `${q.name} (${styles[j]})`).join(', ')}, landing t${t + ORB_DELAY}`);
       }
     }
+    orbs = orbs.filter((o) => o[0] !== t);
     // ---- her attack
-    if (t >= FIRST_ATTACK && (t - FIRST_ATTACK) % ATTACK_EVERY === 0 && alive().length) {
+    if (!blocked && t === nextAttack && alive().length) {
+      nextAttack += ATTACK_EVERY;
       const tgt = rng.choice(alive());
       if (tgt.lastMelee === t - 1 && rng.random() < 0.5) {
         st.melees++;
@@ -234,16 +291,24 @@ export function runSotePhase1(players, team, rng, log = null) {
         L.on && L(`t${t} SOTETSEG magic orb -> ${tgt.name}, lands t${t + ORB_DELAY}`);
       }
     }
-    // ---- melee hits on players, then player attacks
+    // ---- melee hits on players, then player attacks (next one: the first of her attack ticks 5+ ticks later - the flinch)
     for (const p of alive()) {
-      for (const [, d] of p.pending.filter((x) => x[0] === t)) { p.hp -= d; vengHit(t, p, d, 'melee'); if (p.hp <= 0) p.dead = true; }
+      for (const [, d] of p.pending.filter((x) => x[0] === t)) { if (d > 0) { hurt(t, p, d); vengHit(t, p, d, 'melee'); } }
       p.pending = p.pending.filter((x) => x[0] !== t);
       if (p.dead || t !== p.next) continue;
       const [ch, mx] = scythe(p, defLvl);
       const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m) => (rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
       hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}`, null]);
-      p.lastMelee = t; p.next = t + 5;
+      p.lastMelee = t;
+      p.next = herTickFrom(t + 5);
     }
   }
-  return { maze, hp, stopAt, ...st, players: ps.map((p) => ({ name: p.name, hp: p.hp, dead: p.dead })) };
+  if (kill != null) end = kill + anim;
+  return { end, kill, anim, mazes, hp, ...st, players: ps.map((p) => ({ name: p.name, hp: p.hp, dead: p.dead, pnecks: p.pnecks })) };
+}
+
+/** Phase 1 only (start to the first maze): runSote stopped there. */
+export function runSotePhase1(players, team, rng, log = null) {
+  const r = runSote(players, team, rng, log, { upTo: 1 });
+  return { ...r, maze: r.mazes[0] ?? null };
 }
