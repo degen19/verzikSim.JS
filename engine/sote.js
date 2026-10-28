@@ -136,7 +136,8 @@ export const SHARK_HEAL = 20;
 /**
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
  * pnecks, sharks}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
- * instance 0-3 (default 0)}.
+ * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
+ * players take orbs off prayer for veng whatever their HP (default 0.02)}.
  *
  * Mazes (skip / stall): the hit that reaches 66.6% / 33.3% (tick T) teleports everyone (T..T+4). One random player goes
  * under: no maze damage, first swing on T+19 (lands T+20). The others click on the first i3 from T+4, move on the i4
@@ -146,7 +147,7 @@ export const SHARK_HEAL = 20;
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0.02 } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const MAX = SOTE_HP[team] || 4000;
   const marks = [Math.floor(MAX * MAZE_AT[0]), Math.floor(MAX * MAZE_AT[1]), 0];
@@ -312,7 +313,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } 
     for (const p of alive()) {
       const mine = now.filter((o) => o[1] === p); if (!mine.length) continue;
       const later = orbs.filter((o) => o[1] === p && o[0] > t && o[0] <= t + PRAYER_OFF).length;
-      const off = p.veng && p.hp > ORB_MAX && !later && mine.length === 1;   // take this one off prayer for veng
+      // take this one off prayer for veng: safe (above 50, no other orb within 2 ticks) - or chanced, once she's within the
+      // chance veng threshold after the second maze (her last ~2%: she may die to the veng)
+      const chance = mazes.length >= 2 && hp <= MAX * chanceAt;
+      const off = p.veng && mine.length === 1 && (chance || (p.hp > ORB_MAX && !later));
       const prayStyle = off ? null : mine[mine.length - 1][2];
       for (const o of mine) {
         if (p.dead) break;
