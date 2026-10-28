@@ -175,7 +175,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0 } 
     for (const p of runners) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10;
-      // in a danger zone for the skip: one shark (at most) after the teleport, before stepping on
+      // in a danger zone for the skip: one shark at most, after the teleport and before stepping on (no eating in the stall)
       if (p.sharks > 0 && stallSkip(p.hp, team, p.pnecks > 0, true, runners.length).dead) {
         const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--;
         L.on && L(`t${t} ${p.name} eats a shark before the stall: ${old} -> ${p.hp} (${p.sharks} left)`);
