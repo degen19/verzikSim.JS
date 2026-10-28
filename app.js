@@ -8,6 +8,7 @@ import { createBuilder } from './builder-ui.js';
 import { createOptimizer } from './optimizer-ui.js';
 import { createMechanics } from './mechanics-ui.js';
 import { createSolver } from './solver-ui.js';
+import { createGear } from './gear-ui.js';
 import { SimPool } from './pool.js';
 
 const $ = (id) => document.getElementById(id);
@@ -67,6 +68,7 @@ $('team').addEventListener('change', async () => {
   if (source === 'build') await builder.show(team());
   if (tab === 'opt') optimizer.refresh();
   if (tab === 'solve') solver.refresh();
+  if (tab === 'gear') gear.refresh();
   prewarm();
 });
 $('file').addEventListener('change', async (e) => {
@@ -113,6 +115,7 @@ const solver = createSolver($('tab-solve'), {
   getWorkbook,                                                            // "Also try my chart": the chart on this page
 });
 for (const b of ['A', 'B', 'C']) $(`lab${b}`).addEventListener('change', () => { if (tab === 'opt') optimizer.refresh(); });
+const gear = createGear($('tab-gear'), { getTeam: team });
 const TABS_MIN_KEY = 'verzikSim.tabsMin.v1';
 function setTabsMin(on) {
   document.body.classList.toggle('tabs-min', on);
@@ -126,9 +129,10 @@ $('tabs').addEventListener('click', (e) => {
   if (document.body.classList.contains('tabs-min')) setTabsMin(false);   // picking a tab shows the section again
   tab = b.dataset.tab;
   [...$('tabs').children].forEach((x) => { if (x.dataset.tab) x.classList.toggle('on', x === b); });
-  for (const t of ['run', 'opt', 'solve', 'new']) $(`tab-${t}`).hidden = t !== tab;
+  for (const t of ['gear', 'run', 'opt', 'solve', 'new']) $(`tab-${t}`).hidden = t !== tab;
   if (tab === 'opt') optimizer.refresh();
   if (tab === 'solve') solver.refresh();
+  if (tab === 'gear') gear.refresh();
 });
 $('tab-new').innerHTML = `<h3>What's new</h3>${CHANGES.map((c) => `<h4>v${c.version} <span class="muted small">${c.date}</span></h4><ul class="news">${c.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}`;
 
