@@ -415,7 +415,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // ---- Heal Other (75% of the caster's HP, capped at the target's missing HP; no attack delay): only in an attack phase
     // (never between a proc and the stall); the under player not until after their first swing after the maze.
     // Between the mazes, a shark skipper below 51 before their second skip comes first (so the second skip takes 2 sharks, not 3): anyone heals
-    // them, even a player who could veng safely, and heals can add up. Otherwise -
+    // them, even a player who could veng safely, and heals can add up; the caster may go below 17 / into stall danger if
+    // they still have a shark for the stall that gets them through it. Otherwise -
     // Caster: not one who can veng safely themselves (veng up and above 50). Target (lowest HP first), only if the heal:
     //  - lifts a teammate with veng up from 50 or less to above 50 (so they can veng safely) - one with an orb heading at
     //    them, or
@@ -448,7 +449,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           if (!vengGain && !mazeGain && !pairGain && !skipGain) continue;   // no gain
           if (vengSafe && !skipGain) continue;
           if (cUnprayed && left <= ORB_MAX * cUnprayed) continue;      // orbs coming at them they can't pray
-          if (!after2 && (left < 17 || mazeDanger(c, left))) continue;
+          // healing the shark skipper: the caster can drop low if a shark before their stall still gets them through it
+          const shark = skipGain && c.sharks > 0 && !mazeDanger(c, Math.min(99, left + SHARK_HEAL));
+          if (!after2 && !shark && (left < 17 || mazeDanger(c, left))) continue;
           c.hp = left; q.hp += give;
           if (mazeGain) q.keptForMaze = mazes.length;
           L.on && L(`t${t} ${c.name} heals other ${q.name} (+${give}): ${c.name} ${c.hp}, ${q.name} ${q.hp}`);
