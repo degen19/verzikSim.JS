@@ -187,11 +187,21 @@ function playerDef(p, style) {
 export const instanceOf = (t, entry = 0) => (t + entry + 1) % 4;
 /** Ticks lost at a maze proc on tick t. */
 export const ticksLost = (t, entry = 0) => (3 - instanceOf(t, entry) + 4) % 4;
-export const SHARK_HEAL = 20;
+export const SHARK_HEAL = 20, REST_HEAL = 5;
+// ---- shark skip: a player short of phoenix necklaces skips the maze away from the others (no splash either way),
+// eating through it. The maze hits land one a tick on m+2..m+8, each sized from their HP then (mazeDmg) and capped at
+// it; a shark / Guthix rest eaten on a tick lands before the death check, so a hit that takes them to 0 that tick is
+// tick-eaten. What they eat (by their HP at the proc; offsets from m, the i0 they move on): S shark, G Guthix rest.
+export const SHARK_SKIP = [[92, { 7: 'S' }], [71, { 6: 'S', 8: 'G' }], [68, { 4: 'S', 7: 'S' }],
+  [51, { 0: 'S', 6: 'S', 8: 'G' }], [48, { 0: 'S', 4: 'S', 7: 'S' }], [29, { 0: 'S', 3: 'S', 6: 'S', 8: 'G' }]];
+export const SHARK_SKIP_MIN = 29;                                   // below this: a shark + rest on the proc tick (+25)
+export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0, null])[1];
 
 /**
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
- * pnecks, sharks, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor)}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
+ * pnecks, sharks, rests?, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor)}]. opts: {skip: 'stall' (default) |
+ * 'shark' (players with fewer than 2 phoenix necklaces shark skip: 1 necklace the first maze, none both; 4-5s one
+ * player, trios both non-under players)}, {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
  * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
@@ -203,7 +213,7 @@ export const SHARK_HEAL = 20;
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1 } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1, skip = 'stall' } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const plan1Of = team === 3 ? SPEC_PLAN_3 : SPEC_PLAN;
   const roleOf = (i) => (plan === 2 && ROLES_2[team] ? ROLES_2[team][i] : ROLES[i]);
@@ -213,14 +223,20 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   let blocked = false;                          // she can't be damaged (maze) until `attackable`
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
   const mazes = [];
-  const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, stalls: [] };
+  const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: (plan === 2 && (c.gear.weapons || []).includes('Zaryte crossbow') && SPEC_PLAN_2[c.role || roleOf(i)]?.prefire) || c.prefire || '',
     pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? (plan === 2 ? SPEC_PLAN_2[c.role || roleOf(i)]?.start : undefined) ?? 100), regen: 0,
-    hornUntil: -1, surged: false, surgeAt: null, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
+    hornUntil: -1, surged: false, surgeAt: null, rests: Number(c.rests ?? 0), sharkMazes: [], lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
     role: c.role || roleOf(i), mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
-  for (const p of ps) p.regenHold = p.spec < 100;                    // under 100 at the start: first regen the tick after their first spec
+  for (const p of ps) p.regenHold = p.spec < 100;
+  if (skip === 'shark') {                                             // who shark skips which mazes
+    const short = ps.filter((p) => p.pnecks < 2).sort((a, b) => a.pnecks - b.pnecks).slice(0, team <= 3 ? 2 : 1);
+    for (const p of short) p.sharkMazes = p.pnecks === 0 ? [0, 1] : [0];
+  }
+  /** Shark skipping the next maze (they keep their HP for it: no veng orbs, Heal Other to above 50). */
+  const sharkNext = (p) => p.sharkMazes.includes(mazes.length);                    // under 100 at the start: first regen the tick after their first spec
   const alive = () => ps.filter((p) => !p.dead);
   const spend = (p, n, t) => {
     p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; }
@@ -246,19 +262,31 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     attackable = m + 9; nextAttack = m + 10;
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
     const runners = live.filter((p) => p !== under);
-    for (const p of runners) {
+    const skippers = runners.filter((p) => p.sharkMazes.includes(mazes.length - 1));
+    const stallers = runners.filter((p) => !skippers.includes(p));
+    for (const p of skippers) {                                       // shark skip: not stalled - veng, attack with the stallers
+      p.next = m + 10; p.thrallBack = true;
+      if (p.hp < SHARK_SKIP_MIN && p.sharks > 0 && p.rests > 0) {    // a shark + rest on the proc tick
+        const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL + REST_HEAL); p.sharks--; p.rests--; st.sharks++; st.rests++;
+        L.on && L(`t${t} ${p.name} eats a shark + Guthix rest for the shark skip: ${old} -> ${p.hp}`);
+      }
+      const eats = sharkSkipEats(p.hp) || SHARK_SKIP[SHARK_SKIP.length - 1][1];
+      pendingSharks.push({ p, m, eats, from: p.hp });
+      L.on && L(`t${t} ${p.name} shark skips (HP ${p.hp}): ${Object.entries(eats).map(([o, x]) => `${x === 'S' ? 'shark' : 'rest'} t${m + Number(o)}`).join(', ')}`);
+    }
+    for (const p of stallers) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10; p.thrallBack = true;
       // in a danger zone for the skip: one shark at most, after the teleport and before stepping on (no eating in the stall)
-      if (p.sharks > 0 && stallSkip(p.hp, team, p.pnecks > 0, true, runners.length).dead) {
+      if (p.sharks > 0 && stallSkip(p.hp, team, p.pnecks > 0, true, stallers.length).dead) {
         const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--; st.sharks++;
         L.on && L(`t${t} ${p.name} eats a shark before the stall: ${old} -> ${p.hp} (${p.sharks} left)`);
       }
     }
     if (under) { under.next = t + 19; under.healFrom = t + 20; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
-    pendingStall = { at: m + 8, runners };
+    pendingStall = { at: m + 8, runners: stallers };
   };
-  let pendingStall = null;
+  let pendingStall = null, pendingSharks = [];
   /** Would this player die on the skip at this HP? */
   const stallDead = (h, p, runners) => stallSkip(h, team, p.pnecks > 0, true, runners).dead;
   const damage = (t, amt, label, kind) => {
@@ -345,6 +373,18 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
     if (blocked && t >= attackable) blocked = false;
     // ---- coming out of a stall: the stall damage, in order (a phoenix necklace clears the rest)
+    // ---- shark skips: a maze hit a tick on m+2..m+8 (sized from their HP, capped at it), food after it (tick eat)
+    for (const sk of pendingSharks) {
+      const { p, m, eats } = sk, o = t - m;
+      if (p.dead || o < 0 || o > 8) continue;
+      if (o >= 2) { const d = Math.min(mazeDmg(p.hp), p.hp); p.hp -= d; L.on && L(`t${t} ${p.name} maze hit ${d} (HP ${p.hp})`); }
+      const x = eats[o];
+      if (x === 'S' && p.sharks > 0) { p.sharks--; st.sharks++; p.hp = Math.min(99, p.hp + SHARK_HEAL); L.on && L(`t${t} ${p.name} eats a shark (HP ${p.hp}, ${p.sharks} left)`); }
+      if (x === 'G' && p.rests > 0) { p.rests--; st.rests++; p.hp = Math.min(99, p.hp + REST_HEAL); L.on && L(`t${t} ${p.name} sips a Guthix rest (HP ${p.hp})`); }
+      if (p.hp <= 0) { p.dead = true; L.on && L(`t${t} ${p.name} dies on the shark skip`); }
+      if (o === 8 || p.dead) st.sharkSkips.push({ hp: sk.from, after: p.hp, dead: p.dead });
+    }
+    pendingSharks = pendingSharks.filter((sk) => !sk.p.dead && t - sk.m < 8);
     if (pendingStall && t === pendingStall.at) {
       for (const p of pendingStall.runners.filter((q) => !q.dead)) {
         const before = p.hp, r = stallSkip(p.hp, team, p.pnecks > 0, true, pendingStall.runners.filter((q) => !q.dead).length);
@@ -374,10 +414,12 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     // ---- Heal Other (75% of the caster's HP, capped at the target's missing HP; no attack delay): only in an attack phase
     // (never between a proc and the stall); the under player not until after their first swing after the maze.
+    // Between the mazes, a shark skipper below 51 before their second skip comes first (so the second skip takes 2 sharks, not 3): anyone heals
+    // them, even a player who could veng safely, and heals can add up. Otherwise -
     // Caster: not one who can veng safely themselves (veng up and above 50). Target (lowest HP first), only if the heal:
     //  - lifts a teammate with veng up from 50 or less to above 50 (so they can veng safely) - one with an orb heading at
     //    them, or
-    //  - with a maze still to come, takes a teammate out of a stall-danger HP, or
+    //  - with a maze still to come, takes a teammate out of a stall-danger HP (a shark skipper: to above 50), or
     //  - lifts a teammate with orbs coming they can't pray (a close pair) above what those can hit.
     // The caster won't go to 50 or less with orbs coming at them they can't pray; before the second maze not below 17, or
     // into a stall-danger HP.
@@ -385,22 +427,28 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const after2 = mazes.length >= 2, targeted = new Set(orbs.filter((o) => o[0] >= t).map((o) => o[1]));
       const runnersNext = alive().length - 1;
       for (const c of alive()) {
-        if ((c.veng && c.hp > ORB_MAX) || t < (c.healFrom || 0)) continue;
+        if (t < (c.healFrom || 0)) continue;
+        const vengSafe = c.veng && c.hp > ORB_MAX;                      // can veng safely: only heals a shark skipper back up
         if (c.keptForMaze === mazes.length) continue;                  // healed out of stall danger: they keep that HP
         const cUnprayed = prayPlan(c, t, c.prayOffUntil).unprayed;
         const pairNeed = (q) => ORB_MAX * prayPlan(q, t, q.prayOffUntil).unprayed;   // HP an unprayable pair can take
+        // maze danger: a staller who'd die on the stall; a shark skipper at 50 or less (more than 2 sharks for the skip)
+        const mazeDanger = (q, h) => (sharkNext(q) ? h <= ORB_MAX : stallDead(h, q, runnersNext));
+        const skipUp = (q) => (mazes.length === 1 && sharkNext(q) && q.hp <= ORB_MAX ? 1 : 0);   // between the mazes: a shark skipper still to reach 51+
         const cands = alive().filter((q) => q !== c && (
-          (q.veng && q.hp <= ORB_MAX && targeted.has(q)) || (!after2 && stallDead(q.hp, q, runnersNext)) || q.hp <= pairNeed(q)))
-          .sort((a, b) => a.hp - b.hp);
+          (q.veng && q.hp <= ORB_MAX && targeted.has(q)) || (!after2 && mazeDanger(q, q.hp)) || q.hp <= pairNeed(q)))
+          .sort((a, b) => (skipUp(b) - skipUp(a)) || a.hp - b.hp);      // a shark skipper first, then lowest HP
         for (const q of cands) {
           const give = Math.min(Math.floor(c.hp * 0.75), 99 - q.hp), left = c.hp - give;
           if (give <= 0 || left <= 0) continue;
           const vengGain = q.veng && q.hp <= ORB_MAX && targeted.has(q) && q.hp + give > ORB_MAX;
-          const mazeGain = !after2 && stallDead(q.hp, q, runnersNext) && !stallDead(q.hp + give, q, runnersNext);
+          const mazeGain = !after2 && mazeDanger(q, q.hp) && !mazeDanger(q, q.hp + give);
           const pairGain = q.hp <= pairNeed(q) && q.hp + give > pairNeed(q);
-          if (!vengGain && !mazeGain && !pairGain) continue;           // no gain
+          const skipGain = skipUp(q) === 1;                            // any heal toward 51 (more casters can finish it)
+          if (!vengGain && !mazeGain && !pairGain && !skipGain) continue;   // no gain
+          if (vengSafe && !skipGain) continue;
           if (cUnprayed && left <= ORB_MAX * cUnprayed) continue;      // orbs coming at them they can't pray
-          if (!after2 && (left < 17 || stallDead(left, c, runnersNext))) continue;
+          if (!after2 && (left < 17 || mazeDanger(c, left))) continue;
           c.hp = left; q.hp += give;
           if (mazeGain) q.keptForMaze = mazes.length;
           L.on && L(`t${t} ${c.name} heals other ${q.name} (+${give}): ${c.name} ${c.hp}, ${q.name} ${q.hp}`);
@@ -447,7 +495,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const chance = chanceAt > 0 && mazes.length >= 2 && hp <= MAX * chanceAt;
       // taking it unprayed turns their prayer off until 5 ticks later: not with another orb landing on them before then
       const pairAhead = prayPlan(p, t + 1, t + PRAYER_OFF + 1).unprayed > 0;
-      const off = !pp.ticks.has(t) || (p.veng && mine.length === 1 && (chance || (p.hp > ORB_MAX && !pairAhead)));
+      const off = !pp.ticks.has(t) || (p.veng && mine.length === 1 && !sharkNext(p) && (chance || (p.hp > ORB_MAX && !pairAhead)));   // shark skipping next: no veng orbs
       const prayStyle = off ? null : mine[mine.length - 1][2];
       let hitHere = false;
       for (const o of mine) {
@@ -464,6 +512,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         if (!prayed && d > 0) { hurt(t, p, d); vengHit(t, p, d, 'orb'); }
       }
       if (hitHere) p.prayOffUntil = t + PRAYER_OFF + 1;                 // an orb that hit them unprayed turns their prayer off
+      if (mazes.length !== mz0) break;                              // that veng procced the maze: no split
       for (const o of mine.filter((x) => !x[3])) {                    // the first orb on a player splits
         const others = rng.shuffle(alive().filter((q) => q !== p)).slice(0, 2);
         const styles = rng.random() < 0.5 ? ['range', 'mage'] : ['mage', 'range'];
