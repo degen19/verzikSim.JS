@@ -52,6 +52,7 @@ $('chartMin').addEventListener('click', () => setChartMin(!document.body.classLi
 try { if (localStorage.getItem(MIN_KEY)) setChartMin(true); } catch { /* storage off */ }
 $('src').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b && document.body.classList.contains('chart-min')) setChartMin(false);   // picking Import / Build shows the chart again
   source = b.dataset.src;
   [...$('src').children].forEach((x) => x.classList.toggle('on', x === b));
   $('imp').hidden = source !== 'import';

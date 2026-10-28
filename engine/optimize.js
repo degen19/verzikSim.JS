@@ -124,7 +124,7 @@ const labelOf = (map, item, def) => Object.keys(map).find((k) => map[k] === item
 const MAGE_CAPES = ['Infernal cape', 'Imbued saradomin cape'];
 const TOGGLES = [
   ['shadowLB', 'Shadow while on Lightbearer'], ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
-  ['pneckP1', 'Pneck on P1'],
+  ['pneckP1', 'Pneck on P1'], ['bfP2', 'Blood fury in P2'], ['bfP3', 'Blood fury in P3'],
 ];
 
 /**
@@ -145,6 +145,8 @@ export function cfgsToFields(cfgs, team) {
     put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB);
     put('gear', 'Shadow camp', k, !!c.shadowCamp); put('gear', 'Deep proc', k, !!c.deepProc);
     if ('pneckP1' in c) put('gear', 'Pneck on P1', k, !!c.pneckP1);
+    if ('bfP2' in c) put('gear', 'Blood fury P2', k, c.bfP2 !== false);
+    if ('bfP3' in c) put('gear', 'Blood fury P3', k, c.bfP3 !== false);
     if (team > 2) {
       if (c.eastBoak != null || c.westBoak != null) { put('gear', 'East Boak', k, !!c.eastBoak); put('gear', 'West Boak', k, !!c.westBoak); }
       if (c.eastPattern) put('gear', 'East Pattern', k, c.eastPattern);
@@ -270,6 +272,7 @@ export function catalog(cfgs, team) {
     for (const [key, label] of TOGGLES) {
       if (!(key in c)) continue;                                  // only toggles the chart actually has
       if ((key.startsWith('shadow')) && !c.shadow) continue;
+      if (key.startsWith('bf') && !(c.amulet === 'Both' && c.bloodFuryHp)) continue;   // only with both amulets and a Blood fury HP
       opts.push({ id: `${key}_${i}`, group: g, label, kind: 'choice', choices: ['On', 'Off'], current: c[key] ? 'On' : 'Off',
         apply: (cf, v) => { cf[i][key] = v === 'On'; } });
     }

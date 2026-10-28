@@ -3,6 +3,7 @@ import * as supplies from './supplies.js';
 import {
   auto_surge, custom_surge, lb_swap_ok, swap_due, WEAPONS, ARMOUR, FIXED, AMULETS, RINGS, CONFLICTION, PRAYERS,
   hit_chance, fmt,
+  bf_swap, bf_heal,
 } from './sim.js';
 import * as _sim from './sim.js';
 import { shadow_attack } from './gear.js';
@@ -276,6 +277,7 @@ export function run_p2(p1, team, rng, log = null) {
       hp -= dmg;
       if (p != null) {
         p.p2_dmg += dmg;
+        bf_heal(p, label, dmg, rng, L, t);
       }
       if (label === 'Purple crab explosion') {
         crab_stats['dmg'] += dmg;
@@ -406,7 +408,7 @@ export function run_p2(p1, team, rng, log = null) {
         L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? `(4 Claw Priority: Ultor still makes ${p.claw_goal === 'two' ? (p.claw_fallback ? '80% by r40' : 'both claws by r36') : 'one claw by r36'})` : p.target_spec == null ? '(regen landed, default swap)' : `>= target ${fx(Number(p.target_spec))}%`) + ' -> swaps to Ultor ' +
           `(regen timer reset, now 50t)`);
       }
-      custom_surge(p, t, L); auto_surge(p, t, L);
+      custom_surge(p, t, L); auto_surge(p, t, L); bf_swap(p, 'P2', L, t);
       // supplies: under 90 HP, brew between swings and super combat before the next one (never attack drained)
       if (ga(p, 'sc_at', null) === t) {
         p.sc_at = null;

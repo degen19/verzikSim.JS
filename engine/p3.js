@@ -1,7 +1,7 @@
 // Phase 3: from P2 HP 0 to the end of the P3 death animation. (Port of p3.py)
 import * as supplies from './supplies.js';
 import * as horn from './horn.js';
-import { auto_surge, custom_surge, hit_chance, PRAYERS } from './sim.js';
+import { auto_surge, custom_surge, bf_swap, bf_heal, hit_chance, PRAYERS } from './sim.js';
 import { Rng } from './rng.js';
 import { floordiv, pymod, pyround, ga, truthy, range, sum, any, all, maxBy, sorted, dget, has, fx, rjust } from './util.js';
 
@@ -408,6 +408,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       }
       hp -= amt;
       L.on && L(`t${rjust(t, 4)} ${p.name}: ${label} ${amt} -> Verzik ${hp}`);
+      bf_heal(p, label, amt, rng, L, t);
       if (hp < mark20 && st['below20'] === null) {
         st['below20'] = t; st['below20_auto'] = autos; st['below20_attacker'] = p.name;
         st['below20_round'] = p.p3_n;
@@ -661,7 +662,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           p.spec = Math.min(100, p.spec + 10); p.gain_src = 'regen';
         }
       }
-      custom_surge(p, t, L); auto_surge(p, t, L);
+      custom_surge(p, t, L); auto_surge(p, t, L); bf_swap(p, 'P3', L, t);
       if (kill !== null) continue;
       // 3-5 man P3 horn player: if they won't have a halberd (30%) by their Nth swing from the start of webs
       // (5s: 5th, 4s: 6th, trio: 8th = first after webs), horn as soon as possible after the crab spawn (her 5th attack)

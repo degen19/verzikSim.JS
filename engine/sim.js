@@ -111,6 +111,30 @@ export function custom_surge(p, t, L, tag = '') {
 }
 
 
+/** Rancour + Blood fury (amulet 'Both' with a Blood fury HP), each tick of P2 / reds / P3: in a phase ticked for them,
+ *  Blood fury below that HP and Rancour above it (at it: no change); otherwise Rancour. Never in P1. */
+export function bf_swap(p, phase, L, t, tag = '') {
+  if (p.amulet_mode !== 'Both' || !p.bf_hp || p.dead) return;
+  const on = phase === 'P3' ? p.bf_p3 : p.bf_p2;
+  const want = !on ? 'Rancour' : p.hp < p.bf_hp ? 'Blood fury' : p.hp > p.bf_hp ? 'Rancour' : p.amulet;
+  if (want === p.amulet) return;
+  p.amulet = want;
+  L.on && L(`t${rjust(t, 4)} ${tag}${p.name}: HP ${p.hp} ${want === 'Blood fury' ? '<' : '>'} ${p.bf_hp}, swaps to ${want === 'Blood fury' ? 'blood fury' : 'rancour'}`);
+}
+/** Blood fury: a melee hit that does damage has a 20% chance to heal 30% of it. */
+export function bf_heal(p, label, dmg, rng, L, t, tag = '') {
+  if (!p || p.amulet !== 'Blood fury' || !(dmg > 0)) return;
+  const w = String(label).split(/\s+/)[0];
+  const melee = ['Scythe', 'Claw', 'Swift', 'Halberd', 'Obligator'].includes(w) || (label === '3-tick hit' && p.has3 !== 'Ayak');
+  if (!melee || rng.random() >= 0.20) return;
+  const heal = floordiv(dmg * 30, 100);
+  if (heal && p.hp < p.base) {
+    const old = p.hp;
+    p.hp = Math.min(p.base, p.hp + heal);
+    L.on && L(`t${rjust(t, 4)} ${tag}${p.name}: blood fury heals ${p.hp - old} -> ${p.hp} HP`);
+  }
+}
+
 /** On Lightbearer at/over the swap %: swap now unless that last bit of spec came from a surge / purple / DC -
  * then finish the regen in progress first (or swap at 100%). */
 export function lb_swap_ok(p) {
@@ -321,6 +345,10 @@ export class Player {
     this.amulet_mode = dget(cfg, 'amulet', 'Rancour');
     this.amulet = this.amulet_mode === 'Blood fury' ? 'Blood fury' : 'Rancour';
     this.bf_hp = dget(cfg, 'bloodFuryHp');
+    // bringing both amulets: in a ticked phase (P2 includes reds) they wear Blood fury below Blood fury HP and Rancour
+    // above it; never in P1 (blank = ticked)
+    this.bf_p2 = dget(cfg, 'bfP2', true) !== false;
+    this.bf_p3 = dget(cfg, 'bfP3', true) !== false;
     this.prayer = dget(cfg, 'meleePrayer', 'Piety');
     this.lb = dget(cfg, 'lightbearerOn', false);
     this.ring = this.lb ? 'Lightbearer' : 'Ultor';
@@ -565,7 +593,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
         ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
         ['horn', 'Horn'], ['hornP2', 'P2 horn'], ['hornP3', 'P3 horn'],
         ['eastBoak', 'East Boak'], ['westBoak', 'West Boak'], ['redemptionFlick', 'Redemption flick'], ['pneckP1', 'Pneck on P1'], ['passGreen', 'Pass green if death'],
-        ['hasBP', 'Has BP']]) {
+        ['hasBP', 'Has BP'], ['bfP2', 'Blood fury P2'], ['bfP3', 'Blood fury P3']]) {
         if (get(h) != null && pystr(get(h)).trim() !== '') cfgs[k][key] = yes(get(h));
       }
       // Has BP (blank / no column = has one): popping the purple crab needs a blowpipe
@@ -809,10 +837,6 @@ export function run_p1(cfgs, team, rng, log = null) {
         }
       }
       pq = pq.filter((h) => !(h[0] === t && h[1] === p));
-      if (p.amulet_mode === 'Both' && p.amulet === 'Rancour' && p.bf_hp && p.hp < p.bf_hp) {
-        p.amulet = 'Blood fury';
-        L.on && L(`t${rjust(t, 3)} ${p.name}: HP ${p.hp} < ${p.bf_hp}, swaps to blood fury`);
-      }
       supplies.check_death(p, 'P1', L, t);
       // timers: spec regen (95% start: held until their first Dawn spec, then the automatic R the tick after it)
       if (p.auto_r === t) {

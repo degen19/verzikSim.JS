@@ -3,7 +3,7 @@
 import { floordiv, pymod, pyround, ga, truthy, range, sum, any, sorted, dget, has, rjust, fx, maxBy } from './util.js';
 import * as supplies from './supplies.js';
 import * as _sim from './sim.js';
-import { auto_surge, custom_surge, lb_swap_ok, swap_due, ARMOUR, FIXED, AMULETS, RINGS, CONFLICTION, PRAYERS, hit_chance } from './sim.js';
+import { auto_surge, custom_surge, bf_swap, bf_heal, lb_swap_ok, swap_due, ARMOUR, FIXED, AMULETS, RINGS, CONFLICTION, PRAYERS, hit_chance } from './sim.js';
 import { scythe_roll, P2_DEF, P2_HP, shadow_numbers, SHADOW_DELAY_NEAR, blowpipe_chance, BP_DELAY } from './p2.js';
 import {
   CRAB_BASE_HP, CRAB_DEF_ROLL, CLAW, SHIELD, VERZ_ATTACKS, CRAB_HEAL_R, melee_max_acc, claw_spec,
@@ -250,6 +250,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
         hp -= amt;
         p.reds_dmg += amt;
         L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: ${label} ${amt} -> Verzik ${hp}`);
+        bf_heal(p, label, amt, rng, L, t, `s${s} r${r} `);
         if (hp <= 0 && kill == null) kill = t;
       }
       // ---- purple crab: nothing during the shield; from r12 on her cycle: heal if alive, explode if popped
@@ -330,7 +331,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
         } else {
           p.regen_timer = 0;
         }
-        custom_surge(p, t, L, `r${r} `); auto_surge(p, t, L, `r${r} `);
+        custom_surge(p, t, L, `r${r} `); auto_surge(p, t, L, `r${r} `); bf_swap(p, 'P2', L, t, `r${r} `);
         if (swap_due(p)) {
           p.ring = 'Ultor'; p.regen_timer = 0;
           L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: spec ${fx(p.spec)}% >= target -> swaps to Ultor`);

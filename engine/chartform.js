@@ -9,7 +9,7 @@ export const TEAM_HEADERS = ['Number of Purples', 'Death tick', 'Deep proc HP %'
 export const COMPUTED = ['End spec', 'Purple crab', 'Room Time', 'LB swings', 'West/East DC +', 'Spec used', 'Time of regen'];
 const BOOLS = new Set(['lightbearerOn', '1st Purple DC', '2nd Purple DC', 'PurpleDC', 'WestDC', 'EastDC', 'bouncedZCB', 'Shadow', 'Shadow camp',
   '3:1', 'Shadow while LB', 'Deep proc', 'Horn', 'P2 horn', 'P3 horn', 'East Boak', 'West Boak', 'Pneck on P1', 'Redemption flick',
-  'Pass green if death', 'Perfect 1st set', 'Ducktank', '4 Claw Priority', 'Has BP']);
+  'Pass green if death', 'Perfect 1st set', 'Ducktank', '4 Claw Priority', 'Has BP', 'Blood fury P2', 'Blood fury P3']);
 const SELECTS = {
   meleePrayer: ['Piety', 'Zeal'], helm: ['Torva full helm', 'Oathplate helm'], body: ['Torva platebody', 'Oathplate chest'],
   legs: ['Torva platelegs', 'Oathplate legs'], amulet: ['Rancour', 'Blood fury', 'Both'], redCrab: ['West', 'East', 'None'],

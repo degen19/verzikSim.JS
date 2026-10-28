@@ -175,8 +175,9 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const pickBP = !!s.bpSearch;                                  // Advanced: the solver hands out the blowpipes
     const bpCol = { custom: true, label: 'Has BP', help: 'The solver hands out the blowpipes (Advanced)', cell: () => '<span class="muted" title="The solver hands out the blowpipes (Advanced)">Solver</span>' };
     // gear (helm / body / legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab
-    const roleCols = duo ? [['setup', 'Name'], ['setup', 'Custom Surge Timing'], ['gear', 'bloodFuryHp'], ['gear', 'Shadow'], ['gear', 'Deep proc']]
-      : [['setup', 'Name'], boakCol, patCol, ['setup', 'Custom Surge Timing'], ['gear', 'bloodFuryHp'], ...(pickBP ? [bpCol] : []), ...PLAYER_GEAR.slice(7).map((h) => ['gear', h])];
+    const BF = [['gear', 'bloodFuryHp'], ['gear', 'Blood fury P2'], ['gear', 'Blood fury P3']];
+    const roleCols = duo ? [['setup', 'Name'], ['setup', 'Custom Surge Timing'], ...BF, ['gear', 'Shadow'], ['gear', 'Deep proc']]
+      : [['setup', 'Name'], boakCol, patCol, ['setup', 'Custom Surge Timing'], ...BF, ...(pickBP ? [bpCol] : []), ...PLAYER_GEAR.slice(7).map((h) => ['gear', h])];
     const playersBody = `<p class="muted small" style="margin-top:4px">Gear (helm, body, legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab; Blood fury HP is set here - Gear set ${esc(s.gearSet || 'A')}.</p>${playerTable(roleCols)}
       <p class="muted small">${duo ? 'Tick Shadow for the mage (one player). The solver picks the shadow mode (camp, 3:1, Shadow while LB, or 3:1 + Shadow while LB) and the Dawn and P2 last-hit thresholds (1-5%).'
         : 'Shadow modes need Shadow ticked.'}${!duo && s.shadowSearch ? ' The solver places the shadow player(s): the ticked Shadow settings and mage gear move with them to the slot it picks.' : ''} Custom surge blank: the solver places the surge in P1.</p>
