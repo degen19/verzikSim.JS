@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.22.0 - 2026-10-28
+- Gear / Verzik top-level tabs (Sotetseg, Xarpus, Full raid placeholders), Solo scale (Gear only). Gear tab: per-player melee / ranged / magic slots (none / take off fallbacks), weapons, 3-tick weapon (Obligator > Eye of ayak > tome), Gear sets A/B/C linked per Verzik set (`engine/gearstore.js`, `withGear` after every `parse_chart`), saved teams; gear columns removed from the builder / Solver form; imports seed Gear sets. New items (Twisted bow, Zorya's tome, smoke sceptre / barrage, seeking arrows, Masori, void, Zaryte, ward, book of the dead...). Breaker -> Obligator. bloodFuryHp -> bloodFuryThreshold + 'Blood fury in' (P2 crabs / P2 Verzik / P3; never P1), Blood fury heal in P2 / reds / P3. Shadow settings ignored without a shadow in the Gear set. P3 Verzik ranged / magic max hit from her levels (33 / 32, +5% after a tornado). Page renamed Theater Of Blood Simulator.
+
 ## v1.21.0 - 2026-10-12
 - Solver P1 rules (team settings, carried on every config as `dawnLimit` / `clawPickup`; solveRoom `o.dawnLimit` / `o.clawPickup`, CLI `--dawnlimit N` / `--clawpickup 1`): `placeRotation` rejects plans with more Dawn transfers (`dawnTransfers`: holder changes between Dawn slots) than the limit, and the beam stops handing the staff on once it is used up; `buildChart` / duo fills turn the receiver's last attack before a handed-over Dawn from SB into C (`clawOnPickup`). Your chart over the limit: run as charted only; editing starts from `fitTransfers` (shortest holder runs merged into a neighbour until it fits).
 
