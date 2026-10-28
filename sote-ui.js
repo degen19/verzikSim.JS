@@ -40,6 +40,7 @@ export function createSote(root, { getTeam }) {
   const tstate = () => {
     const t = team(), st = (state[t] ||= { gearSet: 'A', skip: 'stall', players: [] });
     st.skip ||= 'stall';
+    if (st.skip === 'redemption' && t >= 5) st.skip = 'stall';     // redemption skips can't be done in 5s
     while (st.players.length < t) st.players.push(blank());
     for (const p of st.players) if (p.lbRegens != null) { p.lbCycles ??= p.lbRegens; delete p.lbRegens; }   // first preview
     st.players.length = t;
@@ -56,8 +57,9 @@ export function createSote(root, { getTeam }) {
     const fewest = [...shortK].sort((a, b) => Number(st.players[a].pnecks || 0) - Number(st.players[b].pnecks || 0))[0];
     const skipper = Number.isInteger(st.sharkSkipper) && st.sharkSkipper < st.players.length ? st.sharkSkipper : (fewest ?? 0);
     const others = shortK.filter((k) => k !== skipper).map(pname);
-    const redeems = (p) => (p.redeem != null ? !!p.redeem : Number(p.pnecks || 0) < 2);   // default: short of necklaces
-    const unredeemed = st.players.map((p, k) => [p, k]).filter(([p]) => Number(p.pnecks || 0) < 2 && !redeems(p)).map(([, k]) => pname(k));
+    const hasOrb = (k) => !!(gp && gp[k] && gp[k].locator);         // a locator orb (Gear tab) is needed to redemption skip
+    const redeems = (p, k) => hasOrb(k) && (p.redeem != null ? !!p.redeem : Number(p.pnecks || 0) < 2);   // default: short of necklaces
+    const unredeemed = st.players.map((p, k) => [p, k]).filter(([p, k]) => Number(p.pnecks || 0) < 2 && !redeems(p, k)).map(([, k]) => `${pname(k)}${hasOrb(k) ? '' : ' (no locator orb - Gear tab)'}`);
     const name = (k) => (gp && gp[k] && gp[k].name) || `Player ${k + 1}`;
     const owns = (k, w) => !!(gp && gp[k] && (gp[k].weapons || []).includes(w));
     const row = (p, k) => {
@@ -83,18 +85,18 @@ export function createSote(root, { getTeam }) {
         <td><input type="number" min="0" step="1" data-s="${k}|sharks" value="${esc(p.sharks)}"></td>
         <td><input type="number" min="0" step="1" data-s="${k}|rests" value="${esc(p.rests ?? 0)}"></td>
         <td><input type="number" min="0" step="1" data-s="${k}|restores" value="${esc(p.restores ?? 3)}"></td>
-        <td><select data-s="${k}|prefire">${opts}</select>${note}</td>
-        ${st.skip === 'redemption' ? `<td style="text-align:center"><input type="checkbox" data-s="${k}|redeem" ${redeems(p) ? 'checked' : ''}></td>` : ''}</tr>`;
+        <td><select data-s="${k}|prefire" style="max-width:190px">${opts}</select>${note}</td>
+        ${st.skip === 'redemption' ? `<td style="text-align:center"><input type="checkbox" data-s="${k}|redeem" ${redeems(p, k) ? 'checked' : ''} ${hasOrb(k) ? '' : 'disabled title="No locator orb (Gear tab)"'}>${hasOrb(k) ? '' : ' <span class="muted small">no orb</span>'}</td>` : ''}</tr>`;
     };
     root.innerHTML = `<h3 style="margin-top:0">Sotetseg <span class="muted small">(${team()}-man)</span></h3>
       <p class="muted small">Room settings for each player. The Sotetseg sim is being built - these are saved in this browser and will be used by it (and by Full raid).
         Gear comes from the Gear tab; a prefire needs that weapon in the Gear set (Shadow Barrage: a Shadow ancient sceptre).</p>
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>Gear set ${x}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
-        <label title="How the mazes are crossed">Maze<select data-skip>${SKIP_TYPES.map(([v, lab]) => `<option value="${v}" ${v === st.skip ? 'selected' : ''}>${esc(lab)}</option>`).join('')}</select></label>
+        <label title="How the mazes are crossed">Maze<select data-skip>${SKIP_TYPES.filter(([v]) => v !== 'redemption' || team() <= 4).map(([v, lab]) => `<option value="${v}" ${v === st.skip ? 'selected' : ''}>${esc(lab)}</option>`).join('')}</select></label>
         ${st.skip === 'shark' ? `<label title="The one player who shark skips (with 1 phoenix necklace: the first maze; with none: both). Everyone else stalls">Shark skipper<select data-skipper>${st.players.map((p, k) => `<option value="${k}" ${k === skipper ? 'selected' : ''}>${esc(pname(k))} (${Number(p.pnecks || 0)} necklace${Number(p.pnecks || 0) === 1 ? '' : 's'})</option>`).join('')}</select></label>` : ''}</div>
       ${st.skip === 'shark' && others.length ? `<div class="warn small" style="margin-bottom:8px">Only one player can shark skip. ${esc(others.join(', '))} ${others.length > 1 ? 'have' : 'has'} fewer than 2 phoenix necklaces too - not enough to stall both mazes.</div>` : ''}
-      ${short.length && st.skip === 'stall' ? `<div class="warn small" style="margin-bottom:8px">${esc(short.join(', '))} ${short.length > 1 ? 'have' : 'has'} fewer than 2 phoenix necklaces - not enough to stall both mazes. Pick another way to cross the maze: Shark skip, Redemption skip or Run maze.</div>` : ''}
-      ${st.skip === 'redemption' ? `<div class="muted small" style="margin-bottom:8px">Redemption skippers need a locator orb and 2 restore doses (one a maze). They come off the maze on 15-18 HP and swing a tick after the others.</div>` : ''}
+      ${short.length && st.skip === 'stall' ? `<div class="warn small" style="margin-bottom:8px">${esc(short.join(', '))} ${short.length > 1 ? 'have' : 'has'} fewer than 2 phoenix necklaces - not enough to stall both mazes. Pick another way to cross the maze: Shark skip${team() <= 4 ? ', Redemption skip' : ''} or Run maze.</div>` : ''}
+      ${st.skip === 'redemption' ? `<div class="muted small" style="margin-bottom:8px">Redemption skippers need a locator orb (Gear tab) and a restore sip for each maze. Their queue is never cleared: from 1 HP they come off on 18 (duo), 11 (trio) or 4 (4s) - more than one can redemption skip - and swing a tick after the others.</div>` : ''}
       ${st.skip === 'redemption' && unredeemed.length ? `<div class="warn small" style="margin-bottom:8px">${esc(unredeemed.join(', '))} ${unredeemed.length > 1 ? 'have' : 'has'} fewer than 2 phoenix necklaces and isn't redemption skipping.</div>` : ''}
       ${st.skip === 'run' ? '<div class="muted small" style="margin-bottom:8px">Run maze: every player runs the maze instead of skipping it - slower.</div>' : ''}
       <div class="scroll"><table class="bt">

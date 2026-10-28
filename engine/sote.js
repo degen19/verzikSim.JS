@@ -198,11 +198,12 @@ export const SHARK_SKIP = [[92, { 7: 'S' }], [71, { 6: 'S', 8: 'G' }], [68, { 4:
 export const SHARK_SKIP_MIN = 29;                                   // below this: a shark + rest on the proc tick (+25)
 // ---- redemption skip: with a locator orb they orb themselves down to 1 HP (2 or 3 also work; 1 is best) and stall like
 // the others, with Redemption instead of a phoenix necklace: every queued hit is capped at that HP and Redemption heals
-// 24 once - 1 HP: 7 hits of 1, +24 -> 18 (each splash from another staller is one more hit). Then a restore sip for
-// their prayer (2 doses: one a maze), so they swing a tick later than the stallers (m+11).
+// 24 once. Nothing clears their queue, so they take all 7 ticks of it - a maze hit plus a splash from each other player
+// on the maze, every tick: 1 HP -> 18 (duo), 11 (trio), 4 (4s); 5s would kill them (not done there). Then a restore
+// sip for their prayer (one a maze), so they swing a tick later than the stallers (m+11).
 export const REDEMPTION_HP = 1;
 export function redemptionSkip(hp, team, runners = team - 1) {
-  const n = STALL_TICKS + Math.max(0, runners - 1);                   // 7 maze hits + a splash from each other staller
+  const n = STALL_TICKS * Math.max(1, runners);                       // each tick: their maze hit + a splash from each other runner
   const end = hp + REDEMPTION_HEAL - n * hp;
   return { hp: end, dead: end <= 0 };
 }
@@ -212,7 +213,8 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
  * pnecks, sharks, rests?, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor)}]. opts: {skip: 'stall' (default) |
  * 'shark' (one player shark skips - sharkSkipper (index), else the one with fewest phoenix necklaces: with 1 necklace
- * the first maze, with none both) | 'redemption' (redemption: player indexes who redemption skip both mazes; default the
+ * the first maze, with none both) | 'redemption' (3-4s; players with a locator orb (gear.locator) only - redemption: player
+ * indexes who redemption skip both mazes; default the
  * players with fewer than 2 phoenix necklaces)}, {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
  * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
@@ -248,7 +250,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     const p = ps[sharkSkipper] || ps.filter((q) => q.pnecks < 2).sort((a, b) => a.pnecks - b.pnecks)[0];
     if (p) p.sharkMazes = p.pnecks === 0 ? [0, 1] : p.pnecks === 1 ? [0] : [];
   }
-  if (skip === 'redemption') for (const [k, p] of ps.entries()) p.redeem = redemption ? redemption.includes(k) : p.pnecks < 2;
+  if (skip === 'redemption' && team <= 4) for (const [k, p] of ps.entries()) p.redeem = !!p.gear.locator && (redemption ? redemption.includes(k) : p.pnecks < 2);   // not in 5s; needs a locator orb
   /** Shark skipping the next maze (they keep their HP for it: no veng orbs, Heal Other to above 50). */
   const sharkNext = (p) => p.sharkMazes.includes(mazes.length);                    // under 100 at the start: first regen the tick after their first spec
   const alive = () => ps.filter((p) => !p.dead);

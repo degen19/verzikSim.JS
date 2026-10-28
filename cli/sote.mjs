@@ -8,7 +8,7 @@ import { Rng } from '../engine/rng.js';
 const a = process.argv.slice(2).filter((x) => x !== '--log');
 const team = Number(a[0] || 5), N = Number(a[1] || 2000), prefire = a[2] ?? 'Twisted bow', showLog = process.argv.includes('--log');
 const players = Array.from({ length: team }, (_, k) => {
-  const g = blankPlayer(k); g.prayer = 'Zeal';
+  const g = blankPlayer(k); g.prayer = 'Zeal'; g.locator = true;
   Object.assign(g.range, { cape: "Blessed dizana's quiver", neck: 'Necklace of rupture', body: 'Masori body (f)', legs: 'Masori chaps (f)', head: 'Masori mask (f)', hands: 'Zaryte vambraces' });
   Object.assign(g.mage, { head: 'Ancestral hat', body: 'Ancestral robe top', legs: 'Ancestral robe bottom', neck: 'Occult necklace', hands: 'Confliction gauntlets', cape: 'Imbued saradomin cape' });
   g.weapons.push('Elder maul', 'Twisted bow', 'Zaryte crossbow', "Tumeken's shadow", 'Shadow ancient sceptre');
