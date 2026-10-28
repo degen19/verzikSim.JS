@@ -1,26 +1,28 @@
-// Gear tab: each player's melee / ranged / magic setup, slot by slot, and the weapons they bring. Saved in this browser.
-// (Preview: the sims don't read it yet - Verzik still uses the gear in its chart.)
+// Gear tab: Gear sets A / B / C - each player's melee / ranged / magic setup, slot by slot, and the weapons they bring.
+// Each Verzik set picks the Gear set it uses (chart builder). Saved in this browser.
 import { ITEMS } from './engine/gear.js';
-import { SLOTS, STYLES, CHOICES, WEAPONS_OWNED, ARROWS, BOLTS, blankPlayer, slotItem, worn, bonuses, threeTick, isTwoHanded } from './engine/loadout.js';
+import { SLOTS, STYLES, CHOICES, WEAPONS_OWNED, ARROWS, BOLTS, BOTH_AMULETS, blankPlayer, slotItem, worn, bonuses, threeTick, isTwoHanded } from './engine/loadout.js';
+import { loadGear, saveGear, linkOf, GEAR_SETS } from './engine/gearstore.js';
 
-const STORE = 'verzikSim.gear.v1';             // {team: {players: [...]}}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
-const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: keep in memory */ } };
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
 export function createGear(root, { getTeam }) {
-  let state = load();
-  let cur = 0;
+  let state = loadGear();
+  let cur = 0, gset = 'A';
   const team = () => Number(getTeam()) || 4;
+  const tstate = () => (state[team()] ||= { sets: {}, link: {} });
+  /** The open Gear set's players (a new set starts as a copy of Gear set A, or blank). */
   const players = () => {
-    const t = team();
-    const st = (state[t] ||= { players: [] });
-    while (st.players.length < t) st.players.push(blankPlayer(st.players.length));
-    st.players.length = t;
-    return st.players;
+    const t = team(), ts = tstate();
+    if (!ts.sets[gset]) ts.sets[gset] = { players: structuredClone(ts.sets.A ? ts.sets.A.players : []) };
+    const ps = ts.sets[gset].players;
+    while (ps.length < t) ps.push(blankPlayer(ps.length));
+    ps.length = t;
+    return ps;
   };
-  const persist = () => save(state);
+  const persist = () => saveGear(state);
+  const usedBy = () => GEAR_SETS.filter((b) => linkOf(state, team(), b) === gset);
 
   function cell(pl, style, slot) {
     const list = CHOICES[style][slot];
@@ -57,11 +59,17 @@ export function createGear(root, { getTeam }) {
     if (cur >= ps.length) cur = 0;
     const pl = ps[cur];
     const three = threeTick(pl);
-    root.innerHTML = `<h3 style="margin-top:0">Gear <span class="muted small">(${team()}-man · preview)</span></h3>
+    const ts = tstate(), used = usedBy();
+    root.innerHTML = `<h3 style="margin-top:0">Gear <span class="muted small">(${team()}-man)</span></h3>
       <p class="muted small">What each player wears for melee, ranged and magic, slot by slot, and the weapons they bring. Ranged / Magic slots:
         <b>none</b> = no switch for that slot (they wear the other style's item if it has one, otherwise their melee item), <b>take off</b> = nothing in that slot.
-        A two-handed weapon leaves the shield slot empty. P1 tick fixes are made in melee gear; only duo Dawn autos use the magic setup.
-        Saved in this browser. <span class="warn">Preview: not used by the sim yet - Verzik still uses the gear in its chart.</span></p>
+        A two-handed weapon leaves the shield slot empty. P1 tick fixes are made in melee gear; the shadow and duo Dawn autos use the magic setup.
+        Lightbearer is set per room. Saved in this browser; importing a chart copies its gear into the Gear sets of the same letters.</p>
+      <div class="row between" style="margin-bottom:8px">
+        <div class="seg">${GEAR_SETS.map((g) => `<button data-gset="${g}" class="${g === gset ? 'on' : ''}">Gear set ${g}${ts.sets[g] ? '' : ' (empty)'}</button>`).join('')}</div>
+        <div class="row" style="gap:8px">${GEAR_SETS.filter((g) => g !== gset).map((g) => `<button class="ghost sm" data-act="copyset" data-to="${g}">Copy Gear set ${gset} to ${g}</button>`).join('')}</div>
+      </div>
+      <p class="small" style="margin:0 0 10px">${used.length ? `Used by Verzik ${used.map((b) => `Set ${b}`).join(', ')}` : '<span class="muted">No Verzik set uses this Gear set (pick it in the chart builder, next to Set A / B / C)</span>'}.</p>
       <div class="row between" style="margin-bottom:8px">
         <div class="seg">${ps.map((p, k) => `<button data-p="${k}" class="${k === cur ? 'on' : ''}">${esc(p.name)}</button>`).join('')}</div>
         <div class="row" style="gap:8px">
@@ -69,7 +77,11 @@ export function createGear(root, { getTeam }) {
           <button class="ghost sm" data-act="reset" title="Back to the default melee gear, no switches">Reset this player</button>
         </div>
       </div>
-      <label>Name<input data-g="name" value="${esc(pl.name)}" style="width:160px"></label>
+      <div class="row" style="gap:14px">
+        <label>Name<input data-g="name" value="${esc(pl.name)}" style="width:160px"></label>
+        <label>Melee prayer<select data-g="prayer">${['Piety', 'Zeal'].map((x) => `<option ${x === (pl.prayer || 'Piety') ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+        ${['Amulet of blood fury', BOTH_AMULETS].includes(pl.melee.neck) ? `<label title="${pl.melee.neck === BOTH_AMULETS ? 'Swap to Blood fury below this HP' : 'Blood fury HP setting (as on the chart)'}">Blood fury HP<input data-g="bloodFuryHp" type="number" min="1" max="99" value="${esc(pl.bloodFuryHp ?? '')}" style="width:80px"></label>` : ''}
+      </div>
       <div class="scroll"><table class="bt gear">
         <tr><th>Slot</th>${STYLES.map(([, l]) => `<th>${l}</th>`).join('')}</tr>
         ${SLOTS.map(([s, lab]) => `<tr><td class="rl">${lab}</td>${STYLES.map(([st]) => `<td>${cell(pl, st, s)}</td>`).join('')}</tr>`).join('')}
@@ -80,7 +92,7 @@ export function createGear(root, { getTeam }) {
         <div>
           <label>Arrows<select data-g="arrows">${ARROWS.map((a) => `<option ${a === pl.arrows ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
           <label style="margin-top:6px">Bolts<select data-g="bolts">${BOLTS.map((a) => `<option ${a === pl.bolts ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
-          <p class="small" style="margin:8px 0 0">3-tick weapon: <b>${esc(three || 'none')}</b><br><span class="muted">first of Obligator, Eye of ayak, Zorya's tome they have</span></p>
+          <p class="small" style="margin:8px 0 0">3-tick weapon: <b>${esc(three || ((pl.weapons || []).includes('Swift blade') ? 'Swift blade' : 'none'))}</b><br><span class="muted">first of Obligator, Eye of ayak, Zorya's tome they have${three === "Zorya's tome" ? ' - the tome as a 3-tick weapon isn\'t simulated yet' : ''}</span></p>
         </div>
       </div>
       <h4>Bonuses with each weapon</h4>
@@ -93,6 +105,8 @@ export function createGear(root, { getTeam }) {
   root.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.p != null) { cur = Number(b.dataset.p); render(); return; }
+    if (b.dataset.gset) { gset = b.dataset.gset; render(); return; }
+    if (b.dataset.act === 'copyset') { tstate().sets[b.dataset.to] = { players: structuredClone(players()) }; persist(); render(); return; }
     const ps = players();
     if (b.dataset.act === 'copyall') {
       const src = ps[cur];
@@ -109,13 +123,13 @@ export function createGear(root, { getTeam }) {
       if (t.checked) set.add(w); else set.delete(w);
       pl.weapons = [...set];
     } else if (t.dataset.g === 'name') pl.name = t.value || `Player ${cur + 1}`;
-    else if (t.dataset.g === 'arrows' || t.dataset.g === 'bolts') pl[t.dataset.g] = t.value;
+    else if (['arrows', 'bolts', 'prayer', 'bloodFuryHp'].includes(t.dataset.g)) pl[t.dataset.g] = t.value;
     else if (t.dataset.g) { const [style, slot] = t.dataset.g.split('|'); pl[style][slot] = t.value; }
     else return;
     persist(); render();
   });
 
-  return { refresh: render };
+  return { refresh: () => { state = loadGear(); render(); } };
 }
 
 export { ITEMS };

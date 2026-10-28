@@ -272,7 +272,7 @@ const coreKey = (cfg) => JSON.stringify(cfg.map((c) => [c.lightbearerOn, c.Purpl
   !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null, c.hasBP !== false, !!c.shadow, !!c.deepProc, c.shadowSrc ?? null]));
 /** Every k-player subset of 0..n-1 (sorted). */
 export const combos = (n, k) => { const out = []; const go = (s, acc) => { if (acc.length === k) { out.push(acc); return; } for (let i = s; i < n; i++) go(i + 1, [...acc, i]); }; go(0, []); return out; };
-const SHADOW_KEYS = ['shadow', 'shadow31', 'shadowLB', 'shadowCamp', 'deepProc', 'mage'];
+const SHADOW_KEYS = ['shadow', 'shadow31', 'shadowLB', 'shadowCamp', 'deepProc', 'mage', 'mageGear'];
 const shadowOf = (c) => Object.fromEntries(SHADOW_KEYS.map((k) => [k, c[k]]));
 const NO_SHADOW = { shadow: false, shadow31: false, shadowLB: false, shadowCamp: false, deepProc: false };
 const withHorn = (cfg, k, p2, p3) => cfg.map((c, j) => (j === k ? { ...c, horn: p2 || p3, hornP2: p2, hornP3: p3 } : c));

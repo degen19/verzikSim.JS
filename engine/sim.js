@@ -354,6 +354,8 @@ export class Player {
     this.mage_gear = [mhelm === 'off' ? null : mhelm === 'melee' ? this.helm : mhelm, dget(mg, 'body', 'Ancestral robe top'),
       dget(mg, 'legs', 'Ancestral robe bottom'), dget(mg, 'cape', 'Imbued saradomin cape'),
       'Occult necklace', 'Avernic treads (max)', 'Confliction gauntlets'].filter(Boolean);
+    const mgl = dget(cfg, 'mageGear', null);                  // from the Gear tab: every slot of their magic setup
+    if (Array.isArray(mgl) && mgl.length) this.mage_gear = mgl.slice();
     this.west = dget(cfg, 'WestDC', false);
     this.east = dget(cfg, 'EastDC', false);
     this.spec = Number(dget(cfg, 'startSpec', 100));
@@ -492,7 +494,7 @@ export function surge_tick(v) {
 }
 
 
-export async function parse_chart(wb, team, tab = null, block = 'A') {
+export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP = false } = {}) {   // deferBP: the page checks it after the Gear tab's gear is applied
   const ws = await wb.load(tab || `${team}-man`);
   const [lo_r, hi_r] = blockRows(ws, block);
   const yes = (v) => ['yes', 'y', 'true', '1'].includes(pystr(v).trim().toLowerCase());
@@ -567,7 +569,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A') {
         if (get(h) != null && pystr(get(h)).trim() !== '') cfgs[k][key] = yes(get(h));
       }
       // Has BP (blank / no column = has one): popping the purple crab needs a blowpipe
-      if (cfgs[k].hasBP === false && (cfgs[k].PurpleDC || cfgs[k].Purple2DC)) {
+      if (!deferBP && cfgs[k].hasBP === false && (cfgs[k].PurpleDC || cfgs[k].Purple2DC)) {
         const nm = cfgs[k].name || `P${k + 1}`;
         throw new Error(`A blowpipe is required to pop the purple crab. Either change the player who DC's purple, or add a blowpipe to ${nm}`);
       }

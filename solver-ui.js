@@ -3,6 +3,7 @@
 // The inputs come from the chart template's own fields (engine/chartform.js), so defaults match the chart.
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart } from './engine/sim.js';
+import { withGear, withGearSet, GEAR_SETS, blowpipes } from './engine/gearstore.js';
 import { describe, readValues, overlaySheet, shadowBlock, SHADOW_MODES } from './engine/chartform.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { solveRoom, evalRange, ROOM_DEPTHS } from './engine/roomsolver.js';
@@ -89,7 +90,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   const S = () => state[team].s, V = () => state[team].v;
   const persist = () => save(state);
   const field = (table, h, p) => tpl[team].desc.fields.get(`${table}|${h}|${p ?? 'team'}`);
-  const bpCount = () => Math.max(1, Array.from({ length: team }, (_, k) => V()[`gear|Has BP|${k}`] !== false).filter(Boolean).length);   // ticked Has BP
+  const bpCount = () => Math.max(1, blowpipes(team, S().gearSet || 'A') ?? team);   // blowpipes in the Gear set
   const names = () => Array.from({ length: team }, (_, k) => V()[`setup|Name|${k}`] || `Player ${k + 1}`);
   const on = (h, k) => { const f = field('gear', h, k); return !!f && V()[f.key] === true; };
 
@@ -147,11 +148,11 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const d = tpl[team].desc, nm = names(), s = S(), duo = team === 2;
     const main = duo ? DUO_MAIN : TEAM_MAIN;
     const ro = rankOpts(); if (!ro.some(([v]) => v === String(s.rankBy))) s.rankBy = ro[0][0];
-    const shadowRows = nm.map((_, k) => on('Shadow', k));
     const teamBody = `
       <div class="row wrap teamset">
         <label title="How many Lightbearer rings the team has. The solver decides who wears them.">Lightbearers${sel('rings', Array.from({ length: team + 1 }, (_, i) => [i, i]), s.rings)}</label>
         ${duo ? '' : `<label title="How many Soulflame horns the team has. The solver decides who holds them and whether they're used in P2, P3 or both.">Horns${sel('horns', Array.from({ length: team + 1 }, (_, i) => [i, i]), s.horns)}</label>`}
+        <label title="Which Gear set (Gear tab) the team uses">Gear set${sel('gearSet', GEAR_SETS.map((g) => [g, g]), s.gearSet || 'A')}</label>
         <label title="Only one player can use Sulphur blades in P1.">Sulphur blades${sel('sb', [['', 'None'], ...nm.map((n, k) => [k, n])], s.sb)}</label>
         <label title="The most times the Dawnbringer may be passed to another player in P1 (the first holder starts with it). Fewer transfers means players spec several times in a row instead of passing the staff back and forth. Blank = no limit.">Dawn transfer limit<input data-s="dawnLimit" type="number" min="0" max="30" step="1" value="${esc(s.dawnLimit ?? '')}" placeholder="no limit" style="width:80px"></label>
         <label title="The attack a player makes right before picking up the Dawnbringer from another player is a Claw scratch instead of Sulphur blades (both 4 ticks) - picking up the Dawn and speccing is easier with claws equipped.">Claw scratch on 4t transfer<input type="checkbox" data-s="clawPickup" ${s.clawPickup ? 'checked' : ''} style="width:auto;align-self:flex-start;margin:8px 0 0"></label>
@@ -173,14 +174,13 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       cell: (k) => { const f = field('gear', 'East Pattern', k); return f && (pickSides || s.boak[k] === 'East') ? input(f) : '<span class="muted">-</span>'; } };
     const pickBP = !!s.bpSearch;                                  // Advanced: the solver hands out the blowpipes
     const bpCol = { custom: true, label: 'Has BP', help: 'The solver hands out the blowpipes (Advanced)', cell: () => '<span class="muted" title="The solver hands out the blowpipes (Advanced)">Solver</span>' };
-    const gearCols = [['setup', 'Name'], ['setup', 'meleePrayer'], ...PLAYER_GEAR.slice(0, 7).map((h) => (h === 'Has BP' && pickBP ? bpCol : ['gear', h]))];
-    const roleCols = duo ? [['setup', 'Custom Surge Timing'], ['gear', 'Shadow'], ['gear', 'Deep proc']]
-      : [boakCol, patCol, ['setup', 'Custom Surge Timing'], ...PLAYER_GEAR.slice(7).map((h) => ['gear', h])];
-    const mage = d.tables.mage.filter((h) => !['necklace', 'boots', 'gloves'].includes(h));
-    const playersBody = `<h4 style="margin-top:4px">Gear</h4>${playerTable(gearCols)}<h4>Roles</h4>${playerTable(roleCols)}
+    // gear (helm / body / legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab
+    const roleCols = duo ? [['setup', 'Name'], ['setup', 'Custom Surge Timing'], ['gear', 'Shadow'], ['gear', 'Deep proc']]
+      : [['setup', 'Name'], boakCol, patCol, ['setup', 'Custom Surge Timing'], ...(pickBP ? [bpCol] : []), ...PLAYER_GEAR.slice(7).map((h) => ['gear', h])];
+    const playersBody = `<p class="muted small" style="margin-top:4px">Gear (helm, body, legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab - Gear set ${esc(s.gearSet || 'A')}.</p>${playerTable(roleCols)}
       <p class="muted small">${duo ? 'Tick Shadow for the mage (one player). The solver picks the shadow mode (camp, 3:1, Shadow while LB, or 3:1 + Shadow while LB) and the Dawn and P2 last-hit thresholds (1-5%).'
         : 'Shadow modes need Shadow ticked.'}${!duo && s.shadowSearch ? ' The solver places the shadow player(s): the ticked Shadow settings and mage gear move with them to the slot it picks.' : ''} Custom surge blank: the solver places the surge in P1.</p>
-      ${shadowRows.some(Boolean) && mage.length ? `<h4>Mage gear <span class="muted small">(Shadow players)</span></h4>${playerTable(mage.map((h) => ['mage', h]), (k) => shadowRows[k])}` : ''}`;
+      `;
     const SUPPLIES = ['Brew sips', 'SCB sips', 'Restore sips', 'Sharks'];
     const advTeam = d.tables.team.map((f) => f.header).filter((h) => !main.includes(h) && !SUPPLIES.includes(h) && h !== 'Death tick' && !(duo ? DUO_SOLVED : TEAM_SOLVED).includes(h));
     const advBody = `<h4 style="margin-top:4px">Team supplies</h4>
@@ -240,7 +240,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     S()[key] = t.type === 'checkbox' ? t.checked : t.value;
     if (key === 'bps') { let now = false; try { now = bpsList().length > 0; } catch { /* shown on Start */ } if (!hadBps && now) S().rankBy = '0'; }
     persist();
-    if (['bps', 'sideSearch', 'bpSearch', 'shadowSearch'].includes(key)) render();
+    if (['bps', 'sideSearch', 'bpSearch', 'shadowSearch', 'gearSet'].includes(key)) render();
   });
   root.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.sec) open[d.dataset.sec] = d.open; }, true);
 
@@ -260,7 +260,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     }
     for (const f of tpl[team].desc.fields.values()) if (f.table === 'chart') v[f.key] = '';
     const ws = overlaySheet(tpl[team].ws, { A: tpl[team].desc }, { A: v });
-    const cfgs = await parse_chart({ sheetnames: [`${team}-man`], load: async () => ws }, team, null, 'A');
+    const cfgs = withGearSet(await parse_chart({ sheetnames: [`${team}-man`], load: async () => ws }, team, null, 'A', { deferBP: true }), team, S().gearSet || 'A');
     lastValues = v;                                                   // the form as run (for Copy to set / Save as chart)
     return cfgs.map((c) => ({ ...c, actions: {}, lightbearerOn: false, ringSwitch: null, targetSpec: null, startSpec: 100,
       PurpleDC: false, Purple2DC: false, WestDC: false, EastDC: false, horn: false, hornP2: false, hornP3: false }));
@@ -335,7 +335,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         const wb = await getWorkbook();
         const ws = wb ? await wb.load(`${team}-man`) : null;
         if (ws) for (const b of ['A', 'B', 'C']) {
-          let cfg; try { cfg = await parse_chart(wb, team, null, b); } catch (e) { if (b === 'A') skipped.push(`Set A: ${e.message}`); continue; }
+          let cfg; try { cfg = withGear(await parse_chart(wb, team, null, b, { deferBP: true }), team, b); } catch (e) { if (b === 'A') skipped.push(`Set A: ${e.message}`); continue; }
           if (cfg.length !== team || !cfg.some((c) => c.actions && Object.keys(c.actions).length)) continue;
           const values = { ...tpl[team].defaults, ...readValues(ws, describe(ws, team, b)) };
           // Boak side left unset on your chart: the form's side (and the 0-T East pattern, as the form defaults)

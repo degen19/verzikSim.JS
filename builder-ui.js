@@ -2,6 +2,7 @@
 import { readXlsx } from './engine/xlsx.js';
 import { describe, readValues, overlaySheet, checkRow, withSetC, shadowBlock, SHADOW_MODES, BLOCKS, CODES, CODE_HELP, isAutoTick } from './engine/chartform.js';
 import { readPlanInputs, plan } from './engine/planner.js';
+import { loadGear, linkOf, setLink, gearOfSet, GEAR_SETS, gearSet } from './engine/gearstore.js';
 
 const STORE = 'verzikSim.builder.v1';
 const LIB = 'verzikSim.library.v1';          // saved charts: {team: [{id, name, saved, sets}]}
@@ -15,6 +16,8 @@ const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {};
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const when = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+// gear columns: set in the Gear tab now (the chart's own values only seed a Gear set the first time it runs)
+const GEAR_HEADERS = new Set(['meleePrayer', 'helm', 'body', 'legs', 'amulet', 'bloodFuryHp', 'has3Tick', 'Has BP']);
 const HELP = {
   'startSpec (%)': 'Spec % at the start of the room', lightbearerOn: 'Starts the room on Lightbearer',
   'Custom Surge Timing': 'Room time of a surge pot without a P in the chart (m:ss)', 'Target spec': 'Spec used in P2 (the ring-swap target if no Ring switch %)',
@@ -186,6 +189,14 @@ export function createBuilder(root, { onChange }) {
       }).join('')}</tr>`).join('')}</table></div>`;
   }
 
+  /** Which Gear set (Gear tab) this Verzik set uses. */
+  function gearPick() {
+    const g = loadGear(), cur = linkOf(g, team, block);
+    const opts = GEAR_SETS.map((x) => `<option value="${x}" ${x === cur ? 'selected' : ''}>Gear set ${x}${gearSet(g, team, x) ? '' : ' (new - starts from this chart)'}</option>`).join('');
+    return `<div class="row" style="align-items:center;gap:10px;margin:4px 0 8px"><label style="flex-direction:row;align-items:center;gap:8px">Gear<select data-gearset>${opts}</select></label>
+      <span class="muted small">Helm, body, legs, amulet, prayer, blowpipe, 3-tick weapon and mage gear come from the Gear tab.</span></div>`;
+  }
+
   function chartGrid() {
     const ch = tpl[team].descs[block].tables.chart;
     if (!ch) return '';
@@ -213,7 +224,8 @@ export function createBuilder(root, { onChange }) {
     for (let k = 0; k < team; k++) {
       const acts = {};
       if (ch) for (const [t] of ch.ticks) { const v = vals()[`chart|${t}|${k}`]; if (v) acts[t] = v; }
-      const msg = checkRow(acts, vals()[`gear|has3Tick|${k}`], team, vals()[`gear|Has BP|${k}`] !== false);
+      const gk = gearOfSet(team, block), g = gk && gk[k];
+      const msg = checkRow(acts, g ? (g.has3Tick || 'No') : vals()[`gear|has3Tick|${k}`], team, g ? g.hasBP : vals()[`gear|Has BP|${k}`] !== false);
       const c = root.querySelector(`#chk-${k}`); if (c) { c.textContent = msg ? '✗' : '✓'; c.title = msg; c.className = `chk ${msg ? 'bad' : 'ok'}`; }
     }
     const msgs = [];
@@ -241,14 +253,14 @@ export function createBuilder(root, { onChange }) {
         </div>
       </div>
       <p class="muted small">${team}-man chart, Set ${block}. Changes are saved in this browser automatically. Sets B and C only run if their P1 chart has something in it.</p>
-      <h3>Setup</h3>${playerTable('setup', d.setup)}
+      ${gearPick()}
+      <h3>Setup</h3>${playerTable('setup', d.setup.filter((h) => !GEAR_HEADERS.has(h)))}
       <h3>Spec planner</h3><div id="vz-plan"></div>
       <p class="muted small">Same as the chart's End spec / Room Time / LB swings / Time of regen columns. P1 ends on the Death tick if set, otherwise on the last charted tick.</p>
       <h3>Team settings</h3><div class="row wrap teamset">${teamFields}</div>
       ${d.team.some((f) => f.header === '4 Claw Priority') ? `<p class="muted small">4 Claw Priority (on by default): when checked, if Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status (didn't use their last Dawn; ties: highest spec % out of P1, then closest to their next regen) prioritises 100% spec for reds - both claws by r36, and they take over the purple DC. The others prioritise 50% (one claw by r36). Each camps Lightbearer only as long as needed. It's better for a non-shadow player to push for 100%, so where you can, give the last Dawn spec (the one most likely to go unused) to a non-shadow player.</p>` : ''}
-      <h3>Gear</h3>${playerTable('gear', d.gear)}
+      <h3>Player settings</h3>${playerTable('gear', d.gear.filter((h) => !GEAR_HEADERS.has(h)))}
       ${d.gear.includes('Shadow while LB') ? `<p class="muted small">Shadow modes need Shadow ticked. Shadow while LB takes priority over 3:1 - with both ticked, they shadow on Lightbearer hits, then 3:1 after the ring swap.${d.gear.includes('Shadow camp') ? ' Shadow camp can\'t be combined with 3:1 or Shadow while LB.' : ''}</p>` : ''}
-      ${d.mage.length ? `<h3>Mage gear <span class="muted small">(used by Shadow players)</span></h3>${playerTable('mage', d.mage)}` : ''}
       <div class="row between" style="margin-top:18px"><h3 style="margin:0">P1 chart ${locked() ? '<span class="muted small">(locked)</span>' : ''}</h3>
         <div class="row"><button class="ghost sm" data-act="clearchart" ${locked() ? 'disabled title="Unlock the chart to clear it"' : ''}>Clear chart</button>
         <button class="ghost sm" data-act="lockchart" title="A locked chart can't be edited and is kept by Reset this set and Copy">${locked() ? 'Unlock chart' : 'Lock chart'}</button></div></div>
@@ -325,6 +337,7 @@ export function createBuilder(root, { onChange }) {
   });
   root.addEventListener('change', async (e) => {
     if (e.target.dataset.lib === 'pick') { await libPick(e.target.value); return; }
+    if (e.target.dataset.gearset != null) { setLink(team, block, e.target.value); render(); onChange && onChange(); return; }
     if (e.target.dataset.act !== 'import' || !e.target.files[0]) return;
     try {
       const j = JSON.parse(await e.target.files[0].text());

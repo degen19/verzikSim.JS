@@ -2,6 +2,7 @@
 import { parse_chart } from './engine/sim.js';
 import { threadCount, workersAvailable } from './pool.js';
 import { catalog, applyCombo, validCfgs, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts, cfgsToFields } from './engine/optimize.js';
+import { withGear } from './engine/gearstore.js';
 import { describe, readValues, withSetC } from './engine/chartform.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -369,7 +370,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     const all = [];
     for (const b of ['A', 'B', 'C']) {
       try {
-        const c = await parse_chart(wb, team, null, b);
+        const c = withGear(await parse_chart(wb, team, null, b, { deferBP: true }), team, b);
         if (c.some((x) => x.actions && Object.keys(x.actions).length)) all.push({ block: b, cfgs: c, opts: catalog(c, team) });
       } catch (e) { if (b === 'A') { cfgs = null; sets = []; $('o-sets').innerHTML = ''; $('o-opts').innerHTML = ''; $('o-err').textContent = e.message; return; } }
     }

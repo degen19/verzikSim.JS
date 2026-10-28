@@ -25,7 +25,7 @@ const TEXT = new Set(['Name', 'Custom Surge Timing']);
 
 export const CODES = ['S', 'D', 'A', 'C', 'H', 'E', 'SB', 'B', 'T', 'P', 'R', 'X', 'ST>1', 'ST>2', 'ST>3', 'ST>4', 'ST>5'];
 export const CODE_HELP = {
-  S: 'Scythe (5t)', D: 'Dawnbringer spec (4t)', A: 'Dawnbringer auto (4t)', C: 'Claw scratch (4t)', H: "3-tick attack (has3Tick weapon)",
+  S: 'Scythe (5t)', D: 'Dawnbringer spec (4t)', A: 'Dawnbringer auto (4t)', C: 'Claw scratch (4t)', H: "3-tick attack (their 3-tick weapon, Gear tab)",
   E: 'Eye of ayak (3t)', SB: 'Sulphur blades (4t, 2 hits)', B: 'Blowpipe (2t)', T: 'Sang (4t)', P: 'Surge / adren pot', R: 'Force spec regen',
   X: 'Dodge (Verzik auto tick only)', 'ST>n': 'Spec transfer to player n',
 };
@@ -169,7 +169,7 @@ export function checkRow(acts, has3Tick, team, hasBP = true) {
     const st = a.match(/^ST>(\d)$/);
     if (st && Number(st[1]) > team) return `tick ${t}: ${a} - there's no player ${st[1]}`;
     if (a === 'X' && !isAutoTick(t)) return `tick ${t}: X only goes on a Verzik auto tick (19, 33, 47...)`;
-    if (a === 'H' && (!has3Tick || has3Tick === 'No')) return `tick ${t}: H needs a has3Tick weapon in the gear table`;
+    if (a === 'H' && (!has3Tick || has3Tick === 'No')) return `tick ${t}: H needs a 3-tick weapon (Obligator, Eye of ayak or Swift blade) in the Gear tab`;
     if (a === 'B' && hasBP === false) return `tick ${t}: B needs Has BP ticked in the gear table`;
     if (a in SPEED) {
       if (prev && t - prev[0] < SPEED[prev[1]]) return `tick ${t}: ${a} is too soon after ${prev[1]} on tick ${prev[0]} (${SPEED[prev[1]]}t)`;

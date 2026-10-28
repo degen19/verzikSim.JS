@@ -1,6 +1,7 @@
 // Optimizer: sweeps chart inputs (ring %, death charges, deep proc, gear, toggles) and finds the setups that
 // most often beat the user's breakpoints. Used by the web page's Optimizer tab (via worker.js).
 import { Rng } from './rng.js';
+import { ITEMS } from './gear.js';
 import { run_p1, Player } from './sim.js';
 import { run_p2 } from './p2.js';
 import { run_reds } from './reds.js';
@@ -225,7 +226,7 @@ export function catalog(cfgs, team) {
   }
   const shK = holders('sh', (c) => c.shadow);
   if (team > 2 && shK.length && shK.length < team) {
-    const ch = pick(team, shK.length), KEYS = ['shadow', 'shadow31', 'shadowLB', 'shadowCamp', 'deepProc', 'mage'];
+    const ch = pick(team, shK.length), KEYS = ['shadow', 'shadow31', 'shadowLB', 'shadowCamp', 'deepProc', 'mage', 'mageGear'];
     const src = shK.map((k) => Object.fromEntries(KEYS.map((x) => [x, structuredClone(cfgs[k][x])])));
     opts.push({ id: 'shadowHolders', group: 'Team', label: 'Shadow player' + (shK.length > 1 ? 's' : '') + ' (with their modes and mage gear)', kind: 'choice', choices: ch.map(label), current: label(shK),
       apply: (cf, v) => { const ks = ch[ch.map(label).indexOf(v)]; cf.forEach((c, i) => {
@@ -255,11 +256,11 @@ export function catalog(cfgs, team) {
     if (c.shadow) {
       const mg = c.mage || {};
       opts.push({ id: `mcape_${i}`, group: g, label: 'Mage cape', kind: 'choice', choices: MAGE_CAPES, current: mg.cape || 'Imbued saradomin cape',
-        apply: (cf, v) => { cf[i].mage = { ...(cf[i].mage || {}), cape: v }; } });
+        apply: (cf, v) => { cf[i].mage = { ...(cf[i].mage || {}), cape: v }; setMageSlot(cf[i], 'cape', v); } });
       for (const [key, label, map, def] of [['helm', 'Mage helm', MAGE_HELM, 'Ancestral'], ['body', 'Mage top', MAGE_BODY, 'Ancestral'],
         ['legs', 'Mage bottom', MAGE_LEGS, 'Ancestral']]) {
         opts.push({ id: `m${key}_${i}`, group: g, label, kind: 'choice', choices: Object.keys(map), current: labelOf(map, mg[key], def),
-          apply: (cf, v) => { cf[i].mage = { ...(cf[i].mage || {}), [key]: map[v] }; } });
+          apply: (cf, v) => { cf[i].mage = { ...(cf[i].mage || {}), [key]: map[v] }; setMageSlot(cf[i], key === 'helm' ? 'head' : key, map[v]); } });
       }
     }
     if (team > 2) {
@@ -274,6 +275,14 @@ export function catalog(cfgs, team) {
     }
   });
   return opts;
+}
+
+/** Gear-tab magic set (cfg.mageGear): put `name` in that slot ('off' = nothing, 'melee' = their melee helm). */
+function setMageSlot(c, slot, name) {
+  if (!Array.isArray(c.mageGear)) return;
+  const v = name === 'off' ? null : name === 'melee' ? c.helm : name;
+  c.mageGear = c.mageGear.filter((n) => !(ITEMS[n] && ITEMS[n].slot === slot));
+  if (v && ITEMS[v]) c.mageGear.push(v);
 }
 
 /** Build the chart for one combination. `combo` = {optionId: value}. Options are applied in catalog order. */

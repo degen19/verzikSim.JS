@@ -9,6 +9,7 @@ import { createOptimizer } from './optimizer-ui.js';
 import { createMechanics } from './mechanics-ui.js';
 import { createSolver } from './solver-ui.js';
 import { createGear } from './gear-ui.js';
+import { withGear, importGear, absorbValues } from './engine/gearstore.js';
 import { SimPool } from './pool.js';
 
 const $ = (id) => document.getElementById(id);
@@ -79,7 +80,19 @@ $('file').addEventListener('change', async (e) => {
     imported = await readXlsx(new Uint8Array(await f.arrayBuffer()));
     importedName = f.name;
     const tabs = imported.sheetnames.filter((n) => /^\d-man$/.test(n));
-    $('status').textContent = `Loaded ${f.name} (${tabs.join(', ')}). Pick a scale, then Run or open the Optimizer.`;
+    // its gear columns -> the Gear tab (each set's gear into the Gear set of the same letter)
+    const copied = [];
+    for (const n of tabs) {
+      const t = Number(n[0]), bySet = {};
+      for (const b of ['A', 'B', 'C']) {
+        try { const c = await parse_chart(imported, t, null, b, { deferBP: true }); if (filled(c)) bySet[b] = c; } catch { /* shows on Run */ }
+      }
+      const done = importGear(t, bySet);
+      if (done.length) copied.push(`${t}-man ${done.join('/')}`);
+    }
+    $('status').textContent = `Loaded ${f.name} (${tabs.join(', ')}). Pick a scale, then Run or open the Optimizer.`
+      + (copied.length ? ` Its gear was copied into the Gear tab (${copied.join(', ')}).` : '');
+    if (tab === 'gear') gear.refresh();
     $('toBuilder').disabled = false;
     if (tab === 'opt') optimizer.refresh();
     prewarm();
@@ -99,6 +112,7 @@ const optimizer = createOptimizer($('tab-opt'), { getWorkbook, getTeam: team, ru
   getLabel: (b) => $(`lab${b}`).value || `Set ${b}` });                    // Run tab set labels
 /** Put chart values into a set of "Build chart on this page" (which then becomes the chart source for Run / Optimizer). */
 async function solverToBuilder(t, b, values) {
+  absorbValues(t, b, values);                                            // its gear changes go to that set's Gear set
   await builder.setSet(t, b, values);
   if (source !== 'build') $('src').querySelector('[data-src="build"]').click();
   else await builder.show(team());
@@ -107,6 +121,7 @@ const solver = createSolver($('tab-solve'), {
   getTeam: team,
   // a solver setup -> a set of "Build chart on this page" (which then becomes the chart source for Run / Optimizer)
   toBuilder: async (t, b, values) => {
+    absorbValues(t, b, values);
     await builder.setSet(t, b, values);
     if (source !== 'build') $('src').querySelector('[data-src="build"]').click();
     else await builder.show(team());
@@ -143,7 +158,7 @@ let lastInfo = null;
 async function prewarm() {
   try {
     const wb = await getWorkbook(); if (!wb) return;
-    const c = await parse_chart(wb, team(), null, 'A');
+    const c = withGear(await parse_chart(wb, team(), null, 'A', { deferBP: true }), team(), 'A');
     if (filled(c)) pool.warm(c, team());
   } catch { /* a chart problem shows up when the user presses Run */ }
 }
@@ -186,7 +201,7 @@ $('go').addEventListener('click', async () => {
     if (!wb) throw new Error('Import a chart or build one on the page first.');
     const sets = [];
     for (const block of ['A', 'B', 'C']) {
-      try { const c = await parse_chart(wb, t, null, block); if (filled(c)) sets.push([block, c]); } catch (e) { if (block === 'A') throw e; }
+      try { const c = await parse_chart(wb, t, null, block, { deferBP: true }); if (filled(c)) sets.push([block, withGear(c, t, block)]); } catch (e) { if (block === 'A') throw e; }
     }
     if (!sets.length) throw new Error(`The ${t}-man chart has no filled P1 chart.`);
     const notes = sets.flatMap(([b, c]) => (c.notes || []).map((n) => `Set ${b} - ${n}`));
