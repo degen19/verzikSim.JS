@@ -273,11 +273,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       L.on && L(`t${t} ${p.name} eats a shark with the phoenix necklace: ${old} -> ${p.hp} (${p.sharks} left)`);
     }
   };
-  /** Damage to a player: a phoenix necklace procs at 1-19 (heals 29). */
+  /** Damage to a player outside a stall (phoenix necklaces are only worn for the stalls - they're needed to cross the maze). */
   const hurt = (t, p, d) => {
     p.hp -= d;
-    if (p.hp <= 0) { p.dead = true; L.on && L(`t${t} ${p.name} dies`); return; }
-    if (p.hp <= PNECK_AT && p.pnecks > 0) { p.pnecks--; p.hp += PNECK_HEAL; L.on && L(`t${t} ${p.name} phoenix necklace -> ${p.hp} HP (${p.pnecks} left)`); afterPneck(t, p); }
+    if (p.hp <= 0) { p.dead = true; L.on && L(`t${t} ${p.name} dies`); }
   };
   for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
     if (blocked && t >= attackable) blocked = false;
@@ -352,21 +351,28 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       // take this one off prayer for veng: safe (above 50, no other orb within 2 ticks) - or chanced, once she's within the
       // chance veng threshold after the second maze (her last ~2%: she may die to the veng)
       const chance = mazes.length >= 2 && hp <= MAX * chanceAt;
-      const off = p.veng && mine.length === 1 && (chance || (p.hp > ORB_MAX && !later));
+      // another orb on them within 2 ticks: they take this one unprayed (praying it would turn their prayer off for the
+      // next) and pray against the last one
+      // a veng (orb taken off prayer) also needs no close pair (2 ticks apart or less) already heading at them: one of a
+      // pair can't be prayed, so they keep their HP above 50 for it
+      const ahead = orbs.filter((o) => o[1] === p && o[0] > t + PRAYER_OFF).map((o) => o[0]).sort((x, y) => x - y);
+      const pairAhead = ahead.some((x, j) => j > 0 && x - ahead[j - 1] <= PRAYER_OFF);
+      const off = later > 0 || (p.veng && mine.length === 1 && (chance || (p.hp > ORB_MAX && !pairAhead)));
       const prayStyle = off ? null : mine[mine.length - 1][2];
+      let prayedHere = false;
       for (const o of mine) {
         if (p.dead) break;
         const prayed = !off && t >= p.prayOffUntil && o[2] === prayStyle;
         let d = 0;
-        if (prayed) st.orbs.prayed++;
+        if (prayed) { st.orbs.prayed++; prayedHere = true; }
         else {
           st.orbs.taken++; if (off) st.orbs.vengd++;
           if (rng.random() < hit_chance((SOTE.mag + 9) * (SOTE.accMagic + 64), playerDef(p, o[2]))) d = rng.randint(0, ORB_MAX);
         }
-        L.on && L(`t${t} ${o[3] ? 'split ' : ''}${o[2]} orb -> ${p.name}: ${prayed ? 'prayed' : `${d}${off ? ' (off prayer, veng)' : ''}`} (HP ${p.hp - d})`);
+        L.on && L(`t${t} ${o[3] ? 'split ' : ''}${o[2]} orb -> ${p.name}: ${prayed ? 'prayed' : `${d}${off ? (p.veng ? ' (off prayer, veng)' : ' (off prayer)') : ''}`} (HP ${p.hp - d})`);
         if (!prayed && d > 0) { hurt(t, p, d); vengHit(t, p, d, 'orb'); }
       }
-      p.prayOffUntil = t + PRAYER_OFF + 1;
+      if (prayedHere) p.prayOffUntil = t + PRAYER_OFF + 1;              // an orb turns their prayer off (only if it was on)
       for (const o of mine.filter((x) => !x[3])) {                    // the first orb on a player splits
         const others = rng.shuffle(alive().filter((q) => q !== p)).slice(0, 2);
         const styles = rng.random() < 0.5 ? ['range', 'mage'] : ['mage', 'range'];
