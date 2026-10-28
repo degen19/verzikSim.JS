@@ -25,7 +25,7 @@ export const PREFIRES = [
   ["Tumeken's shadow", "Tumeken's shadow", "Tumeken's shadow"],
 ];
 const STYLE = { 'Twisted bow': 'range', 'Zaryte crossbow': 'range', 'Shadow ancient sceptre': 'mage', "Tumeken's shadow": 'mage' };
-const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 0, sharks: 0, rests: 0, prefire: '' });
+const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 0, sharks: 0, rests: 0, restores: 3, prefire: '' });
 /** How the maze is crossed. Stall: everyone but the player under stands on the maze for 7 ticks with a phoenix
  *  necklace. Shark skip: one player short of phoenix necklaces (never more than one) skips
  *  away from the others (no splash), eating sharks / Guthix rests through it instead. Run maze: everyone runs it
@@ -82,6 +82,7 @@ export function createSote(root, { getTeam }) {
         <td><input type="number" min="0" step="1" data-s="${k}|pnecks" value="${esc(p.pnecks)}"></td>
         <td><input type="number" min="0" step="1" data-s="${k}|sharks" value="${esc(p.sharks)}"></td>
         <td><input type="number" min="0" step="1" data-s="${k}|rests" value="${esc(p.rests ?? 0)}"></td>
+        <td><input type="number" min="0" step="1" data-s="${k}|restores" value="${esc(p.restores ?? 3)}"></td>
         <td><select data-s="${k}|prefire">${opts}</select>${note}</td>
         ${st.skip === 'redemption' ? `<td style="text-align:center"><input type="checkbox" data-s="${k}|redeem" ${redeems(p) ? 'checked' : ''}></td>` : ''}</tr>`;
     };
@@ -97,7 +98,7 @@ export function createSote(root, { getTeam }) {
       ${st.skip === 'redemption' && unredeemed.length ? `<div class="warn small" style="margin-bottom:8px">${esc(unredeemed.join(', '))} ${unredeemed.length > 1 ? 'have' : 'has'} fewer than 2 phoenix necklaces and isn't redemption skipping.</div>` : ''}
       ${st.skip === 'run' ? '<div class="muted small" style="margin-bottom:8px">Run maze: every player runs the maze instead of skipping it - slower.</div>' : ''}
       <div class="scroll"><table class="bt">
-        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Guthix rests (4 dose) they bring: heal 5 a sip, on the potion delay (can go with a shark on the same tick)">Guthix rests</th><th title="Their first attack, before the room starts">Prefire</th>${st.skip === 'redemption' ? '<th title="Orbs down to 1 HP with a locator orb and stalls with Redemption instead of a phoenix necklace (needs a locator orb and 2 restore doses)">Redemption skip</th>' : ''}</tr>
+        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Guthix rest sips they bring (a 4 dose = 4 sips): heal 5 a sip, on the potion delay (can go with a shark on the same tick)">Guthix rest sips</th><th title="Prayer restore sips they bring (default 3): a redemption skip takes one a maze; after the second maze a redemption skipper uses spares on locator orb Redemption procs to Heal Other">Restore sips</th><th title="Their first attack, before the room starts">Prefire</th>${st.skip === 'redemption' ? '<th title="Orbs down to 1 HP with a locator orb and stalls with Redemption instead of a phoenix necklace (needs a locator orb and 2 restore doses)">Redemption skip</th>' : ''}</tr>
         ${st.players.map(row).join('')}
       </table></div>`;
   }

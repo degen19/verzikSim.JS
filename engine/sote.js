@@ -235,11 +235,11 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   let blocked = false;                          // she can't be damaged (maze) until `attackable`
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
   const mazes = [];
-  const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, stalls: [], sharkSkips: [] };
+  const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, restores: 0, locator: 0, stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: (plan === 2 && (c.gear.weapons || []).includes('Zaryte crossbow') && SPEC_PLAN_2[c.role || roleOf(i)]?.prefire) || c.prefire || '',
     pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? (plan === 2 ? SPEC_PLAN_2[c.role || roleOf(i)]?.start : undefined) ?? 100), regen: 0,
-    hornUntil: -1, surged: false, surgeAt: null, rests: Number(c.rests ?? 0), sharkMazes: [], lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
+    hornUntil: -1, surged: false, surgeAt: null, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
     role: c.role || roleOf(i), mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   for (const p of ps) p.regenHold = p.spec < 100;
@@ -291,7 +291,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     for (const p of stallers) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10; p.thrallBack = true;
-      if (p.redeem) {                                                 // redemption skip: orb down to 1 HP; prayers back a tick late
+      p.redeemNow = !!p.redeem && p.restores >= 1;                   // no restore sip left: a normal stall
+      if (p.redeemNow) {                                                 // redemption skip: orb down to 1 HP; prayers back a tick late
         L.on && L(`t${t} ${p.name} orbs down to ${REDEMPTION_HP} HP for a redemption skip (from ${p.hp})`);
         p.hp = REDEMPTION_HP; p.next = m + 11; continue;
       }
@@ -406,11 +407,12 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (pendingStall && t === pendingStall.at) {
       for (const p of pendingStall.runners.filter((q) => !q.dead)) {
         const nRun = pendingStall.runners.filter((q) => !q.dead).length;
-        if (p.redeem) {                                               // redemption skip: no phoenix necklace
+        if (p.redeemNow) {                                            // redemption skip: no phoenix necklace
           const before = p.hp, r = redemptionSkip(p.hp, team, nRun);
-          p.hp = r.hp; if (r.dead) p.dead = true;
+          p.hp = r.hp; if (r.dead) p.dead = true; else { p.restores--; st.restores++; p.sipReady = t + 3; }
+          p.redeemNow = false;
           st.stalls.push({ hp: before, after: r.hp, pneck: false, dead: r.dead, redemption: true });
-          L.on && L(`t${t} ${p.name} out of the stall (Redemption): ${before} -> ${r.dead ? 'DEAD' : r.hp}, sips a restore`);
+          L.on && L(`t${t} ${p.name} out of the stall (Redemption): ${before} -> ${r.dead ? 'DEAD' : r.hp}, sips a restore (${p.restores} left)`);
           continue;
         }
         const before = p.hp, r = stallSkip(p.hp, team, p.pnecks > 0, true, nRun);
@@ -462,7 +464,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         // maze danger: a staller who'd die on the stall; a shark skipper at 50 or less (more than 2 sharks for the skip)
         const mazeDanger = (q, h) => (q.redeem ? false : sharkNext(q) ? h <= ORB_MAX : stallDead(h, q, runnersNext));   // a redemption skipper orbs down anyway
         const skipUp = (q) => (mazes.length === 1 && sharkNext(q) && q.hp <= ORB_MAX ? 1 : 0);   // between the mazes: a shark skipper still to reach 51+
-        const cands = alive().filter((q) => q !== c && (
+        const cands = alive().filter((q) => q !== c && !(q.redeem && mazes.length < 2) && (   // a redemption skipper wants 1 HP
           (q.veng && q.hp <= ORB_MAX && targeted.has(q)) || (!after2 && mazeDanger(q, q.hp)) || q.hp <= pairNeed(q)))
           .sort((a, b) => (skipUp(b) - skipUp(a)) || a.hp - b.hp);      // a shark skipper first, then lowest HP
         for (const q of cands) {
@@ -483,6 +485,22 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           L.on && L(`t${t} ${c.name} heals other ${q.name} (+${give}): ${c.name} ${c.hp}, ${q.name} ${q.hp}`);
           break;
         }
+      }
+    }
+    // ---- locator orb (redemption skippers, after the second maze): at 1 HP with Redemption up, the orb hits them for
+    // 0 -> Redemption heals them to 25 (a restore sip for their prayer), and they Heal Other the player with veng up
+    // below, but closest to, 50. Between swings (not on their attack tick, once a swing), only with no orb landing on
+    // them in the next 3 ticks, and with a restore sip left (after their first swing; sips 3 ticks apart).
+    if (!blocked && mazes.length >= 2 && kill == null) {
+      for (const p of alive().filter((q) => q.redeem && q.restores >= 1 && q.hp < REDEMPTION_HP + REDEMPTION_HEAL)) {
+        if (t === p.next || t < p.cycleAfter || t < (p.sipReady || 0) || !p.swings[2] || t < (p.healFrom || 0) || t < p.noVengUntil) continue;
+        if (orbs.some((o) => o[1] === p && o[0] >= t && o[0] <= t + 3)) continue;
+        const q = alive().filter((x) => x !== p && x.veng && x.hp < ORB_MAX).sort((a, b) => b.hp - a.hp)[0];
+        if (!q) continue;
+        const old = p.hp; p.hp = REDEMPTION_HP + REDEMPTION_HEAL; p.restores--; st.restores++; st.locator++; p.sipReady = t + 3;
+        const give = Math.min(Math.floor(p.hp * 0.75), 99 - q.hp); p.hp -= give; q.hp += give;
+        p.cycleAfter = p.next + 1;                                      // once between swings
+        L.on && L(`t${t} ${p.name} locator orb -> Redemption (${old} -> 25, restore: ${p.restores} left), heals other ${q.name} (+${give}): ${p.name} ${p.hp}, ${q.name} ${q.hp}`);
       }
     }
     // ---- damage on her this tick
