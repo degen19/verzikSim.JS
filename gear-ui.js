@@ -5,7 +5,13 @@ import { SLOTS, STYLES, CHOICES, WEAPONS_OWNED, ARROWS, BOLTS, BOTH_AMULETS, bla
 import { loadGear, saveGear, linkOf, GEAR_SETS } from './engine/gearstore.js';
 
 const TEAMS = 'verzikSim.gearTeams.v1';        // saved teams: {team: [{id, name, saved, players}]}
-const loadTeams = () => { try { return JSON.parse(localStorage.getItem(TEAMS)) || {}; } catch { return {}; } };
+const loadTeams = () => {
+  let v; try { v = JSON.parse(localStorage.getItem(TEAMS)) || {}; } catch { v = {}; }
+  for (const list of Object.values(v)) for (const t of list || []) for (const p of t.players || []) {   // renamed items
+    if (Array.isArray(p.weapons)) p.weapons = p.weapons.map((w) => (w === 'Smoke ancient sceptre' ? 'Shadow ancient sceptre' : w));
+  }
+  return v;
+};
 const saveTeams = (v) => { try { localStorage.setItem(TEAMS, JSON.stringify(v)); return true; } catch { return false; } };
 const when = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

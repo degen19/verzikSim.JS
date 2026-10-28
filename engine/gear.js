@@ -67,8 +67,8 @@ export const ITEMS = {
                                  spec: { cost: 50, acc: 2.5, dmg: 1.6, buffed: 3, chain: 5, buffSpeed: 2, keepTicks: 50 } }),   // Zorya's flow: +150% acc, +60% dmg
   'Eye of ayak':          item('weapon', [0, 0, 0, 30, 0], [1, 5, 5, 10, 0], { pray: 2, speed: 3 }),
   'Sanguinesti staff':    item('weapon', [0, 0, 0, 25, -4], [2, 3, 1, 15, 0], { speed: 4 }),
-  'Smoke ancient sceptre': item('weapon', [20, -1, 50, 20, 0], [2, 3, 1, 15, 0], { str: 60, mdmg: 10, pray: -1, speed: 5, ancients: 0.10 }),   // smoke spells +10%
-  'Smoke Barrage':        { slot: 'spell', base: 27, speed: 5, aoe: 3, poison: 1 / 8, level: 86 },   // Ancient Magicks, 3x3
+  'Shadow ancient sceptre': item('weapon', [20, -1, 50, 20, 0], [2, 3, 1, 15, 0], { str: 60, mdmg: 10, pray: -1, speed: 5, shadowDrain: true }),   // shadow spells also drain Attack, Strength and Defence (if not already drained)
+  'Shadow Barrage':       { slot: 'spell', base: 28, speed: 5, aoe: 3, drainAtk: 0.15, level: 88 },   // Ancient Magicks, 3x3; -15% Attack if not already drained
   'Twisted bow':          item('weapon', [0, 0, 0, 0, 70], undefined, { rstr: 20, speed: 5, two_handed: true, bow: true }),
   'Toxic blowpipe':       item('weapon', [0, 0, 0, 0, 30], undefined, { rstr: 55, speed: 2, two_handed: true }),   // dragon darts included
   'Zaryte crossbow':      item('weapon', [0, 0, 0, 0, 110], undefined, { speed: 5, crossbow: true }),

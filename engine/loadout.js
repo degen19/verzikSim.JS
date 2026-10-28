@@ -40,7 +40,7 @@ export const CHOICES = {
 export const WEAPONS_OWNED = {
   melee: ['Scythe of vitur', 'Dragon claws', 'Sulphur blades', 'Obligator', 'Swift blade'],
   range: ['Toxic blowpipe', 'Zaryte crossbow', 'Twisted bow'],
-  mage: ["Tumeken's shadow", "Zorya's tome", 'Eye of ayak', 'Sanguinesti staff', 'Smoke ancient sceptre'],
+  mage: ["Tumeken's shadow", "Zorya's tome", 'Eye of ayak', 'Sanguinesti staff', 'Shadow ancient sceptre'],
 };
 export const ARROWS = ['Dragon arrow', 'Seeking dragon arrow'];
 export const BOLTS = ['Ruby dragon bolts (e)'];

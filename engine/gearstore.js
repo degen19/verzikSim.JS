@@ -13,6 +13,9 @@ export function loadGear() {
   try { s = JSON.parse(localStorage.getItem(GEAR_KEY)); } catch { s = null; }
   s = s || mem || {};
   for (const t of Object.keys(s)) if (s[t] && s[t].players && !s[t].sets) s[t] = { sets: { A: { players: s[t].players } }, link: {} };   // first preview
+  for (const t of Object.values(s)) for (const set of Object.values((t && t.sets) || {})) for (const p of set.players || []) {   // renamed items
+    if (Array.isArray(p.weapons)) p.weapons = p.weapons.map((w) => (w === 'Smoke ancient sceptre' ? 'Shadow ancient sceptre' : w));
+  }
   return s;
 }
 export function saveGear(s) { mem = s; try { localStorage.setItem(GEAR_KEY, JSON.stringify(s)); } catch { /* storage off */ } }
