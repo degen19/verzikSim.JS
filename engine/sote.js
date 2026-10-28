@@ -32,6 +32,17 @@ export const MAZE_AT = [2 / 3, 1 / 3];
 // her death (after the second maze): the room ends 5 ticks after the killing hit, 4 with overkill - as in Verzik P3,
 // overkill = another hitsplat lands on the killing tick after the killing hit
 export const DEATH_ANIM = 5, DEATH_ANIM_OVERKILL = 4;
+
+// ---- maze damage (worked out on the tick a player steps on a wrong tile from their HP then; lands the next tick,
+// the splash to every player within 5x5 of them the tick after)
+/** Damage to a player on a wrong maze tile, by their HP. */
+export function mazeDmg(hp) {
+  return hp >= 106 ? 22 : hp >= 90 ? 21 : hp >= 75 ? 20 : hp >= 60 ? 19 : hp >= 45 ? 18 : hp >= 30 ? 17 : 16;
+}
+/** Splash damage bounced to a nearby player, by HP. */
+export function splashDmg(hp) {
+  return hp >= 120 ? 16 : hp >= 100 ? 15 : hp >= 80 ? 14 : hp >= 60 ? 13 : hp >= 40 ? 12 : hp >= 20 ? 11 : 10;
+}
 // prefires: the tick they attack on, ticks until it lands, attack speed (their next attack is lined up on her
 // attack ticks anyway). ZCB: one tile less range, so it goes off a tick later.
 export const PREFIRE = {
