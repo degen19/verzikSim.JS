@@ -35,12 +35,13 @@ if (process.argv.includes('--full')) {
   const entry = Number((process.argv.find((x) => x.startsWith('--entry=')) || '--entry=0').split('=')[1]);
   const full = players.map((p) => ({ ...p, pnecks: 2, sharks: 4 }));
   if (showLog) { const log = []; runSote(full, team, new Rng('full#0'), log, { entry }); console.log('\n--- full raid log ---\n' + log.filter((l) => /MAZE|under|stall|shark|DIES|overkill|necklace|dies|^t(3[5-9]|4\d|5[0-9]) /.test(l)).join('\n')); }
-  const ends = [], m1 = [], m2 = []; let deaths = 0, pn = 0, fails = 0, stallDeaths = 0; const dm = {}, sp = { maul: 0, maulHit: 0, claw: 0 };
+  const ends = [], m1 = [], m2 = []; let deaths = 0, sh = 0, pn = 0, fails = 0, stallDeaths = 0; const dm = {}, sp = { maul: 0, maulHit: 0, claw: 0 };
   for (let i = 0; i < N; i++) {
     const r = runSote(full, team, new Rng(`full#${i}`), null, { entry });
+    deaths += r.players.filter((p) => p.dead).length; sh += r.sharks;
     if (r.end == null) { fails++; continue; }
     ends.push(r.end); m1.push(r.mazes[0]); m2.push(r.mazes[1]);
-    deaths += r.players.filter((p) => p.dead).length; pn += r.players.reduce((a, p) => a + (2 - p.pnecks), 0);
+    pn += r.players.reduce((a, p) => a + (2 - p.pnecks), 0);
     stallDeaths += r.stalls.filter((x) => x.dead).length;
     for (const k in r.dmg) dm[k] = (dm[k] || 0) + r.dmg[k]; for (const k in sp) sp[k] += r.specs[k];
   }
@@ -48,7 +49,7 @@ if (process.argv.includes('--full')) {
   s(ends); s(m1); s(m2);
   const mmss = (t) => { const sec = t * 0.6; return `${Math.floor(sec / 60)}:${(sec % 60).toFixed(1).padStart(4, '0')}`; };
   console.log(`FULL ${team}-man, entry i${entry}: room time 10% ${mmss(qq(ends, 0.1))} | median ${mmss(qq(ends, 0.5))} | 90% ${mmss(qq(ends, 0.9))} | fastest ${mmss(ends[0])} (t${ends[0]})`);
-  console.log(`  maze 1 median t${qq(m1, 0.5)}, maze 2 median t${qq(m2, 0.5)} | per raid: player deaths ${(deaths / ends.length).toFixed(2)} (in stalls ${(stallDeaths / ends.length).toFixed(2)}), phoenix necklaces used ${(pn / ends.length).toFixed(2)}${fails ? ` | ${fails} raids didn't finish` : ''}`);
+  console.log(`  maze 1 median t${qq(m1, 0.5)}, maze 2 median t${qq(m2, 0.5)} | per raid: player deaths ${(deaths / N).toFixed(2)} (in stalls ${(stallDeaths / ends.length).toFixed(2)}), phoenix necklaces used ${(pn / ends.length).toFixed(2)}, sharks for orbs ${(sh / N).toFixed(2)}${fails ? ` | ${fails} raids wiped` : ''}`);
   const DT = Object.values(dm).reduce((x, y) => x + y, 0);
   console.log(`  damage: ${Object.entries(dm).map(([k, v]) => `${k} ${(v / DT * 100).toFixed(1)}%`).join(', ')} | per raid: mauls ${(sp.maul / ends.length).toFixed(2)} (hit ${(sp.maulHit / Math.max(1, sp.maul) * 100).toFixed(0)}%), claw specs ${(sp.claw / ends.length).toFixed(2)}`);
 }
