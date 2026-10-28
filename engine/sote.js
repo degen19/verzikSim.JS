@@ -188,7 +188,7 @@ export const instanceOf = (t, entry = 0) => (t + entry + 1) % 4;
 /** Ticks lost at a maze proc on tick t. */
 export const ticksLost = (t, entry = 0) => (3 - instanceOf(t, entry) + 4) % 4;
 export const SHARK_HEAL = 20, REST_HEAL = 5;
-// ---- shark skip: a player short of phoenix necklaces skips the maze away from the others (no splash either way),
+// ---- shark skip (one player at most): a player short of phoenix necklaces skips the maze away from the others (no splash either way),
 // eating through it. The maze hits land one a tick on m+2..m+8, each sized from their HP then (mazeDmg) and capped at
 // it; a shark / Guthix rest eaten on a tick lands before the death check, so a hit that takes them to 0 that tick is
 // tick-eaten. What they eat (by their HP at the proc; offsets from m, the i0 they move on): S shark, G Guthix rest.
@@ -200,8 +200,8 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
 /**
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
  * pnecks, sharks, rests?, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor)}]. opts: {skip: 'stall' (default) |
- * 'shark' (players with fewer than 2 phoenix necklaces shark skip: 1 necklace the first maze, none both; 4-5s one
- * player, trios both non-under players)}, {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
+ * 'shark' (one player shark skips - sharkSkipper (index), else the one with fewest phoenix necklaces: with 1 necklace
+ * the first maze, with none both)}, {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
  * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
@@ -213,7 +213,7 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1, skip = 'stall' } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1, skip = 'stall', sharkSkipper = null } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const plan1Of = team === 3 ? SPEC_PLAN_3 : SPEC_PLAN;
   const roleOf = (i) => (plan === 2 && ROLES_2[team] ? ROLES_2[team][i] : ROLES[i]);
@@ -232,8 +232,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     lastMelee: -9, next: null, pending: [] }));
   for (const p of ps) p.regenHold = p.spec < 100;
   if (skip === 'shark') {                                             // who shark skips which mazes
-    const short = ps.filter((p) => p.pnecks < 2).sort((a, b) => a.pnecks - b.pnecks).slice(0, team <= 3 ? 2 : 1);
-    for (const p of short) p.sharkMazes = p.pnecks === 0 ? [0, 1] : [0];
+    // one shark skipper at most: the one picked (sharkSkipper: player index), else the player with fewest necklaces
+    const p = ps[sharkSkipper] || ps.filter((q) => q.pnecks < 2).sort((a, b) => a.pnecks - b.pnecks)[0];
+    if (p) p.sharkMazes = p.pnecks === 0 ? [0, 1] : p.pnecks === 1 ? [0] : [];
   }
   /** Shark skipping the next maze (they keep their HP for it: no veng orbs, Heal Other to above 50). */
   const sharkNext = (p) => p.sharkMazes.includes(mazes.length);                    // under 100 at the start: first regen the tick after their first spec
