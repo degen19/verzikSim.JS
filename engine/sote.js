@@ -307,6 +307,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const runnersNext = alive().length - 1;
       for (const c of alive()) {
         if ((c.veng && c.hp > ORB_MAX) || t < (c.healFrom || 0)) continue;
+        if (c.keptForMaze === mazes.length) continue;                  // healed out of stall danger: they keep that HP
         const cUnprayed = prayPlan(c, t, c.prayOffUntil).unprayed;
         const pairNeed = (q) => ORB_MAX * prayPlan(q, t, q.prayOffUntil).unprayed;   // HP an unprayable pair can take
         const cands = alive().filter((q) => q !== c && (
@@ -322,6 +323,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           if (cUnprayed && left <= ORB_MAX * cUnprayed) continue;      // orbs coming at them they can't pray
           if (!after2 && (left < 17 || stallDead(left, c, runnersNext))) continue;
           c.hp = left; q.hp += give;
+          if (mazeGain) q.keptForMaze = mazes.length;
           L.on && L(`t${t} ${c.name} heals other ${q.name} (+${give}): ${c.name} ${c.hp}, ${q.name} ${q.hp}`);
           break;
         }
