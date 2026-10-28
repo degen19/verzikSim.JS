@@ -1,4 +1,4 @@
-# Verzik Room Simulator (JavaScript)
+# Theater Of Blood Simulator (JavaScript)
 
 A tick-based Monte Carlo sim of the Verzik room for 2, 3, 4 and 5-man teams. Fill in the chart template (`verzik_chart_template.xlsx`) or build the chart right on the page, and the sim plays the room thousands of times. It gives you success rates, splits, an odds table and room-time charts, and the **Optimizer** searches for the setups that most often beat your target times.
 
