@@ -29,6 +29,8 @@ export const SOTE = { def: 200, defFloor: 100, mag: 250, rng: 250, atk: 250, str
 export const FIRST_ATTACK = 6, ATTACK_EVERY = 5, ORB_DELAY = 7, PRAYER_OFF = 2;
 export const MELEE_MAX = 45, ORB_MAX = 50, VENG_CD = 50;
 export const MAZE_AT = [2 / 3, 1 / 3];
+// her death (after the second maze): the room ends 5 ticks after the killing hit, 4 if that hit overkills her
+export const DEATH_ANIM = 5, DEATH_ANIM_OVERKILL = 4;
 // prefires: the tick they attack on, ticks until it lands, attack speed (their next attack is lined up on her
 // attack ticks anyway). ZCB: one tile less range, so it goes off a tick later.
 export const PREFIRE = {
