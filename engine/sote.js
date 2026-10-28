@@ -94,6 +94,32 @@ function scythe(p, defLvl) {
   return [hit_chance(ea * (b.atk[1] + 64), defRoll(defLvl, 'melee')), mx];
 }
 
+/** A player's melee numbers with a weapon against her Defence: [chance, max]. idx 1 slash / 2 crush; acc multiplier. */
+function melee(p, weapon, idx, defLvl, accMult = 1) {
+  const b = bonuses(worn(p.gear, 'melee', weapon));
+  const [pa, ps] = PRAY[p.gear.prayer || 'Piety'] || PRAY.Piety;
+  const ea = Math.floor(118 * pa) + 8, es = Math.floor(118 * ps) + 3 + 8;
+  const mx = Math.floor((es * (b.str + 64) + 320) / 640);
+  return [hit_chance(Math.floor(ea * (b.atk[idx] + 64) * accMult), defRoll(defLvl, 'melee')), mx];
+}
+/** Dragon claws (Slice and Dice): the four hits. */
+function clawSpec(p, defLvl, rng) {
+  const [ch, mx] = melee(p, 'Dragon claws', 1, defLvl);
+  for (let k = 0; k < 4; k++) {
+    if (rng.random() >= ch) continue;
+    if (k === 0) { const x = rng.randint(Math.floor(mx / 2), mx - 1); return [x, Math.floor(x / 2), Math.floor(x / 4), Math.floor(x / 4) + 1]; }
+    if (k === 1) { const x = rng.randint(Math.floor(3 * mx / 8), Math.floor(7 * mx / 8)); return [0, x, Math.floor(x / 2), Math.floor(x / 2) + 1]; }
+    if (k === 2) { const x = rng.randint(Math.floor(mx / 4), Math.floor(3 * mx / 4)); return [0, 0, x, x + 1]; }
+    return [0, 0, 0, rng.randint(Math.floor(mx / 4), Math.floor(5 * mx / 4))];
+  }
+  return rng.random() < 2 / 3 ? [1, 1, 0, 0] : [0, 0, 0, 0];
+}
+// Spec plan by player (A-E = players 1-5): planned Elder mauls per phase (0 = before the first maze, 1 = between, 2 =
+// after the second), backups (up to two mauls in their phase, once the planned ones have landed and her Defence still
+// isn't at the floor), and in phase 3 the backups use spare spec: maul if she isn't fully reduced, otherwise claws.
+export const SPEC_PLAN = { A: { maul: [0, 1] }, B: { maul: [1, 2] }, C: { maul: [0, 2] }, D: { backup: 0 }, E: { backup: 1 } };
+const ROLES = ['A', 'B', 'C', 'D', 'E'];
+
 /** A prefire's numbers: {ch, mx, kind}. Ranged on Rigour (+20% acc, +23% str), magic on Augury (+25% acc, +4% dmg). */
 export function prefireNumbers(p, kind, defLvl) {
   const pf = PREFIRE[kind];
@@ -155,19 +181,24 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   let blocked = false;                          // she can't be damaged (maze) until `attackable`
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
   const mazes = [];
-  const st = { dmg: { prefire: 0, scythe: 0, veng: 0, ruby: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, stalls: [] };
+  const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, stalls: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear, prefire: c.prefire || '',
-    pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
+    pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? 100), regen: 0,
+    role: c.role || ROLES[i], mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   const alive = () => ps.filter((p) => !p.dead);
   let hits = [];                      // [tick, player, amount, label, kind] damage landing on her
   let orbs = [];                      // [tick, player, style, split]
   /** Her attack ticks from `from`: the first one at or after tick t. */
   const herTickFrom = (t) => { let x = nextAttack; while (x < t) x += ATTACK_EVERY; return x; };
+  const isHerTick = (x) => x >= nextAttack && (x - nextAttack) % ATTACK_EVERY === 0;
+  /** Their next attack after one on tick t with this speed: on time, but never the tick before her attack (the flinch:
+   *  she can only melee a player who attacked the tick before) - then a tick later. */
+  const nextAfter = (t, speed) => (isHerTick(t + speed + 1) ? t + speed + 1 : t + speed);
   const startMaze = (t) => {
     mazes.push(t);
     L.on && L(`t${t} *** MAZE ${mazes.length} (${mazes.length === 1 ? '66.6' : '33.3'}%) ***`);
-    blocked = true; hits = []; orbs = []; for (const p of ps) p.pending = [];
+    blocked = true; hits = []; orbs = []; for (const p of ps) { p.pending = []; p.thrallNext = null; }   // thralls stop until they attack again
     defLvl = SOTE.def; drained = false;
     let m = t + 5; while (instanceOf(m, entry) !== 0) m++;           // runners: click on the first i3 from T+4, move on the i0 after
     attackable = m + 9; nextAttack = m + 10;
@@ -190,14 +221,14 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     for (const p of runners) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
-      p.stallAt = m + 8; p.next = m + 10;
+      p.stallAt = m + 8; p.next = m + 10; p.thrallBack = true;
       // in a danger zone for the skip: one shark at most, after the teleport and before stepping on (no eating in the stall)
       if (p.sharks > 0 && stallSkip(p.hp, team, p.pnecks > 0, true, runners.length).dead) {
         const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--;
         L.on && L(`t${t} ${p.name} eats a shark before the stall: ${old} -> ${p.hp} (${p.sharks} left)`);
       }
     }
-    if (under) { under.next = t + 19; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
+    if (under) { under.next = t + 19; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
     pendingStall = { at: m + 8, runners };
   };
   let pendingStall = null;
@@ -223,9 +254,11 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const pf = PREFIRE[p.prefire];
       hits.push([pf.tick + pf.delay, p, null, `prefire ${p.prefire}`, p.prefire]);
       after = pf.tick + 5;
+      p.thrallNext = pf.tick + 1 + rng.randint(1, 2);             // thrall summoned after the prefire
     }
     let t = FIRST_ATTACK + ATTACK_EVERY; while (t < after) t += ATTACK_EVERY;
     p.next = t;
+    if (p.thrallNext == null) p.thrallBack = true;                  // no prefire: thrall with their first attack
   }
   const vengHit = (t, p, dmg, src) => {
     if (!p.veng || dmg <= 0) return;
@@ -302,10 +335,13 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
             const r = Math.min(110, Math.floor(hp * 0.22)); p.hp -= Math.floor(p.hp / 10);
             damage(t, r, `${p.name} ${label} ruby`, 'ruby'); d = PREFIRE[kind].spec ? 0 : d;
           }
-          if (n.drain && !drained) { drained = true; defLvl = Math.max(SOTE.defFloor, Math.floor(defLvl * 0.85)); L.on && L(`t${t} Shadow Barrage drains her Defence -> ${defLvl}`); }
+          if (n.drain && !drained) { drained = true; defLvl = Math.max(SOTE.defFloor, defLvl - Math.floor(defLvl * 0.15)); L.on && L(`t${t} Shadow Barrage drains her Defence -> ${defLvl}`); }
           damage(t, d, `${p.name} ${label}`, 'prefire');
         } else L.on && L(`t${t} ${p.name} ${label} misses`);
-      } else damage(t, h[2], `${p.name} ${label}`, 'scythe');
+      } else if (kind === 'maul') {
+        if (h[5] && defLvl > SOTE.defFloor) { defLvl = Math.max(SOTE.defFloor, defLvl - Math.floor(defLvl * 0.35)); L.on && L(`t${t} Elder maul lowers her Defence -> ${defLvl}`); }
+        damage(t, h[2], `${p.name} ${label}`, 'maul');
+      } else damage(t, h[2], `${p.name} ${label}`, kind || 'scythe');
     }
     if (mazes.length >= upTo) continue;
     // ---- orbs landing on players
@@ -354,16 +390,47 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         L.on && L(`t${t} SOTETSEG magic orb -> ${tgt.name}, lands t${t + ORB_DELAY}`);
       }
     }
-    // ---- melee hits on players, then player attacks (next one: the first of her attack ticks 5+ ticks later - the flinch)
+    // ---- spec regen (10% per 50 ticks below 100) and thralls (0-3 every 4 ticks, landing a tick later; not in a maze)
+    for (const p of alive()) {
+      if (p.spec < 100) { if (++p.regen >= 50) { p.regen = 0; p.spec = Math.min(100, p.spec + 10); } } else p.regen = 0;
+      if (!blocked && p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); p.thrallNext = t + 4; }
+    }
+    // ---- melee hits on players, then player attacks
+    const floored = () => defLvl <= SOTE.defFloor;
+    const maulPending = () => hits.some((h) => h[4] === 'maul');
+    const plannedLeft = (ph) => alive().some((q) => (SPEC_PLAN[q.role]?.maul || []).includes(ph) && !q.mauled[ph] && q.spec >= 50);
     for (const p of alive()) {
       for (const [, d] of p.pending.filter((x) => x[0] === t)) { if (d > 0) { hurt(t, p, d); vengHit(t, p, d, 'melee'); } }
       p.pending = p.pending.filter((x) => x[0] !== t);
       if (p.dead || t !== p.next) continue;
-      const [ch, mx] = scythe(p, defLvl);
-      const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m) => (rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
-      hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}`, null]);
-      p.lastMelee = t;
-      p.next = herTickFrom(t + 5);
+      if (p.thrallBack) { p.thrallBack = false; p.thrallNext = t + rng.randint(1, 2); }   // thrall back with their first attack
+      // what to hit with: a planned maul, a backup maul, phase-3 spare spec (maul, else claws), or the scythe
+      const plan = SPEC_PLAN[p.role] || {}, ph = phase, has = (w) => (p.gear.weapons || []).includes(w);
+      let act = 'scythe';
+      if (p.spec >= 50 && has('Elder maul') && !floored()) {
+        if ((plan.maul || []).includes(ph) && !p.mauled[ph]) act = 'maul';
+        else if ((plan.backup === ph || (ph === 2 && plan.backup != null)) && p.mauled[ph] < 2 && !plannedLeft(ph) && !maulPending()) act = 'maul';
+      }
+      if (act === 'scythe' && ph === 2 && plan.backup != null && p.spec >= 50 && floored() && has('Dragon claws')) act = 'claw';
+      if (act === 'maul') {
+        p.spec -= 50; p.mauled[ph]++; st.specs.maul++;
+        const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25);
+        const hit = rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
+        if (hit) st.specs.maulHit++;
+        hits.push([t + 1, p, d, `Elder maul spec ${hit ? d : 'misses'}`, 'maul', hit]);
+        L.on && L(`t${t} ${p.name} Elder maul spec (${p.spec}% left)`);
+        p.lastMelee = t; p.next = nextAfter(t, 6);
+      } else if (act === 'claw') {
+        p.spec -= 50; st.specs.claw++;
+        const parts = clawSpec(p, defLvl, rng);
+        hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `claw spec ${parts.join('/')}`, 'claw']);
+        p.lastMelee = t; p.next = nextAfter(t, 4);
+      } else {
+        const [ch, mx] = scythe(p, defLvl);
+        const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m) => (rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
+        hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}`, null]);
+        p.lastMelee = t; p.next = nextAfter(t, 5);
+      }
     }
   }
   if (kill != null) end = kill + anim;

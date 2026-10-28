@@ -38,7 +38,7 @@ export const CHOICES = {
 
 /** Weapons a player can bring, by style. Dawnbringer is the team's (passed around), not listed. */
 export const WEAPONS_OWNED = {
-  melee: ['Scythe of vitur', 'Dragon claws', 'Sulphur blades', 'Obligator', 'Swift blade'],
+  melee: ['Scythe of vitur', 'Dragon claws', 'Elder maul', 'Sulphur blades', 'Obligator', 'Swift blade'],
   range: ['Toxic blowpipe', 'Zaryte crossbow', 'Twisted bow'],
   mage: ["Tumeken's shadow", "Zorya's tome", 'Eye of ayak', 'Sanguinesti staff', 'Shadow ancient sceptre'],
 };
