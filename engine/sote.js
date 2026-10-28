@@ -17,6 +17,12 @@
 //    then (specs - to come) scythes every 5 ticks, lined up on her attack ticks so she never melees (the "flinch").
 //    Shadow Barrage drains 15% of her Defence (once until the next maze, floor 100).
 //
+// Solver (to come), every scale: Lightbearer (and for how many cycles, 1-5), 95 / 100 start spec (95: first regen the
+// tick after their first spec), horn, mauls / claws / ZCB specs, Shadow Barrage prefire in place of a maul, skipping a
+// maul once one lands, who specs in which phase - and the room entry instance. Output: top 10 (as Verzik), each with
+// the entry instance tick and a phase-by-phase breakdown of the procedure. Spec resets each room; the surge cooldown
+// carries over (the full raid solver weighs Sotetseg against Verzik).
+//
 // Assumptions to confirm (constants below): prefire attack ticks / hit delays, player stats (super combat 118 Atk /
 // Str / Def, range potted 112 Ranged, 99 Magic, Piety or Zeal for melee, Rigour / Augury for prefires).
 import { hit_chance } from './sim.js';
@@ -87,8 +93,9 @@ export function tbowMult(m) {
 }
 
 /** A player's scythe numbers against her Defence level: [chance per hitsplat, max hit]. */
+const ringOn = (set, p) => (p.lb ? { ...set, ring: 'Lightbearer' } : set);   // on Lightbearer: no Ultor ring
 function scythe(p, defLvl) {
-  const b = bonuses(worn(p.gear, 'melee', 'Scythe of vitur'));
+  const b = bonuses(ringOn(worn(p.gear, 'melee', 'Scythe of vitur'), p));
   const [pa, ps] = PRAY[p.gear.prayer || 'Piety'] || PRAY.Piety;
   const ea = Math.floor(118 * pa) + 8, es = Math.floor(118 * ps) + 3 + 8;
   const mx = Math.floor((es * (b.str + 64) + 320) / 640);
@@ -97,7 +104,7 @@ function scythe(p, defLvl) {
 
 /** A player's melee numbers with a weapon against her Defence: [chance, max]. idx 1 slash / 2 crush; acc multiplier. */
 function melee(p, weapon, idx, defLvl, accMult = 1) {
-  const b = bonuses(worn(p.gear, 'melee', weapon));
+  const b = bonuses(ringOn(worn(p.gear, 'melee', weapon), p));
   const [pa, ps] = PRAY[p.gear.prayer || 'Piety'] || PRAY.Piety;
   const ea = Math.floor(118 * pa) + 8, es = Math.floor(118 * ps) + 3 + 8;
   const mx = Math.floor((es * (b.str + 64) + 320) / 640);
@@ -184,7 +191,7 @@ export const SHARK_HEAL = 20;
 
 /**
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
- * pnecks, sharks}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
+ * pnecks, sharks, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor)}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
  * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
@@ -210,7 +217,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: (plan === 2 && (c.gear.weapons || []).includes('Zaryte crossbow') && SPEC_PLAN_2[c.role || roleOf(i)]?.prefire) || c.prefire || '',
     pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? (plan === 2 ? SPEC_PLAN_2[c.role || roleOf(i)]?.start : undefined) ?? 100), regen: 0,
-    hornUntil: -1, surged: false, surgeAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
+    hornUntil: -1, surged: false, surgeAt: null, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
     role: c.role || roleOf(i), mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   for (const p of ps) p.regenHold = p.spec < 100;                    // under 100 at the start: first regen the tick after their first spec
@@ -482,7 +489,12 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     // ---- spec regen (10% per 50 ticks below 100) and thralls (0-3 every 4 ticks, landing a tick later; not in a maze)
     for (const p of alive()) {
-      if (p.regenHold) { /* waiting for their first spec */ } else if (p.spec < 100) { if (++p.regen >= 50) { p.regen = 0; p.spec = Math.min(100, p.spec + 10); } } else p.regen = 0;
+      if (p.regenHold) { /* waiting for their first spec */ } else if (p.spec < 100) {
+        if (++p.regen >= (p.lb ? 25 : 50)) {                             // Lightbearer: a regen every 25 ticks
+          p.regen = 0; p.spec = Math.min(100, p.spec + 10);
+          if (p.lb && --p.lbLeft <= 0) { p.lb = false; p.lbOffAt = t; L.on && L(`t${t} ${p.name} Lightbearer cycles done (${p.spec}%) - swaps to Ultor`); }
+        }
+      } else p.regen = 0;
       if (!blocked && p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); p.thrallNext = t + 4; }
     }
     // ---- melee hits on players, then player attacks
@@ -533,7 +545,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
   }
   if (kill != null) end = kill + anim;
-  return { end, kill, anim, mazes, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, role: p.role, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks, spec: p.spec, surgeAt: p.surgeAt })) };
+  return { end, kill, anim, mazes, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, role: p.role, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks, spec: p.spec, surgeAt: p.surgeAt, lbOffAt: p.lbOffAt })) };
 }
 
 /** Phase 1 only (start to the first maze): runSote stopped there. */

@@ -4,7 +4,8 @@
 //  - Start spec 95 or 100 (default 100). A 95% start gets its first regen the tick after their first special attack,
 //    then regens as normal.
 //  - Surge: they drink a surge with their first special attack.
-//  - LB regens: how many Lightbearer regens they take in the room (none, 1-4). The solver will pick Surge / LB regens too.
+//  - Lightbearer cycles: how many spec regens they wear Lightbearer for (none, 1-5; a regen every 25 ticks on it), then
+//    swap to Ultor (the regen timer restarts). The solver will pick Surge / Lightbearer cycles too.
 //  - Prefires with the Twisted bow / ZCB are made in their best ranged gear, Shadow / Shadow Barrage in their best magic
 //    gear (each slot: their ranged, magic or melee item, or nothing - loadout.js bestWorn).
 import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
@@ -24,7 +25,7 @@ export const PREFIRES = [
   ["Tumeken's shadow", "Tumeken's shadow", "Tumeken's shadow"],
 ];
 const STYLE = { 'Twisted bow': 'range', 'Zaryte crossbow': 'range', 'Shadow ancient sceptre': 'mage', "Tumeken's shadow": 'mage' };
-const blank = () => ({ startSpec: 100, surge: false, lbRegens: 0, pnecks: 0, sharks: 0, prefire: '' });
+const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 0, sharks: 0, prefire: '' });
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
 export function createSote(root, { getTeam }) {
@@ -33,6 +34,7 @@ export function createSote(root, { getTeam }) {
   const tstate = () => {
     const t = team(), st = (state[t] ||= { gearSet: 'A', players: [] });
     while (st.players.length < t) st.players.push(blank());
+    for (const p of st.players) if (p.lbRegens != null) { p.lbCycles ??= p.lbRegens; delete p.lbRegens; }   // first preview
     st.players.length = t;
     return st;
   };
@@ -61,7 +63,7 @@ export function createSote(root, { getTeam }) {
       return `<tr><td class="rl">${esc(name(k))}</td>
         <td>${sel('startSpec', [[100, '100'], [95, '95']], p.startSpec === 95 ? 95 : 100)}</td>
         <td style="text-align:center"><input type="checkbox" data-s="${k}|surge" ${p.surge ? 'checked' : ''}></td>
-        <td>${sel('lbRegens', [[0, 'None'], [1, '1'], [2, '2'], [3, '3'], [4, '4']], p.lbRegens || 0)}</td>
+        <td>${sel('lbCycles', [[0, 'None'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], p.lbCycles || 0)}</td>
         <td><input type="number" min="0" step="1" data-s="${k}|pnecks" value="${esc(p.pnecks)}"></td>
         <td><input type="number" min="0" step="1" data-s="${k}|sharks" value="${esc(p.sharks)}"></td>
         <td><select data-s="${k}|prefire">${opts}</select>${note}</td></tr>`;
@@ -71,7 +73,7 @@ export function createSote(root, { getTeam }) {
         Gear comes from the Gear tab; a prefire needs that weapon in the Gear set (Shadow Barrage: a Shadow ancient sceptre).</p>
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>Gear set ${x}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label></div>
       <div class="scroll"><table class="bt">
-        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="Lightbearer regens they take in the room">LB regens</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Their first attack, before the room starts">Prefire</th></tr>
+        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Their first attack, before the room starts">Prefire</th></tr>
         ${st.players.map(row).join('')}
       </table></div>`;
   }
