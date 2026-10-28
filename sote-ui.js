@@ -49,8 +49,21 @@ export function createSote(host, { getTeam }) {
       <div data-rstatus class="muted" style="margin-top:8px"></div>
       <div data-rerr class="err"></div>
       <div data-rout style="margin-top:8px"></div>
+    </details>
+    <details class="video" data-opt style="margin-top:14px"><summary>Optimizer - entry instance</summary>
+      <p class="muted small" style="margin-top:8px">Plays the setup above entered on each instance (i0-i3), on the same raids, and ranks them: with breakpoints by the
+        share finished at the fastest breakpoint (then the next), otherwise by the median room time.</p>
+      <div class="row">
+        <label>Raids per instance<input data-o="raids" type="number" min="100" step="500" style="width:90px"></label>
+        <label>Seed (optional)<input data-o="seed" placeholder="random" style="width:100px"></label>
+        <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-o="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
+        <button data-oact="run">Find the best entry</button><button data-oact="stop" class="ghost" disabled>Stop</button>
+      </div>
+      <div data-ostatus class="muted" style="margin-top:8px"></div>
+      <div data-oerr class="err"></div>
+      <div data-oout style="margin-top:8px"></div>
     </details>`;
-  const root = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]');
+  const root = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), opt = host.querySelector('[data-opt]');
   const $r = (k) => rep.querySelector(`[data-r="${k}"]`);
   const team = () => Number(getTeam()) || 4;
   const tstate = () => {
@@ -199,5 +212,58 @@ export function createSote(host, { getTeam }) {
     step();
   });
 
-  return { refresh: () => { state = load(); render(); showRep(); } };
+  // ---- optimizer: the entry instance (i0-i3) for the setup above, on the same raids at each
+  let ojob = null;
+  const $o = (k) => opt.querySelector(`[data-o="${k}"]`), obtn = (a) => opt.querySelector(`[data-oact="${a}"]`);
+  const optState = () => { const st = tstate(); st.opt ||= { raids: 2000, seed: '', bps: '' }; return st.opt; };
+  const showOpt = () => { const o = optState(); $o('raids').value = o.raids; $o('seed').value = o.seed; $o('bps').value = o.bps; };
+  for (const ev of ['input', 'change']) opt.addEventListener(ev, (e) => { const k = e.target.dataset.o; if (!k) return; optState()[k] = k === 'raids' ? Number(e.target.value) : e.target.value; persist(); });
+  const tm = (t) => { const x = t * 0.6; return `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}`; };
+  opt.addEventListener('click', (e) => {
+    const a = e.target.dataset.oact;
+    if (e.target.dataset.useEntry != null) { repState().entry = Number(e.target.dataset.useEntry); persist(); showRep(); rep.open = true; rep.scrollIntoView({ behavior: 'smooth' }); return; }
+    if (!a) return;
+    if (a === 'stop') { if (ojob) ojob.stop = true; return; }
+    if (a !== 'run' || ojob) return;
+    const o = optState(), err = opt.querySelector('[data-oerr]'), status = opt.querySelector('[data-ostatus]'), out = opt.querySelector('[data-oout]');
+    err.textContent = '';
+    let bps = [];
+    try { bps = String(o.bps || '').trim() ? parseBreakpoints(o.bps) : []; } catch (x) { err.textContent = x.message; return; }
+    const n = Math.max(100, Number(o.raids) || 2000), t = team(), players = playersNow();
+    const seed = String(o.seed || '').trim() || `o${Date.now()}`, res = [0, 1, 2, 3].map(() => newSoteResult());
+    ojob = { stop: false }; const me = ojob;
+    obtn('run').disabled = true; obtn('stop').disabled = false;
+    let entry = 0, i = 0;
+    const finish = () => {
+      ojob = null; obtn('run').disabled = false; obtn('stop').disabled = true;
+      const rows = res.map((r, k) => {
+        const v = r.total.slice().sort((x, y) => x - y), med = v[Math.floor(v.length / 2)], q10 = v[Math.max(0, Math.floor(v.length * 0.1) - 1)];
+        const sp = (key) => { const w = r.split[key].slice().sort((x, y) => x - y); return w[Math.floor(w.length / 2)]; };
+        const at = bps.map((b) => (v.length ? v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length : 0));
+        return { k, n: v.length, med, q10, fast: v[0], at, maze: v.length ? sp('maze1') + sp('maze2') : null, p1: v.length ? sp('p1') : null };
+      }).filter((r) => r.n);
+      if (!rows.length) { status.textContent = 'Stopped.'; return; }
+      const asc = [...bps].sort((x, y) => x - y);                     // fastest breakpoint first
+      const key = (r) => [...asc.map((b) => -r.at[bps.indexOf(b)]), r.med, r.q10];
+      rows.sort((x, y) => { const a1 = key(x), b1 = key(y); for (let j = 0; j < a1.length; j++) if (a1[j] !== b1[j]) return a1[j] - b1[j]; return 0; });
+      const best = rows[0].k, fs = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floor(b / 60)}:${r < 10 ? '0' : ''}${r}`; };
+      out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: entry instance</h3>
+        <div class="sub">${rows[0].n.toLocaleString()} raids per instance, the same raids at each · best: <b>i${best}</b>${bps.length ? ` (most finished by ${fs(asc[0])})` : ' (lowest median)'} · maze = both mazes, proc to interactable (medians)</div>
+        <table><tr><th>Rank</th><th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${bps.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>Mazes</th><th>P1</th><th></th></tr>
+        ${rows.map((r, j) => `<tr${r.k === best ? ' style="font-weight:700"' : ''}><td>${j + 1}</td><td>i${r.k}</td><td>${tm(r.med)}</td><td>${tm(r.q10)}</td><td>${tm(r.fast)}</td>${r.at.map((x) => `<td>${(x * 100).toFixed(1)}%</td>`).join('')}<td>${(r.maze * 0.6).toFixed(1)}s</td><td>${(r.p1 * 0.6).toFixed(1)}s</td><td><button class="ghost sm" data-use-entry="${r.k}">Use in report</button></td></tr>`).join('')}
+        </table></div>`;
+      status.textContent = me.stop ? 'Stopped early - partial results.' : 'Done.';
+    };
+    const step = () => {
+      if (me.stop || entry > 3) { finish(); return; }
+      const to = Math.min(n, i + 50);
+      try { addSoteRaids(res[entry], players, t, i, to, { seed, entry }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
+      i = to; if (i >= n) { entry++; i = 0; }
+      status.textContent = `Running... i${Math.min(entry, 3)}: ${(entry > 3 ? n : i).toLocaleString()} / ${n.toLocaleString()} raids`;
+      setTimeout(step, 0);
+    };
+    step();
+  });
+
+  return { refresh: () => { state = load(); render(); showRep(); showOpt(); } };
 }
