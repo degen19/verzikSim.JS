@@ -12,7 +12,7 @@ const players = Array.from({ length: team }, (_, k) => {
   Object.assign(g.range, { cape: "Blessed dizana's quiver", neck: 'Necklace of rupture', body: 'Masori body (f)', legs: 'Masori chaps (f)', head: 'Masori mask (f)', hands: 'Zaryte vambraces' });
   Object.assign(g.mage, { head: 'Ancestral hat', body: 'Ancestral robe top', legs: 'Ancestral robe bottom', neck: 'Occult necklace', hands: 'Confliction gauntlets', cape: 'Imbued saradomin cape' });
   g.weapons.push('Elder maul', 'Twisted bow', 'Zaryte crossbow', "Tumeken's shadow", 'Shadow ancient sceptre');
-  return { name: `P${k + 1}`, gear: g, prefire };
+  return { name: `P${k + 1}`, gear: g, prefire, pnecks: 2, sharks: 4 };
 });
 if (showLog) { const log = []; runSotePhase1(players, team, new Rng('sote#0'), log); console.log(log.join('\n')); }
 const mazes = [], tot = { prefire: 0, scythe: 0, veng: 0, ruby: 0 }, orb = { taken: 0, prayed: 0, vengd: 0 };
@@ -40,14 +40,14 @@ if (process.argv.includes('--full')) {
   const setup = defaultSetup(team);   // the default specs' prefires / start spec / surges
   const full = players.map((p, k) => ({ ...p, ...setup[k], pnecks: pnArr ? (pnArr[k] ?? 2) : 2, sharks: pnArr && (pnArr[k] ?? 2) < 2 ? 3 : 4, rests: 4, ...(mz && mz[k] ? { mazes: mz[k] } : {}) }));
   if (showLog) { const log = []; runSote(full, team, new Rng('full#0'), log, { entry }); console.log('\n--- full raid log ---\n' + log.filter((l) => /MAZE|under|stall|shark|DIES|overkill|necklace|dies|^t(3[5-9]|4\d|5[0-9]) /.test(l)).join('\n')); }
-  const ends = [], m1 = [], m2 = []; let deaths = 0, runs = 0, runLost = 0, loc = 0, rd = 0, rdDead = 0, sh = 0, sk = 0, skDead = 0, rs = 0, pn = 0, fails = 0, stallDeaths = 0; const splits = {}, surges = {}, dm = {}, sp = { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0 };
+  const ends = [], m1 = [], m2 = []; let deaths = 0, late = 0, runs = 0, runLost = 0, loc = 0, rd = 0, rdDead = 0, sh = 0, sk = 0, skDead = 0, rs = 0, pn = 0, fails = 0, stallDeaths = 0; const splits = {}, surges = {}, dm = {}, sp = { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0 };
   for (let i = 0; i < N; i++) {
     const r = runSote(full, team, new Rng(`full#${i}`), null, { entry });
     deaths += r.players.filter((p) => p.dead).length; sh += r.sharks;
     if (r.end == null) { fails++; continue; }
     ends.push(r.end); m1.push(r.mazes[0]); m2.push(r.mazes[1]);
     if (r.split) for (const k in r.split) (splits[k] ||= []).push(r.split[k]);
-    pn += r.players.reduce((a, p, k) => a + ((full[k].pnecks) - p.pnecks), 0); sk += r.sharkSkips.length; rd += r.stalls.filter((x) => x.redemption).length; for (const x of r.runs) { runs++; runLost += x.lost; } loc += r.locator; rdDead += r.stalls.filter((x) => x.redemption && x.dead).length; skDead += r.sharkSkips.filter((x) => x.dead).length; rs += r.rests;
+    pn += r.players.reduce((a, p, k) => a + ((full[k].pnecks) - p.pnecks), 0); sk += r.sharkSkips.length; rd += r.stalls.filter((x) => x.redemption).length; late += r.lateOrb; for (const x of r.runs) { runs++; runLost += x.lost; } loc += r.locator; rdDead += r.stalls.filter((x) => x.redemption && x.dead).length; skDead += r.sharkSkips.filter((x) => x.dead).length; rs += r.rests;
     stallDeaths += r.stalls.filter((x) => x.dead).length;
     r.players.forEach((q) => { if (q.surgeAt != null) (surges[`${q.name} (${q.role})`] ||= []).push(q.surgeAt); });
     for (const k in r.dmg) dm[k] = (dm[k] || 0) + r.dmg[k]; for (const k in sp) sp[k] += r.specs[k];
@@ -56,7 +56,7 @@ if (process.argv.includes('--full')) {
   s(ends); s(m1); s(m2);
   const mmss = (t) => { const sec = t * 0.6; return `${Math.floor(sec / 60)}:${(sec % 60).toFixed(1).padStart(4, '0')}`; };
   console.log(`FULL ${team}-man, entry i${entry}: room time 10% ${mmss(qq(ends, 0.1))} | median ${mmss(qq(ends, 0.5))} | 90% ${mmss(qq(ends, 0.9))} | fastest ${mmss(ends[0])} (t${ends[0]})`);
-  console.log(`  maze 1 median t${qq(m1, 0.5)}, maze 2 median t${qq(m2, 0.5)} | per raid: player deaths ${(deaths / N).toFixed(2)} (in stalls ${(stallDeaths / ends.length).toFixed(2)}), phoenix necklaces used ${(pn / ends.length).toFixed(2)}${rd ? `, redemption skips ${(rd / N).toFixed(2)} (deaths ${rdDead}), locator heals ${(loc / N).toFixed(2)}` : ''}${runs ? `, maze runs ${(runs / N).toFixed(2)} (${(runLost / runs).toFixed(1)} ticks after a skip on average)` : ''}${sk ? `, shark skips ${(sk / N).toFixed(2)} (deaths ${skDead})` : ''}, sharks eaten ${(sh / N).toFixed(2)}, rests ${(rs / N).toFixed(2)}${fails ? ` | ${fails} raids wiped` : ''}`);
+  console.log(`  maze 1 median t${qq(m1, 0.5)}, maze 2 median t${qq(m2, 0.5)} | per raid: player deaths ${(deaths / N).toFixed(2)} (in stalls ${(stallDeaths / ends.length).toFixed(2)}), phoenix necklaces used ${(pn / ends.length).toFixed(2)}${rd ? `, redemption skips ${(rd / N).toFixed(2)} (deaths ${rdDead}, not down to 1 HP at the proc ${late}), locator heals ${(loc / N).toFixed(2)}` : ''}${runs ? `, maze runs ${(runs / N).toFixed(2)} (${(runLost / runs).toFixed(1)} ticks after a skip on average)` : ''}${sk ? `, shark skips ${(sk / N).toFixed(2)} (deaths ${skDead})` : ''}, sharks eaten ${(sh / N).toFixed(2)}, rests ${(rs / N).toFixed(2)}${fails ? ` | ${fails} raids wiped` : ''}`);
   const DT = Object.values(dm).reduce((x, y) => x + y, 0);
   console.log(`  damage: ${Object.entries(dm).map(([k, v]) => `${k} ${(v / DT * 100).toFixed(1)}%`).join(', ')} | per raid: mauls ${(sp.maul / ends.length).toFixed(2)} (hit ${(sp.maulHit / Math.max(1, sp.maul) * 100).toFixed(0)}%), claw specs ${(sp.claw / ends.length).toFixed(2)}, ZCB specs ${(sp.zcb / ends.length).toFixed(2)}, horns ${(sp.horn / ends.length).toFixed(2)}`);
   // report: median, top 10% (the fastest tenth) and fastest of each part

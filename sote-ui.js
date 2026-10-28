@@ -12,7 +12,7 @@ import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { bestWorn, bonuses, blankPlayer } from './engine/loadout.js';
 import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './engine/sotereport.js';
 import { parseBreakpoints } from './engine/optimize.js';
-import { defaultMazes, MAZE_HOW, defaultSpecs, SPECS, SPEC_COST } from './engine/sote.js';
+import { defaultMazes, MAZE_HOW, defaultSpecs, SPECS, SPEC_COST, CLAW_BELOW } from './engine/sote.js';
 import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
 
 const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}
@@ -161,6 +161,7 @@ export function createSote(host, { getTeam }) {
         Gear comes from the Gear tab; a prefire needs that weapon in the Gear set (Shadow Barrage: a Shadow ancient sceptre).</p>
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>Gear set ${x}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         <label title="Surge potions the team can use in this room (the solver won't use more - keep some back for another room)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label title="P3: anyone planned to ZCB claws instead once Sotetseg is below this HP (needs claws and 50% spec)">P3 ZCB → claws below (HP)<input type="number" min="0" step="50" style="width:80px" data-rnum="clawBelow" value="${esc(st.clawBelow ?? CLAW_BELOW)}"></label>
         <label title="Lightbearer rings in the raid: no more players than this can wear one">Lightbearers<select data-rset="lbRings">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === lbRings ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
 </div>
       ${notes.map((x) => `<div class="warn small" style="margin-bottom:4px">${esc(x)}</div>`).join('')}
@@ -186,6 +187,7 @@ export function createSote(host, { getTeam }) {
     const t = e.target, st = tstate();
     if (t.dataset.gearset != null) { st.gearSet = t.value; persist(); render(); return; }
     if (t.dataset.rset) { st[t.dataset.rset] = Number(t.value); persist(); render(); return; }
+    if (t.dataset.rnum) { st[t.dataset.rnum] = t.value === '' ? null : Number(t.value); persist(); return; }
     if (t.dataset.sp) {
       const [k, ph, f] = t.dataset.sp.split('|'), p = st.players[Number(k)];
       p.specs = (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[Number(k)] || [{}, {}, {}])).map((x) => ({ spec: 'none', backup: false, horn: false, ...x }));
@@ -250,7 +252,7 @@ export function createSote(host, { getTeam }) {
         return;
       }
       const to = Math.min(n, i + 50);
-      try { addSoteRaids(res, players, t, i, to, { seed, entry: Number(r.entry) || 0 }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
+      try { addSoteRaids(res, players, t, i, to, { seed, entry: Number(r.entry) || 0, clawBelow: tstate().clawBelow ?? CLAW_BELOW }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids`;
       setTimeout(step, 0);
     };
@@ -302,7 +304,7 @@ export function createSote(host, { getTeam }) {
     const step = () => {
       if (me.stop || entry > 3) { finish(); return; }
       const to = Math.min(n, i + 50);
-      try { addSoteRaids(res[entry], players, t, i, to, { seed, entry }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
+      try { addSoteRaids(res[entry], players, t, i, to, { seed, entry, clawBelow: tstate().clawBelow ?? CLAW_BELOW }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       i = to; if (i >= n) { entry++; i = 0; }
       status.textContent = `Running... i${Math.min(entry, 3)}: ${(entry > 3 ? n : i).toLocaleString()} / ${n.toLocaleString()} raids`;
       setTimeout(step, 0);

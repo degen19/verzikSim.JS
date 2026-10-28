@@ -161,6 +161,7 @@ export function defaultSetup(team) {
 }
 const ROLES = ['A', 'B', 'C', 'D', 'E'];
 export const HORN_TICK = 8;                                       // a phase 1 horn: after the prefire, while running in
+export const CLAW_BELOW = 450;   // P3: a planned ZCB becomes claws once she's below this HP (the ruby's 22% is small by then)
 export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, ZCB_SPEC = 75, ZCB_DELAY = 2;
 // ZCB spec (75%): double accuracy, guaranteed ruby bolt (22% of her HP, max 110), lands 2 ticks later (assumed), 5-tick
 // attack; not a melee (no melee from her off it). Surge: +25% spec, straight after their first spec (once).
@@ -238,7 +239,7 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * pnecks, sharks, rests?, restores?, prefire?, surge?, startSpec?, specs? ([P1, P2, P3] - see SPECS; default
  * defaultSpecs()), lbCycles? (spec regens on Lightbearer, then Ultor), mazes? (how they
  * cross each maze: ['pneck' | 'redemption' | 'shark' | 'run', ...]; default defaultMazes())}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
- * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
+ * instance 0-3 (default 0); clawBelow: P3 HP below which a planned ZCB becomes claws (default 450); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
  * Mazes (skip / stall): the hit that reaches 66.6% / 33.3% (tick T) teleports everyone (T..T+4). One random player goes
@@ -249,7 +250,7 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0 } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, clawBelow = CLAW_BELOW } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const specsDefault = defaultSpecs(team);
   const MAX = SOTE_HP[team] || 4000;
@@ -259,11 +260,11 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
   const back = [];                              // the tick she's interactable again after each maze
   const mazes = [];
-  const st = { specLog: [], specMissed: [], dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, restores: 0, locator: 0, runs: [], stalls: [], sharkSkips: [] };
+  const st = { specLog: [], specMissed: [], dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, restores: 0, locator: 0, lateOrb: 0, runs: [], stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: c.prefire || '', pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? 100),
     surgePlan: !!c.surge, regen: 0, specs: [0, 1, 2].map((k) => ({ ...S_('none'), ...((c.specs || specsDefault[i] || [])[k] || {}) })), hornDone: [false, false, false],
-    hornUntil: -1, surged: false, surgeAt: null, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
+    hornUntil: -1, surged: false, surgeAt: null, vengPops: [0, 0, 0], orbedDown: -1, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
     role: c.role || ROLES[i], mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   for (const p of ps) p.regenHold = p.spec < 100;
@@ -319,8 +320,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10; p.thrallBack = true;
       p.redeemNow = p.how[mazes.length - 1] === 'redemption' && p.restores >= 1;   // no restore sip left: a normal stall
-      if (p.redeemNow) {                                                 // redemption skip: orb down to 1 HP; prayers back a tick late
-        L.on && L(`t${t} ${p.name} orbs down to ${REDEMPTION_HP} HP for a redemption skip (from ${p.hp})`);
+      if (p.redeemNow) {                                                 // redemption skip at 1 HP; prayers back a tick late
+        if (p.hp > REDEMPTION_HP) { st.lateOrb++; L.on && L(`t${t} ${p.name} wasn't down to ${REDEMPTION_HP} HP at the proc (${p.hp}) - orbs down late`); }
         p.hp = REDEMPTION_HP; p.next = m + 11; continue;
       }
       // in a danger zone for the skip: one shark at most, after the teleport and before stepping on (no eating in the stall)
@@ -382,7 +383,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   }
   const vengHit = (t, p, dmg, src) => {
     if (!p.veng || dmg <= 0) return;
-    p.veng = false;
+    p.veng = false; p.vengPops[mazes.length]++;
     damage(t, Math.floor(dmg * 0.75), `${p.name} veng (${src} ${dmg})`, 'veng');
   };
   /** A phoenix necklace just procced: with more sharks than mazes still to come, they eat one the same tick (+20);
@@ -424,7 +425,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   /** Waiting on a phase 2 / 3 horn (theirs, or one that buffs them): they scythe until it's up. */
   const hornWait = (p, ph) => ph > 0 && alive().some((c) => c.specs[ph].horn && !c.hornDone[ph] && c.spec >= HORN_COST && (c === p || hornRecipient(c, ph) === p));
   const chooseAct = (p, t, ph, has) => {
-    const sp = p.specs[ph], floorNow = defLvl <= SOTE.defFloor;
+    let sp = p.specs[ph]; const floorNow = defLvl <= SOTE.defFloor;
+    if (ph === 2 && sp.spec === 'zcb' && hp < clawBelow && has('Dragon claws')) sp = { ...sp, spec: 'claws' };   // late P3: claws over a ZCB
     // a phase 2 / 3 horn: after their first scythe off the maze, free (then the maul)
     if (ph > 0 && sp.horn && !p.hornDone[ph] && p.swings[ph] >= 1 && p.spec >= HORN_COST) castHorn(p, t, ph);
     const mauls = (q) => plannedMaul(q, ph) && !q.mauled[ph] && q.spec >= 50 && (q.gear.weapons || []).includes('Elder maul');
@@ -443,6 +445,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (sp.spec === 'claws' && has('Dragon claws')) return p.spec >= 50 ? 'claw' : 'scythe';
     p.specDone[ph]++; return 'scythe';                               // at the floor, nothing else planned
   };
+  /** Could she melee them this tick or the next (they attack the tick before one of her attacks), or is a melee hit on
+   *  its way? Nobody drops to low HP then. */
+  const meleeable = (p, t) => p.pending.length > 0 || (p.lastMelee === t - 1 && isHerTick(t)) || (p.next === t && isHerTick(t + 1));   // incl. a melee on its way
   /** A phase ends: planned specs (and horns) that never went off. */
   const closePhase = (ph) => {
     for (const q of alive()) {
@@ -549,13 +554,35 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         }
       }
     }
+    // ---- before a redemption skip: there's no time to orb down after the proc, so in the phase before it they pop 1-2
+    // vengs (1 if the first left them on 50 or less), Heal Other someone with what they have, then locator orb down to
+    // 1 HP. The heal: lowest HP first, never to another redemption skipper, never to an HP that dies on the stall.
+    // Close to the proc (her last 5% before the maze) they do it anyway. Not with their prayer off (an unprayed orb).
+    if (!blocked && mazes.length < 2 && kill == null) {
+      const ph = mazes.length, near = hp - stopAt <= MAX * 0.05;
+      for (const p of alive()) {
+        if (p.how[ph] !== 'redemption' || p.orbedDown === ph || p.restores < 1 || t < p.prayOffUntil || t < (p.healFrom || 0) || meleeable(p, t)) continue;
+        const done = p.vengPops[ph] >= 2 || (p.vengPops[ph] >= 1 && p.hp <= ORB_MAX) || p.hp <= ORB_MAX;
+        if (!done && !near) continue;
+        const nRun = alive().length - 1;
+        for (const q of alive().filter((x) => x !== p && !redeemAhead(x)).sort((a, b) => a.hp - b.hp)) {
+          const give = Math.min(Math.floor(p.hp * 0.75), 99 - q.hp);
+          if (give <= 0 || stallDead(q.hp + give, q, nRun)) continue;
+          p.hp -= give; q.hp += give;
+          L.on && L(`t${t} ${p.name} heals other ${q.name} (+${give}) before orbing down: ${p.name} ${p.hp}, ${q.name} ${q.hp}`);
+          break;
+        }
+        L.on && L(`t${t} ${p.name} locator orbs down to ${REDEMPTION_HP} HP for the redemption skip (from ${p.hp}; ${p.vengPops[ph]} veng${p.vengPops[ph] === 1 ? '' : 's'})`);
+        p.hp = REDEMPTION_HP; p.orbedDown = ph;
+      }
+    }
     // ---- locator orb (redemption skippers, after the second maze): at 1 HP with Redemption up, the orb hits them for
     // 0 -> Redemption heals them to 25 (a restore sip for their prayer), and they Heal Other the player with veng up
     // below, but closest to, 50. Between swings (not on their attack tick, once a swing), only with no orb landing on
     // them in the next 3 ticks, and with a restore sip left (after their first swing; sips 3 ticks apart).
     if (!blocked && mazes.length >= 2 && kill == null) {
       for (const p of alive().filter((q) => q.gear.locator && q.how.includes('redemption') && q.restores >= 1 && q.hp < REDEMPTION_HP + REDEMPTION_HEAL)) {
-        if (t === p.next || t < p.cycleAfter || t < (p.sipReady || 0) || !p.swings[2] || t < (p.healFrom || 0) || t < p.noVengUntil) continue;
+        if (t === p.next || meleeable(p, t) || t < p.cycleAfter || t < (p.sipReady || 0) || !p.swings[2] || t < (p.healFrom || 0) || t < p.noVengUntil) continue;
         if (orbs.some((o) => o[1] === p && o[0] >= t && o[0] <= t + 3)) continue;
         const q = alive().filter((x) => x !== p && x.veng && x.hp < ORB_MAX).sort((a, b) => b.hp - a.hp)[0];
         if (!q) continue;
