@@ -28,6 +28,7 @@
 import { hit_chance } from './sim.js';
 import { ITEMS } from './gear.js';
 import { worn, bonuses, bestWorn } from './loadout.js';
+import { REDEMPTION_HEAL } from './supplies.js';
 
 export const SOTE_HP = { 5: 4000, 4: 3500, 3: 3000, 2: 3000, 1: 3000 };
 export const SOTE = { def: 200, defFloor: 100, mag: 250, rng: 250, atk: 250, str: 250,
@@ -195,13 +196,24 @@ export const SHARK_HEAL = 20, REST_HEAL = 5;
 export const SHARK_SKIP = [[92, { 7: 'S' }], [71, { 6: 'S', 8: 'G' }], [68, { 4: 'S', 7: 'S' }],
   [51, { 0: 'S', 6: 'S', 8: 'G' }], [48, { 0: 'S', 4: 'S', 7: 'S' }], [29, { 0: 'S', 3: 'S', 6: 'S', 8: 'G' }]];
 export const SHARK_SKIP_MIN = 29;                                   // below this: a shark + rest on the proc tick (+25)
+// ---- redemption skip: with a locator orb they orb themselves down to 1 HP (2 or 3 also work; 1 is best) and stall like
+// the others, with Redemption instead of a phoenix necklace: every queued hit is capped at that HP and Redemption heals
+// 24 once - 1 HP: 7 hits of 1, +24 -> 18 (each splash from another staller is one more hit). Then a restore sip for
+// their prayer (2 doses: one a maze), so they swing a tick later than the stallers (m+11).
+export const REDEMPTION_HP = 1;
+export function redemptionSkip(hp, team, runners = team - 1) {
+  const n = STALL_TICKS + Math.max(0, runners - 1);                   // 7 maze hits + a splash from each other staller
+  const end = hp + REDEMPTION_HEAL - n * hp;
+  return { hp: end, dead: end <= 0 };
+}
 export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0, null])[1];
 
 /**
  * One raid of Sotetseg with maze skips. players: [{name, gear (Gear tab player), prefire ('' or a PREFIRE key),
  * pnecks, sharks, rests?, startSpec?, lbCycles? (spec regens on Lightbearer, then Ultor)}]. opts: {skip: 'stall' (default) |
  * 'shark' (one player shark skips - sharkSkipper (index), else the one with fewest phoenix necklaces: with 1 necklace
- * the first maze, with none both)}, {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
+ * the first maze, with none both) | 'redemption' (redemption: player indexes who redemption skip both mazes; default the
+ * players with fewer than 2 phoenix necklaces)}, {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
  * instance 0-3 (default 0); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
@@ -213,7 +225,7 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1, skip = 'stall', sharkSkipper = null } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1, skip = 'stall', sharkSkipper = null, redemption = null } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const plan1Of = team === 3 ? SPEC_PLAN_3 : SPEC_PLAN;
   const roleOf = (i) => (plan === 2 && ROLES_2[team] ? ROLES_2[team][i] : ROLES[i]);
@@ -236,6 +248,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     const p = ps[sharkSkipper] || ps.filter((q) => q.pnecks < 2).sort((a, b) => a.pnecks - b.pnecks)[0];
     if (p) p.sharkMazes = p.pnecks === 0 ? [0, 1] : p.pnecks === 1 ? [0] : [];
   }
+  if (skip === 'redemption') for (const [k, p] of ps.entries()) p.redeem = redemption ? redemption.includes(k) : p.pnecks < 2;
   /** Shark skipping the next maze (they keep their HP for it: no veng orbs, Heal Other to above 50). */
   const sharkNext = (p) => p.sharkMazes.includes(mazes.length);                    // under 100 at the start: first regen the tick after their first spec
   const alive = () => ps.filter((p) => !p.dead);
@@ -278,6 +291,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     for (const p of stallers) {
       p.noVengUntil = m + 8;                                         // no veng casts while stalling
       p.stallAt = m + 8; p.next = m + 10; p.thrallBack = true;
+      if (p.redeem) {                                                 // redemption skip: orb down to 1 HP; prayers back a tick late
+        L.on && L(`t${t} ${p.name} orbs down to ${REDEMPTION_HP} HP for a redemption skip (from ${p.hp})`);
+        p.hp = REDEMPTION_HP; p.next = m + 11; continue;
+      }
       // in a danger zone for the skip: one shark at most, after the teleport and before stepping on (no eating in the stall)
       if (p.sharks > 0 && stallSkip(p.hp, team, p.pnecks > 0, true, stallers.length).dead) {
         const old = p.hp; p.hp = Math.min(99, p.hp + SHARK_HEAL); p.sharks--; st.sharks++;
@@ -388,7 +405,15 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     pendingSharks = pendingSharks.filter((sk) => !sk.p.dead && t - sk.m < 8);
     if (pendingStall && t === pendingStall.at) {
       for (const p of pendingStall.runners.filter((q) => !q.dead)) {
-        const before = p.hp, r = stallSkip(p.hp, team, p.pnecks > 0, true, pendingStall.runners.filter((q) => !q.dead).length);
+        const nRun = pendingStall.runners.filter((q) => !q.dead).length;
+        if (p.redeem) {                                               // redemption skip: no phoenix necklace
+          const before = p.hp, r = redemptionSkip(p.hp, team, nRun);
+          p.hp = r.hp; if (r.dead) p.dead = true;
+          st.stalls.push({ hp: before, after: r.hp, pneck: false, dead: r.dead, redemption: true });
+          L.on && L(`t${t} ${p.name} out of the stall (Redemption): ${before} -> ${r.dead ? 'DEAD' : r.hp}, sips a restore`);
+          continue;
+        }
+        const before = p.hp, r = stallSkip(p.hp, team, p.pnecks > 0, true, nRun);
         p.hp = r.hp; if (r.pneck) p.pnecks--;
         if (r.dead) p.dead = true;
         st.stalls.push({ hp: before, after: r.hp, pneck: r.pneck, dead: r.dead });
@@ -435,7 +460,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         const cUnprayed = prayPlan(c, t, c.prayOffUntil).unprayed;
         const pairNeed = (q) => ORB_MAX * prayPlan(q, t, q.prayOffUntil).unprayed;   // HP an unprayable pair can take
         // maze danger: a staller who'd die on the stall; a shark skipper at 50 or less (more than 2 sharks for the skip)
-        const mazeDanger = (q, h) => (sharkNext(q) ? h <= ORB_MAX : stallDead(h, q, runnersNext));
+        const mazeDanger = (q, h) => (q.redeem ? false : sharkNext(q) ? h <= ORB_MAX : stallDead(h, q, runnersNext));   // a redemption skipper orbs down anyway
         const skipUp = (q) => (mazes.length === 1 && sharkNext(q) && q.hp <= ORB_MAX ? 1 : 0);   // between the mazes: a shark skipper still to reach 51+
         const cands = alive().filter((q) => q !== c && (
           (q.veng && q.hp <= ORB_MAX && targeted.has(q)) || (!after2 && mazeDanger(q, q.hp)) || q.hp <= pairNeed(q)))

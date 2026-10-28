@@ -11,7 +11,7 @@
 import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { bestWorn, bonuses } from './engine/loadout.js';
 
-const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, skip, sharkSkipper (player index), players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, prefire}]}}
+const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, skip, sharkSkipper (player index), players (redeem: redemption skip): [{startSpec, surge, lbCycles, pnecks, sharks, rests, prefire}]}}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
 const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: kept for this page */ } };
@@ -29,8 +29,9 @@ const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 0, sha
 /** How the maze is crossed. Stall: everyone but the player under stands on the maze for 7 ticks with a phoenix
  *  necklace. Shark skip: one player short of phoenix necklaces (never more than one) skips
  *  away from the others (no splash), eating sharks / Guthix rests through it instead. Run maze: everyone runs it
- *  (slower). Redemption skip and Run maze are still to come. */
-export const SKIP_TYPES = [['stall', 'Stall (phoenix necklaces)'], ['shark', 'Shark skip'], ['redemption', 'Redemption skip (to come)'], ['run', 'Run maze - all players (to come)']];
+ *  (slower). Redemption skip: the players ticked orb down to 1 HP with a locator orb and stall with Redemption instead
+ *  of a phoenix necklace (a restore sip after each - 2 doses; they swing a tick late). Run maze is still to come. */
+export const SKIP_TYPES = [['stall', 'Stall (phoenix necklaces)'], ['shark', 'Shark skip'], ['redemption', 'Redemption skip'], ['run', 'Run maze - all players (to come)']];
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
 export function createSote(root, { getTeam }) {
@@ -55,6 +56,8 @@ export function createSote(root, { getTeam }) {
     const fewest = [...shortK].sort((a, b) => Number(st.players[a].pnecks || 0) - Number(st.players[b].pnecks || 0))[0];
     const skipper = Number.isInteger(st.sharkSkipper) && st.sharkSkipper < st.players.length ? st.sharkSkipper : (fewest ?? 0);
     const others = shortK.filter((k) => k !== skipper).map(pname);
+    const redeems = (p) => (p.redeem != null ? !!p.redeem : Number(p.pnecks || 0) < 2);   // default: short of necklaces
+    const unredeemed = st.players.map((p, k) => [p, k]).filter(([p]) => Number(p.pnecks || 0) < 2 && !redeems(p)).map(([, k]) => pname(k));
     const name = (k) => (gp && gp[k] && gp[k].name) || `Player ${k + 1}`;
     const owns = (k, w) => !!(gp && gp[k] && (gp[k].weapons || []).includes(w));
     const row = (p, k) => {
@@ -79,7 +82,8 @@ export function createSote(root, { getTeam }) {
         <td><input type="number" min="0" step="1" data-s="${k}|pnecks" value="${esc(p.pnecks)}"></td>
         <td><input type="number" min="0" step="1" data-s="${k}|sharks" value="${esc(p.sharks)}"></td>
         <td><input type="number" min="0" step="1" data-s="${k}|rests" value="${esc(p.rests ?? 0)}"></td>
-        <td><select data-s="${k}|prefire">${opts}</select>${note}</td></tr>`;
+        <td><select data-s="${k}|prefire">${opts}</select>${note}</td>
+        ${st.skip === 'redemption' ? `<td style="text-align:center"><input type="checkbox" data-s="${k}|redeem" ${redeems(p) ? 'checked' : ''}></td>` : ''}</tr>`;
     };
     root.innerHTML = `<h3 style="margin-top:0">Sotetseg <span class="muted small">(${team()}-man)</span></h3>
       <p class="muted small">Room settings for each player. The Sotetseg sim is being built - these are saved in this browser and will be used by it (and by Full raid).
@@ -89,9 +93,11 @@ export function createSote(root, { getTeam }) {
         ${st.skip === 'shark' ? `<label title="The one player who shark skips (with 1 phoenix necklace: the first maze; with none: both). Everyone else stalls">Shark skipper<select data-skipper>${st.players.map((p, k) => `<option value="${k}" ${k === skipper ? 'selected' : ''}>${esc(pname(k))} (${Number(p.pnecks || 0)} necklace${Number(p.pnecks || 0) === 1 ? '' : 's'})</option>`).join('')}</select></label>` : ''}</div>
       ${st.skip === 'shark' && others.length ? `<div class="warn small" style="margin-bottom:8px">Only one player can shark skip. ${esc(others.join(', '))} ${others.length > 1 ? 'have' : 'has'} fewer than 2 phoenix necklaces too - not enough to stall both mazes.</div>` : ''}
       ${short.length && st.skip === 'stall' ? `<div class="warn small" style="margin-bottom:8px">${esc(short.join(', '))} ${short.length > 1 ? 'have' : 'has'} fewer than 2 phoenix necklaces - not enough to stall both mazes. Pick another way to cross the maze: Shark skip, Redemption skip or Run maze.</div>` : ''}
+      ${st.skip === 'redemption' ? `<div class="muted small" style="margin-bottom:8px">Redemption skippers need a locator orb and 2 restore doses (one a maze). They come off the maze on 15-18 HP and swing a tick after the others.</div>` : ''}
+      ${st.skip === 'redemption' && unredeemed.length ? `<div class="warn small" style="margin-bottom:8px">${esc(unredeemed.join(', '))} ${unredeemed.length > 1 ? 'have' : 'has'} fewer than 2 phoenix necklaces and isn't redemption skipping.</div>` : ''}
       ${st.skip === 'run' ? '<div class="muted small" style="margin-bottom:8px">Run maze: every player runs the maze instead of skipping it - slower.</div>' : ''}
       <div class="scroll"><table class="bt">
-        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Guthix rests (4 dose) they bring: heal 5 a sip, on the potion delay (can go with a shark on the same tick)">Guthix rests</th><th title="Their first attack, before the room starts">Prefire</th></tr>
+        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Guthix rests (4 dose) they bring: heal 5 a sip, on the potion delay (can go with a shark on the same tick)">Guthix rests</th><th title="Their first attack, before the room starts">Prefire</th>${st.skip === 'redemption' ? '<th title="Orbs down to 1 HP with a locator orb and stalls with Redemption instead of a phoenix necklace (needs a locator orb and 2 restore doses)">Redemption skip</th>' : ''}</tr>
         ${st.players.map(row).join('')}
       </table></div>`;
   }
@@ -103,7 +109,7 @@ export function createSote(root, { getTeam }) {
     if (t.dataset.skipper != null) { st.sharkSkipper = Number(t.value); persist(); render(); return; }
     if (!t.dataset.s) return;
     const [k, key] = t.dataset.s.split('|');
-    st.players[Number(k)][key] = key === 'prefire' ? t.value : key === 'surge' ? t.checked : (t.value === '' ? '' : Number(t.value));
+    st.players[Number(k)][key] = key === 'prefire' ? t.value : key === 'surge' || key === 'redeem' ? t.checked : (t.value === '' ? '' : Number(t.value));
     persist(); render();
   });
 
