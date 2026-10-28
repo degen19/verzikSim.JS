@@ -120,20 +120,25 @@ function clawSpec(p, defLvl, rng) {
 // isn't at the floor), and in phase 3 the backups use spare spec: maul if she isn't fully reduced, otherwise claws.
 export const SPEC_PLAN = { A: { maul: [0, 1] }, B: { maul: [1, 2] }, C: { maul: [0, 2] }, D: { backup: 0 }, E: { backup: 1 } };
 const ROLES = ['A', 'B', 'C', 'D', 'E'];
-// Spec plan 2 (5s), by player:
-//  A: Soulflame horn (B) + Elder maul in phase 1; surge, then maul in phase 2
+// Spec plan 2 (5s; 4s the same without D), by player:
+//  A: Soulflame horn on t8 (after the prefire, running in: A and B), Elder maul in phase 1; maul in phase 2
+//  Surges (A, C, D): drunk straight after their first spec (A: the horn).
 //  B: maul in phase 1 (with A's horn buff), maul in phase 3
 //  Mauls go off as early as possible: A and B's are their first hits after the prefire (Twisted bow); C, D and E
 //  prefire with a ZCB (lines them up for the flinch).
 //  C (95% start): ZCB spec in phase 1 once A and B have mauled (it lands after the mauls); phase 3: scythe first, then
-//     (once B's and E's mauls have landed) surge and a ZCB spec - or a maul if her Defence isn't at the floor (a maul missed)
+//     (once B's and E's mauls have landed) a ZCB spec - or a maul if her Defence isn't at the floor (a maul missed)
 //  D (95% start): as C, but in phase 3 after C's spec has landed: maul if she still isn't at the floor (B and E both
 //     missed, or C's maul missed), otherwise a ZCB spec
 //  E: maul in phases 2 and 3
 // Soulflame horn: 25% spec, no attack delay; A and B's next melee hit within 10 ticks can't miss. Surge: +25% spec, once.
 // ZCB spec (75%): double accuracy, guaranteed ruby bolt (22% of her HP, max 110), lands 2 ticks later (assumed), 5-tick
 // attack; not a melee (no melee from her off it).
-export const SPEC_PLAN_2 = { A: { horn: 0, maul: [0, 1], surge: 1 }, B: { maul: [0, 2] }, C: { zcb: true, start: 95, prefire: 'ZCB auto' }, D: { zcb: true, start: 95, after: 'C', prefire: 'ZCB auto' }, E: { maul: [1, 2], prefire: 'ZCB auto' } };
+export const SPEC_PLAN_2 = { A: { horn: true, maul: [0, 1], surge: true }, B: { maul: [0, 2] }, C: { zcb: true, start: 95, surge: true, prefire: 'ZCB auto' },
+  D: { zcb: true, start: 95, surge: true, after: 'C', prefire: 'ZCB auto' }, E: { maul: [1, 2], prefire: 'ZCB auto' } };
+/** Players' roles under plan 2: 5s A-E, 4s A, B, C, E (no D). */
+export const ROLES_2 = { 5: ['A', 'B', 'C', 'D', 'E'], 4: ['A', 'B', 'C', 'E'] };
+export const HORN_TICK = 8;                                       // A horns after the prefire, while running in
 export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, ZCB_SPEC = 75, ZCB_DELAY = 2;
 
 /** A prefire's numbers: {ch, mx, kind}. Ranged on Rigour (+20% acc, +23% str), magic on Augury (+25% acc, +4% dmg). */
@@ -189,8 +194,9 @@ export const SHARK_HEAL = 20;
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = team === 5 ? 2 : 1 } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, plan = ROLES_2[team] ? 2 : 1 } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
+  const roleOf = (i) => (plan === 2 && ROLES_2[team] ? ROLES_2[team][i] : ROLES[i]);
   const MAX = SOTE_HP[team] || 4000;
   const marks = [Math.floor(MAX * MAZE_AT[0]), Math.floor(MAX * MAZE_AT[1]), 0];
   let hp = MAX, defLvl = SOTE.def, drained = false, phase = 0, stopAt = marks[0];
@@ -199,14 +205,20 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const mazes = [];
   const st = { dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, stalls: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
-    prefire: (plan === 2 && (c.gear.weapons || []).includes('Zaryte crossbow') && SPEC_PLAN_2[c.role || ROLES[i]]?.prefire) || c.prefire || '',
-    pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? (plan === 2 ? SPEC_PLAN_2[c.role || ROLES[i]]?.start : undefined) ?? 100), regen: 0,
-    hornUntil: -1, surged: false, specDone: [0, 0, 0], swings: [0, 0, 0],
-    role: c.role || ROLES[i], mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
+    prefire: (plan === 2 && (c.gear.weapons || []).includes('Zaryte crossbow') && SPEC_PLAN_2[c.role || roleOf(i)]?.prefire) || c.prefire || '',
+    pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? (plan === 2 ? SPEC_PLAN_2[c.role || roleOf(i)]?.start : undefined) ?? 100), regen: 0,
+    hornUntil: -1, surged: false, surgeAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
+    role: c.role || roleOf(i), mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   for (const p of ps) p.regenHold = p.spec < 100;                    // under 100 at the start: first regen the tick after their first spec
   const alive = () => ps.filter((p) => !p.dead);
-  const spend = (p, n) => { p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; } };
+  const spend = (p, n, t) => {
+    p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; }
+    if (plan === 2 && SPEC_PLAN_2[p.role]?.surge && !p.surged) {      // surge straight after their first spec
+      const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++;
+      L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`);
+    }
+  };
   let hits = [];                      // [tick, player, amount, label, kind] damage landing on her
   let orbs = [];                      // [tick, player, style, split]
   /** Her attack ticks from `from`: the first one at or after tick t. */
@@ -300,22 +312,11 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const anyMaulPending = () => hits.some((h) => h[4] === 'maul');
   const plan2Act = (p, t, ph, has) => {
     const pl = SPEC_PLAN_2[p.role] || {};
-    const surge = () => { if (!p.surged) { const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; st.specs.surge++; L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`); } };
     const floorNow = defLvl <= SOTE.defFloor;
-    // planned mauls (A with the horn first in phase 1; A surges first in phase 2)
-    if ((pl.maul || []).includes(ph) && !p.mauled[ph] && has('Elder maul')) {
-      if (pl.surge === ph) surge();
-      if (pl.horn === ph && p.spec >= HORN_COST + 50) {
-        const rec = alive().find((q) => q.role === 'B');
-        spend(p, HORN_COST); st.specs.horn++;
-        p.hornUntil = t + HORN_TICKS; if (rec) rec.hornUntil = t + HORN_TICKS;
-        L.on && L(`t${t} ${p.name} Soulflame horn (${p.spec}% left): ${p.name}${rec ? ` and ${rec.name}` : ''} can't miss their next hit`);
-      }
-      if (p.spec >= 50) return 'maul';
-      return 'scythe';
-    }
+    // planned mauls, as early as possible
+    if ((pl.maul || []).includes(ph) && !p.mauled[ph] && has('Elder maul')) return p.spec >= 50 ? 'maul' : 'scythe';
     if (!pl.zcb) return 'scythe';
-    const mine = (x) => (SPEC_PLAN_2[x.role]?.maul || []).includes(ph) && !x.mauled[ph] && x.spec + (SPEC_PLAN_2[x.role]?.surge === ph && !x.surged ? SURGE : 0) >= 50;
+    const mine = (x) => (SPEC_PLAN_2[x.role]?.maul || []).includes(ph) && !x.mauled[ph] && x.spec >= 50;
     const mazeMaulsLeft = alive().some(mine) || anyMaulPending();
     if (ph === 0) {                                                   // once A and B have mauled (lands after them)
       if (p.specDone[0] || alive().some(mine) || p.spec < ZCB_SPEC || !has('Zaryte crossbow')) return 'scythe';
@@ -326,12 +327,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const c = alive().find((q) => q.role === pl.after);
       if (c && (!c.specDone[2] || specHitPending(c))) return 'scythe';
     }
-    // surge only once it gets them to the spec they need (a maul now; a ZCB may wait for a regen)
-    const need = floorNow ? ZCB_SPEC : 50, can = p.spec + (p.surged ? 0 : SURGE);
-    if (!floorNow && can >= 50 && has('Elder maul')) { if (p.spec < 50) surge(); return 'maul'; }
-    if (floorNow && can >= ZCB_SPEC && has('Zaryte crossbow')) { if (p.spec < ZCB_SPEC) surge(); return 'zcb'; }
+    if (!floorNow && p.spec >= 50 && has('Elder maul')) return 'maul';
+    if (floorNow && p.spec >= ZCB_SPEC && has('Zaryte crossbow')) return 'zcb';   // a ZCB may wait for a regen
     if (!floorNow) p.specDone[2]++;                                  // can't maul: nothing for D to wait for
-    void need;
     return 'scythe';
   };
   for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
@@ -347,6 +345,15 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         if (r.pneck) afterPneck(t, p);
       }
       pendingStall = null;
+    }
+    // ---- plan 2: A's Soulflame horn on t8 (after the prefire, running in): A and B can't miss their next hit
+    if (plan === 2 && t === HORN_TICK) {
+      const a = alive().find((q) => q.role === 'A' && SPEC_PLAN_2.A.horn), rec = alive().find((q) => q.role === 'B');
+      if (a && a.spec >= HORN_COST) {
+        L.on && L(`t${t} ${a.name} Soulflame horn (${a.spec - HORN_COST}% left): ${a.name}${rec ? ` and ${rec.name}` : ''} can't miss their next hit (to t${t + HORN_TICKS})`);
+        spend(a, HORN_COST, t); st.specs.horn++;
+        a.hornUntil = t + HORN_TICKS; if (rec) rec.hornUntil = t + HORN_TICKS;
+      }
     }
     // ---- veng casts: own first, else on a teammate without one (only if the caster's own is up)
     for (const p of alive()) {
@@ -496,12 +503,12 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       }
       if (plan === 1 && act === 'scythe' && ph === 2 && plan1.backup != null && p.spec >= 50 && floored() && has('Dragon claws')) act = 'claw';
       if (act === 'zcb') {
-        spend(p, ZCB_SPEC); p.specDone[ph]++; st.specs.zcb++;
+        spend(p, ZCB_SPEC, t); p.specDone[ph]++; st.specs.zcb++;
         hits.push([t + ZCB_DELAY, p, 0, 'ZCB spec', 'zcb']);
         L.on && L(`t${t} ${p.name} ZCB spec (${p.spec}% left)`);
         p.next = nextAfter(t, 5);
       } else if (act === 'maul') {
-        spend(p, 50); p.mauled[ph]++; p.specDone[ph]++; st.specs.maul++;
+        spend(p, 50, t); p.mauled[ph]++; p.specDone[ph]++; st.specs.maul++;
         const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25);
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;   // Soulflame horn: this hit can't miss
         const hit = horned || rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
@@ -510,7 +517,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         L.on && L(`t${t} ${p.name} Elder maul spec${horned ? ' (horned)' : ''} (${p.spec}% left)`);
         p.lastMelee = t; p.next = nextAfter(t, 6);
       } else if (act === 'claw') {
-        spend(p, 50); st.specs.claw++;
+        spend(p, 50, t); st.specs.claw++;
         const parts = clawSpec(p, defLvl, rng);
         hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `claw spec ${parts.join('/')}`, 'claw']);
         p.lastMelee = t; p.next = nextAfter(t, 4);
@@ -523,7 +530,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
   }
   if (kill != null) end = kill + anim;
-  return { end, kill, anim, mazes, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks })) };
+  return { end, kill, anim, mazes, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, role: p.role, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks, spec: p.spec, surgeAt: p.surgeAt })) };
 }
 
 /** Phase 1 only (start to the first maze): runSote stopped there. */

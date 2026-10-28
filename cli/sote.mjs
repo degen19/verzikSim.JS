@@ -36,7 +36,7 @@ if (process.argv.includes('--full')) {
   const planArg = process.argv.find((x) => x.startsWith('--plan=')), plan = planArg ? Number(planArg.split('=')[1]) : undefined;
   const full = players.map((p) => ({ ...p, pnecks: 2, sharks: 4 }));
   if (showLog) { const log = []; runSote(full, team, new Rng('full#0'), log, { entry, plan }); console.log('\n--- full raid log ---\n' + log.filter((l) => /MAZE|under|stall|shark|DIES|overkill|necklace|dies|^t(3[5-9]|4\d|5[0-9]) /.test(l)).join('\n')); }
-  const ends = [], m1 = [], m2 = []; let deaths = 0, sh = 0, pn = 0, fails = 0, stallDeaths = 0; const dm = {}, sp = { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0 };
+  const ends = [], m1 = [], m2 = []; let deaths = 0, sh = 0, pn = 0, fails = 0, stallDeaths = 0; const surges = {}, dm = {}, sp = { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0 };
   for (let i = 0; i < N; i++) {
     const r = runSote(full, team, new Rng(`full#${i}`), null, { entry, plan });
     deaths += r.players.filter((p) => p.dead).length; sh += r.sharks;
@@ -44,6 +44,7 @@ if (process.argv.includes('--full')) {
     ends.push(r.end); m1.push(r.mazes[0]); m2.push(r.mazes[1]);
     pn += r.players.reduce((a, p) => a + (2 - p.pnecks), 0);
     stallDeaths += r.stalls.filter((x) => x.dead).length;
+    r.players.forEach((q) => { if (q.surgeAt != null) (surges[`${q.name} (${q.role})`] ||= []).push(q.surgeAt); });
     for (const k in r.dmg) dm[k] = (dm[k] || 0) + r.dmg[k]; for (const k in sp) sp[k] += r.specs[k];
   }
   const s = (a) => a.sort((x, y) => x - y), qq = (a, f) => a[Math.floor(a.length * f)];
@@ -53,4 +54,5 @@ if (process.argv.includes('--full')) {
   console.log(`  maze 1 median t${qq(m1, 0.5)}, maze 2 median t${qq(m2, 0.5)} | per raid: player deaths ${(deaths / N).toFixed(2)} (in stalls ${(stallDeaths / ends.length).toFixed(2)}), phoenix necklaces used ${(pn / ends.length).toFixed(2)}, sharks eaten ${(sh / N).toFixed(2)}${fails ? ` | ${fails} raids wiped` : ''}`);
   const DT = Object.values(dm).reduce((x, y) => x + y, 0);
   console.log(`  damage: ${Object.entries(dm).map(([k, v]) => `${k} ${(v / DT * 100).toFixed(1)}%`).join(', ')} | per raid: mauls ${(sp.maul / ends.length).toFixed(2)} (hit ${(sp.maulHit / Math.max(1, sp.maul) * 100).toFixed(0)}%), claw specs ${(sp.claw / ends.length).toFixed(2)}, ZCB specs ${(sp.zcb / ends.length).toFixed(2)}, horns ${(sp.horn / ends.length).toFixed(2)}`);
+  if (Object.keys(surges).length) console.log(`  surge drunk (median tick): ${Object.entries(surges).map(([k, v]) => `${k} t${s(v)[Math.floor(v.length / 2)]}`).join(', ')}`);
 }
