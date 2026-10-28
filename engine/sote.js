@@ -8,8 +8,8 @@
 //    50% melee (lands next tick: crush, accuracy (250+9) x (0+64), max 45, protect melee cuts the max by 40%),
 //    otherwise a magic orb: lands on the target 7 ticks later, then splits to up to 2 other players (one Ranged, one
 //    Magic orb, random which; duo: one orb 50/50; solo: none) landing 7 ticks after that. Orbs: max 50, accuracy
-//    (250+9) x (-10+64); 0 if prayed against; any orb turns their prayer off for 2 ticks. Split orbs don't split again.
-//  - Players pray against every orb, except: with veng up, above 50 HP and no other orb on them within the next 2 ticks,
+//    (250+9) x (-10+64); 0 if prayed against; an orb that hits them unprayed (prayed wrong, or taken for veng) turns their prayer off - back up 5 ticks later (unprayed on t16: up again on t21); a prayed one doesn't. Split orbs don't split again.
+//  - Players pray against every orb, except: with veng up, above 50 HP and no other orb on them in the next 4 ticks,
 //    they take the earliest orb off prayer (veng). Veng: 75% of the hit back to her; everyone starts with it up and off
 //    cooldown; recast (or cast on a teammate without one, if the caster's own is up) as soon as the 50-tick cooldown
 //    allows. Veng damage obeys the maze threshold too.
@@ -26,7 +26,7 @@ import { worn, bonuses, bestWorn } from './loadout.js';
 export const SOTE_HP = { 5: 4000, 4: 3500, 3: 3000, 2: 3000, 1: 3000 };
 export const SOTE = { def: 200, defFloor: 100, mag: 250, rng: 250, atk: 250, str: 250,
   defMelee: 70, defMagic: 30, defRanged: 150, accMelee: 0, accMagic: -10, accRanged: -10 };
-export const FIRST_ATTACK = 6, ATTACK_EVERY = 5, ORB_DELAY = 7, PRAYER_OFF = 2;
+export const FIRST_ATTACK = 6, ATTACK_EVERY = 5, ORB_DELAY = 7, PRAYER_OFF = 4;   // an orb that hits them unprayed on t: prayer off t+1 - t+4, back up on t+5
 export const MELEE_MAX = 45, ORB_MAX = 50, VENG_CD = 50;
 export const MAZE_AT = [2 / 3, 1 / 3];
 // her death (after the second maze): the room ends 5 ticks after the killing hit, 4 with overkill - as in Verzik P3,
@@ -263,14 +263,17 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     p.hp -= d;
     if (p.hp <= 0) { p.dead = true; L.on && L(`t${t} ${p.name} dies`); }
   };
-  /** Which of the orbs heading at a player (landing from tick `from`) they pray against: prayer has to be on, and a prayed
-   *  orb turns it off for 2 ticks - so of orbs 2 ticks apart or less only one can be prayed. They pray the most they can,
-   *  the later ones first (of a close pair: the last). Two on the same tick: one prayed. Returns {ticks, unprayed}. */
+  /** Which of the orbs heading at a player (landing from tick `from`) they can pray against: prayer has to be on - an orb
+   *  that hits them unprayed turns it off until 5 ticks later; a prayed one doesn't.
+   *  Returns {ticks, unprayed}. */
   const prayPlan = (p, from, offUntil) => {
-    const mine = orbs.filter((o) => o[1] === p && o[0] >= from), xs = [...new Set(mine.map((o) => o[0]))].sort((a, b) => b - a);
-    const ticks = new Set(); let last = Infinity;
-    for (const x of xs) if (x + PRAYER_OFF < last && x >= offUntil) { ticks.add(x); last = x; }
-    return { ticks, unprayed: mine.length - ticks.size };
+    const xs = orbs.filter((o) => o[1] === p && o[0] >= from).map((o) => o[0]).sort((a, b) => a - b);
+    const ticks = new Set(); let unprayed = 0, off = offUntil;
+    for (const x of xs) {
+      if (x >= off && !ticks.has(x)) ticks.add(x);
+      else { unprayed++; off = Math.max(off, x + PRAYER_OFF + 1); }
+    }
+    return { ticks, unprayed };
   };
   for (let t = 1; t <= 1000 && !(mazes.length >= upTo) && kill == null; t++) {
     if (blocked && t >= attackable) blocked = false;
@@ -352,34 +355,33 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     if (mazes.length >= upTo) continue;
     // ---- orbs landing on players
-    const now = orbs.filter((o) => o[0] === t);
+    const now = orbs.filter((o) => o[0] === t), mz0 = mazes.length;
     for (const p of alive()) {
+      if (mazes.length !== mz0) break;                              // a veng procced the maze: the rest of the orbs are gone
       const mine = now.filter((o) => o[1] === p); if (!mine.length) continue;
       const plan = prayPlan(p, t, p.prayOffUntil);
-      // take this one off prayer for veng: safe (above 50, no other orb within 2 ticks) - or chanced, once she's within the
+      // take this one off prayer for veng: safe (above 50, no other orb on them in the next 4 ticks) - or chanced, once she's within the
       // chance veng threshold after the second maze (her last ~2%: she may die to the veng)
       const chance = mazes.length >= 2 && hp <= MAX * chanceAt;
-      // another orb on them within 2 ticks: they take this one unprayed (praying it would turn their prayer off for the
-      // next) and pray against the last one
-      // a veng (orb taken off prayer) also needs no close pair (2 ticks apart or less) already heading at them: one of a
-      // pair can't be prayed, so they keep their HP above 50 for it
-      const pairAhead = prayPlan(p, t + 1, p.prayOffUntil).unprayed > 0;
+      // taking it unprayed turns their prayer off until 5 ticks later: not with another orb landing on them before then
+      const pairAhead = prayPlan(p, t + 1, t + PRAYER_OFF + 1).unprayed > 0;
       const off = !plan.ticks.has(t) || (p.veng && mine.length === 1 && (chance || (p.hp > ORB_MAX && !pairAhead)));
       const prayStyle = off ? null : mine[mine.length - 1][2];
-      let prayedHere = false;
+      let hitHere = false;
       for (const o of mine) {
         if (p.dead) break;
         const prayed = !off && t >= p.prayOffUntil && o[2] === prayStyle;
         let d = 0;
-        if (prayed) { st.orbs.prayed++; prayedHere = true; }
+        if (prayed) st.orbs.prayed++;
         else {
+          hitHere = true;
           st.orbs.taken++; if (off) st.orbs.vengd++;
           if (rng.random() < hit_chance((SOTE.mag + 9) * (SOTE.accMagic + 64), playerDef(p, o[2]))) d = rng.randint(0, ORB_MAX);
         }
         L.on && L(`t${t} ${o[3] ? 'split ' : ''}${o[2]} orb -> ${p.name}: ${prayed ? 'prayed' : `${d}${off ? (p.veng ? ' (off prayer, veng)' : ' (off prayer)') : ''}`} (HP ${p.hp - d})`);
         if (!prayed && d > 0) { hurt(t, p, d); vengHit(t, p, d, 'orb'); }
       }
-      if (prayedHere) p.prayOffUntil = t + PRAYER_OFF + 1;              // an orb turns their prayer off (only if it was on)
+      if (hitHere) p.prayOffUntil = t + PRAYER_OFF + 1;                 // an orb that hit them unprayed turns their prayer off
       for (const o of mine.filter((x) => !x[3])) {                    // the first orb on a player splits
         const others = rng.shuffle(alive().filter((q) => q !== p)).slice(0, 2);
         const styles = rng.random() < 0.5 ? ['range', 'mage'] : ['mage', 'range'];
