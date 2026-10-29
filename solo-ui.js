@@ -34,8 +34,8 @@ export function createSolo(host) {
   const cfgOfSet = (st) => {
     const g = gearOf(st) || blankPlayer(0), base = applyToCfg({ name: g.name || 'Solo' }, g);
     const sh = base.hasShadow;
-    return { ...base, name: base.name || 'Solo', godbook: !!st.godbook, ringSwitch: st.ringSwitch ?? '', shadow: sh && (st.shadowCamp || st.shadowLB || st.shadow31 || st.deepProc),
-      shadowCamp: sh && !!st.shadowCamp, shadowLB: sh && !!st.shadowLB, shadow31: sh && !!st.shadow31, deepProc: sh && !!st.deepProc, deepThr: Number(st.deepThr) || 42,
+    return { ...base, name: base.name || 'Solo', godbook: !!st.godbook, ringSwitch: st.ringSwitch ?? '', shadow: sh,
+      shadowCamp: sh && !!st.shadowCamp, shadowLB: sh && !!st.shadowLB, shadow31: sh && !!st.shadow31, deepProc: sh,                                                         // solos always deep proc with a shadow deepThr: Number(st.deepThr) || 42,
       ayakP2: (g.weapons || []).includes('Eye of ayak') && !!st.ayakP2, ayakAmount: Number(st.ayakAmount) || 0, commit: { ...st.commit }, hasAyak: (g.weapons || []).includes('Eye of ayak') };
   };
 
@@ -103,8 +103,7 @@ export function createSolo(host) {
         ${chk('shadowCamp', 'Shadow camp', st.shadowCamp, 'Shadow every P2 attack until reds', !sh)}
         ${chk('shadowLB', 'Shadow while LB', st.shadowLB, 'Shadow while wearing Lightbearer in P2', !sh)}
         ${chk('shadow31', '3:1', st.shadow31, 'Scythe, but the attack that would collide with Verzik becomes a shadow (P2 and reds)', !sh)}
-        ${chk('deepProc', 'Deep proc', st.deepProc, 'Shadow from max distance below the Deep proc HP %', !sh)}
-        <label>Deep proc HP %<input data-s="deepThr" type="number" min="35" max="100" value="${esc(st.deepThr)}" style="width:70px" ${sh ? '' : 'disabled'}></label>
+        <label title="Solos always deep proc with a shadow: below this % of P2 HP every attack is a shadow from max distance">Deep proc HP %<input data-s="deepThr" type="number" min="35" max="100" value="${esc(st.deepThr)}" style="width:70px" ${sh ? '' : 'disabled'}></label>
         ${chk('ayakP2', 'Ayak P2', st.ayakP2, 'Eye of ayak in P2: ayak autos until one misses (Confliction gauntlets then roll accuracy twice), then Soul Rend (50%: 2x accuracy, +30% max), which lowers her magic defence (70) by the damage - until it is down by the Ayak Amount', !ay)}
         <label title="Stop Soul Rending once her magic defence is down by this much (0-70)">Ayak Amount<input data-s="ayakAmount" type="number" min="0" max="70" value="${esc(st.ayakAmount)}" style="width:70px" ${ay ? '' : 'disabled'}></label>
         ${ay ? '' : '<span class="muted small">Ayak P2 needs an Eye of ayak in this Gear set</span>'}

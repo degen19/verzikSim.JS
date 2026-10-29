@@ -123,7 +123,8 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   if (scope === 'p1') return { ...out, end: p1end };
   const K = p1end + 14;
   for (t = kill + 1; t < K; t++) { regen(t); surge(t); }
-  p.hp = Math.max(p.hp, 99); p.atk = p.str = p.dfn = 118; p.next_attack = K; p.thrall_next = null;   // the heal-up window
+  p.hp = Math.max(p.hp, 99); p.atk = p.str = p.dfn = 118; p.next_attack = K;   // the heal-up window
+  if (p.thrall_next != null) while (p.thrall_next < K + 1) p.thrall_next += 4;   // the thrall stays up: its next hit on her once she's attackable
 
   // ================================================================ P2 (to the reds shield)
   const MX = P2_HP[1], REDS = P2_REDS[1];
@@ -272,7 +273,6 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   for (let s = 1; s <= 60 && kill2 == null; s++, P += SET_LEN) {
     st.sets = s;
     let ch = crab0, crabDone = false;
-    p.thrall_next = null;
     if (p.next_attack < P) p.next_attack = P;
     // commit: at the shield, Verzik at or below the Commit % for the spec they have
     const cp = COMMIT_KEYS.find(([, at]) => p.spec >= at), cpct = cfg.commit ? Number(cfg.commit[cp[0]]) : NaN;
@@ -316,11 +316,15 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
       for (const [, d] of pend.filter((x) => x[0] === t)) lightning(t, d, tag);
       for (let i = pend.length - 1; i >= 0; i--) if (pend[i][0] === t) pend.splice(i, 1);
       regen(t, tag); surge(t, tag); ringCheck(t, tag);
-      if (p.thrall_next != null && t === p.thrall_next && r >= SHIELD) { vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'v']); p.thrall_next = t + 4; }
+      if (p.thrall_next != null && t === p.thrall_next) {                 // the thrall stays up: the crab during the shield, then Verzik
+        if (r >= SHIELD) vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'v']);
+        else if (r >= 2 && ch > 0 && !crabDone) vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'crab']);
+        p.thrall_next = t + 4;
+      }
       if (t < p.next_attack) continue;
       const before = vq.length;
       act(t, r, verz, tag);
-      if (p.thrall_next == null && r >= SHIELD && vq.slice(before).some((h) => h[4] === 'v')) p.thrall_next = t + rng.randint(1, 2);
+      if (p.thrall_next == null && vq.slice(before).length > 0) p.thrall_next = t + rng.randint(1, 2);
     }
     if (kill2 != null) break;
 

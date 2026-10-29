@@ -18,7 +18,7 @@ export function cfgOf(base, s) {
   const c = { ...base, commit: { ...s.commit }, godbook: !!s.godbook, ringSwitch: s.ringSwitch ?? '' };
   if (s.shadowMode != null) {
     const m = c.hasShadow ? s.shadowMode : 'none';
-    Object.assign(c, { shadow: m !== 'none', shadowCamp: m === 'camp', shadow31: m === '31' || m === 'lb31', shadowLB: m === 'lb' || m === 'lb31' });
+    Object.assign(c, { shadow: !!c.hasShadow, deepProc: !!c.hasShadow, shadowCamp: m === 'camp', shadow31: m === '31' || m === 'lb31', shadowLB: m === 'lb' || m === 'lb31' });
   }
   if (s.ayak != null) Object.assign(c, { ayakP2: s.ayak > 0, ayakAmount: s.ayak });
   return c;

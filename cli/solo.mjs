@@ -4,13 +4,13 @@ import { run_solo } from '/root/repo/engine/solo.js';
 import { simulate } from '/root/repo/engine/simulate.js';
 import { Rng } from '/root/repo/engine/rng.js';
 import { blankPlayer, applyToCfg } from '/root/repo/engine/loadout.js';
-const g = blankPlayer(0); g.prayer = 'Zeal';
+const arg = (k, d) => { const x = process.argv.find((a) => a.startsWith(`--${k}=`)); return x ? x.split('=')[1] : d; };
+const g = blankPlayer(0); g.prayer = arg('prayer', 'Zeal');
 Object.assign(g.mage, { head: 'Ancestral hat', body: 'Ancestral robe top', legs: 'Ancestral robe bottom', cape: 'Imbued saradomin cape', neck: 'Occult necklace', hands: 'Confliction gauntlets', feet: 'Avernic treads (max)' });
 Object.assign(g.melee, { head: 'Torva full helm', body: 'Torva platebody', legs: 'Torva platelegs' });
 g.weapons.push('Toxic blowpipe', "Tumeken's shadow", 'Eye of ayak', 'Elder maul');
 const base = applyToCfg({ name: 'Solo' }, g);
-const arg = (k, d) => { const x = process.argv.find((a) => a.startsWith(`--${k}=`)); return x ? x.split('=')[1] : d; };
-const cfg = { ...base, shadow: base.hasShadow, shadow31: arg('s31', '0') === '1', shadowCamp: arg('camp', '0') === '1', ayakP2: arg('ayak', '0') === '1', ayakAmount: Number(arg('amt', 70)), godbook: arg('gb', '0') === '1',
+const cfg = { ...base, shadow: base.hasShadow, deepProc: base.hasShadow, deepThr: Number(arg('deep', 42)), shadow31: arg('s31', '0') === '1', shadowCamp: arg('camp', '0') === '1', ayakP2: arg('ayak', '0') === '1', ayakAmount: Number(arg('amt', 70)), godbook: arg('gb', '0') === '1',
   commit: { c100: Number(arg('c100', 0)), c80: Number(arg('c80', 0)), c50: Number(arg('c50', 0)), c0: Number(arg('c0', 0)) } };
 if (process.argv.includes('--log')) { const log = []; const r = run_solo(cfg, new Rng(arg('seed', 'x#1')), log); console.log(log.join('\n')); console.log(r.end, r.st); }
 else {
