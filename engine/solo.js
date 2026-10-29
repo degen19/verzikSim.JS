@@ -55,7 +55,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   p.auto_surge_on = true;
   p.auto_r = cfg.godbook ? 'pending' : null;                    // godbook: 95%, no regen before the first spec, then one
   p.has3 = cfg.has3Tick || 'Ayak';
-  const st = { purples: 0, purple_pops: 0, redemptions: 0, vengs: 0, veng_dmg: 0, drained: 0, rends: 0, ayak: 0, sets: 0, commit_set: null, dc: 0, crab_kills: 0, claws: 0, halb: 0, shadows: 0, ayak_fix: 0 };
+  const st = { purples: 0, purple_pops: 0, redemptions: 0, drained: 0, rends: 0, ayak: 0, sets: 0, commit_set: null, dc: 0, crab_kills: 0, claws: 0, halb: 0, shadows: 0, ayak_fix: 0 };
   const out = { st, players: [p], pid: [p] };
   const regen = (t, tag = '') => {
     if (p.auto_r === t) { const o = p.spec; p.spec = Math.min(100, p.spec + 10); p.regen_timer = 0; p.auto_r = null; L.on && L(`t${rjust(t, 4)} ${tag}regen the tick after the first spec (godbook) ${fx(o)}% -> ${fx(p.spec)}%`); return; }
@@ -72,10 +72,6 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     } else if (!p.surge_due) auto_surge(p, t, L, tag);
   };
   const dc = (t, why, tag = '') => { const o = p.spec; p.spec = Math.min(100, p.spec + 15); st.dc += 1; L.on && L(`t${rjust(t, 4)} ${tag}${why} -> Death Charge ${fx(o)}% -> ${fx(p.spec)}%`); };
-  // Vengeance: up from the start, recast 50 ticks after the last cast once it has gone off; 75% of a hit back
-  const veng = { up: true, cast: -10 };                          // cast just before the room
-  const vengTick = (t) => { if (!veng.up && t - veng.cast >= 50) { veng.up = true; veng.cast = t; } };
-  const vengOn = (t, d) => { if (!(d > 0) || !veng.up) return 0; veng.up = false; st.vengs += 1; const v = floordiv(d * 75, 100); st.veng_dmg += v; return v; };
   const floor1 = (why, t) => { if (p.hp < 1) { L.on && L(`t${rjust(t, 4)} would be at ${p.hp} HP (${why}) - kept at 1 HP`); p.hp = 1; } };
 
   // ================================================================ P1
@@ -97,11 +93,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     }
     if (kill != null) break;
     if (t >= AUTO_QUEUE_FIRST && (t - AUTO_QUEUE_FIRST) % AUTO_EVERY === 0) { const d = rng.randint(0, 69); pq.push([t + AUTO_DELAY, d]); }
-    vengTick(t);
-    for (const [, d] of pq.filter((h) => h[0] === t)) {
-      p.hp -= d; floor1('P1 auto', t); L.on && L(`t${rjust(t, 4)} takes ${d} from her auto -> ${p.hp} HP`);
-      const v = vengOn(t, d); if (v) vq.push([t + 1, 8, v, 10, 'Vengeance']);     // P1: capped like every non-Dawnbringer hit
-    }
+    for (const [, d] of pq.filter((h) => h[0] === t)) { p.hp -= d; floor1('P1 auto', t); L.on && L(`t${rjust(t, 4)} takes ${d} from her auto -> ${p.hp} HP`); }
     pq = pq.filter((h) => h[0] !== t);
     regen(t); surge(t);
     if (p.thrall_next != null && t === p.thrall_next) { vq.push([t + 1, 9, rng.randint(0, 3), 10, 'Thrall']); p.thrall_next = t + 4; }
@@ -130,7 +122,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   L.on && L(`t${rjust(kill, 4)} P1 HP 0, death animation ${anim} -> ends t${p1end}; P2 from t${p1end + 14}`);
   if (scope === 'p1') return { ...out, end: p1end };
   const K = p1end + 14;
-  for (t = kill + 1; t < K; t++) { regen(t); surge(t); vengTick(t); }
+  for (t = kill + 1; t < K; t++) { regen(t); surge(t); }
   p.hp = Math.max(p.hp, 99); p.atk = p.str = p.dfn = 118; p.next_attack = K;   // the heal-up window
   if (p.thrall_next != null) while (p.thrall_next < K + 1) p.thrall_next += 4;   // the thrall stays up: its next hit on her once she's attackable
 
@@ -202,7 +194,6 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const lightning = (t, d, tag = '') => {
     if (p.hp < REDEEM_BELOW) { const o = p.hp; p.hp = Math.max(1, supplies.REDEMPTION_HEAL + 1 - d); st.redemptions += 1; L.on && L(`t${rjust(t, 4)} ${tag}${o} HP: locator orb + Redemption tick-eat the lightning (${d}) -> ${p.hp} HP, restore after`); }
     else { p.hp -= d; floor1('lightning', t); L.on && L(`t${rjust(t, 4)} ${tag}lightning hits ${d} -> ${p.hp} HP`); }
-    const v = vengOn(t, d); if (v) { vq.push([t + 1, 8, 'Vengeance', v, 'v']); L.on && L(`t${rjust(t, 4)} ${tag}VENG ${v}`); }
   };
   const shadowMode = () => {
     if (!cfg.shadow) return null;
@@ -245,7 +236,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     }
     for (const [, d] of pend.filter((x) => x[0] === t)) lightning(t, d);
     for (let i = pend.length - 1; i >= 0; i--) if (pend[i][0] === t) pend.splice(i, 1);
-    regen(t); surge(t); ringCheck(t); vengTick(t);
+    regen(t); surge(t); ringCheck(t);
     if (p.thrall_next != null && t === p.thrall_next) { vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'v']); p.thrall_next = t + 4; }
     if (t < p.next_attack) continue;
     if (crab && crab.alive && t >= crab.bp_from && p.has_bp) {
@@ -324,7 +315,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
       }
       for (const [, d] of pend.filter((x) => x[0] === t)) lightning(t, d, tag);
       for (let i = pend.length - 1; i >= 0; i--) if (pend[i][0] === t) pend.splice(i, 1);
-      regen(t, tag); surge(t, tag); ringCheck(t, tag); vengTick(t);
+      regen(t, tag); surge(t, tag); ringCheck(t, tag);
       if (p.thrall_next != null && t === p.thrall_next) {                 // the thrall stays up: the crab during the shield, then Verzik
         if (r >= SHIELD) vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'v']);
         else if (r >= 2 && ch > 0 && !crabDone) vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'crab']);
