@@ -30,6 +30,8 @@ export function linkOf(s, team, block) {
 }
 export function setLink(team, block, letter) { const s = loadGear(); teamOf(s, team).link[block] = letter; saveGear(s); }
 export function gearSet(s, team, letter) { return teamOf(s, team).sets[letter] || null; }
+/** A Gear set's label for the pickers: its name (Gear tab) with the letter, or "Gear set A". */
+export function gearSetLabel(s, team, letter) { const set = gearSet(s, team, letter), n = set && String(set.name || '').trim(); return n ? `${n} (Gear set ${letter})` : `Gear set ${letter}`; }
 /** The players of a Gear set, padded / cut to the team size (blank players added). */
 export function playersOf(set, team) {
   const ps = set.players.slice(0, team);
@@ -79,7 +81,7 @@ export function absorbValues(team, block, values) {
   const letter = linkOf(s, team, block);
   const set = t.sets[letter] || { players: [] };
   const ps = playersOf(set, team);
-  t.sets[letter] = { players: ps.map((pl, k) => mergeChartValues(pl, values, k)) };
+  t.sets[letter] = { ...set, players: ps.map((pl, k) => mergeChartValues(pl, values, k)) };   // keeps its name
   saveGear(s);
   return letter;
 }

@@ -1,7 +1,7 @@
 // Verzik for solos: no chart - the room settings below (P1 plays itself: Dawn spec off cooldown, Dawn autos, Lightbearer).
 // Sets A / B / C (switch, copy, save in this browser or to a file), a Report comparing the ticked sets, and the Solver
 // (Commit % for each spec level, and optionally the shadow mode, Ayak P2, godbook and Lightbearer cycles). Gear: the Gear tab.
-import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
+import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { applyToCfg, blankPlayer, BOTH_AMULETS } from './engine/loadout.js';
 import { reportHtml, reportPage } from './engine/report.js';
 import { parseBreakpoints } from './engine/optimize.js';
@@ -111,7 +111,7 @@ export function createSolo(host) {
         <span class="muted small">${esc(setMsg)}</span>
       </div>
       <div class="row wrap" style="gap:14px;align-items:end">
-        <label>Gear<select data-s="gearSet">${GEAR_SETS.map((k) => `<option value="${k}" ${k === st.gearSet ? 'selected' : ''}>Gear set ${k}${gearSet(loadGear(), 1, k) ? '' : ' (empty)'}</option>`).join('')}</select></label>
+        <label>Gear<select data-s="gearSet">${GEAR_SETS.map((k) => `<option value="${k}" ${k === st.gearSet ? 'selected' : ''}>${esc(gearSetLabel(loadGear(), 1, k))}${gearSet(loadGear(), 1, k) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         ${chk('godbook', 'Godbook (95% start)', st.godbook, 'Start P1 at 95%: no regen before the first Dawn spec, then a regen the tick after it')}
         <label title="Surge potion doses brought: one a drink - straight after their first Dawn spec, then whenever the cooldown (500 ticks) is up at 70% spec or less">Surge pot doses<input data-s="surgeDoses" type="number" min="0" max="8" value="${esc(st.surgeDoses ?? 1)}" style="width:70px"></label>
         <label title="P2 before reds: spec regens on Lightbearer from the start of P2 (0-5), then Ultor. (P1 is always on Lightbearer.)">LB cycles before reds<input data-s="lbP2" type="number" min="0" max="5" value="${esc(st.lbP2)}" style="width:70px" ${st.lbCamp ? 'disabled title="LB P2 Until Reds is on"' : ''}></label>

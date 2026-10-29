@@ -8,7 +8,7 @@
 //    swap to Ultor (the regen timer restarts). The solver will pick Surge / Lightbearer cycles too.
 //  - Prefires with the Twisted bow / ZCB are made in their best ranged gear, Shadow / Shadow Barrage in their best magic
 //    gear (each slot: their ranged, magic or melee item, or nothing - loadout.js bestWorn).
-import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
+import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { bestWorn, bonuses, blankPlayer } from './engine/loadout.js';
 import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './engine/sotereport.js';
 import { parseBreakpoints } from './engine/optimize.js';
@@ -241,7 +241,7 @@ export function createSote(host, { getTeam }) {
       <p class="muted small">Room settings for each player, saved in this browser - the Report and Optimizer below play them (and Full raid will).
         Gear comes from the Gear tab; a prefire needs that weapon in the Gear set (Shadow Barrage: a Shadow ancient sceptre).</p>
       ${setBar()}
-      <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>Gear set ${x}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
+      <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>${esc(gearSetLabel(g, team(), x))}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         <label title="The 4-tick instance this set enters the room on (shifts the maze cycle). Each set in the Report runs on its own.">Entry instance<select data-entry>${[0, 1, 2, 3].map((x) => `<option value="${x}" ${x === Number(st.entry) ? 'selected' : ''}>i${x}</option>`).join('')}</select></label>
         <label title="Surge potions the team can use in this room (the solver won't use more - keep some back for another room)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label title="P3: anyone planned to ZCB claws instead once Sotetseg is below this HP (needs claws and 50% spec)">P3 ZCB → claws below (HP)<input type="number" min="0" step="50" style="width:80px" data-rnum="clawBelow" value="${esc(st.clawBelow ?? CLAW_BELOW)}"></label>

@@ -92,7 +92,8 @@ export function createGear(root, { getTeam }) {
         A two-handed weapon leaves the shield slot empty. P1 tick fixes are made in melee gear; the shadow and duo Dawn autos use the magic setup.
         Lightbearer is set per room. Saved in this browser; importing a chart copies its gear into the Gear sets of the same letters.</p>
       <div class="row between" style="margin-bottom:8px">
-        <div class="seg">${GEAR_SETS.map((g) => `<button data-gset="${g}" class="${g === gset ? 'on' : ''}">Gear set ${g}${ts.sets[g] ? '' : ' (empty)'}</button>`).join('')}</div>
+        <div class="seg">${GEAR_SETS.map((g) => `<button data-gset="${g}" class="${g === gset ? 'on' : ''}" title="Gear set ${g}">${ts.sets[g] && ts.sets[g].name ? `${esc(ts.sets[g].name)} <span class="muted small">(${g})</span>` : `Gear set ${g}`}${ts.sets[g] ? '' : ' (empty)'}</button>`).join('')}</div>
+        <label title="A name for Gear set ${gset} - the room tabs list it by this name">Gear set ${gset} name<input data-gsetname value="${esc((ts.sets[gset] && ts.sets[gset].name) || '')}" placeholder="optional" style="width:150px"></label>
         <div class="row" style="gap:8px">${GEAR_SETS.filter((g) => g !== gset).map((g) => `<button class="ghost sm" data-act="copyset" data-to="${g}">Copy Gear set ${gset} to ${g}</button>`).join('')}</div>
       </div>
       ${teamBar()}
@@ -134,7 +135,7 @@ export function createGear(root, { getTeam }) {
     if (b.dataset.p != null) { cur = Number(b.dataset.p); render(); return; }
     if (b.dataset.gset) { gset = b.dataset.gset; render(); return; }
     if (b.dataset.act === 'teamsave') {
-      const name = (root.querySelector('[data-team="name"]').value || '').trim() || (teams[team()] || []).find((x) => x.id === teamPick)?.name || '';
+      const name = (root.querySelector('[data-team="name"]').value || '').trim() || (teams[team()] || []).find((x) => x.id === teamPick)?.name || (tstate().sets[gset] && tstate().sets[gset].name) || '';
       if (!name) { msg = 'Type a name for the team first.'; render(); return; }
       const list = (teams[team()] ||= []);
       const old = list.find((x) => x.name === name);
@@ -147,8 +148,8 @@ export function createGear(root, { getTeam }) {
     if (b.dataset.act === 'teamload' || b.dataset.act === 'teamdel') {
       const list = teams[team()] || [], x = list.find((y) => y.id === teamPick); if (!x) return;
       if (b.dataset.act === 'teamload') {
-        tstate().sets[gset] = { players: structuredClone(x.players) }; persist();
-        msg = `Loaded "${x.name}" into Gear set ${gset}.`;
+        tstate().sets[gset] = { players: structuredClone(x.players), name: x.name }; persist();
+        msg = `Loaded "${x.name}" into Gear set ${gset} (named "${x.name}").`;
       } else {
         teams[team()] = list.filter((y) => y !== x); teamPick = ''; saveTeams(teams);
         msg = `Deleted "${x.name}".`;
@@ -157,11 +158,11 @@ export function createGear(root, { getTeam }) {
     }
     if (b.dataset.act === 'teamfile') {
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'team', team: team(), players: players() }, null, 1)], { type: 'application/json' }));
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'team', team: team(), name: (tstate().sets[gset] && tstate().sets[gset].name) || '', players: players() }, null, 1)], { type: 'application/json' }));
       a.download = team() === 1 ? 'verzik_solo_gear.json' : `verzik_team_${team()}man.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       return;
     }
-    if (b.dataset.act === 'copyset') { tstate().sets[b.dataset.to] = { players: structuredClone(players()) }; persist(); render(); return; }
+    if (b.dataset.act === 'copyset') { const src = tstate().sets[gset] || {}; tstate().sets[b.dataset.to] = { players: structuredClone(players()), ...(src.name ? { name: src.name } : {}) }; persist(); render(); return; }
     const ps = players();
     if (b.dataset.act === 'copyall') {
       const src = ps[cur];
@@ -175,12 +176,13 @@ export function createGear(root, { getTeam }) {
     const t = e.target, pl = players()[cur];
     if (t.dataset.team === 'pick') { teamPick = t.value; msg = ''; render(); return; }
     if (t.dataset.team === 'name') return;
+    if (t.dataset.gsetname != null) { const ts = tstate(); ts.sets[gset] ||= { players: structuredClone(players()) }; const n = t.value.trim(); if (n) ts.sets[gset].name = n; else delete ts.sets[gset].name; persist(); render(); return; }
     if (t.dataset.team === 'file') {
       try {
         const j = JSON.parse(await t.files[0].text());
         if (j.kind !== 'team' || !Array.isArray(j.players)) throw new Error('not a saved team file');
         if (Number(j.team) !== team()) throw new Error(`it's a ${j.team}-man team - pick that scale first`);
-        tstate().sets[gset] = { players: j.players }; persist();
+        tstate().sets[gset] = { players: j.players, ...(j.name ? { name: j.name } : {}) }; persist();
         msg = `Opened ${t.files[0].name} into Gear set ${gset}.`;
       } catch (err) { msg = `Couldn't open that file: ${err.message}`; }
       render(); return;

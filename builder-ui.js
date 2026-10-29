@@ -2,7 +2,7 @@
 import { readXlsx } from './engine/xlsx.js';
 import { describe, readValues, overlaySheet, checkRow, withSetC, shadowBlock, SHADOW_MODES, BLOCKS, CODES, CODE_HELP, isAutoTick, multiInput, multiFromBox, migrateKeys } from './engine/chartform.js';
 import { readPlanInputs, plan } from './engine/planner.js';
-import { loadGear, linkOf, setLink, gearOfSet, GEAR_SETS, gearSet } from './engine/gearstore.js';
+import { loadGear, linkOf, setLink, gearOfSet, GEAR_SETS, gearSet, gearSetLabel } from './engine/gearstore.js';
 
 const STORE = 'verzikSim.builder.v1';
 const LIB = 'verzikSim.library.v1';          // saved charts: {team: [{id, name, saved, sets}]}
@@ -208,7 +208,7 @@ export function createBuilder(root, { onChange }) {
   /** Which Gear set (Gear tab) this Verzik set uses. */
   function gearPick() {
     const g = loadGear(), cur = linkOf(g, team, block);
-    const opts = GEAR_SETS.map((x) => `<option value="${x}" ${x === cur ? 'selected' : ''}>Gear set ${x}${gearSet(g, team, x) ? '' : ' (new - starts from this chart)'}</option>`).join('');
+    const opts = GEAR_SETS.map((x) => `<option value="${x}" ${x === cur ? 'selected' : ''}>${esc(gearSetLabel(g, team, x))}${gearSet(g, team, x) ? '' : ' (new - starts from this chart)'}</option>`).join('');
     return `<div class="row" style="align-items:center;gap:10px;margin:4px 0 8px"><label style="flex-direction:row;align-items:center;gap:8px">Gear<select data-gearset>${opts}</select></label>
       <span class="muted small">Helm, body, legs, amulet, prayer, blowpipe, 3-tick weapon and mage gear come from the Gear tab.</span></div>`;
   }
