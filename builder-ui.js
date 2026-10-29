@@ -360,7 +360,15 @@ export function createBuilder(root, { onChange }) {
     }
     if (act === 'export') {
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', team, sets: state[team] }, null, 1)], { type: 'application/json' }));
+      // the file carries each player's gear from the Gear set linked to the block (prayer, helm, body, legs, amulet,
+      // blowpipe, 3-tick weapon) - the chart's own copies of these are only a fallback and may be blank or stale
+      const sets = structuredClone(state[team] || {});
+      for (const [b, vals0] of Object.entries(sets)) {
+        const g = gearOfSet(team, b); if (!g) continue;
+        g.forEach((c, k) => Object.assign(vals0, { [`setup|meleePrayer|${k}`]: c.meleePrayer, [`gear|helm|${k}`]: c.helm, [`gear|body|${k}`]: c.body, [`gear|legs|${k}`]: c.legs,
+          [`gear|amulet|${k}`]: c.amulet, [`gear|Has BP|${k}`]: !!c.hasBP, [`gear|has3Tick|${k}`]: c.has3Tick || 'No' }));
+      }
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', team, sets }, null, 1)], { type: 'application/json' }));
       const nm = cur[team] && cur[team].name ? `_${cur[team].name.replace(/[^\w.-]+/g, '_')}` : '';
       a.download = `verzik_${team}man${nm}_chart.json`; a.click();
     }
