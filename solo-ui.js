@@ -60,7 +60,7 @@ export function createSolo(host) {
       <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above. Commit % (always): for each spec level at a reds shield,
         how low Verzik must be (% of P2 HP) for the player to commit to the kill - one swing on the crab for the Death Charge, then the spec
         sequence (two claws, claw > shadow > scythes, claw > scratch > scythes, or scythes; halberd on r40 with 30%+). Optionally also the shadow
-        mode, Ayak P2 amount, godbook and Lightbearer cycles (before reds / in reds). With a Target down it ranks by the share of raids killed in that many reds sets or fewer first. Each round tries every single change on a few raids, then the best on more, and keeps the best
+        mode, Ayak P2 amount, godbook, Lightbearer cycles (before reds / in reds), LB P2 Until Reds and LB Flick Reds. With a Target down it ranks by the share of raids killed in that many reds sets or fewer first. Each round tries every single change on a few raids, then the best on more, and keeps the best
         if it beats the current setup; the top setups are then played on more raids and ranked: with breakpoints by the share finished at the
         fastest one (then the next), otherwise by the median.</p>
       <div class="row">
@@ -70,7 +70,7 @@ export function createSolo(host) {
         <label>Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
         <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
       </div>
-      <div class="row" style="margin-top:6px">${[['shadow', 'Shadow mode'], ['ayak', 'Ayak P2'], ['godbook', 'Godbook'], ['lb', 'Lightbearer cycles'], ['flick', 'LB Flick Reds']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
+      <div class="row" style="margin-top:6px">${[['shadow', 'Shadow mode'], ['ayak', 'Ayak P2'], ['godbook', 'Godbook'], ['lb', 'Lightbearer cycles'], ['lbcamp', 'LB P2 Until Reds'], ['flick', 'LB Flick Reds']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>
     `)}`;
   wireSubtabs(host, 'verzikSim.soloTabs.v1');                         // Report / Optimizer / Solver tabs; settings can be minimized
@@ -239,7 +239,7 @@ export function createSolo(host) {
   const solState = () => { const r = root(); r.solve ||= { bps: '', effort: 'normal', allow: { shadow: false, ayak: false, godbook: false, ring: false } }; return r.solve; };
   const showSol = () => {
     const v = solState(); sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="downs"]').value = v.downs || ''; sol.querySelector('[data-v="effort"]').value = v.effort; sol.querySelector('[data-v="scope"]').value = v.scope || 'full';
-    for (const k of ['shadow', 'ayak', 'godbook', 'lb', 'flick']) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
+    for (const k of ['shadow', 'ayak', 'godbook', 'lb', 'lbcamp', 'flick']) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
   };
   sol.addEventListener('change', (e) => {
     const v = solState(), t = e.target;
@@ -250,12 +250,12 @@ export function createSolo(host) {
   let solver = null, results = null, lastBps = [], lastDowns = [], lastScope = 'full';
   const settingsOf = (st, c, allow) => ({ commit: { ...st.commit }, shadowMode: allow.shadow && c.hasShadow ? shadowModeOf(c) : null,
     ayak: allow.ayak && c.hasAyak ? (c.ayakP2 ? Number(st.ayakAmount) || 0 : 0) : null, godbook: !!st.godbook,
-    lbCamp: allow.lb ? !!st.lbCamp : null, lbP2: allow.lb ? Number(st.lbP2) || 0 : null, lbReds: allow.lb ? Number(st.lbReds) || 0 : null, lbFlick: allow.flick ? Number(st.lbFlick) || 0 : null });
+    lbCamp: allow.lbcamp ? !!st.lbCamp : null, lbP2: allow.lb ? Number(st.lbP2) || 0 : null, lbReds: allow.lb ? Number(st.lbReds) || 0 : null, lbFlick: allow.flick ? Number(st.lbFlick) || 0 : null });
   const describe = (s, hasShadow, hasAyak) => [
     COMMIT_KEYS.map(([k]) => `${COMMIT_LABEL[k]}: ${s.commit[k] ? `${s.commit[k]}%` : 'never'}`).join(', '),
     hasShadow && s.shadowMode != null ? (SHADOW_MODES.find((m) => m[0] === s.shadowMode) || ['', 'No shadow'])[1] : null,
     hasAyak && s.ayak != null ? (s.ayak ? `Ayak P2 to ${s.ayak}` : 'no Ayak P2') : null,
-    s.godbook ? 'godbook' : null, s.lbP2 != null ? `LB: ${s.lbCamp ? 'camp P2 until reds' : `${s.lbP2} cycles before reds`}, ${s.lbReds} in reds` : null, s.lbFlick ? `LB Flick Reds: ${s.lbFlick} set${s.lbFlick === 1 ? '' : 's'}` : s.lbFlick === 0 ? 'no LB flick' : null,
+    s.godbook ? 'godbook' : null, s.lbP2 != null ? `LB: ${s.lbCamp ? 'camp P2 until reds' : `${s.lbP2} cycles before reds`}, ${s.lbReds} in reds` : null, s.lbCamp != null && s.lbP2 == null ? (s.lbCamp ? 'LB P2 until reds' : 'no LB P2 camp') : null, s.lbFlick ? `LB Flick Reds: ${s.lbFlick} set${s.lbFlick === 1 ? '' : 's'}` : s.lbFlick === 0 ? 'no LB flick' : null,
   ].filter(Boolean).join(' · ');
   sol.addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;

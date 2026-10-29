@@ -64,7 +64,7 @@ export function neighbours(s, ctx) {
   if (ctx.allow.ayak && ctx.hasAyak) for (const v of AYAK_VALUES) if (v !== s.ayak) push({ ayak: v }, v ? `Ayak P2 to ${v}` : 'No Ayak P2');
   if (ctx.allow.godbook) push({ godbook: !s.godbook }, s.godbook ? '100% start' : 'Godbook (95%)');
   if (ctx.allow.flick) for (let v = 0; v <= 7; v++) if (v !== (s.lbFlick || 0)) push({ lbFlick: v }, v ? `LB Flick Reds ${v} set${v === 1 ? '' : 's'}` : 'No LB flick');
-  if (ctx.allow.lb) push({ lbCamp: !s.lbCamp }, s.lbCamp ? 'No LB P2 Until Reds' : 'LB P2 Until Reds');
+  if (ctx.allow.lbcamp) push({ lbCamp: !s.lbCamp }, s.lbCamp ? 'No LB P2 Until Reds' : 'LB P2 Until Reds');
   if (ctx.allow.lb) {
     for (const v of LB_VALUES) if (v !== (s.lbP2 || 0)) push({ lbP2: v, lbReds: s.lbReds || 0 }, `LB cycles before reds ${v}`);
     for (const v of LB_VALUES) if (v !== (s.lbReds || 0)) push({ lbP2: s.lbP2 || 0, lbReds: v }, `LB cycles in reds ${v}`);
