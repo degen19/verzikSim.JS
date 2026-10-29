@@ -12,8 +12,8 @@ import { Rng } from './rng.js';
 
 export const SOLVE_PREFIRES = [['', null], ['Twisted bow', 'Twisted bow'], ['ZCB auto', 'Zaryte crossbow'], ['ZCB spec', 'Zaryte crossbow'],
   ['Shadow Barrage', 'Shadow ancient sceptre'], ["Tumeken's shadow", "Tumeken's shadow"]];
-const SPEC_OPTS = ['none', 'maul', 'claws', 'zcb'];
-const SPEC_NEEDS = { maul: ['Elder maul', 'Bandos godsword'], claws: ['Dragon claws'], zcb: ['Zaryte crossbow'] };
+const SPEC_OPTS = ['none', 'maul', 'bgs', 'claws', 'zcb'];
+const SPEC_NEEDS = { maul: ['Elder maul', 'Bandos godsword'], bgs: ['Bandos godsword'], claws: ['Dragon claws'], zcb: ['Zaryte crossbow'] };
 
 /** The players for a run: the fixed parts (gear, supplies, mazes) from `base`, the searched parts from `cfg`. */
 export function playersOf(base, cfg) {
@@ -45,15 +45,21 @@ export function scoreOf(totals, bps = []) {
 export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i] - 1e-12) return true; if (a[i] > b[i] + 1e-12) return false; } return false; };
 export const keyOf = (cfg) => JSON.stringify(cfg.players);
 
-/** Every single change to one player that the settings allow. ctx: {team, gear: [gear], allow: {prefire, start, surge,
- *  lb, specs}, surgeLimit, lbRings}. */
+/** The changes the settings allow. ctx: {team, gear: [gear], allow: {prefire, start, surge, lb, specs}, surgeLimit,
+ *  lbRings, swaps, pairs}. Always: every single change to one player. swaps: move a surge / Lightbearer from one player to
+ *  another, and swap two players' specs in a phase. pairs: two players' specs in a phase changed together. */
 export function neighbours(cfg, ctx) {
-  const out = [], P = cfg.players;
+  const out = [], P = cfg.players, seen = new Set([keyOf(cfg)]);
   const own = (k, w) => (ctx.gear[k].weapons || []).includes(w);
-  const push = (k, patch, what) => {
-    const players = P.map((p, j) => (j === k ? { ...p, ...patch, specs: (patch.specs || p.specs).map((x) => ({ ...x })) } : p));
-    out.push({ entry: cfg.entry, players, what });
+  /** The spec choices a player can make (BGS as its own choice only if they also have a maul - otherwise Maul is it). */
+  const specOk = (k, s) => s === 'none' || (s === 'bgs' ? own(k, 'Bandos godsword') && own(k, 'Elder maul') : (SPEC_NEEDS[s] || []).some((w) => own(k, w)));
+  const many = (patches, what) => {                                  // patches: {player index: patch}
+    const players = P.map((p, j) => (patches[j] ? { ...p, ...patches[j], specs: (patches[j].specs || p.specs).map((x) => ({ ...x })) } : p));
+    const c = { entry: cfg.entry, players, what }, k = keyOf(c);
+    if (!seen.has(k)) { seen.add(k); out.push(c); }
   };
+  const push = (k, patch, what) => many({ [k]: patch }, what);
+  const withSpec = (p, ph, o) => p.specs.map((x, j) => (j === ph ? { ...x, ...o } : x));
   const surges = P.filter((p) => p.surge).length, lbs = P.filter((p) => p.lbCycles > 0).length;
   P.forEach((p, k) => {
     if (ctx.allow.prefire) for (const [v, need] of SOLVE_PREFIRES) if (v !== p.prefire && (!need || own(k, need))) push(k, { prefire: v }, `P${k + 1} prefire ${v || 'none'}`);
@@ -63,7 +69,7 @@ export function neighbours(cfg, ctx) {
     if (ctx.allow.specs) for (let ph = 0; ph < 3; ph++) {
       const cur = p.specs[ph];
       for (const s of SPEC_OPTS) for (const backup of [false, true]) {
-        if (s !== 'none' && !(SPEC_NEEDS[s] || []).some((w) => own(k, w))) continue;
+        if (!specOk(k, s)) continue;
         if (s === 'none' && backup && !SPEC_NEEDS.maul.some((w) => own(k, w))) continue;
         if (s === cur.spec && backup === !!cur.backup) continue;
         const specs = p.specs.map((x, j) => (j === ph ? { ...x, spec: s, backup } : x));
@@ -72,6 +78,27 @@ export function neighbours(cfg, ctx) {
       if (ctx.gear[k].horn) { const specs = p.specs.map((x, j) => (j === ph ? { ...x, horn: !x.horn } : x)); push(k, { specs }, `P${k + 1} P${ph + 1} ${cur.horn ? 'no horn' : 'horn'}`); }
     }
   });
+  if (ctx.swaps) {
+    P.forEach((a, i) => P.forEach((b, j) => {
+      if (i === j) return;
+      if (ctx.allow.surge && a.surge && !b.surge) many({ [i]: { surge: false }, [j]: { surge: true } }, `surge P${i + 1} -> P${j + 1}`);
+      if (ctx.allow.lb && a.lbCycles > 0 && !(b.lbCycles > 0)) many({ [i]: { lbCycles: 0 }, [j]: { lbCycles: a.lbCycles } }, `Lightbearer P${i + 1} -> P${j + 1}`);
+      if (ctx.allow.specs && i < j) for (let ph = 0; ph < 3; ph++) {
+        const x = a.specs[ph], y = b.specs[ph];
+        if (x.spec === y.spec && !!x.backup === !!y.backup) continue;
+        if (!specOk(j, x.spec) || !specOk(i, y.spec)) continue;
+        many({ [i]: { specs: withSpec(a, ph, { spec: y.spec, backup: !!y.backup }) }, [j]: { specs: withSpec(b, ph, { spec: x.spec, backup: !!x.backup }) } }, `P${ph + 1} specs P${i + 1} <-> P${j + 1}`);
+      }
+    }));
+  }
+  if (ctx.pairs && ctx.allow.specs) {
+    for (let ph = 0; ph < 3; ph++) for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      for (const s1 of SPEC_OPTS) for (const s2 of SPEC_OPTS) {
+        if (s1 === P[i].specs[ph].spec || s2 === P[j].specs[ph].spec || !specOk(i, s1) || !specOk(j, s2)) continue;   // both change
+        many({ [i]: { specs: withSpec(P[i], ph, { spec: s1 }) }, [j]: { specs: withSpec(P[j], ph, { spec: s2 }) } }, `P${ph + 1}: P${i + 1} ${s1} + P${j + 1} ${s2}`);
+      }
+    }
+  }
   return out;
 }
 
@@ -94,6 +121,11 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     cur = { ...cur, entry: best };
   }
   const bigN = stages[stages.length - 1][0];
+  const starts = [cur, ...(ctx.restarts || []).map((x) => ({ entry: cur.entry, players: x.players }))];   // restarts: other starting setups
+  for (const [si0, st0] of starts.entries()) {
+  if (stopped()) break;
+  cur = st0;
+  if (si0) progress(`Restart ${si0}: from another starting setup`, 0);
   for (let round = 1; round <= rounds && !stopped(); round++) {
     let cands = neighbours(cur, ctx).map((c) => ({ ...c, entry: cur.entry }));
     const seed = `round${round}`;
@@ -115,9 +147,10 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     cur = { entry: cur.entry, players: bestC.players, what: [...(cur.what || []), bestC.what] };
     progress(`Round ${round}: kept "${bestC.what}"`, round / rounds);
   }
+  }
   // the best setups seen, played at every entry instance (or the one searched on) and ranked
   const ranked = [...seen.values()].sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0)).slice(0, top);
-  const entries = ctx.solveEntry ? [0, 1, 2, 3] : [cur.entry];
+  const entries = ctx.solveEntry ? [0, 1, 2, 3] : [starts[0].entry];
   const out = [];
   for (const [i, x] of ranked.entries()) {
     if (stopped()) break;

@@ -89,6 +89,7 @@ export function createSolo(host) {
       <div class="row wrap" style="gap:10px;align-items:end;margin:4px 0 10px">
         <div><div class="muted small">Set</div><div class="seg">${SETS.map((k) => `<button data-set="${k}" class="${k === r.cur ? 'on' : ''}">Set ${k}${r.sets[k] ? '' : ' (empty)'}</button>`).join('')}</div></div>
         <div><div class="muted small">Copy set ${r.cur} to</div>${SETS.filter((k) => k !== r.cur).map((k) => `<button class="ghost sm" data-copyset="${k}">Set ${k}</button>`).join(' ')}</div>
+        <button class="ghost sm" data-clearset title="Start set ${r.cur} over from the default settings (its Gear set stays)">Clear set ${r.cur}</button>
         <label>Saved sets<select data-saved="pick"><option value="">(choose a set)</option>${list.map((x) => `<option value="${x.id}" ${x.id === savedPick ? 'selected' : ''}>${esc(x.name)} · ${new Date(x.saved).toLocaleDateString()}</option>`).join('')}</select></label>
         <button class="ghost sm" data-setact="load" ${savedPick ? '' : 'disabled'}>Load into set ${r.cur}</button>
         <button class="ghost sm" data-setact="del" ${savedPick ? '' : 'disabled'}>Delete</button>
@@ -126,6 +127,10 @@ export function createSolo(host) {
     const b = e.target.closest('button'); if (!b) return;
     const r = root();
     if (b.dataset.set) { r.cur = b.dataset.set; r.sets[r.cur] ||= blankSet(); setMsg = ''; persist(); refreshAll(); return; }
+    if (b.dataset.clearset != null) {
+      if (!confirm(`Clear set ${r.cur}? Its settings go back to the defaults (its Gear set stays).`)) return;
+      r.sets[r.cur] = { ...blankSet(), gearSet: cur().gearSet }; setMsg = `Set ${r.cur} cleared.`; persist(); refreshAll(); return;
+    }
     if (b.dataset.copyset) { const k = b.dataset.copyset; r.sets[k] = structuredClone(cur()); const rp = repState(); if (!rp.sets.includes(k)) rp.sets = SETS.filter((x) => x === k || rp.sets.includes(x)); setMsg = `Copied set ${r.cur} to set ${k}.`; persist(); refreshAll(); return; }
     const act = b.dataset.setact; if (!act) return;
     if (act === 'save') {
@@ -245,11 +250,13 @@ export function createSolo(host) {
     const status = sol.querySelector('[data-vstatus]'), err = sol.querySelector('[data-verr]'), out = sol.querySelector('[data-vout]');
     const vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
     if (b.dataset.vuse != null && results) {
-      const s = results[Number(b.dataset.vuse)].s, st = cur();
+      const s = results[Number(b.dataset.vuse)].s, k = b.dataset.to || root().cur, rs = root();
+      if (!rs.sets[k]) rs.sets[k] = structuredClone(cur());              // an empty set starts as a copy of this one
+      const st = setOf(k), rp = repState(); if (!rp.sets.includes(k)) rp.sets = SETS.filter((x) => x === k || rp.sets.includes(x));
       st.commit = { ...s.commit }; st.godbook = !!s.godbook; if (s.lbP2 != null) { st.lbP2 = s.lbP2; st.lbReds = s.lbReds; }
       if (s.shadowMode != null) Object.assign(st, { shadowCamp: s.shadowMode === 'camp', shadow31: s.shadowMode === '31' || s.shadowMode === 'lb31', shadowLB: s.shadowMode === 'lb' || s.shadowMode === 'lb31' });
       if (s.ayak != null) { st.ayakP2 = s.ayak > 0; if (s.ayak > 0) st.ayakAmount = s.ayak; }
-      persist(); render(); status.textContent = `Set ${root().cur} now uses setup #${Number(b.dataset.vuse) + 1}.`; return;
+      persist(); render(); showRep(); status.textContent = `Setup #${Number(b.dataset.vuse) + 1} copied into set ${k}.`; return;
     }
     if (b.dataset.vact === 'stop') { if (solver) { solver.stopped = true; solver.pool.stop(); } return; }
     if (b.dataset.vact !== 'run' || solver) return;
@@ -281,7 +288,7 @@ export function createSolo(host) {
       <div class="sub">Each played on the same ${results[0].totals.length.toLocaleString()} raids. Times: median. ${esc(DEATHS_NOTE)}</div>
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${lastDowns.map((n) => `<th>${n}-down or better</th>`).join('')}${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>P2</th><th>P3</th><th>Reds sets</th><th style="text-align:left">Setup</th><th></th></tr>
       ${results.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b), sets = r.split.sets;
-        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${lastDowns.map((n) => `<td>${(r.downs.filter((x) => x <= n).length / r.downs.length * 100).toFixed(1)}%</td>`).join('')}${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td><td>${sets.length ? (sets.reduce((s, x) => s + x, 0) / sets.length).toFixed(2) : '-'}</td><td style="text-align:left;white-space:normal;min-width:260px">${esc(describe(r.s, hasShadow, hasAyak))}</td><td><button class="ghost sm" data-vuse="${i}">Use this setup</button></td></tr>`; }).join('')}
+        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${lastDowns.map((n) => `<td>${(r.downs.filter((x) => x <= n).length / r.downs.length * 100).toFixed(1)}%</td>`).join('')}${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td><td>${sets.length ? (sets.reduce((s, x) => s + x, 0) / sets.length).toFixed(2) : '-'}</td><td style="text-align:left;white-space:normal;min-width:260px">${esc(describe(r.s, hasShadow, hasAyak))}</td><td>${SETS.map((k) => `<button class="ghost sm" data-vuse="${i}" data-to="${k}" title="Put this setup into set ${k}${root().sets[k] ? '' : ' - a new set, from set ' + root().cur}">Copy to set ${k}</button>`).join(' ')}</td></tr>`; }).join('')}
       </table></div></div>`;
   }
 

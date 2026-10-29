@@ -14,7 +14,7 @@ import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './e
 import { parseBreakpoints } from './engine/optimize.js';
 import { solveSote } from './engine/sotesolve.js';
 import { SotePool } from './sote-solver-pool.js';
-import { defaultMazes, MAZE_HOW, defaultSpecs, SPECS, SPEC_COST, CLAW_BELOW } from './engine/sote.js';
+import { defaultMazes, MAZE_HOW, defaultSpecs, defaultSetup, SPECS, SPEC_COST, CLAW_BELOW } from './engine/sote.js';
 import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 
@@ -71,9 +71,10 @@ export function createSote(host, { getTeam }) {
     `)}
     ${pane('solve', 'data-solve', `
       <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's prefire, start spec, surge, Lightbearer cycles and
-        specs in each phase (and the entry instance), within the Surge potions / Lightbearers limits and the gear each player has. Each round it tries
-        every single change to one player - on a few raids, then the best on more - and keeps the best if it beats the current setup, until nothing
-        does. The top setups are then played at every entry instance and ranked: with breakpoints by the share finished at the fastest one (then the
+        specs in each phase (Maul, BGS, Claws, ZCB, backup, horn) and the entry instance, within the Surge potions / Lightbearers limits and the gear
+        each player has. Each round it tries every single change to one player (with Swaps: also moving a surge / Lightbearer to another player and
+        swapping two players' specs in a phase; with Paired specs: two players' specs in a phase changed together) - on a few raids, then the best on
+        more - and keeps the best if it beats the current setup, until nothing does (Restarts: again from two other starting setups). The top setups are then played at every entry instance and ranked: with breakpoints by the share finished at the fastest one (then the
         next), otherwise by the median. Mazes and supplies stay as set.</p>
       <div class="row">
         <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
@@ -82,6 +83,11 @@ export function createSote(host, { getTeam }) {
       </div>
       <div class="row" style="margin-top:6px">
         ${[['prefire', 'Prefires'], ['start', 'Start spec'], ['surge', 'Surges'], ['lb', 'Lightbearer'], ['specs', 'Specs'], ['entry', 'Entry instance']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}
+      </div>
+      <div class="row" style="margin-top:6px"><span class="muted small">Search:</span>
+        ${[['swaps', 'Swaps', 'Also move a surge / Lightbearer from one player to another, and swap two players\' specs in a phase, in one step (finds swaps a one-change-at-a-time search can\'t when the surge limit is used up)'],
+          ['pairs', 'Paired specs', 'Also change two players\' specs in the same phase together (slower)'],
+          ['restarts', 'Restarts', 'Search again from two other starting setups - the default for the scale and the setup above with the players\' roles moved one along - and keep the best of everything (about 3x the time)']].map(([k, l, tt]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="${tt}"><input type="checkbox" data-vs="${k}">${l}</label>`).join('')}
       </div>
       <div data-vstatus class="muted" style="margin-top:8px"></div>
       <div data-verr class="err"></div>
@@ -129,6 +135,7 @@ export function createSote(host, { getTeam }) {
     return `<div class="row wrap" style="gap:10px;align-items:end;margin:4px 0 10px">
       <div><div class="muted small">Set</div><div class="seg">${SETS.map((k) => `<button data-set="${k}" class="${k === r.cur ? 'on' : ''}" title="${r.sets[k] ? '' : 'Empty - opens a blank set'}">Set ${k}${r.sets[k] ? '' : ' (empty)'}</button>`).join('')}</div></div>
       <div><div class="muted small">Copy set ${r.cur} to</div>${SETS.filter((k) => k !== r.cur).map((k) => `<button class="ghost sm" data-copyset="${k}" title="Replace set ${k} with a copy of set ${r.cur}">Set ${k}</button>`).join(' ')}</div>
+      <button class="ghost sm" data-clearset title="Start set ${r.cur} over from a blank setup (its Gear set stays)">Clear set ${r.cur}</button>
       <label>Saved sets<select data-saved="pick"><option value="">(choose a set)</option>${list.map((x) => `<option value="${x.id}" ${x.id === savedPick ? 'selected' : ''}>${esc(x.name)} · ${when(x.saved)}</option>`).join('')}</select></label>
       <button class="ghost sm" data-setact="load" ${savedPick ? '' : 'disabled'} title="Replace set ${r.cur} with this one">Load into set ${r.cur}</button>
       <button class="ghost sm" data-setact="del" ${savedPick ? '' : 'disabled'}>Delete</button>
@@ -255,6 +262,10 @@ export function createSote(host, { getTeam }) {
     const b = e.target.closest('button'); if (!b) return;
     const r = rootState();
     if (b.dataset.set) { r.cur = b.dataset.set; r.sets[r.cur] ||= structuredClone({ gearSet: tstate().gearSet, players: [] }); setMsg = ''; persist(); refreshAll(); return; }
+    if (b.dataset.clearset != null) {
+      if (!confirm(`Clear set ${r.cur}? Its players, specs, mazes, supplies and room settings go back to a blank setup (its Gear set stays).`)) return;
+      r.sets[r.cur] = { gearSet: tstate().gearSet, players: [] }; setMsg = `Set ${r.cur} cleared.`; persist(); refreshAll(); return;
+    }
     if (b.dataset.copyset) { r.sets[b.dataset.copyset] = structuredClone(tstate()); delete r.sets[b.dataset.copyset].lastTimes; const rp = repState(); if (!rp.sets.includes(b.dataset.copyset)) rp.sets = SETS.filter((x) => x === b.dataset.copyset || rp.sets.includes(x));
       setMsg = `Copied set ${r.cur} to set ${b.dataset.copyset}.`; persist(); refreshAll(); return; }
     const act = b.dataset.setact; if (!act) return;
@@ -436,16 +447,20 @@ export function createSote(host, { getTeam }) {
   // ---- solver
   let vjob = null, vresults = null;
   const ALLOW = ['prefire', 'start', 'surge', 'lb', 'specs', 'entry'];
+  const SEARCH_DEFAULT = { swaps: true, pairs: false, restarts: false };
   const solState = () => { const st = rootState(); st.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])) }; return st.solve; };
   const showSol = () => {
     const v = solState();
     sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="effort"]').value = v.effort;
     for (const k of ALLOW) sol.querySelector(`[data-va="${k}"]`).checked = v.allow[k] !== false;
+    v.search ||= { ...SEARCH_DEFAULT };
+    for (const k of Object.keys(SEARCH_DEFAULT)) sol.querySelector(`[data-vs="${k}"]`).checked = !!v.search[k];
   };
   for (const ev of ['input', 'change']) sol.addEventListener(ev, (e) => {
     const v = solState();
     if (e.target.dataset.v) v[e.target.dataset.v] = e.target.value;
     else if (e.target.dataset.va) v.allow[e.target.dataset.va] = e.target.checked;
+    else if (e.target.dataset.vs) { v.search ||= { ...SEARCH_DEFAULT }; v.search[e.target.dataset.vs] = e.target.checked; }
     else return;
     persist();
   });
@@ -470,7 +485,7 @@ export function createSote(host, { getTeam }) {
       ${allWiped ? '<p class="err">Every raid wiped with these setups, so there is nothing to rank. Check the mazes and supplies above (phoenix necklaces, sharks) and the gear set - a Report run shows how the room goes.</p>' : ''}
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>Mazes</th><th>P2</th><th>P3</th>${vresults.some((r) => wiped(r) > 0) ? '<th>Wiped</th>' : ''}<th></th></tr>
       ${vresults.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b);
-        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>i${r.entry}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.maze1) + med(r.split.maze2))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td>${vresults.some((y) => wiped(y) > 0) ? `<td>${(wiped(r) * 100).toFixed(1)}%</td>` : ''}<td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use this setup</button></td></tr>
+        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>i${r.entry}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.maze1) + med(r.split.maze2))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td>${vresults.some((y) => wiped(y) > 0) ? `<td>${(wiped(r) * 100).toFixed(1)}%</td>` : ''}<td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> ${SETS.map((k) => `<button class="ghost sm" data-vuse="${i}" data-to="${k}" title="Put this setup (and its entry instance) into set ${k}${rootState().sets[k] ? '' : ' - a new set, from set ' + rootState().cur}">Copy to set ${k}</button>`).join(' ')}</td></tr>
         <tr class="sub-row" data-vproc="${i}" hidden><td colspan="${11 + asc.length}" style="text-align:left">
           <div class="small">Entry instance i${r.entry} (median by entry: ${r.byEntry.map((y) => `i${y.entry} ${ft(y.median)}`).join(', ')})</div>
           <table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
@@ -481,11 +496,13 @@ export function createSote(host, { getTeam }) {
   sol.addEventListener('click', async (e) => {
     const t0 = e.target;
     if (t0.dataset.vshow != null) { const row = sol.querySelector(`[data-vproc="${t0.dataset.vshow}"]`); row.hidden = !row.hidden; return; }
-    if (t0.dataset.vuse != null) {                                    // copy the setup into the tab (and the entry into the report)
-      const r = vresults[Number(t0.dataset.vuse)], st = tstate();
+    if (t0.dataset.vuse != null) {                                    // copy the setup (and its entry instance) into set A / B / C
+      const r = vresults[Number(t0.dataset.vuse)], k = t0.dataset.to || rootState().cur, rs = rootState();
+      if (!rs.sets[k]) rs.sets[k] = structuredClone(tstate());          // an empty set starts as a copy of this one (gear, mazes, supplies)
+      const st = setOf(k), rp = repState(); if (!rp.sets.includes(k)) rp.sets = SETS.filter((x) => x === k || rp.sets.includes(x));
       r.cfg.players.forEach((p, k) => Object.assign(st.players[k], { prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ ...x })) }));
       st.entry = r.entry; persist(); render(); showRep();
-      sol.querySelector('[data-vstatus]').textContent = `Setup #${Number(t0.dataset.vuse) + 1} copied into set ${rootState().cur} (entry instance i${r.entry}).`;
+      sol.querySelector('[data-vstatus]').textContent = `Setup #${Number(t0.dataset.vuse) + 1} copied into set ${k} (entry instance i${r.entry}).`;
       return;
     }
     const a = t0.dataset.vact; if (!a) return;
@@ -499,6 +516,19 @@ export function createSote(host, { getTeam }) {
     const base = all.map((p) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes }));
     const start = { entry: Number(tstate().entry) || 0, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
     const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick };
+    const sr = v.search || SEARCH_DEFAULT, sLim = Number.isInteger(st.surgeLimit) ? st.surgeLimit : t, lbLim = Number.isInteger(st.lbRings) ? st.lbRings : t;
+    /** A restart setup within the surge / Lightbearer limits and the weapons each player has. */
+    const fit = (players) => { let su = 0, lb = 0; return players.map((p, k) => {
+      const own = (w) => (all[k].gear.weapons || []).includes(w), okSpec = (x) => x.spec === 'none' || ({ maul: own('Elder maul') || own('Bandos godsword'), bgs: own('Bandos godsword'), claws: own('Dragon claws'), zcb: own('Zaryte crossbow') })[x.spec];
+      const pre = { 'Twisted bow': 'Twisted bow', 'ZCB auto': 'Zaryte crossbow', 'ZCB spec': 'Zaryte crossbow', 'Shadow Barrage': 'Shadow ancient sceptre', "Tumeken's shadow": "Tumeken's shadow" }[p.prefire];
+      const surge = p.surge && su < sLim; if (surge) su++; const lbc = p.lbCycles > 0 && lb < lbLim ? p.lbCycles : 0; if (lbc) lb++;
+      return { ...p, prefire: !pre || own(pre) ? p.prefire : '', surge, lbCycles: lbc, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x, ...(okSpec(x) ? {} : { spec: 'none' }), horn: !!x.horn && !!all[k].gear.horn })) };
+    }); };
+    const ds = defaultSetup(t), dsp = defaultSpecs(t);
+    const restarts = sr.restarts ? [
+      { players: fit(ds.map((x, k) => ({ prefire: x.prefire, startSpec: x.startSpec, surge: x.surge, lbCycles: 0, specs: dsp[k].map((y) => ({ ...y })) }))) },
+      { players: fit(start.players.map((_, k) => structuredClone(start.players[(k + 1) % t]))) },
+    ] : [];
     const pool = new SotePool(base, t, opts);
     vjob = { stopped: false, pool }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
@@ -506,7 +536,7 @@ export function createSote(host, { getTeam }) {
     try {
       vresults = await solveSote({ team: t, base, start, gear: all.map((p) => p.gear), allow: { ...Object.fromEntries(ALLOW.map((k) => [k, v.allow[k] !== false])) },
         surgeLimit: Number.isInteger(st.surgeLimit) ? st.surgeLimit : t, lbRings: Number.isInteger(st.lbRings) ? st.lbRings : t,
-        bps, solveEntry: v.allow.entry !== false, ...ef, top: 10 },
+        bps, solveEntry: v.allow.entry !== false, ...ef, top: 10, swaps: !!sr.swaps, pairs: !!sr.pairs, restarts },
       (...args) => pool.run(...args), (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; }, () => me.stopped);
       showResults(bps, t);
       status.textContent = `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
