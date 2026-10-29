@@ -6,7 +6,8 @@ import { applyToCfg, blankPlayer, BOTH_AMULETS } from './engine/loadout.js';
 import { reportHtml, reportPage } from './engine/report.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { COMMIT_KEYS, COMMIT_DEFAULT, DEEP_THR } from './engine/solo.js';
-import { solveSolo, cfgOf, shadowModeOf, SHADOW_MODES } from './engine/solosolve.js';
+import { solveSolo, cfgOf, shadowModeOf, SHADOW_MODES, better as scoreBetter } from './engine/solosolve.js';
+import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresults.js';
 import { SoloPool } from './solo-solver-pool.js';
 import { SimPool } from './pool.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
@@ -62,8 +63,9 @@ export function createSolo(host) {
         sequence (two claws, claw > shadow > scythes, claw > scratch > scythes, or scythes; halberd on r40 with 30%+). Optionally also the shadow
         mode, Ayak P2 amount, godbook, Lightbearer cycles (before reds / in reds), LB P2 Until Reds and LB Flick Reds. With a Target down it ranks by the share of raids killed in that many reds sets or fewer first. Each round tries every single change on a few raids, then the best on more, and keeps the best
         if it beats the current setup; the top setups are then played on more raids and ranked: with breakpoints by the share finished at the
-        fastest one (then the next), otherwise by the median.</p>
+        fastest one (then the next), otherwise by the median. Each ticked set is solved from its own settings; each gets its own results (or one combined ranking).</p>
       <div class="row">
+        <div data-vsets></div>
         <label title="Reds sets: rank by the share of raids killed in at most this many sets (several: the lowest first), before breakpoints and the median">Target down (optional)<input data-v="downs" placeholder="e.g. 7 or 6, 7, 8" style="width:120px"></label>
         <label>Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label title="How far each raid is played while solving: times are then to the end of P2, or the whole room">Phases<select data-v="scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option></select></label>
@@ -243,21 +245,26 @@ export function createSolo(host) {
     finally { running = false; btn('run').disabled = false; btn('stop').disabled = true; }
   });
 
-  // ---------------------------------------------------------------- solver
+  // ---------------------------------------------------------------- solver: each ticked set solved from its own settings
   const EFFORT = { quick: { rounds: 5, stages: [[40, 0.25], [150, 3], [500, 1]], final: 1000 }, normal: { rounds: 8, stages: [[60, 0.25], [240, 4], [800, 1]], final: 2000 },
     thorough: { rounds: 14, stages: [[100, 0.3], [400, 5], [1500, 1]], final: 5000 } };
-  const solState = () => { const r = root(); r.solve ||= { bps: '', effort: 'normal', allow: { shadow: false, ayak: false, godbook: false, ring: false } }; return r.solve; };
+  const setLabel = (k) => { const l = String((repState().labels || {})[k] || '').trim(); return l ? `Set ${k}: ${l}` : `Set ${k}`; };
+  const solState = () => { const r = root(); r.solve ||= { bps: '', effort: 'normal', allow: { shadow: false, ayak: false, godbook: false, ring: false } }; r.solve.sets ||= [r.cur]; return r.solve; };
   const showSol = () => {
-    const v = solState(); sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="downs"]').value = v.downs || ''; sol.querySelector('[data-v="effort"]').value = v.effort; sol.querySelector('[data-v="scope"]').value = v.scope || 'full';
+    const v = solState(), rs = root();
+    sol.querySelector('[data-vsets]').innerHTML = setPicker((k) => !!rs.sets[k], v.sets, setLabel);
+    sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="downs"]').value = v.downs || ''; sol.querySelector('[data-v="effort"]').value = v.effort; sol.querySelector('[data-v="scope"]').value = v.scope || 'full';
     for (const k of ['shadow', 'ayak', 'godbook', 'lb', 'lbcamp', 'flick']) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
   };
   sol.addEventListener('change', (e) => {
     const v = solState(), t = e.target;
+    if (t.dataset.runset) v.sets = pickSets(v.sets, t);
     if (t.dataset.v) v[t.dataset.v] = t.value;
     if (t.dataset.va) v.allow[t.dataset.va] = t.checked;
     persist();
   });
-  let solver = null, results = null, lastBps = [], lastDowns = [], lastScope = 'full';
+  let solver = null, results = null, lastBps = [], lastDowns = [], lastScope = 'full', combine = false, flat = [];
+  const openSecs = {};
   const settingsOf = (st, c, allow) => ({ commit: { ...st.commit }, shadowMode: allow.shadow && c.hasShadow ? shadowModeOf(c) : null,
     ayak: allow.ayak && c.hasAyak ? (c.ayakP2 ? Number(st.ayakAmount) || 0 : 0) : null, godbook: !!st.godbook,
     lbCamp: allow.lbcamp ? !!st.lbCamp : null, lbP2: allow.lb ? Number(st.lbP2) || 0 : null, lbReds: allow.lb ? Number(st.lbReds) || 0 : null, lbFlick: allow.flick ? Number(st.lbFlick) || 0 : null });
@@ -271,48 +278,63 @@ export function createSolo(host) {
     const b = e.target.closest('button'); if (!b) return;
     const status = sol.querySelector('[data-vstatus]'), err = sol.querySelector('[data-verr]'), out = sol.querySelector('[data-vout]');
     const vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
-    if (b.dataset.vuse != null && results) {
-      const s = results[Number(b.dataset.vuse)].s, k = b.dataset.to || root().cur, rs = root();
-      if (!rs.sets[k]) rs.sets[k] = structuredClone(cur());              // an empty set starts as a copy of this one
+    if (b.dataset.vuse != null) {
+      const r = flat[Number(b.dataset.vuse)]; if (!r) return;
+      const s = r.s, k = b.dataset.to || root().cur, rs = root();
+      if (!rs.sets[k]) rs.sets[k] = structuredClone(setOf(r.set) || cur());   // an empty set starts as a copy of the set solved
       const st = setOf(k), rp = repState(); if (!rp.sets.includes(k)) rp.sets = SETS.filter((x) => x === k || rp.sets.includes(x));
       st.commit = { ...s.commit }; st.godbook = !!s.godbook; if (s.lbP2 != null) { st.lbP2 = s.lbP2; st.lbReds = s.lbReds; } if (s.lbFlick != null) st.lbFlick = s.lbFlick; if (s.lbCamp != null) st.lbCamp = s.lbCamp;
       if (s.shadowMode != null) Object.assign(st, { shadowCamp: s.shadowMode === 'camp', shadow31: s.shadowMode === '31' || s.shadowMode === 'lb31', shadowLB: s.shadowMode === 'lb' || s.shadowMode === 'lb31' });
       if (s.ayak != null) { st.ayakP2 = s.ayak > 0; if (s.ayak > 0) st.ayakAmount = s.ayak; }
-      persist(); render(); showRep(); status.textContent = `Setup #${Number(b.dataset.vuse) + 1} copied into set ${k}.`; return;
+      persist(); render(); showRep(); showSol(); status.textContent = `Set ${r.set} setup copied into set ${k}.`; return;
     }
-    if (b.dataset.vact === 'stop') { if (solver) { solver.stopped = true; solver.pool.stop(); } return; }
+    if (b.dataset.vact === 'stop') { if (solver) { solver.stopped = true; if (solver.pool) solver.pool.stop(); } return; }
     if (b.dataset.vact !== 'run' || solver) return;
     const v = solState(); err.textContent = '';
     let bps = []; try { bps = String(v.bps || '').trim() ? parseBreakpoints(v.bps) : []; } catch (x) { err.textContent = x.message; return; }
     const downs = [...new Set(String(v.downs || '').split(/[\s,]+/).filter(Boolean).map(Number))];
     if (downs.some((n) => !Number.isInteger(n) || n < 1 || n > 60)) { err.textContent = 'Target down: whole numbers of reds sets, e.g. 7 or 6, 7, 8'; return; }
     downs.sort((a, b) => a - b);
-    const st = cur(), c = cfgOfSet(st), eff = EFFORT[v.effort] || EFFORT.normal;
-    const base = { ...c, scope: v.scope === 'p2' ? 'p2' : 'full' }, start = settingsOf(st, c, v.allow);
-    solver = { stopped: false, pool: new SoloPool(base) }; const me = solver;
-    vbtn('run').disabled = true; vbtn('stop').disabled = false; out.innerHTML = ''; lastBps = bps; lastDowns = downs; lastScope = base.scope;
-    const t0 = performance.now();
+    const keys = v.sets.filter((k) => setOf(k));
+    if (!keys.length) { err.textContent = 'Tick at least one set to solve.'; return; }
+    const eff = EFFORT[v.effort] || EFFORT.normal, scope = v.scope === 'p2' ? 'p2' : 'full';
+    solver = { stopped: false, pool: null }; const me = solver;
+    vbtn('run').disabled = true; vbtn('stop').disabled = false; out.innerHTML = ''; lastBps = bps; lastDowns = downs; lastScope = scope;
+    const t0 = performance.now(), groups = [];
     try {
-      results = await solveSolo({ start, allow: { commit: true, ...v.allow }, hasShadow: !!c.hasShadow, hasAyak: !!c.hasAyak, bps, targets: downs, rounds: eff.rounds, stages: eff.stages, finalRaids: eff.final, top: 10 },
-        (cfgs, from, to, seed) => me.pool.run(cfgs, from, to, seed), (m) => { status.textContent = m; }, () => me.stopped);
+      for (const [n, k] of keys.entries()) {
+        if (me.stopped) break;
+        const st = setOf(k), c = cfgOfSet(st), base = { ...c, scope }, start = settingsOf(st, c, v.allow);
+        const pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '';
+        me.pool = new SoloPool(base);
+        try {
+          const list = await solveSolo({ start, allow: { commit: true, ...v.allow }, hasShadow: !!c.hasShadow, hasAyak: !!c.hasAyak, bps, targets: downs, rounds: eff.rounds, stages: eff.stages, finalRaids: eff.final, top: 10 },
+            (cfgs, from, to, seed) => me.pool.run(cfgs, from, to, seed), (m) => { status.textContent = pre + m; }, () => me.stopped);
+          groups.push({ k, label: setLabel(k), items: list.map((r) => ({ ...r, set: k, hasShadow: !!c.hasShadow, hasAyak: !!c.hasAyak })) });
+        } finally { me.pool.stop(); }
+        results = [...groups]; showResults();
+      }
       status.textContent = me.stopped ? 'Stopped.' : `Done in ${((performance.now() - t0) / 1000).toFixed(0)}s.`;
-      showResults(!!c.hasShadow, !!c.hasAyak);
     } catch (x) { if (!me.stopped) err.textContent = x.message; else status.textContent = 'Stopped.'; }
-    finally { me.pool.stop(); solver = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
+    finally { solver = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
-  function showResults(hasShadow, hasAyak) {
+  function showResults() {
     const out = sol.querySelector('[data-vout]');
-    if (!results || !results.length) { out.innerHTML = ''; return; }
+    if (!results || !results.some((g) => g.items.length)) { out.innerHTML = ''; return; }
     const med = (a) => { const x = a.slice().sort((p, q) => p - q); return x[Math.floor(x.length / 2)]; };
     const asc = [...lastBps].sort((a, b) => a - b), fs = (b) => `${Math.floor(b / 60)}:${String(Math.round(b % 60)).padStart(2, '0')}`;
     const ft = (x) => (x == null || Number.isNaN(x) ? '-' : x >= 99999 ? 'failed' : fsec(x));
-    out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">Solo Verzik: solver - top ${results.length}</h3>
-      <div class="sub">Each played on the same ${results[0].totals.length.toLocaleString()} raids${lastScope === 'p2' ? ', P1 + P2 only - times are to the end of P2' : ''}. Times: median. ${esc(DEATHS_NOTE)}</div>
-      <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${lastDowns.map((n) => `<th>${n}-down or better</th>`).join('')}${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>P2</th><th>P3</th><th>Reds sets</th><th style="text-align:left">Setup</th><th></th></tr>
-      ${results.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b), sets = r.split.sets;
-        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${lastDowns.map((n) => `<td>${(r.downs.filter((x) => x <= n).length / r.downs.length * 100).toFixed(1)}%</td>`).join('')}${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td><td>${sets.length ? (sets.reduce((s, x) => s + x, 0) / sets.length).toFixed(2) : '-'}</td><td style="text-align:left;white-space:normal;min-width:260px">${esc(describe(r.s, hasShadow, hasAyak))}</td><td>${SETS.map((k) => `<button class="ghost sm" data-vuse="${i}" data-to="${k}" title="Put this setup into set ${k}${root().sets[k] ? '' : ' - a new set, from set ' + root().cur}">Copy to set ${k}</button>`).join(' ')}</td></tr>`; }).join('')}
-      </table></div></div>`;
+    flat = [];
+    const table = (rows, withSet) => `<div class="scroll"><table class="sortlist"><tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Median</th><th>Top 10%</th><th>Fastest</th>${lastDowns.map((n) => `<th>${n}-down or better</th>`).join('')}${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>P2</th><th>P3</th><th>Reds sets</th><th style="text-align:left">Setup</th><th></th></tr>
+      ${rows.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b), sets = r.split.sets, idx = flat.push(r) - 1;
+        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${lastDowns.map((n) => `<td>${(r.downs.filter((x) => x <= n).length / r.downs.length * 100).toFixed(1)}%</td>`).join('')}${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td><td>${sets.length ? (sets.reduce((s, x) => s + x, 0) / sets.length).toFixed(2) : '-'}</td><td style="text-align:left;white-space:normal;min-width:260px">${esc(describe(r.s, r.hasShadow, r.hasAyak))}</td><td>${SETS.map((k) => `<button class="ghost sm" data-vuse="${idx}" data-to="${k}" title="Put this setup into set ${k}${root().sets[k] ? '' : ` - a new set, from set ${r.set}`}">Copy to set ${k}</button>`).join(' ')}</td></tr>`; }).join('')}
+      </table></div>`;
+    const all = results.flatMap((g) => g.items);
+    out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">Solo Verzik: solver</h3>
+      <div class="sub">Each played on the same ${all[0].totals.length.toLocaleString()} raids${results.length > 1 ? ' (every set on the same raids, so sets compare fairly)' : ''}${lastScope === 'p2' ? ', P1 + P2 only - times are to the end of P2' : ''}. Times: median. ${esc(DEATHS_NOTE)}</div>
+      ${setResultsHtml(results, { combine, table, open: openSecs, better: (a, b) => scoreBetter(a.score, b.score) })}</div>`;
   }
+  wireSetResults(sol.querySelector('[data-vout]'), openSecs, (c) => { combine = c; showResults(); });
 
   function refreshAll() { render(); showRep(); showSol(); }
   refreshAll();
