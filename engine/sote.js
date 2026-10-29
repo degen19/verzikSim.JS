@@ -161,7 +161,8 @@ export function defaultSetup(team) {
 }
 const ROLES = ['A', 'B', 'C', 'D', 'E'];
 export const HORN_TICK = 8;                                       // a phase 1 horn: after the prefire, while running in
-export const ORB_DOWN_AT = 0.07;  // a redemption skipper orbs down regardless once she's within 7% (of her HP) of the maze
+export const ORB_DOWN_AT = 0.09;  // a redemption skipper orbs down regardless once she's within 9% (of her HP) of the maze
+export const ZCB_MARGIN = 100;    // P1 / P2: no ZCB unless its ruby (+ this for the team's hits as it flies) fits before the maze
 export const CLAW_BELOW = 450;   // P3: a planned ZCB becomes claws once she's below this HP (the ruby's 22% is small by then)
 export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, ZCB_SPEC = 75, ZCB_DELAY = 2;
 // ZCB spec (75%): double accuracy, guaranteed ruby bolt (22% of her HP, max 110), lands 2 ticks later (assumed), 5-tick
@@ -265,7 +266,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: c.prefire || '', pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? 100),
     surgePlan: !!c.surge, regen: 0, specs: [0, 1, 2].map((k) => ({ ...S_('none'), ...((c.specs || specsDefault[i] || [])[k] || {}) })), hornDone: [false, false, false],
-    hornUntil: -1, surged: false, surgeAt: null, vengPops: [0, 0, 0], orbedDown: -1, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
+    hornUntil: -1, surged: false, surgeAt: null, zcbCarry: -1, vengPops: [0, 0, 0], orbedDown: -1, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
     role: c.role || ROLES[i], mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   for (const p of ps) p.regenHold = p.spec < 100;
@@ -431,10 +432,18 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // a phase 2 / 3 horn: after their first scythe off the maze, free (then the maul)
     if (ph > 0 && sp.horn && !p.hornDone[ph] && p.swings[ph] >= 1 && p.spec >= HORN_COST) castHorn(p, t, ph);
     const mauls = (q) => plannedMaul(q, ph) && !q.mauled[ph] && q.spec >= 50 && (q.gear.weapons || []).includes('Elder maul');
+    // P1 / P2: a ZCB's ruby (22% of her HP, max 110) would be cut short by the maze - wasted. They keep it for the start of
+    // the next phase instead (after its mauls).
+    const zcbWasted = ph < 2 && hp - stopAt < Math.min(110, Math.floor(hp * 0.22)) + ZCB_MARGIN;
+    if (p.zcbCarry === ph && !alive().some(mauls) && p.spec >= ZCB_SPEC && has('Zaryte crossbow') && !zcbWasted) { p.zcbCarry = -1; return 'zcbCarry'; }
     if (!sp.backup) {
       if (sp.spec === 'maul' && !p.mauled[ph] && has('Elder maul')) return p.spec >= 50 && !hornWait(p, ph) ? 'maul' : 'scythe';
       if (p.specDone[ph] || sp.spec === 'none') return 'scythe';
-      if (sp.spec === 'zcb') return !alive().some(mauls) && p.spec >= ZCB_SPEC && has('Zaryte crossbow') ? 'zcb' : 'scythe';
+      if (sp.spec === 'zcb') {
+        if (alive().some(mauls) || p.spec < ZCB_SPEC || !has('Zaryte crossbow')) return 'scythe';
+        if (zcbWasted) { p.specDone[ph]++; p.zcbCarry = ph + 1; L.on && L(`t${t} ${p.name} keeps their ZCB spec for the start of P${ph + 2} (P${ph + 1} too close to the maze)`); return 'scythe'; }
+        return 'zcb';
+      }
       if (sp.spec === 'claws') return !alive().some(mauls) && !anyMaulPending() && p.spec >= 50 && has('Dragon claws') ? 'claw' : 'scythe';
       return 'scythe';
     }
@@ -442,7 +451,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (p.specDone[ph] || !p.swings[ph] || alive().some(mauls) || anyMaulPending()) return 'scythe';
     if (!floorNow && alive().some((q) => q.i < p.i && q.specs[ph].backup && (!q.specDone[ph] || specHitPending(q)))) return 'scythe';
     if (!floorNow) { if (p.spec >= 50 && has('Elder maul')) return 'maul'; p.specDone[ph]++; return 'scythe'; }
-    if (sp.spec === 'zcb' && has('Zaryte crossbow')) return p.spec >= ZCB_SPEC ? 'zcb' : 'scythe';   // a ZCB may wait for a regen
+    if (sp.spec === 'zcb' && has('Zaryte crossbow')) { if (zcbWasted) { p.specDone[ph]++; return 'scythe'; } return p.spec >= ZCB_SPEC ? 'zcb' : 'scythe'; }   // a ZCB may wait for a regen
     if (sp.spec === 'claws' && has('Dragon claws')) return p.spec >= 50 ? 'claw' : 'scythe';
     p.specDone[ph]++; return 'scythe';                               // at the floor, nothing else planned
   };
@@ -453,6 +462,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const closePhase = (ph) => {
     for (const q of alive()) {
       const sp = q.specs[ph];
+      if (sp.spec === 'zcb' && !sp.backup && !q.specDone[ph] && ph < 2) {    // a P1 / P2 ZCB that never went off: start of the next phase
+        q.zcbCarry = ph + 1; L.on && L(`${q.name}'s P${ph + 1} ZCB spec moves to the start of P${ph + 2}`); continue;
+      }
+      if (ph === 2 && q.zcbCarry === 2) st.specMissed.push({ i: q.i, ph: 1, kind: 'zcb' });
       if (sp.spec !== 'none' && !sp.backup && !q.specDone[ph]) st.specMissed.push({ i: q.i, ph, kind: sp.spec });
       if (sp.horn && !q.hornDone[ph]) st.specMissed.push({ i: q.i, ph, kind: 'horn' });
     }
@@ -558,7 +571,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // ---- before a redemption skip: there's no time to orb down after the proc, so in the phase before it they pop 1-2
     // vengs (1 if the first left them on 50 or less), Heal Other someone with what they have, then locator orb down to
     // 1 HP. The heal: lowest HP first, never to another redemption skipper, never to an HP that dies on the stall.
-    // Close to the proc (her last 7% before the maze) they do it anyway. Not with their prayer off (an unprayed orb).
+    // Close to the proc (her last 9% before the maze) they do it anyway. Not with their prayer off (an unprayed orb).
     if (!blocked && mazes.length < 2 && kill == null) {
       const ph = mazes.length, near = hp - stopAt <= MAX * ORB_DOWN_AT;
       for (const p of alive()) {
@@ -694,9 +707,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const ph = phase, has = (w) => (p.gear.weapons || []).includes(w);
       const act = chooseAct(p, t, ph, has);
       p.swings[ph]++;
-      if (act !== 'scythe') st.specLog.push({ i: p.i, ph, kind: act === 'claw' ? 'claws' : act, t });
-      if (act === 'zcb') {
-        spend(p, ZCB_SPEC, t); p.specDone[ph]++; st.specs.zcb++;
+      if (act !== 'scythe') st.specLog.push({ i: p.i, ph, kind: act === 'claw' ? 'claws' : act === 'zcbCarry' ? 'zcb' : act, t, carried: act === 'zcbCarry' });
+      if (act === 'zcb' || act === 'zcbCarry') {
+        spend(p, ZCB_SPEC, t); if (act === 'zcb') p.specDone[ph]++; st.specs.zcb++;
         hits.push([t + ZCB_DELAY, p, 0, 'ZCB spec', 'zcb']);
         L.on && L(`t${t} ${p.name} ZCB spec (${p.spec}% left)`);
         p.next = nextAfter(t, 5);
