@@ -4,7 +4,8 @@
 import { readXlsx } from './engine/xlsx.js';
 import { SOTE_MECHANICS } from './engine/sotemech.js';
 import { SOLO_SECTIONS } from './engine/solomech.js';
-const BOSSES = [['verzik', 'Verzik', 'Set on the chart'], ['sote', 'Sotetseg', 'Set in the Sotetseg tab']];
+import { XARPUS_MECHANICS } from './engine/xarpusmech.js';
+const BOSSES = [['verzik', 'Verzik', 'Set on the chart'], ['sote', 'Sotetseg', 'Set in the Sotetseg tab'], ['xarpus', 'Xarpus', 'Set in the Xarpus tab']];
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -30,16 +31,16 @@ export function createMechanics(details, body, { getRoom } = {}) {
   let data = null, boss = null, picked = null;       // picked: the boss chosen in the section (else the tab's)
   const cache = {};
   async function render() {
-    const want = picked || ((getRoom && getRoom()) === 'sote' ? 'sote' : 'verzik');
+    const want = picked || (['sote', 'xarpus'].includes(getRoom && getRoom()) ? getRoom() : 'verzik');
     if (!data || want !== boss) {
       boss = want;
       body.innerHTML = '<p class="muted">Loading...</p>';
-      try { data = cache[boss] ||= boss === 'sote' ? SOTE_MECHANICS : await loadMechanics(); } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+      try { data = cache[boss] ||= boss === 'sote' ? SOTE_MECHANICS : boss === 'xarpus' ? XARPUS_MECHANICS : await loadMechanics(); } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
       body.innerHTML = `
         <div class="row" style="margin:0 0 8px"><label>Boss<select id="m-b">${BOSSES.map(([v, l]) => `<option value="${v}" ${v === boss ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
         ${data.intro.map((t) => `<p class="muted small">${esc(t)}</p>`).join('')}
         <div class="row" style="margin:8px 0">
-          <label>Search<input id="m-q" placeholder="e.g. ${boss === 'sote' ? 'maze, ball, horn' : 'brew, purple, horn'}" style="width:220px"></label>
+          <label>Search<input id="m-q" placeholder="e.g. ${boss === 'sote' ? 'maze, ball, horn' : boss === 'xarpus' ? 'screech, Ralos, heals' : 'brew, purple, horn'}" style="width:220px"></label>
           <label>Scale<select id="m-s"><option value="">All scales</option><option value="solo">Solo</option><option value="duo">Duo</option><option value="team">3-5 man</option></select></label>
         </div>
         <div class="row" style="margin:0 0 6px"><button class="ghost sm" id="m-all">Expand all</button><button class="ghost sm" id="m-none">Collapse all</button></div>
