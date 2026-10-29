@@ -89,6 +89,7 @@ export const SURGE_AT = 70;                   // after P1: re-surge when off coo
 /** Duos (and later solos) only. From P2 on: surge again (+25%) once its 500-tick cooldown is up, if spec <= 70% and off potion delay. */
 export function auto_surge(p, t, L, tag = '') {
   if (!p.auto_surge_on || p.dead || t < p.surge_ready || p.spec > SURGE_AT || t < p.sip_ready) return false;
+  if (p.surge_left != null) { if (p.surge_left <= 0) return false; p.surge_left -= 1; }   // solos: a set number of surge doses
   const old = p.spec;
   p.spec = Math.min(100, p.spec + 25); p.gain_src = 'other';
   p.surge_ready = t + SURGE_CD;

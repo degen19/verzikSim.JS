@@ -10,7 +10,7 @@ Object.assign(g.mage, { head: 'Ancestral hat', body: 'Ancestral robe top', legs:
 Object.assign(g.melee, { head: 'Torva full helm', body: 'Torva platebody', legs: 'Torva platelegs' });
 g.weapons.push('Toxic blowpipe', "Tumeken's shadow", 'Eye of ayak', 'Elder maul');
 const base = applyToCfg({ name: 'Solo' }, g);
-const cfg = { ...base, shadow: base.hasShadow, deepProc: base.hasShadow, deepThr: Number(arg('deep', 37)), shadow31: arg('s31', '0') === '1', shadowCamp: arg('camp', '0') === '1', ayakP2: arg('ayak', '0') === '1', ayakAmount: Number(arg('amt', 70)), redsMode: arg('reds', 'scythe'), lbP2: Number(arg('lbp2', 0)), lbReds: Number(arg('lbreds', 0)), godbook: arg('gb', '0') === '1',
+const cfg = { ...base, shadow: base.hasShadow, deepProc: base.hasShadow, deepThr: Number(arg('deep', 37)), shadow31: arg('s31', '0') === '1', shadowCamp: arg('camp', '0') === '1', ayakP2: arg('ayak', '0') === '1', ayakAmount: Number(arg('amt', 70)), redsMode: arg('reds', 'scythe'), surgeDoses: Number(arg('surge', 1)), lbP2: Number(arg('lbp2', 0)), lbReds: Number(arg('lbreds', 0)), godbook: arg('gb', '0') === '1',
   commit: { c100: Number(arg('c100', 12)), c80: Number(arg('c80', 9)), c50: Number(arg('c50', 7)), c30: Number(arg('c30', 5)), c0: Number(arg('c0', 5)) } };
 if (process.argv.includes('--log')) { const log = []; const r = run_solo(cfg, new Rng(arg('seed', 'x#1')), log); console.log(log.join('\n')); console.log(r.end, r.st); }
 else {

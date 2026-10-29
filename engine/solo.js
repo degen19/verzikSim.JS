@@ -55,6 +55,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   p.ring = 'Lightbearer';
   p.mag = SHADOW_MAGIC; p.heart = SHADOW_MAGIC;                  // heart boost (112 Magic) the whole room
   p.auto_surge_on = true;
+  p.surge_left = Math.max(0, Math.trunc(Number(cfg.surgeDoses ?? 1)));   // surge pot doses: one a drink
   p.auto_r = cfg.godbook ? 'pending' : null;                    // godbook: 95%, no regen before the first spec, then one
   p.has3 = cfg.has3Tick || 'Ayak';
   const st = { purples: 0, purple_pops: 0, redemptions: 0, drained: 0, rends: 0, ayak: 0, sets: 0, commit_set: null, dc: 0, crab_kills: 0, claws: 0, halb: 0, shadows: 0, ayak_fix: 0 };
@@ -71,8 +72,9 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     } else p.regen_timer = 0;
   };
   const surge = (t, tag = '') => {
+    if (p.surge_due && p.surge_left <= 0) p.surge_due = false;     // no doses
     if (p.surge_due && t >= p.sip_ready && t >= p.surge_ready) {
-      const o = p.spec; p.spec = Math.min(100, p.spec + 25); p.surge_ready = t + 500; p.sip_ready = t + 3; p.surge_due = false;
+      p.surge_left -= 1; const o = p.spec; p.spec = Math.min(100, p.spec + 25); p.surge_ready = t + 500; p.sip_ready = t + 3; p.surge_due = false;
       L.on && L(`t${rjust(t, 4)} ${tag}surge after the first spec ${fx(o)}% -> ${fx(p.spec)}%`);
     } else if (!p.surge_due) auto_surge(p, t, L, tag);
   };

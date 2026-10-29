@@ -17,7 +17,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const loadKey = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch { return d; } };
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 export const DEATHS_NOTE = '*This does not yet take into account deaths and assumes you live every raid. Death tracking will come at a later date*';
-const blankSet = () => ({ gearSet: 'A', godbook: false, lbP2: 0, lbReds: 0, shadowCamp: false, shadowLB: false, shadow31: false, deepProc: false, deepThr: DEEP_THR,
+const blankSet = () => ({ gearSet: 'A', surgeDoses: 1, godbook: false, lbP2: 0, lbReds: 0, shadowCamp: false, shadowLB: false, shadow31: false, deepProc: false, deepThr: DEEP_THR,
   ayakP2: false, ayakAmount: 70, redsMode: 'scythe', commit: { ...COMMIT_DEFAULT } });
 const fsec = (t) => { const s = t * 0.6, m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(1)}`; };
 const COMMIT_LABEL = { c100: '100% spec', c80: '80%+ spec', c50: '50%+ spec', c30: '30%+ spec', c0: 'under 30%' };
@@ -34,7 +34,7 @@ export function createSolo(host) {
   const cfgOfSet = (st) => {
     const g = gearOf(st) || blankPlayer(0), base = applyToCfg({ name: g.name || 'Solo' }, g);
     const sh = base.hasShadow;
-    return { ...base, name: base.name || 'Solo', godbook: !!st.godbook, lbP2: Number(st.lbP2) || 0, lbReds: Number(st.lbReds) || 0, shadow: sh,
+    return { ...base, name: base.name || 'Solo', surgeDoses: Number(st.surgeDoses ?? 1), godbook: !!st.godbook, lbP2: Number(st.lbP2) || 0, lbReds: Number(st.lbReds) || 0, shadow: sh,
       shadowCamp: sh && !!st.shadowCamp, shadowLB: sh && !!st.shadowLB, shadow31: sh && !!st.shadow31, deepProc: sh,                                                         // solos always deep proc with a shadow deepThr: Number(st.deepThr) || DEEP_THR,
       ayakP2: (g.weapons || []).includes('Eye of ayak') && !!st.ayakP2, ayakAmount: Number(st.ayakAmount) || 0, redsMode: sh ? st.redsMode || 'scythe' : 'scythe', commit: { ...st.commit }, hasAyak: (g.weapons || []).includes('Eye of ayak') };
   };
@@ -97,6 +97,7 @@ export function createSolo(host) {
       <div class="row wrap" style="gap:14px;align-items:end">
         <label>Gear<select data-s="gearSet">${GEAR_SETS.map((k) => `<option value="${k}" ${k === st.gearSet ? 'selected' : ''}>Gear set ${k}${gearSet(loadGear(), 1, k) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         ${chk('godbook', 'Godbook (95% start)', st.godbook, 'Start P1 at 95%: no regen before the first Dawn spec, then a regen the tick after it')}
+        <label title="Surge potion doses brought: one a drink - straight after their first Dawn spec, then whenever the cooldown (500 ticks) is up at 70% spec or less">Surge pot doses<input data-s="surgeDoses" type="number" min="0" max="8" value="${esc(st.surgeDoses ?? 1)}" style="width:70px"></label>
         <label title="P2 before reds: spec regens on Lightbearer from the start of P2 (0-5), then Ultor. (P1 is always on Lightbearer.)">LB cycles before reds<input data-s="lbP2" type="number" min="0" max="5" value="${esc(st.lbP2)}" style="width:70px"></label>
         <label title="Reds: back on Lightbearer at the first shield for this many spec regens (0-5), then Ultor">LB cycles in reds<input data-s="lbReds" type="number" min="0" max="5" value="${esc(st.lbReds)}" style="width:70px"></label>
       </div>
@@ -154,6 +155,7 @@ export function createSolo(host) {
     if (t.dataset.commit) { st.commit[t.dataset.commit] = Math.max(0, Math.min(100, Number(t.value) || 0)); persist(); return; }
     const k = t.dataset.s; if (!k) return;
     if (t.type === 'checkbox') st[k] = t.checked;
+    else if (k === 'surgeDoses') st[k] = Math.max(0, Math.min(8, Math.trunc(Number(t.value) || 0)));
     else if (k === 'lbP2' || k === 'lbReds') st[k] = Math.max(0, Math.min(5, Math.trunc(Number(t.value) || 0)));
     else if (k === 'gearSet' || k === 'redsMode') st[k] = t.value;
     else st[k] = Number(t.value) || 0;
