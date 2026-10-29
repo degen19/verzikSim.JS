@@ -150,7 +150,7 @@ export function defaultXarpus(team) {
  * zcbBelow (ZCB_BELOW), maulTarget (MAUL_TARGET)}. Returns {end, kill, startHp, heals, screech, ..., players: [{surgeCd (left at
  * the end of the room), spec}]}.
  */
-export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAULT[team], exactHeals = false, defStop = DEF_STOP, zcbBelow = ZCB_BELOW, maulTarget = MAUL_TARGET, trace = null } = {}) {
+export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAULT[team], exactHeals = false, defStop = DEF_STOP, zcbBelow = ZCB_BELOW, maulTarget = MAUL_TARGET, trace = null, specsLand = false, bgsToZero = false } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const EXH = EXHUMED_TICKS[team] || 96, BASE = XARPUS_HP[team] || 5080, SCREECH_HP = Math.floor(BASE * SCREECH_AT);
   const nHeals = rollHeals(heals, rng, exactHeals), START = EXHUMED_HP[team] + nHeals * HEAL[team];
@@ -166,7 +166,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     let fix = c.fix || 'tick'; if (!ok(fix)) fix = 'tick';
     return { i, name: c.name || `P${i + 1}`, gear: g, spec: Number(c.startSpec ?? 100), regen: 0, regenHold: Number(c.startSpec ?? 100) < 100,
       surgePlan: !!c.surge, surged: false, surgeReady: Math.max(0, Number(c.surgeCd) || 0), surgeAt: null,
-      lb: false, lbLeft: Number(c.lbCycles || 0), slots, dps, fix, horn: !!c.horn && !!g.horn, firstSpec: false,
+      lb: false, lbLeft: Number(c.lbCycles || 0), dpsFrom: Number(c.dpsFrom) || 0, slots, dps, fix, horn: !!c.horn && !!g.horn, firstSpec: false,
       next: EXH + 1, hornUntil: -1, thrallNext: EXH + 1 + rng.randint(1, 2) };
   });
   // surge cooldown carried in: it doesn't tick between rooms, so it's ready `surgeCd` ticks into this room (the exhumeds count)
@@ -231,7 +231,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
   };
   const ownDefDone = (p) => p.slots.every((x) => x.done);
   const dpsAct = (p, t) => {
-    if (p.dps === 'none' || !ownDefDone(p)) return null;            // their own Defence specs first
+    if (p.dps === 'none' || !ownDefDone(p) || t < p.dpsFrom) return null;   // their own Defence specs first; held until dpsFrom
     if (p.dps === 'zcb') {
       if (hp < zcbBelow) return !defOpen() && has(p, 'Dragon claws') && p.spec >= 50 ? 'claw' : null;
       return settled() && p.spec >= ZCB_SPEC ? 'zcb' : null;        // a ZCB: once the mauls are settled
@@ -307,15 +307,15 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;
         if (act === 'maul') {
           st.specs.maul++;
-          const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25), hit = horned || rng.random() < ch;
+          const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25), hit = horned || rng.random() < ch || specsLand;
           const d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
           if (hit) { st.specs.maulHit++; lowerDef(t, `${p.name} Elder maul`, Math.floor(defLvl * 0.35)); }
           hits.push([t + MELEE_DELAY, p, d, `Elder maul spec${horned ? ' (horned)' : ''}${hit ? '' : ' misses'}`, 'maul', hit]);
         } else {
           st.specs.bgs++;
-          const [ch, mx0] = melee(p, 'Bandos godsword', 1, defLvl, 2), mx = Math.floor(Math.floor(mx0 * 1.1) * 1.1), hit = horned || rng.random() < ch;
+          const [ch, mx0] = melee(p, 'Bandos godsword', 1, defLvl, 2), mx = Math.floor(Math.floor(mx0 * 1.1) * 1.1), hit = horned || rng.random() < ch || specsLand;
           const d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
-          if (hit) { st.specs.bgsHit++; lowerDef(t, `${p.name} BGS`, d); }
+          if (hit) { st.specs.bgsHit++; lowerDef(t, `${p.name} BGS`, bgsToZero ? defLvl : d); }   // bgsToZero: checking against a raid that hit 0 there
           hits.push([t + MELEE_DELAY, p, d, `BGS spec${horned ? ' (horned)' : ''}${hit ? '' : ' misses'}`, slot && slot.useBgs ? 'maul' : 'bgs', hit]);
         }
         L.on && L(`t${t} ${p.name} ${act === 'maul' ? 'Elder maul' : 'BGS'} spec${tag} (${p.spec}% left)`);
