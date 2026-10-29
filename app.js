@@ -15,12 +15,14 @@ import { withGear, importGear, absorbValues } from './engine/gearstore.js';
 import { SimPool } from './pool.js';
 import { installMagnifier } from './engine/magnify.js';
 import { installChartCrop } from './chartcrop.js';
+import { installTableSort } from './tablesort.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const style = document.createElement('style'); style.textContent = REPORT_CSS; document.head.appendChild(style);
 installMagnifier(document);                                              // Magnify button on every report chart
 installChartCrop(document);                                              // drag across a report chart to crop it
+installTableSort(document);                                              // click a results column title to sort it
 $('ver').textContent = `v${VERSION}`;
 // light / dark switch (saved in this browser)
 const themeLabel = () => { $('theme').textContent = document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode'; };

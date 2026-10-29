@@ -305,9 +305,9 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     let body;
     if (multi && combineView) {
       const merged = perSet.flat().sort((a, c) => finalScore(c.counts, metric, ofKR) - finalScore(a.counts, metric, ofKR));
-      body = `<h4>All sets, one ranking</h4><div class="scroll"><table class="bt res">${head(true)}${merged.map((x, i) => row(x, i + 1, true)).join('')}</table></div>`;
+      body = `<h4>All sets, one ranking</h4><div class="scroll"><table class="bt res sortlist">${head(true)}${merged.map((x, i) => row(x, i + 1, true)).join('')}</table></div>`;
     } else {
-      body = perSet.map((l) => `${multi ? `<h4>${esc(getLabel(l[0].set.block))}</h4>` : ''}<div class="scroll"><table class="bt res">${head(false)}${l.map((x, i) => row(x, i + 1, false)).join('')}</table></div>`).join('');
+      body = perSet.map((l) => `${multi ? `<h4>${esc(getLabel(l[0].set.block))}</h4>` : ''}<div class="scroll"><table class="bt res sortlist">${head(false)}${l.map((x, i) => row(x, i + 1, false)).join('')}</table></div>`).join('');
     }
     $('o-out').innerHTML = `<div class="row between"><h3>Results</h3>${multi ? `<label class="pick"><input type="checkbox" id="o-combine" ${combineView ? 'checked' : ''}>Combine into one ranked list</label>` : ''}</div>${body}
       <p class="muted small">Highlighted values differ from that set's chart. Ranked by ${metric === 'success' ? 'success rate' : `rooms at ${fmtS(curBps[metric])} or faster${ofKR ? ' (of successful runs)' : ' (of all attempts)'}`} in the final round${multi ? ' (every set\'s finalists ran on the same fresh raids, so sets compare fairly)' : ''}.

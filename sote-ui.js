@@ -417,7 +417,7 @@ export function createSote(host, { getTeam }) {
       const best = rows[0].k, fs = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floor(b / 60)}:${r < 10 ? '0' : ''}${r}`; };
       out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: entry instance</h3>
         <div class="sub">${rows[0].n.toLocaleString()} raids per instance, the same raids at each · best: <b>i${best}</b>${bps.length ? ` (most finished by ${fs(asc[0])})` : ' (lowest median)'} · maze = both mazes, proc to interactable (medians)</div>
-        <table><tr><th>Rank</th><th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${bps.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>Mazes</th><th>P1</th><th></th></tr>
+        <table class="sortlist"><tr><th>Rank</th><th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${bps.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>Mazes</th><th>P1</th><th></th></tr>
         ${rows.map((r, j) => `<tr${r.k === best ? ' style="font-weight:700"' : ''}><td>${j + 1}</td><td>i${r.k}</td><td>${tm(r.med)}</td><td>${tm(r.q10)}</td><td>${tm(r.fast)}</td>${r.at.map((x) => `<td>${(x * 100).toFixed(1)}%</td>`).join('')}<td>${(r.maze * 0.6).toFixed(1)}s</td><td>${(r.p1 * 0.6).toFixed(1)}s</td><td><button class="ghost sm" data-use-entry="${r.k}">Use for this set</button></td></tr>`).join('')}
         </table></div>`;
       status.textContent = me.stop ? 'Stopped early - partial results.' : 'Done.';
@@ -468,10 +468,10 @@ export function createSote(host, { getTeam }) {
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: solver - top ${vresults.length}</h3>
       <div class="sub">Each played on the same ${vresults[0].totals.length.toLocaleString()} raids at its best entry instance. Times: median.</div>
       ${allWiped ? '<p class="err">Every raid wiped with these setups, so there is nothing to rank. Check the mazes and supplies above (phoenix necklaces, sharks) and the gear set - a Report run shows how the room goes.</p>' : ''}
-      <div class="scroll"><table><tr><th>#</th><th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>Mazes</th><th>P2</th><th>P3</th>${vresults.some((r) => wiped(r) > 0) ? '<th>Wiped</th>' : ''}<th></th></tr>
+      <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>Mazes</th><th>P2</th><th>P3</th>${vresults.some((r) => wiped(r) > 0) ? '<th>Wiped</th>' : ''}<th></th></tr>
       ${vresults.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b);
         return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>i${r.entry}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.maze1) + med(r.split.maze2))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td>${vresults.some((y) => wiped(y) > 0) ? `<td>${(wiped(r) * 100).toFixed(1)}%</td>` : ''}<td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use this setup</button></td></tr>
-        <tr data-vproc="${i}" hidden><td colspan="${11 + asc.length}" style="text-align:left">
+        <tr class="sub-row" data-vproc="${i}" hidden><td colspan="${11 + asc.length}" style="text-align:left">
           <div class="small">Entry instance i${r.entry} (median by entry: ${r.byEntry.map((y) => `i${y.entry} ${ft(y.median)}`).join(', ')})</div>
           <table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
           ${r.cfg.players.map((p, k) => `<tr><td>${esc(pnameOf(k))}</td><td>${esc(p.prefire || 'none')}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td>${p.specs.map((x) => `<td>${esc(specTxt(x))}</td>`).join('')}</tr>`).join('')}</table></td></tr>`; }).join('')}
