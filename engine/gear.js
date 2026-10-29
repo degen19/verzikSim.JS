@@ -71,6 +71,7 @@ export const ITEMS = {
   'Shadow Barrage':       { slot: 'spell', base: 28, speed: 5, aoe: 3, drainAtk: 0.15, level: 88 },   // Ancient Magicks, 3x3; -15% Attack if not already drained
   'Twisted bow':          item('weapon', [0, 0, 0, 0, 70], undefined, { rstr: 20, speed: 5, two_handed: true, bow: true }),
   'Toxic blowpipe':       item('weapon', [0, 0, 0, 0, 30], undefined, { rstr: 55, speed: 2, two_handed: true }),   // dragon darts included
+  'Tonalztics of Ralos':  item('weapon', [0, 0, 0, 0, 115], undefined, { rstr: 55, pray: 2, speed: 6, two_handed: true, thrown: true, twoHits: true, maxPct: 0.75, spec: 50 }),   // charged: two rolls, each 0-75% of their ranged max (6 ticks, Rapid). Ralos Spec: +50% accuracy, each hit (1+) drains Defence by 1/8 of Magic - the first hit's drain counts for the second roll
   'Zaryte crossbow':      item('weapon', [0, 0, 0, 0, 110], undefined, { speed: 5, crossbow: true }),
   'Scythe of vitur':      item('weapon', [70, 125, 30, -6, 0], undefined, { str: 75, speed: 5, two_handed: true }),   // attack stats as the sim uses them
   'Dragon claws':         item('weapon', [41, 57, -4, 0, 0], undefined, { str: 56, speed: 4, spec: 50 }),
