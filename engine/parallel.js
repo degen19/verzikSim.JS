@@ -58,6 +58,7 @@ export function mergeResults(parts) {
   } else {
     out.die_p1 = 0;
     out.splits = { sp1: [], sproc: [], sp2: [], sp3: [] };
+    if (first.solo) out.solo = {};                                       // solo stats: fresh lists, appended below
   }
   for (const r of parts) {
     for (const k of listKeys) append(out[k], r[k]);
@@ -69,6 +70,7 @@ export function mergeResults(parts) {
     } else {
       out.die_p1 += r.die_p1;
       for (const k of ['sp1', 'sproc', 'sp2', 'sp3']) append(out.splits[k], r.splits[k]);
+      if (r.solo) { out.solo ||= {}; for (const [k, v] of Object.entries(r.solo)) append(out.solo[k] ||= [], v); }
     }
   }
   out.succ = out.total.length / out.runs;

@@ -6,6 +6,7 @@ import { run_p2 } from './p2.js';
 import { run_reds } from './reds.js';
 import { run_duo_reds } from './duo_reds.js';
 import { run_p3 } from './p3.js';
+import { simulate_solo } from './solo.js';
 import { dget } from './util.js';
 
 /** How far a run goes: 'full' (whole room), 'p2' (P1 + P2, ends when P2 dies) or 'p1' (P1 only). Set on the
@@ -15,7 +16,8 @@ export const scopeOf = (cfgs) => (cfgs && cfgs[0] && SCOPES[cfgs[0].scope] ? cfg
 
 /** Run `runs` raids. `onProgress(done, runs)` is called every 250 raids (optional). */
 export function simulate(cfgs, team, runs, seed, onProgress = null) {
-  const res = team === 2 ? simulate_duo(cfgs, runs, seed, onProgress) : simulate_team(cfgs, team, runs, seed, onProgress);
+  const res = team === 1 ? simulate_solo(cfgs, runs, seed, onProgress, Rng, scopeOf(cfgs))
+    : team === 2 ? simulate_duo(cfgs, runs, seed, onProgress) : simulate_team(cfgs, team, runs, seed, onProgress);
   res.scope = scopeOf(cfgs);
   return res;
 }

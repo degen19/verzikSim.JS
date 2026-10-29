@@ -9,8 +9,8 @@ import * as _sim from './sim.js';
 import { shadow_attack } from './gear.js';
 import { floordiv, pymod, ga, dget, has, sum, all, sorted, rjust, fx, truthy } from './util.js';
 
-export const P2_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625 };
-export const P2_REDS = { 5: 1225, 4: 1071, 3: 918, 2: 918 };
+export const P2_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625, 1: 2625 };
+export const P2_REDS = { 5: 1225, 4: 1071, 3: 918, 2: 918, 1: 918 };
 export const P2_DEF = { 0: 34276, 1: 25916, 2: 34276, 3: 28006, 4: 65626 };
 export const CRAB_DEF = 3136;
 export const SCYTHE = WEAPONS['S'];

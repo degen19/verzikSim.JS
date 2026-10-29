@@ -98,6 +98,29 @@ function oddsRows(res, team, bps = []) {
     ];
   }
   const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN);
+  if (team === 1 && scope !== 'p1') {
+    const so = (r, k) => (r.solo && r.solo[k]) || [];
+    const avg = (k, d = 2) => res.map((r) => (so(r, k).length ? mean(so(r, k)).toFixed(d) : '-'));
+    const share = (k, f) => res.map((r) => pct(so(r, k).filter(f).length, so(r, k).length));
+    return [
+      ['Success (all runs)', res.map((r) => pct(r.total.length, r.runs))],
+      ['Reds sets (average)', avg('sets')],
+      ['Reds sets: 1-3', share('sets', (x) => x <= 3)], ['Reds sets: 4-5', share('sets', (x) => x >= 4 && x <= 5)],
+      ['Reds sets: 6-7', share('sets', (x) => x >= 6 && x <= 7)], ['Reds sets: 8+', share('sets', (x) => x >= 8)],
+      ['Purples before reds (average)', avg('purples')],
+      ['Purples before reds: 0 / 1 / 2 / 3+', res.map((r) => { const v = so(r, 'purples'), n = v.length || 1; return [0, 1, 2].map((x) => `${(v.filter((y) => y === x).length / n * 100).toFixed(0)}%`).concat(`${(v.filter((y) => y >= 3).length / n * 100).toFixed(0)}%`).join(' / '); })],
+      ['Committed to the kill (of kills)', share('commit', (x) => x > 0)],
+      ['Death Charges (average)', avg('dc', 1)],
+      ['Red crabs killed (average)', avg('crab_kills', 1)],
+      ['Ayak: magic defence drained (average)', avg('drained', 1)],
+      ['Soul Rends (average)', avg('rends', 1)],
+      ['Ayak tick fixes in reds (average)', avg('ayak_fix', 1)],
+      ['Locator orb + Redemption on lightning (average)', avg('redemptions', 1)],
+      ['Avg reds proc depth (Verzik HP %)', res.map((r) => (r.depth.length ? `${mean(r.depth).toFixed(1)}%` : '-'))],
+      ...(scope === 'full' ? [['Avg P3 20% tick', res.map((r) => (r.p20.length ? mean(r.p20).toFixed(1) : '-'))]] : []),
+      ...fastestRows, ...bpRows(res, bps),
+    ];
+  }
   return [
     ['Success (all runs)', res.map((r) => pct(r.total.length, r.runs))],
     ...(SUPPLY_FLAGS.DEATHS ? [['Someone dies in P1 (all runs)', res.map((r) => pct(r.die_p1, r.runs))]] : []),
@@ -338,11 +361,12 @@ export function reportHtml(res, labels, team, runs, opts = {}) {
   const scope = scopeOfRes(res);
   const what = scope === 'p1' ? 'success = P1 killed' : scope === 'p2'
     ? (team === 2 ? 'success = P2 down in two reds' : 'success = P2 down in reds')
-    : (team === 2 ? 'success = P2 down in two reds and P3 killed' : 'success = P2 down in reds and P3 killed');
+    : (team === 2 ? 'success = P2 down in two reds and P3 killed' : team === 1 ? 'success = room completed' : 'success = P2 down in reds and P3 killed');
   const title = scope === 'p1' ? 'P1 only - time to the end of P1' : scope === 'p2' ? 'P1 + P2 - time to the end of P2' : 'room time';
   const timesAre = scope === 'p1' ? 'times are room time at the end of P1' : scope === 'p2' ? 'times are room time when P2 dies' : 'times are total room time';
   return `<div class="vz-report">
 <h2>${team}-man Verzik: ${title}${res.length > 1 ? ' comparison' : ''}</h2>
+${team === 1 ? '<div class="sub"><b>*This does not yet take into account deaths and assumes you live every raid. Death tracking will come at a later date*</b></div>' : ''}
 <div class="sub">${runs.toLocaleString()} raids per set · ${timesAre} · charts use each set's successful runs · ${what} · sim v${VERSION}</div>
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3><div class="sub">Median / Top 10% / Top 25% / Bottom 25% are of each set's <b>successful runs only</b> (${res.map((r, k) => `${esc(labels[k])}: ${r.total.length.toLocaleString()} kills of ${r.runs.toLocaleString()} attempts`).join(' · ')}). Failed raids have no room time, so they aren't in these columns - see "% of all attempts" below for odds per attempt.</div>${splits}${team === 2 ? '<div class="sub" style="margin-top:6px">Depth = Verzik HP % when the shield goes up (lower = deeper), averaged over the runs in each room-time bucket (Median = runs around the median room time).</div>' : ''}

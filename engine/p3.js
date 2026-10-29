@@ -5,8 +5,8 @@ import { auto_surge, custom_surge, bf_swap, bf_heal, hit_chance, PRAYERS } from 
 import { Rng } from './rng.js';
 import { floordiv, pymod, pyround, ga, truthy, range, sum, any, all, maxBy, sorted, dget, has, fx, rjust } from './util.js';
 
-export const P3_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625 };
-export const P3_20 = { 5: 700, 4: 612, 3: 525, 2: 525 };
+export const P3_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625, 1: 2625 };
+export const P3_20 = { 5: 700, 4: 612, 3: 525, 2: 525, 1: 525 };
 export const P3_DEF_LVL = 150, P3_SLASH = 30;
 export const P3_DEF = { 1: (P3_DEF_LVL + 9) * (P3_SLASH + 64) };   // slash 14,946 (15,604 once a tornado hit boosts her stats 5%)
 export const VERZ_ATK_LVL = 300, VERZ_ATK_BONUS = 80;      // Ranged / Magic 300 (Attack and Strength 400: her melee is always avoided)
@@ -240,7 +240,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
   const L = log != null ? (s) => log.push(s) : (s) => {}; L.on = log != null;   // log text is only built when a log is kept
   const players = r_reds['players'], pid = r_reds['pid'], Kp = r_reds['kill'];
   const rank = new Map(pid.map((p, k) => [p, k]));
-  const duo = team === 2;
+  const duo = team <= 2;                               // solos play P3 as duos do (one player: always the tank)
   let hp = P3_HP[team];
   const mx = hp;
   const mark20 = P3_20[team];
@@ -553,6 +553,16 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           }
           continue;
         }
+        if (item[1] === 'green' && team === 1) {
+          // solo: locator orb down to 1 and tick-eat the ball with Redemption - the ball hits what's left, Redemption
+          // heals 24: they end on 25 minus their HP before the orb (24 from 1 HP; they let HP drop after yellows)
+          const before = Math.min(p.hp, 24), old = p.hp;
+          p.hp = Math.max(1, supplies.REDEMPTION_HEAL + 1 - before);
+          st['solo_green'] = dget(st, 'solo_green', 0) + 1;
+          if (!has(st, 'green_74')) st['green_74'] = t;
+          L.on && L(`t${rjust(t, 4)} ${p.name}: GREEN BALL tick-eaten - locator orb to 1, Redemption (${old} -> ${p.hp} HP)`);
+          continue;
+        }
         if (item[1] === 'green') {
           const meta = item.length > 2 ? item[2] : { chain: [p], passes: 0 };
           const chain = meta['chain'];
@@ -723,7 +733,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         use = 'H'; V['drag3'] = true;
         L.on && L(`t${rjust(t, 4)} ${p.name}: 30%+ before webs -> halberd, Verzik will drag 3 ticks`);
       // ---- tank's 13th swing: get back on the team's rhythm
-      } else if (p === tank && !p.special_done && n === 13 && (V['ev'] === 'auto' || V['ev'] === 'move')) {
+      } else if (team !== 1 && p === tank && !p.special_done && n === 13 && (V['ev'] === 'auto' || V['ev'] === 'move')) {   // solos: no ticks lost into webs
         p.special_done = true;
         const nt_h = duo && others.length > 0 && st['below20'] === null && V['cd'] === 7 &&
           spec_at(others[0], t, V['ev'] === 'auto' ? (V['a9'] || V['at']) + 5 : V['at'] - 2) >= 30;
@@ -854,7 +864,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       p.p3_n = n;
       p.last_atk_t = t;
       tl.push([t, p.name, use]);
-      if (p === tank && n === 9 && ducktank) {
+      if (p === tank && n === 9 && ducktank && team !== 1) {
         p.next_attack += 1;
         L.on && L(`t${rjust(t, 4)} ${p.name} (tank): 9th swing -> +1t (Ducktank)`);
       }

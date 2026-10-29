@@ -3,6 +3,7 @@
 // matches the template. Sotetseg: engine/sotemech.js.
 import { readXlsx } from './engine/xlsx.js';
 import { SOTE_MECHANICS } from './engine/sotemech.js';
+import { SOLO_SECTIONS } from './engine/solomech.js';
 const BOSSES = [['verzik', 'Verzik', 'Set on the chart'], ['sote', 'Sotetseg', 'Set in the Sotetseg tab']];
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -22,7 +23,7 @@ export async function loadMechanics() {
     if (a && !b && !c && !d) sections.push({ title: a, rows: [] });
     else if (sections.length) sections[sections.length - 1].rows.push({ topic: a, scales: b, what: c, input: d });
   }
-  return { intro, sections };
+  return { intro, sections: [...sections, ...SOLO_SECTIONS] };   // solo rows: engine/solomech.js
 }
 
 export function createMechanics(details, body, { getRoom } = {}) {
@@ -39,7 +40,7 @@ export function createMechanics(details, body, { getRoom } = {}) {
         ${data.intro.map((t) => `<p class="muted small">${esc(t)}</p>`).join('')}
         <div class="row" style="margin:8px 0">
           <label>Search<input id="m-q" placeholder="e.g. ${boss === 'sote' ? 'maze, ball, horn' : 'brew, purple, horn'}" style="width:220px"></label>
-          <label>Scale<select id="m-s"><option value="">All scales</option>${boss === 'sote' ? '<option value="solo">Solo</option>' : ''}<option value="duo">Duo</option><option value="team">3-5 man</option></select></label>
+          <label>Scale<select id="m-s"><option value="">All scales</option><option value="solo">Solo</option><option value="duo">Duo</option><option value="team">3-5 man</option></select></label>
         </div>
         <div class="row" style="margin:0 0 6px"><button class="ghost sm" id="m-all">Expand all</button><button class="ghost sm" id="m-none">Collapse all</button></div>
         <div id="m-list"></div>`;
