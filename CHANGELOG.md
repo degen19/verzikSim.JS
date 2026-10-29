@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.24.0 - 2026-10-28
+- Solo Verzik (`engine/solo.js`, `engine/solosolve.js`, `engine/solomech.js`, `solo-ui.js`, solver pool / worker, CLI `cli/solo.mjs`): no chart - P1 Dawn spec off cooldown / autos on Lightbearer, P2 lightning + locator orb / Redemption, purples, Ayak P2 (Soul Rend magic defence drain), shadow options with deep proc, LB cycles before / in reds, reds sets back to back with Commit % by spec, P3 as duos (no webs tick loss, green ball tick-eat), heart and thrall all room. Report: Reds sets section (Mark reds sets), no '% of all attempts' for solos (deaths not tracked yet). Solver: Commit %, shadow mode, Ayak P2, godbook, LB cycles; target down. Sotetseg: entry instance per set.
+
 ## v1.23.0 - 2026-10-28
 - Sotetseg (1-5 man): `engine/sote.js` (room sim: her attacks, orbs / prayer / veng, death ball, Heal Other, specs per player and phase, PID, mazes - pneck stall / shark / redemption skips / run), `engine/sotemaze.js` (maze generation + best route, ported from devqhp's trainer), `engine/soteplan.js` (spec planner), `engine/sotereport.js` (report), `engine/sotemech.js` (mechanics). Sotetseg tab (`sote-ui.js`): player settings, first / second maze, specs + spec planner, Report, entry-instance Optimizer. Gear tab: Locator orb, Soulflame horn, Bandos godsword. View mechanics & behavior: boss picker. CLI `cli/sote.mjs`.
 

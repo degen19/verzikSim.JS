@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.23.0';
+export const VERSION = '1.24.0';
 export const CHANGES = [
+  { version: '1.24.0', date: '2026-10-28', items: [
+    'Added solo Verzik. Not yet tracking deaths in solos - that will come at a later date and be used to measure success % and blood fury thresholds',
+  ] },
   { version: '1.23.0', date: '2026-10-28', items: [
     'Added Sotetseg for 1-5 man. See the View mechanics & behavior section for details.',
   ] },
