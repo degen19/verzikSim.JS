@@ -41,6 +41,7 @@ export const SOTE = { def: 200, defFloor: 100, mag: 250, rng: 250, atk: 250, str
 export const FIRST_ATTACK = 6, ATTACK_EVERY = 5, ORB_DELAY = 7, PRAYER_OFF = 4;   // an orb that hits them unprayed on t: prayer off t+1 - t+4, back up on t+5
 export const MELEE_MAX = 45, ORB_MAX = 50, VENG_CD = 50;
 export const MAZE_AT = [2 / 3, 1 / 3];
+export const SOLO_UNDER = 14;                    // solos are picked as the under first: the skip after it is 14 ticks later
 // her death (after the second maze): the room ends 5 ticks after the killing hit, 4 with overkill - as in Verzik P3,
 // overkill = another hitsplat lands on the killing tick after the killing hit
 export const DEATH_ANIM = 5, DEATH_ANIM_OVERKILL = 4;
@@ -322,6 +323,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     blocked = true; hits = []; orbs = []; ball = null; skipAt = -1;   // a death ball on its way is gone too for (const p of ps) { p.pending = []; p.thrallNext = null; }   // thralls stop until they attack again
     defLvl = SOTE.def; drained = false;
     let m = t + 5; while (instanceOf(m, entry) !== 0) m++;           // runners: click on the first i3 from T+4, move on the i0 after
+    if (team === 1) m += SOLO_UNDER;                                 // solos: under first, then skip the maze as the runner
     attackable = m + 9; nextAttack = m + 10; back.push(attackable);
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
     if (live.some((p) => p.how[mazes.length - 1] === 'run')) { runMaze(t, m, live, under); return; }   // anyone runs: all run

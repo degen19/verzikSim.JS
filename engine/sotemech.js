@@ -70,7 +70,7 @@ export const SOTE_MECHANICS = {
       R('Redemption skip', '1-4', 'Needs a locator orb. They stall at 1 HP with Redemption instead of a necklace: their queue is never cleared, so they take a maze hit and a splash from each other runner every tick, each capped at 1 - from 1 HP they come off on 18 (solo / duo), 11 (trio) or 4 (4s); not possible in 5s. A restore sip after, swinging a tick late. Before the skip: 1-2 vengs, Heal Other, then orb down to 1 (regardless within 9% of the maze).', 'Redemption; Restore sips; Gear tab: Locator orb'),
       R('Locator heals', '1-4', 'After the second maze (duos: every phase), at 1 HP the locator orb procs Redemption (to 25, a restore sip) and they Heal Other the veng player closest below 50 (duos: their partner at 50 or less) - keeping a sip for each redemption skip left.', 'Restore sips'),
       R('Run', 'All', 'If anyone runs a maze, everyone does: a real maze is rolled (devqhp\'s trainer rules and best route). The player under reaches the first tile, the runners follow the route behind them, wait on the second-to-last row and click off on the next i3. No maze damage; a shark whenever below 85 HP. Usually 4-12 ticks slower than a skip.', 'Run'),
-      R('Solos', 'Solo', 'Always redemption skip both mazes.'),
+      R('Solos', 'Solo', 'Always redemption skip both mazes. They are picked as the under first and skip the maze as the runner after it: each maze takes 14 ticks longer.'),
     ] },
   ],
 };
