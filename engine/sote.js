@@ -283,7 +283,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   for (const p of ps) p.regenHold = p.spec < 100;
   // how each player crosses each maze (redemption: 1-4s with a locator orb, else a stall)
   ps.forEach((p, i) => {
-    if (team === 1) { p.gear = { ...p.gear, locator: true }; p.how = ['redemption', 'redemption']; p.sharkMazes = []; return; }   // solos always redemption skip
+    if (team === 1) { p.gear = { ...p.gear, locator: true }; p.how = ['redemption', 'redemption']; p.sharkMazes = []; p.rests = 0; return; }   // solos always redemption skip; no Guthix rests
     p.how = (players[i].mazes || defaultMazes(p.pnecks, !!p.gear.locator, team)).slice(0, 2)
       .map((h) => (h === 'redemption' && !(p.gear.locator && team <= 4) ? 'pneck' : h));
     p.sharkMazes = [0, 1].filter((k) => p.how[k] === 'shark');
@@ -711,7 +711,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // hit takes them to 0 and food that tick lands before the death check: a Guthix rest if they have one (to 5 HP, no
     // attack delay - it's a potion), else a shark (to 20 HP, no attack for 3 ticks); with neither, tick-healed (a 3-tick
     // stall; the lowest-HP teammate Heal Others them before it ends - the least goes to waste). Solos tick-eat with purple
-    // sweets (1-3 HP, unlimited) after any Guthix rest. A maze proc first: it does nothing. Veng doesn't
+    // sweets (1-3 HP, unlimited); they never bring Guthix rests. A maze proc first: it does nothing. Veng doesn't
     // reflect it. The count of magic attacks carries over through the mazes.
     // the tick before: a target who'll tick-eat it (they end up on 5 / 20 HP anyway) Heal Others their HP away first -
     // P1 / P2 to the lowest-HP teammate who isn't redemption skipping and won't be left at an HP that dies on the maze;
