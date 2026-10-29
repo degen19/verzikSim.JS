@@ -20,7 +20,7 @@ export const DEATHS_NOTE = '*This does not yet take into account deaths and assu
 const blankSet = () => ({ gearSet: 'A', godbook: false, ringSwitch: '', shadowCamp: false, shadowLB: false, shadow31: false, deepProc: false, deepThr: DEEP_THR,
   ayakP2: false, ayakAmount: 70, redsMode: 'scythe', commit: { ...COMMIT_DEFAULT } });
 const fsec = (t) => { const s = t * 0.6, m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(1)}`; };
-const COMMIT_LABEL = { c100: '100% spec', c80: '80%+ spec', c50: '50%+ spec', c30: '30%+ spec' };
+const COMMIT_LABEL = { c100: '100% spec', c80: '80%+ spec', c50: '50%+ spec', c30: '30%+ spec', c0: 'under 30%' };
 
 export function createSolo(host) {
   let state = loadKey(STORE, {}), saved = loadKey(SAVED, []), savedPick = '', setMsg = '';
@@ -109,7 +109,7 @@ export function createSolo(host) {
         <label title="Stop Soul Rending once her magic defence is down by this much (0-70)">Ayak Amount<input data-s="ayakAmount" type="number" min="0" max="70" value="${esc(st.ayakAmount)}" style="width:70px" ${ay ? '' : 'disabled'}></label>
         ${ay ? '' : '<span class="muted small">Ayak P2 needs an Eye of ayak in this Gear set</span>'}
       </div>
-      <h4 style="margin:12px 0 4px">Commit % <span class="muted small">- at a reds shield, commit to the kill when Verzik is at or below this % of P2 HP for the spec they have (0 = never; under 30% spec: never)</span></h4>
+      <h4 style="margin:12px 0 4px">Commit % <span class="muted small">- at a reds shield, commit to the kill when Verzik is at or below this % of P2 HP for the spec they have (0 = never)</span></h4>
       <div class="row wrap" style="gap:14px;align-items:end">
         ${COMMIT_KEYS.map(([k]) => `<label>${COMMIT_LABEL[k]}<input data-commit="${k}" type="number" min="0" max="100" value="${esc(st.commit[k])}" style="width:70px"></label>`).join('')}
       </div>
