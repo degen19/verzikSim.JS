@@ -4,10 +4,10 @@ import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/
 import { blankPlayer } from './engine/loadout.js';
 import { newXarpusResult, addXarpusRaids, xarpusReportHtml, xarpusReportPage } from './engine/xarpusreport.js';
 import { parseBreakpoints } from './engine/optimize.js';
-import { defaultXarpus, canDo, DEF_SPECS, DPS_SPECS, FIXES, DEF_STOP, ZCB_BELOW, HEALS_DEFAULT, HEALS_NOTE, HEAL, EXHUMED_HP, HEAL_SPREAD, XARPUS_HP, EXHUMED_TICKS } from './engine/xarpus.js';
+import { defaultXarpus, canDo, slotsOf, parseSlot, SLOT_CHOICES, DEF_SLOTS, MAUL_TARGET, DPS_SPECS, FIXES, DEF_STOP, ZCB_BELOW, HEALS_DEFAULT, HEALS_NOTE, HEAL, EXHUMED_HP, HEAL_SPREAD, XARPUS_HP, EXHUMED_TICKS } from './engine/xarpus.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresults.js';
-import { solveXarpus, better as scoreBetter } from './engine/xarpussolve.js';
+import { solveXarpus, better as scoreBetter, DEF_STOPS } from './engine/xarpussolve.js';
 import { XarpusPool } from './xarpus-solver-pool.js';
 
 const STORE = 'verzikSim.xarpus.v1';           // {team: {cur, sets: {A, B?, C?}, report, solve}}
@@ -35,11 +35,11 @@ export function createXarpus(host, { getTeam }) {
       <div data-rstatus class="muted" style="margin-top:8px"></div><div data-rerr class="err"></div><div data-rout style="margin-top:8px"></div>
     `)}
     ${pane('solve', 'data-solve', `
-      <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's Defence spec (maul, BGS, Ralos Spec), backup,
-        damage spec (claws, claws at the screech, ZCB), tick fix, start spec, Lightbearer cycles, surge and horn, and the Defence stop and ZCB → claws HP -
-        within the Surge potions / Lightbearers limits and the gear each player has. Each round it tries every single change (with Swaps: also two
+      <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's Defence specs (each slot: maul, BGS, Ralos Spec - always, if short or backup),
+        damage spec (claws, claws at the screech, ZCB), tick fix, start spec, Lightbearer cycles, surge and horn, and the Maul target, Defence stop and ZCB → claws HP -
+        within the Surge potions / Lightbearers limits and the gear each player has. Each round it tries every single change (with Role changes: a player's Defence spec, damage spec, start spec and Lightbearer cycles together; with Swaps: also two
         players' Defence or damage specs swapped, a Lightbearer / surge moved) on a few raids, then the best on more, and keeps the best if it beats the
-        current setup, until nothing does (Restarts: again from the default plan for the scale). The top setups are then played on more raids and ranked:
+        current setup, until nothing does (Restarts: again from the default plan for the scale). Setups with no Defence spec at all are skipped. The top setups are then played on more raids and ranked:
         with breakpoints by the share finished at the fastest one (then the next), otherwise by the median. Each ticked set is solved from its own setup.</p>
       <div class="row">
         <div data-vsets></div>
@@ -47,10 +47,11 @@ export function createXarpus(host, { getTeam }) {
         <label>Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
         <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
       </div>
-      <div class="row" style="margin-top:6px">${[['def', 'Defence specs'], ['backup', 'Backups'], ['dps', 'Damage specs'], ['fix', 'Tick fixes'], ['start', 'Start spec'], ['lb', 'Lightbearer'], ['surge', 'Surges'], ['horn', 'Horns'], ['defStop', 'Defence stop'], ['zcbBelow', 'ZCB → claws HP']]
+      <div class="row" style="margin-top:6px">${[['def', 'Defence specs'], ['dps', 'Damage specs'], ['fix', 'Tick fixes'], ['start', 'Start spec'], ['lb', 'Lightbearer'], ['surge', 'Surges'], ['horn', 'Horns'], ['maulTarget', 'Maul target'], ['defStop', 'Defence stop'], ['zcbBelow', 'ZCB → claws HP']]
         .map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
       <div class="row" style="margin-top:6px"><span class="muted small">Search:</span>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Also swap two players' Defence or damage specs, and move a Lightbearer / surge, in one step"><input type="checkbox" data-vs="swaps">Swaps</label>
+        <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Also change a player's Defence spec, damage spec, start spec and Lightbearer cycles together (e.g. no maul: 95% start, ZCB, Lightbearer for a second) - plans one change at a time can't reach"><input type="checkbox" data-vs="roles">Role changes</label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Search again from the default plan for the scale and keep the best of everything (about 2x the time)"><input type="checkbox" data-vs="restarts">Restarts</label></div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>
     `)}`;
@@ -59,12 +60,17 @@ export function createXarpus(host, { getTeam }) {
 
   // per scale: {cur, sets, report, solve}
   const rootState = () => { const t = team(); state[t] ||= {}; const r = state[t]; r.sets ||= {}; r.cur ||= 'A'; if (!r.sets[r.cur]) r.cur = 'A'; return r; };
-  const blankSet = () => ({ gearSet: 'A', heals: HEALS_DEFAULT[team()], exactHeals: false, defStop: DEF_STOP, zcbBelow: ZCB_BELOW, surgeLimit: 0, lbRings: team(), players: [] });
+  const blankSet = () => ({ gearSet: 'A', heals: HEALS_DEFAULT[team()], exactHeals: false, defStop: DEF_STOP, zcbBelow: ZCB_BELOW, surgeLimit: 0, lbRings: team(), maulTarget: MAUL_TARGET, players: [] });
   const fixSet = (st) => {
     const t = team(), d = defaultXarpus(t), b = blankSet();
     for (const k of Object.keys(b)) if (st[k] == null) st[k] = b[k];
     st.players ||= [];
-    for (let k = 0; k < t; k++) st.players[k] = { ...d[k] || d[0], ...(st.players[k] || {}) };
+    for (let k = 0; k < t; k++) {
+      const old = st.players[k];
+      st.players[k] = { ...d[k] || d[0], ...(old || {}) };
+      if (old && !Array.isArray(old.defs) && (old.def || old.backup)) st.players[k].defs = slotsOf(old);   // the earlier Defence spec + backup
+      st.players[k].defs = slotsOf(st.players[k]); delete st.players[k].def; delete st.players[k].backup;
+    }
     st.players.length = t;
     return st;
   };
@@ -89,10 +95,11 @@ export function createXarpus(host, { getTeam }) {
     const surgers = st.players.filter((p) => p.surge).length, lbers = st.players.filter((p) => Number(p.lbCycles || 0) > 0).length;
     if (surgers > Number(st.surgeLimit)) notes.push(`${surgers} players drink a surge, but only ${st.surgeLimit} surge potion${Number(st.surgeLimit) === 1 ? '' : 's'} can be used here.`);
     if (lbers > Number(st.lbRings)) notes.push(`${lbers} players wear Lightbearer, but there ${Number(st.lbRings) === 1 ? 'is' : 'are'} only ${st.lbRings} in the raid.`);
-    const maulers = st.players.filter((p, k) => p.def === 'maul' && (canDo(gearK(k), 'maul') || canDo(gearK(k), 'bgs'))).length;
-    if (!maulers) notes.push('Nobody mauls: Ralos / BGS players spec on their second attack.');
+    const anyDef = st.players.some((p, k) => p.defs.some((x) => x !== 'none' && canDo(gearK(k), x)));
+    if (!anyDef) notes.push('Nobody lowers his Defence.');
     st.players.forEach((p, k) => {
-      for (const [key, v] of [['def', p.def], ['backup', p.backup], ['dps', p.dps], ['fix', p.fix]]) if (v && v !== 'none' && !canDo(gearK(k), v) && !(v === 'maul' && canDo(gearK(k), 'bgs'))) notes.push(`${pname(k)}: no ${({ def: 'weapon for their Defence spec', backup: 'weapon for their backup', dps: 'weapon for their damage spec', fix: 'weapon for their tick fix' })[key]} in this Gear set - ${key === 'fix' ? 'they lose a tick instead' : 'skipped'}.`);
+      for (const [key, v] of [...p.defs.map((x) => ['def', x]), ['dps', p.dps], ['fix', p.fix]]) if (v && v !== 'none' && !canDo(gearK(k), v)) notes.push(`${pname(k)}: no ${({ def: `weapon for their ${SLOT_CHOICES.find((c) => c[0] === v)?.[1] || v}`, dps: 'weapon for their damage spec', fix: 'weapon for their tick fix' })[key]} in this Gear set - ${key === 'fix' ? 'they lose a tick instead' : 'skipped'}.`);
+      if (p.defs.some((x) => x.startsWith('maul')) && !(gearK(k).weapons || []).includes('Elder maul') && canDo(gearK(k), 'maul')) notes.push(`${pname(k)}: no Elder maul - a BGS in its place.`);
       if (p.horn && !(gp && gp[k] && gp[k].horn)) notes.push(`${pname(k)}: no Soulflame horn (Gear tab) - no horn.`);
     });
     cfg.innerHTML = `<h3 style="margin-top:0">Xarpus <span class="muted small">(${t}-man)</span></h3>
@@ -114,7 +121,8 @@ export function createXarpus(host, { getTeam }) {
         <label>Gear<select data-s="gearSet">${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>${esc(gearSetLabel(g, t, x))}${gearSet(g, t, x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         <label title="${esc(HEALS_NOTE)}. Each heal (a missed tick on an exhumed) gives him ${HEAL[t]} HP: ${EXHUMED_HP[t]} + heals x ${HEAL[t]} when players can attack.">Number of heals<input data-s="heals" type="number" min="0" step="1" value="${esc(st.heals)}" style="width:70px"></label>
         ${pick()} title="Every raid uses exactly this number of heals. Off: each raid is this number +- ${HEAL_SPREAD} (evenly, never below 0)"><input type="checkbox" data-s="exactHeals" ${st.exactHeals ? 'checked' : ''}>Exact heals (no +-${HEAL_SPREAD})</label>
-        <label title="No more Defence specs (planned BGS / Ralos Spec, or backups) once his Defence is at or below this - damage specs instead. Mauls always go.">Defence stop<input data-s="defStop" type="number" min="0" max="250" value="${esc(st.defStop)}" style="width:70px"></label>
+        <label title="No more Defence specs (planned BGS / Ralos Spec, or backups) once his Defence is at or below this - damage specs instead. Mauls always go.">Defence stop<select data-s="defStop">${DEF_STOPS.map((n) => `<option value="${n}" ${n === Number(st.defStop) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label title="If short: a Defence slot marked If short goes only when fewer mauls than this have landed (counting mauls on their way and planned mauls still to swing)">Maul target<select data-s="maulTarget">${[1, 2, 3, 4].map((n) => `<option value="${n}" ${n === Number(st.maulTarget) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label title="Surge potions the team can use in this room (the solver won't use more). Most scales don't surge here.">Surge potions<select data-s="surgeLimit">${Array.from({ length: t + 1 }, (_, n) => `<option value="${n}" ${n === Number(st.surgeLimit) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label title="Lightbearer rings in the raid: no more players than this can wear one">Lightbearers<select data-s="lbRings">${Array.from({ length: t + 1 }, (_, n) => `<option value="${n}" ${n === Number(st.lbRings) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label title="A planned ZCB becomes claws (if they have them) once his HP is below this - the ruby is 22% of his HP (max 110), so it's worth less than a claw spec and the tick it gains by then">ZCB → claws below (HP)<input data-s="zcbBelow" type="number" min="0" step="50" value="${esc(st.zcbBelow)}" style="width:80px"></label>
@@ -126,8 +134,7 @@ export function createXarpus(host, { getTeam }) {
         <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th>
           <th title="Drink a surge with their first special attack">Surge</th>
           <th title="Spec regens on Lightbearer (a regen every 25 ticks), then Ultor. A 95% start's regen after their first spec doesn't count as one">Lightbearer cycles</th>
-          <th title="Their Defence spec. Elder maul: on their first attack. BGS / Ralos Spec: on their next attack once the mauls have landed (after any backup mauls if fewer than 2 mauls hit)">Defence spec</th>
-          <th title="Backup Defence spec (once): after the planned Defence specs have landed, if his Defence is still above the Defence stop. A backup maul goes as soon as the mauls come up short (fewer than 2 hit)">Backup</th>
+          ${Array.from({ length: DEF_SLOTS }, (_, j) => `<th title="Defence specs in order (up to ${DEF_SLOTS}). Maul: on their first attack (as soon as they have 50%). BGS / Ralos Spec: once the mauls are settled. If short: only if the mauls come up short of the Maul target (they scythe and wait while it can't be known yet; otherwise skipped). Backup: once every other Defence spec has gone and landed. BGS / Ralos / backups only while his Defence is above the Defence stop">Defence ${j + 1}</th>`).join('')}
           <th title="Damage spec once no Defence spec is still to come, as often as their spec allows. Claws at screech: held for the screech (a tick fix, or their first attack from it)">Damage spec</th>
           <th title="If their scythe (or ZCB) would go off on the i3 before the screech: lose a tick (scythe, next attack 6 ticks later), a claw scratch or claw spec (4 ticks), a blowpipe hit (2 - Rigour, quiver, gloves, necklace) or an Ayak hit (3 - their magic gear)">Tick fix</th>
           <th title="Soulflame horn on the interact tick: they and the first other mauler can't miss their next maul / BGS (needs a horn in the Gear tab)">Horn</th></tr>
@@ -135,7 +142,7 @@ export function createXarpus(host, { getTeam }) {
           <td><select data-p="${k}|startSpec"><option value="100" ${p.startSpec === 95 ? '' : 'selected'}>100</option><option value="95" ${p.startSpec === 95 ? 'selected' : ''}>95</option></select></td>
           <td style="text-align:center"><input type="checkbox" data-p="${k}|surge" ${p.surge ? 'checked' : ''}></td>
           <td><select data-p="${k}|lbCycles">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${n === Number(p.lbCycles || 0) ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></td>
-          <td>${sel(k, 'def', DEF_SPECS, p.def)}</td><td>${sel(k, 'backup', DEF_SPECS, p.backup)}</td><td>${sel(k, 'dps', DPS_SPECS, p.dps)}</td><td>${sel(k, 'fix', FIXES, p.fix)}</td>
+          ${p.defs.map((x, j) => `<td>${sel(k, `defs.${j}`, SLOT_CHOICES, x)}</td>`).join('')}<td>${sel(k, 'dps', DPS_SPECS, p.dps)}</td><td>${sel(k, 'fix', FIXES, p.fix)}</td>
           <td style="text-align:center"><input type="checkbox" data-p="${k}|horn" ${p.horn ? 'checked' : ''} ${gp && gp[k] && gp[k].horn ? '' : 'disabled title="No Soulflame horn (Gear tab)"'}></td></tr>`).join('')}
       </table></div>`;
   }
@@ -191,14 +198,15 @@ export function createXarpus(host, { getTeam }) {
     }
     if (el.dataset.p) {
       const [k, key] = el.dataset.p.split('|'), p = st.players[Number(k)];
-      p[key] = el.type === 'checkbox' ? el.checked : ['startSpec', 'lbCycles'].includes(key) ? Number(el.value) : el.value;
+      if (key.startsWith('defs.')) p.defs[Number(key.slice(5))] = el.value;
+      else p[key] = el.type === 'checkbox' ? el.checked : ['startSpec', 'lbCycles'].includes(key) ? Number(el.value) : el.value;
       persist(); render();
     }
   });
 
   /** The players for the engine: gear from the set's Gear set + the room settings. */
   const playersNow = (st) => { const gp = gearOf(st); return st.players.map((p, k) => ({ ...p, name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k) })); };
-  const optsOf = (st) => ({ heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals, defStop: Number(st.defStop) || 0, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
+  const optsOf = (st) => ({ heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals, defStop: Number(st.defStop) || 0, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW), maulTarget: Number(st.maulTarget) || MAUL_TARGET });
 
   // ---------------------------------------------------------------- report
   const repState = () => { const r = rootState(); r.report ||= { raids: 5000, seed: '', bps: '' }; r.report.sets ||= ['A']; r.report.labels ||= {}; return r.report; };
@@ -252,18 +260,18 @@ export function createXarpus(host, { getTeam }) {
 
   // ---------------------------------------------------------------- solver: each ticked set solved from its own setup
   const sol = host.querySelector('[data-solve]');
-  const ALLOW = ['def', 'backup', 'dps', 'fix', 'start', 'lb', 'surge', 'horn', 'defStop', 'zcbBelow'];
+  const ALLOW = ['def', 'dps', 'fix', 'start', 'lb', 'surge', 'horn', 'maulTarget', 'defStop', 'zcbBelow'];
   const EFFORT = { quick: { rounds: 4, stages: [[40, 0.15], [150, 3], [600, 1]], finalRaids: 1000 },
     normal: { rounds: 8, stages: [[60, 0.2], [240, 4], [1000, 1]], finalRaids: 2000 },
     thorough: { rounds: 14, stages: [[100, 0.25], [400, 5], [2000, 1]], finalRaids: 5000 } };
   const setLabel = (k) => { const l = String((repState().labels || {})[k] || '').trim(); return l ? `Set ${k}: ${l}` : `Set ${k}`; };
-  const solState = () => { const r = rootState(); r.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, k !== 'surge'])), search: { swaps: true, restarts: false } }; r.solve.sets ||= [r.cur]; return r.solve; };
+  const solState = () => { const r = rootState(); r.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, k !== 'surge'])), search: { swaps: true, roles: true, restarts: false } }; r.solve.sets ||= [r.cur]; return r.solve; };
   const showSol = () => {
     const v = solState(), rs = rootState();
     sol.querySelector('[data-vsets]').innerHTML = setPicker((k) => !!rs.sets[k], v.sets, setLabel);
     sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="effort"]').value = v.effort;
     for (const k of ALLOW) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
-    for (const k of ['swaps', 'restarts']) sol.querySelector(`[data-vs="${k}"]`).checked = !!(v.search || {})[k];
+    for (const k of ['swaps', 'roles', 'restarts']) sol.querySelector(`[data-vs="${k}"]`).checked = k === 'roles' ? (v.search || {}).roles !== false : !!(v.search || {})[k];
   };
   sol.addEventListener('change', (e) => {
     const v = solState(), el = e.target;
@@ -286,14 +294,14 @@ export function createXarpus(host, { getTeam }) {
     const med = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
     const ft = (x) => (x == null || Number.isNaN(x) ? '-' : x >= 99999 ? 'failed' : fsec(x));
     vflat = [];
-    const table = (rows, withSet) => `<div class="scroll"><table class="sortlist"><tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>To 25%</th><th>25% to kill</th><th>Defence left</th><th></th></tr>
+    const table = (rows, withSet) => `<div class="scroll"><table class="sortlist"><tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>To 25%</th><th>25% to the end</th><th>Defence left</th><th></th></tr>
       ${rows.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b), idx = vflat.push(r) - 1, EXH = EXHUMED_TICKS[t];
         return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.toScreech) - EXH)}</td><td>${ft(med(r.split.kill))}</td><td>${r.defEnd.length ? (r.defEnd.reduce((a, b) => a + b, 0) / r.defEnd.length).toFixed(1) : '-'}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${idx}">Procedure</button> ${SETS.map((k) => `<button class="ghost sm" data-vuse="${idx}" data-to="${k}" title="Put this setup into set ${k}${rootState().sets[k] ? '' : ` - a new set, from set ${r.set}`}">Copy to set ${k}</button>`).join(' ')}</td></tr>
         <tr class="sub-row" data-vproc="${idx}" hidden><td colspan="${9 + asc.length + (withSet ? 1 : 0)}" style="text-align:left">
-          <div class="small">Defence stop ${r.cfg.defStop} · ZCB → claws below ${r.cfg.zcbBelow} HP</div>
-          <table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>Defence spec</th><th>Backup</th><th>Damage spec</th><th>Tick fix</th><th>Horn</th></tr>
-          ${r.cfg.players.map((p, k) => `<tr><td>${esc(r.names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td><td>${lab(DEF_SPECS, p.def)}</td><td>${lab(DEF_SPECS, p.backup)}</td><td>${lab(DPS_SPECS, p.dps)}</td><td>${lab(FIXES, p.fix)}</td><td>${p.horn ? 'yes' : '-'}</td></tr>`).join('')}</table></td></tr>`; }).join('')}
+          <div class="small">Maul target ${r.cfg.maulTarget} · Defence stop ${r.cfg.defStop} · ZCB → claws below ${r.cfg.zcbBelow} HP</div>
+          <table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>Defence specs</th><th>Damage spec</th><th>Tick fix</th><th>Horn</th></tr>
+          ${r.cfg.players.map((p, k) => `<tr><td>${esc(r.names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td><td>${p.defs.filter((x) => x !== 'none').map((x) => lab(SLOT_CHOICES, x)).join(' → ') || 'none'}</td><td>${lab(DPS_SPECS, p.dps)}</td><td>${lab(FIXES, p.fix)}</td><td>${p.horn ? 'yes' : '-'}</td></tr>`).join('')}</table></td></tr>`; }).join('')}
       </table></div>`;
     const all = groups.flatMap((g) => g.items);
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Xarpus: solver</h3>
@@ -301,7 +309,7 @@ export function createXarpus(host, { getTeam }) {
       ${setResultsHtml(groups, { combine: vcombine, table, open: vopen, better: (a, b) => scoreBetter(a.score, b.score) })}</div>`;
   };
   wireSetResults(sol.querySelector('[data-vout]'), vopen, (c) => { vcombine = c; showResults(); });
-  const PLAN = ['startSpec', 'surge', 'lbCycles', 'def', 'backup', 'dps', 'fix', 'horn'];
+  const PLAN = ['startSpec', 'surge', 'lbCycles', 'defs', 'dps', 'fix', 'horn'];
   sol.addEventListener('click', async (e) => {
     const el = e.target, status = sol.querySelector('[data-vstatus]'), err = sol.querySelector('[data-verr]'), vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
     if (el.dataset.vshow != null) { const row = sol.querySelector(`[data-vproc="${el.dataset.vshow}"]`); row.hidden = !row.hidden; return; }
@@ -310,8 +318,8 @@ export function createXarpus(host, { getTeam }) {
       const k = el.dataset.to, rs = rootState();
       if (!rs.sets[k]) rs.sets[k] = structuredClone(setOf(r.set) || cur());
       const st = setOf(k), rp = repState(); if (!rp.sets.includes(k)) rp.sets = SETS.filter((x) => x === k || rp.sets.includes(x));
-      r.cfg.players.forEach((p, j) => { for (const f of PLAN) st.players[j][f] = p[f]; });
-      st.defStop = r.cfg.defStop; st.zcbBelow = r.cfg.zcbBelow; persist(); refreshAll();
+      r.cfg.players.forEach((p, j) => { for (const f of PLAN) st.players[j][f] = f === 'defs' ? [...p.defs] : p[f]; });
+      st.defStop = r.cfg.defStop; st.zcbBelow = r.cfg.zcbBelow; st.maulTarget = r.cfg.maulTarget; persist(); refreshAll();
       status.textContent = `Set ${r.set} setup copied into set ${k}.`; return;
     }
     const a = el.dataset.vact; if (!a) return;
@@ -329,13 +337,13 @@ export function createXarpus(host, { getTeam }) {
         if (me.stopped) break;
         const st = setOf(k), all = playersNow(st), pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '';
         const base = all.map((p) => ({ name: p.name, gear: p.gear })), names = all.map((p) => p.name);
-        const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : p[f]]));
-        const start = { players: st.players.map(planOf), defStop: Number(st.defStop) || 0, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) };
+        const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'defs' ? slotsOf(p) : p[f]]));
+        const start = { players: st.players.map(planOf), defStop: Number(st.defStop) || 0, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW), maulTarget: Number(st.maulTarget) || MAUL_TARGET };
         const restarts = sr.restarts ? [{ ...start, players: defaultXarpus(t).map(planOf) }] : [];
         me.pool = new XarpusPool(base, t, { heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals });
         try {
           const items = await solveXarpus({ start, gear: all.map((p) => p.gear), allow: { ...v.allow }, surgeLimit: Number(st.surgeLimit) || 0, lbRings: Number(st.lbRings ?? t),
-            swaps: !!sr.swaps, restarts, bps, ...ef, top: 10 }, (...args) => me.pool.run(...args),
+            swaps: !!sr.swaps, roles: sr.roles !== false, restarts, bps, ...ef, top: 10 }, (...args) => me.pool.run(...args),
           (txt) => { status.textContent = `${pre}${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; }, () => me.stopped);
           groups.push({ k, label: setLabel(k), items: items.map((r) => ({ ...r, set: k, names })) });
         } finally { me.pool.stop(); }

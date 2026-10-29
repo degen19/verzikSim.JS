@@ -24,7 +24,7 @@ export function addXarpusRaids(res, players, team, from, to, { seed = 'xarpus', 
     res.runs++;
     if (r.end == null) { res.failed++; continue; }
     res.total.push(r.end); res.split.exh.push(EXH);
-    const drop = r.dropAt ?? r.end; res.split.toScreech.push(drop - EXH); res.split.kill.push(r.end - drop);
+    const drop = r.dropAt ?? r.kill; res.split.toScreech.push(drop - EXH); res.split.kill.push(r.end - drop);
     res.startHp.push(r.startHp); res.heals.push(r.heals); res.defEnd.push(r.defEnd); res.maulHits.push(r.maulHits); res.ralosHits.push(r.specs.ralosHits);
     if (r.defZeroAt != null) res.defZero.push(r.defZeroAt - EXH);
     if (r.fixes.length) res.fixRaids++;
@@ -34,7 +34,7 @@ export function addXarpusRaids(res, players, team, from, to, { seed = 'xarpus', 
   return res;
 }
 
-const PARTS = [['exh', 'Exhumeds'], ['toScreech', 'Attackable to 25%'], ['kill', '25% to the kill']];
+const PARTS = [['exh', 'Exhumeds'], ['toScreech', 'Attackable to 25%'], ['kill', '25% to the end (incl. death animation)']];
 const COL = ['#2a78d6', '#d64545', '#2f9e61'];
 const sortedOf = (a) => a.slice().sort((x, y) => x - y);
 const FIX_NAMES = { tick: 'lose a tick', scratch: 'claw scratch', claw: 'claw spec', bp: 'blowpipe hit', ayak: 'Ayak hit' };
@@ -82,7 +82,7 @@ export function xarpusReportHtml(resIn, team, opts = {}) {
   }).join('');
   return `<div class="vz-report">
 <h2>${team}-man Xarpus: room time${multi ? ` - ${all.length} sets compared` : ''}</h2>
-<div class="sub">${all[0].runs.toLocaleString()} raids${multi ? ' per set (the same raids for each)' : ''} · the room ends on the killing hit · sim v${VERSION}</div>
+<div class="sub">${all[0].runs.toLocaleString()} raids${multi ? ' per set (the same raids for each)' : ''} · the room ends 5 ticks after the killing hit (4 with overkill) · sim v${VERSION}</div>
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3>${splits}
 <h3>Odds</h3>${oddsT}${fixT}

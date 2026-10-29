@@ -35,35 +35,60 @@ export const RALOS_DRAIN = Math.floor(XARPUS.magic / 8);
 // ---------------------------------------------------------------- the room
 //  - The exhumeds end on EXHUMED_TICKS (a multiple of 4: his 4-tick cycle, i0 = tick % 4 === 0); players attack from the
 //    tick after. His HP then: startHp (the heals +- HEAL_SPREAD a raid, or exact). Horns go off on the interact tick.
-//  - Defence specs: planned mauls on their first attack (a maul / BGS lowers his Defence as the attack is made - PID);
-//    a planned BGS / Ralos Spec on their next attack once the mauls have landed - unless fewer than 2 mauls hit (1 if only
-//    one was planned) and a backup maul is coming: then after the backup mauls land. Backups: once the planned Defence
-//    specs have landed, each backup player specs their backup (once) while his Defence is above the Defence stop.
-//    A planned BGS / Ralos Spec isn't thrown once his Defence is at or below the Defence stop either. No Defence floor.
-//  - Damage specs once no Defence spec is still to come: ZCB (75%) while his HP is at or above the ZCB -> claws HP (below
-//    it: claws instead, if they have them); Claws (50%); Claws at the screech (held: on the tick fix if their fix is a
-//    claw spec, else their first attack from the screech). As often as their spec allows.
+//  - Defence specs: each player has up to 4 in order (slots), each Elder maul / BGS / Ralos Spec with when it goes:
+//     Always - a maul on their first attack (as soon as they have 50%); a BGS / Ralos Spec once the mauls are settled
+//       (no maul hit still on its way, no planned maul still to swing, and no "if short" maul due), if his Defence is above
+//       the Defence stop.
+//     If short - only if the mauls come up short of the Maul target (landed mauls + mauls on their way + planned mauls
+//       still to swing < the target): a maul straight away; a BGS / Ralos Spec once the mauls are settled. While it can't
+//       be known yet (a maul on its way or still to swing) they scythe and wait; otherwise the slot is skipped.
+//     Backup - once every Always / If short Defence spec has gone and landed, if his Defence is still above the Defence
+//       stop (they wait for 50% spec if needed; others don't wait for them).
+//    A maul / BGS lowers his Defence as the attack is made (PID); a Ralos Spec when it lands. No Defence floor.
+//  - Damage specs (after the player's own Defence specs): ZCB (75%) once the mauls are settled, while his HP is at or
+//    above the ZCB -> claws HP (below it: claws instead, if they have them); Claws (50%) once no Defence spec is still to
+//    come; Claws at the screech (held: on the tick fix if their fix is a claw spec, else their first attack from the
+//    screech). As often as their spec allows.
 //  - The screech: once he's at or below 25% of his base HP (XARPUS_HP), on the next i0. A player whose scythe (or ZCB)
 //    would go off on the i3 before it - who could see he was below 25% the tick before - tick fixes instead: lose a tick
 //    (scythe, next attack 6 ticks later), a claw scratch or claw spec (4 ticks), a blowpipe hit (2) or an Ayak hit (3),
-//    then scythes every 5 ticks again. Nothing else happens; they attack until he's dead (the room ends on the killing hit).
+//    then scythes every 5 ticks again. Nothing else happens; they attack until he's dead. The room ends 5 ticks after
+//    the killing hit (4 with overkill: another hitsplat on the killing tick).
 //  - Thralls (0-3 every 4 ticks) from everyone's first attack. Spec: 10% every 50 ticks (Lightbearer: 25) below 100;
-//    a 95% start regens the tick after their first spec. Surge (if planned): +25% straight after their first spec.
+//    a 95% start regens the tick after their first spec (not a Lightbearer cycle). Surge (if planned): +25% straight after
+//    their first spec - once its cooldown (500 ticks, carried in from earlier rooms: surgeCd) is up, else as soon as it is.
 //  - Damage to players doesn't matter in this room.
 import { hit_chance } from './sim.js';
 import { worn, bonuses, bestWorn, slotItem } from './loadout.js';
 
 export const SCREECH_AT = 0.25;
-export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, ZCB_SPEC = 75, BP_DELAY = 2, AYAK_DELAY = 2;
+// his death: the room ends 5 ticks after the killing hit, 4 with overkill (another hitsplat landing on the killing tick after it)
+export const DEATH_ANIM = 5, DEATH_ANIM_OVERKILL = 4;
+export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, SURGE_CD = 500, ZCB_SPEC = 75, BP_DELAY = 2, AYAK_DELAY = 2;
 export const ZCB_BELOW = 450;      // a planned ZCB becomes claws below this HP (the ruby: 22% of his HP, max 110)
-export const DEF_STOP = 0;         // no more Defence specs once his Defence is at or below this
+export const DEF_STOP = 0;         // no more BGS / Ralos Specs / backups once his Defence is at or below this
+export const MAUL_TARGET = 2;      // "if short": mauls landed (or on their way / still to swing) below this
+export const DEF_SLOTS = 4;
 export const DEF_SPECS = [['none', 'None'], ['maul', 'Elder maul'], ['bgs', 'BGS'], ['ralos', 'Ralos Spec']];
+export const WHEN = [['always', ''], ['short', ' if short'], ['backup', ' (backup)']];
+/** A Defence slot's choices: 'none', or `${spec}` / `${spec}:short` / `${spec}:backup`. */
+export const SLOT_CHOICES = [['none', 'None'], ...DEF_SPECS.slice(1).flatMap(([v, l]) => WHEN.map(([w, wl]) => [w === 'always' ? v : `${v}:${w}`, `${l}${wl}`]))];
+export const parseSlot = (x) => { const [spec, when = 'always'] = String(x || 'none').split(':'); return { spec, when }; };
 export const DPS_SPECS = [['none', 'None'], ['claws', 'Claws'], ['clawsScreech', 'Claws at screech'], ['zcb', 'ZCB']];
 export const FIXES = [['tick', 'Lose a tick'], ['scratch', 'Claw scratch'], ['claw', 'Claw spec'], ['bp', 'Blowpipe hit'], ['ayak', 'Ayak hit']];
 const NEED = { maul: 'Elder maul', bgs: 'Bandos godsword', ralos: 'Tonalztics of Ralos', claws: 'Dragon claws', clawsScreech: 'Dragon claws', zcb: 'Zaryte crossbow',
   scratch: 'Dragon claws', claw: 'Dragon claws', bp: 'Toxic blowpipe', ayak: 'Eye of ayak' };
-/** Does the player have what this choice needs (Gear tab)? */
-export const canDo = (gear, v) => !NEED[v] || (gear.weapons || []).includes(NEED[v]);
+/** Does the player have what this choice needs (Gear tab)? A slot choice: its spec (a maul can be a BGS instead). */
+export const canDo = (gear, v) => {
+  const x = String(v || '').split(':')[0], own = (w) => (gear.weapons || []).includes(w);
+  return !NEED[x] || own(NEED[x]) || (x === 'maul' && own('Bandos godsword'));
+};
+/** A player's Defence slots (DEF_SLOTS long): from `defs`, or the older def / backup. */
+export const slotsOf = (c) => {
+  const d = Array.isArray(c.defs) ? c.defs.slice(0, DEF_SLOTS) : [c.def || 'none', c.backup && c.backup !== 'none' ? `${c.backup}:backup` : 'none'];
+  while (d.length < DEF_SLOTS) d.push('none');
+  return d;
+};
 const PRAY = { Piety: [1.20, 1.23], Zeal: [1.25, 1.28] };
 const RANGED = 112, MAGIC = 99;
 
@@ -107,44 +132,52 @@ function clawSpec(p, defLvl, rng) {
   return rng.random() < 2 / 3 ? [1, 1, 0, 0] : [0, 0, 0, 0];
 }
 
-/** The default plan by scale: who mauls, who throws Ralos, damage specs, tick fixes (players 1-5). */
+/** The default plan by scale (players 1-5): Defence slots, damage spec, tick fix, start spec, Lightbearer cycles. */
 export function defaultXarpus(team) {
-  const P = (def, dps, extra = {}) => ({ startSpec: 100, surge: false, lbCycles: 0, def, backup: 'none', dps, fix: 'tick', horn: false, ...extra });
-  if (team === 1) return [P('maul', 'claws', { backup: 'maul' })];
-  if (team === 2) return [P('maul', 'claws', { backup: 'maul' }), P('maul', 'claws', { backup: 'maul' })];
-  if (team === 3) return [P('maul', 'claws', { backup: 'maul' }), P('maul', 'claws'), P('ralos', 'claws')];
-  return Array.from({ length: team }, (_, k) => (k < 3 ? P('maul', 'clawsScreech', { backup: k === 0 ? 'maul' : 'none' }) : P('ralos', 'zcb', { startSpec: 95, lbCycles: 2 })));
+  const P = (defs, dps, extra = {}) => ({ startSpec: 100, surge: false, lbCycles: 0, defs: [...defs, 'none', 'none', 'none', 'none'].slice(0, DEF_SLOTS), dps, fix: 'tick', horn: false, ...extra });
+  if (team === 1) return [P(['maul', 'maul'], 'claws')];                                    // two mauls at the start
+  if (team === 2) return [P(['maul', 'maul'], 'claws'),                                     // P1 double mauls; P2 mauls if they come up short, else BGS / Ralos 1-2 times
+    P(['maul:short', 'maul:short', 'ralos', 'ralos:backup'], 'claws')];
+  if (team === 3) return [P(['maul', 'ralos'], 'claws'), P(['maul', 'ralos'], 'claws'), P(['maul', 'ralos:backup'], 'claws')];
+  if (team === 4) return [P(['maul', 'maul:short', 'ralos'], 'clawsScreech'), P(['maul', 'maul:short', 'ralos:backup'], 'zcb', { lbCycles: 3 }),
+    P(['maul', 'maul:short', 'ralos:backup'], 'zcb', { lbCycles: 3 }), P(['ralos', 'ralos:backup'], 'zcb', { startSpec: 95, lbCycles: 2 })];
+  return [0, 1, 2].map(() => P(['maul', 'maul:short'], 'clawsScreech')).concat([3, 4].map(() => P(['ralos', 'ralos:backup'], 'zcb', { startSpec: 95, lbCycles: 2 })));
 }
 
 /**
- * One raid of Xarpus. players: [{name, gear, startSpec, surge, lbCycles, def, backup, dps, fix, horn}].
- * opts: {heals (default HEALS_DEFAULT), exactHeals, defStop (DEF_STOP), zcbBelow (ZCB_BELOW)}.
- * Returns {end, startHp, heals, screech, defAt, ...stats}.
+ * One raid of Xarpus. players: [{name, gear, startSpec, surge, surgeCd (ticks of surge cooldown left coming in), lbCycles,
+ * defs ([slot] - see SLOT_CHOICES), dps, fix, horn}]. opts: {heals (default HEALS_DEFAULT), exactHeals, defStop (DEF_STOP),
+ * zcbBelow (ZCB_BELOW), maulTarget (MAUL_TARGET)}. Returns {end, kill, startHp, heals, screech, ..., players: [{surgeCd (left at
+ * the end of the room), spec}]}.
  */
-export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAULT[team], exactHeals = false, defStop = DEF_STOP, zcbBelow = ZCB_BELOW } = {}) {
+export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAULT[team], exactHeals = false, defStop = DEF_STOP, zcbBelow = ZCB_BELOW, maulTarget = MAUL_TARGET } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const EXH = EXHUMED_TICKS[team] || 96, BASE = XARPUS_HP[team] || 5080, SCREECH_HP = Math.floor(BASE * SCREECH_AT);
   const nHeals = rollHeals(heals, rng, exactHeals), START = EXHUMED_HP[team] + nHeals * HEAL[team];
-  let hp = START, defLvl = XARPUS.def, kill = null, dropAt = null, screech = null, defZeroAt = null, lastDefAt = null;
+  let anim = DEATH_ANIM, hp = START, defLvl = XARPUS.def, kill = null, dropAt = null, screech = null, defZeroAt = null, lastDefAt = null;
   const st = { dmg: { scythe: 0, maul: 0, bgs: 0, ralos: 0, claw: 0, scratch: 0, zcb: 0, thrall: 0, bp: 0, ayak: 0 },
     specs: { maul: 0, maulHit: 0, bgs: 0, bgsHit: 0, ralos: 0, ralosHits: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, fixes: [], specLog: [] };
   L.on && L(`exhumeds: ${nHeals} heal${nHeals === 1 ? '' : 's'} -> Xarpus ${START} HP; interactable t${EXH}, first attacks t${EXH + 1}`);
   const ps = players.map((c, i) => {
-    const g = c.gear, ok = (v) => canDo(g, v);
-    let def = c.def || 'none'; if (def === 'maul' && !ok('maul')) def = ok('bgs') ? 'bgs' : 'none'; else if (!ok(def)) def = 'none';
-    let backup = c.backup || 'none'; if (backup === 'maul' && !ok('maul')) backup = ok('bgs') ? 'bgs' : 'none'; else if (!ok(backup)) backup = 'none';
-    let dps = c.dps || 'none'; if (!ok(dps)) dps = dps === 'zcb' ? 'none' : 'none';
+    const g = c.gear, ok = (v) => canDo(g, v), own = (w) => (g.weapons || []).includes(w);
+    const slots = slotsOf(c).map(parseSlot).filter((x) => x.spec !== 'none' && ok(x.spec))
+      .map((x) => ({ ...x, useBgs: x.spec === 'maul' && !own('Elder maul'), done: false }));   // no maul: a BGS in its place (it counts as a maul)
+    let dps = c.dps || 'none'; if (!ok(dps)) dps = 'none';
     let fix = c.fix || 'tick'; if (!ok(fix)) fix = 'tick';
     return { i, name: c.name || `P${i + 1}`, gear: g, spec: Number(c.startSpec ?? 100), regen: 0, regenHold: Number(c.startSpec ?? 100) < 100,
-      surgePlan: !!c.surge, surged: false, lb: false, lbLeft: Number(c.lbCycles || 0), def, backup, dps, fix, horn: !!c.horn && !!g.horn,
-      defDone: def === 'none', backupDone: backup === 'none', next: EXH + 1, hornUntil: -1, thrallNext: EXH + 1 + rng.randint(1, 2) };
+      surgePlan: !!c.surge, surged: false, surgeReady: Math.max(0, Number(c.surgeCd) || 0), surgeAt: null,
+      lb: false, lbLeft: Number(c.lbCycles || 0), slots, dps, fix, horn: !!c.horn && !!g.horn, firstSpec: false,
+      next: EXH + 1, hornUntil: -1, thrallNext: EXH + 1 + rng.randint(1, 2) };
   });
+  // surge cooldown carried in: it doesn't tick between rooms, so it's ready `surgeCd` ticks into this room (the exhumeds count)
   const pid = rng.shuffle(ps.slice());
-  let hits = [];                                                    // [tick, player, amount | null, label, kind, extra]
+  let hits = [];                                                    // [tick, player, amount | null, label, kind]
   const has = (p, w) => (p.gear.weapons || []).includes(w);
+  const drinkSurge = (p, t) => { const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++; L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`); };
   const spend = (p, n, t) => {
-    p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; p.freeRegen = true; }   // a 95% start: the regen the tick after isn't a Lightbearer cycle
-    if (p.surgePlan && !p.surged) { const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; st.specs.surge++; L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`); }
+    p.spec -= n; p.firstSpec = true;
+    if (p.regenHold) { p.regenHold = false; p.regen = 49; p.freeRegen = true; }   // a 95% start: the regen the tick after isn't a Lightbearer cycle
+    if (p.surgePlan && !p.surged && t >= p.surgeReady) drinkSurge(p, t);
   };
   const lowerDef = (t, what, by) => {
     if (by <= 0 || defLvl <= 0) return;
@@ -158,47 +191,58 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     if (dropAt == null && hp <= SCREECH_HP && hp > 0) { dropAt = t; screech = t + 1; while (screech % 4 !== 0) screech++; L.on && L(`t${t} Xarpus at or below 25% (${SCREECH_HP}): screech on t${screech}`); }
     if (hp <= 0) { kill = t; L.on && L(`t${t} *** XARPUS DIES ***`); }
   };
-  // ---- Defence specs
-  const plannedMaulers = ps.filter((p) => p.def === 'maul');
-  const need = Math.min(2, plannedMaulers.length);
-  let maulHits = 0;
-  const pendingKind = (...k) => hits.some((h) => k.includes(h[4]));
-  const maulsDone = () => plannedMaulers.every((p) => p.defDone) && !pendingKind('maul');
-  const backupMaulsComing = () => ps.some((p) => !p.backupDone && (p.backup === 'maul' || p.backup === 'bgs') && p.spec >= 50);
-  const shortOfMauls = () => maulHits < need && defLvl > defStop;
-  const defPending = () => pendingKind('maul', 'bgs', 'ralos');
-  /** Is any Defence spec still to come (planned or backup)? */
-  const defOpen = () => defPending() || ps.some((p) => !p.defDone || (!p.backupDone && defLvl > defStop && p.spec >= 50));
+  // ---- Defence slots
+  let maulsLanded = 0;                                              // maul / BGS-as-maul hits that have landed (seen)
+  const inFlight = (...k) => hits.filter((h) => k.includes(h[4])).length;
+  const alwaysMaulsLeft = () => ps.reduce((n, p) => n + p.slots.filter((x) => !x.done && x.when === 'always' && x.spec === 'maul').length, 0);
+  const uncertain = () => inFlight('maul') > 0 || alwaysMaulsLeft() > 0;
+  const short = () => maulsLanded + inFlight('maul') + alwaysMaulsLeft() < maulTarget;
+  const shortMaulDue = () => short() && ps.some((p) => p.spec >= 50 && p.slots.some((x) => !x.done && x.when === 'short' && x.spec === 'maul'));
+  const settled = () => !uncertain() && !shortMaulDue();            // the mauls are settled
+  const firstWaveOpen = () => inFlight('maul', 'bgs', 'ralos') > 0 || ps.some((p) => p.slots.some((x) => !x.done && x.when !== 'backup'));
+  /** Is any Defence spec still to come that others should wait for (not a backup still waiting for spec)? */
+  const defOpen = () => firstWaveOpen() || ps.some((p) => p.slots.some((x) => !x.done && x.when === 'backup' && p.spec >= 50 && defLvl > defStop));
+  /** The player's next Defence spec now (or null: scythe / damage spec). Skips slots that no longer apply. */
   const defAct = (p) => {
-    if (!p.defDone) {
-      if (p.def === 'maul') return p.spec >= 50 ? 'maul' : null;
-      if (!maulsDone()) return null;                                  // BGS / Ralos: after the mauls have landed
-      if (shortOfMauls() && backupMaulsComing()) return null;           // ... or after the backup mauls
-      if (defLvl <= defStop) { p.defDone = true; return null; }
-      return p.spec >= 50 ? p.def : null;
-    }
-    if (!p.backupDone) {
-      const isMaul = p.backup === 'maul' || p.backup === 'bgs';
-      if (defLvl <= defStop) { if (!defPending()) p.backupDone = true; return null; }
-      if (isMaul && shortOfMauls() && maulsDone()) return p.spec >= 50 ? p.backup : null;   // the mauls came up short: back up now
-      if (ps.some((q) => !q.defDone) || defPending()) return null;     // otherwise once the planned Defence specs have landed
-      if (p.spec < 50) { p.backupDone = true; return null; }
-      return p.backup;
+    for (const x of p.slots) {
+      if (x.done) continue;
+      if (x.when === 'always') {
+        if (x.spec === 'maul') return p.spec >= 50 ? x : null;
+        if (!settled()) return null;
+        if (defLvl <= defStop) { x.done = true; continue; }
+        return p.spec >= 50 ? x : null;
+      }
+      if (x.when === 'short') {
+        if (short()) {
+          if (x.spec === 'maul') return p.spec >= 50 ? x : null;
+          if (!settled()) return null;
+          if (defLvl <= defStop) { x.done = true; continue; }
+          return p.spec >= 50 ? x : null;
+        }
+        if (uncertain()) return null;                               // can't tell yet: scythe and wait
+        x.done = true; continue;                                    // the mauls landed: skip it
+      }
+      // backup: once every Always / If short Defence spec has gone and landed
+      if (firstWaveOpen()) return null;
+      if (defLvl <= defStop) { x.done = true; continue; }
+      return p.spec >= 50 ? x : null;                               // waits for 50% (others don't wait for them)
     }
     return null;
   };
+  const ownDefDone = (p) => p.slots.every((x) => x.done);
   const dpsAct = (p, t) => {
-    if (p.dps === 'none' || defOpen()) return null;
+    if (p.dps === 'none' || !ownDefDone(p)) return null;            // their own Defence specs first
     if (p.dps === 'zcb') {
-      if (hp < zcbBelow) return has(p, 'Dragon claws') && p.spec >= 50 ? 'claw' : null;
-      return p.spec >= ZCB_SPEC ? 'zcb' : null;
+      if (hp < zcbBelow) return !defOpen() && has(p, 'Dragon claws') && p.spec >= 50 ? 'claw' : null;
+      return settled() && p.spec >= ZCB_SPEC ? 'zcb' : null;        // a ZCB: once the mauls are settled
     }
+    if (defOpen()) return null;                                     // claws: once no Defence spec is still to come
     if (p.dps === 'clawsScreech' && !(screech != null && t >= screech)) return null;
     return p.spec >= 50 ? 'claw' : null;
   };
-  // ---- horns on the interact tick: the caster and the first other planned mauler can't miss their next maul / BGS
+  // ---- horns on the interact tick: the caster and the first other player mauling on their first attack can't miss their next maul / BGS
   for (const c of ps.filter((q) => q.horn && q.spec >= HORN_COST)) {
-    const rec = ps.find((q) => q !== c && q.def === 'maul');
+    const rec = ps.find((q) => q !== c && q.slots[0] && q.slots[0].when === 'always' && q.slots[0].spec !== 'ralos');
     spend(c, HORN_COST, EXH); st.specs.horn++; st.specLog.push({ i: c.i, kind: 'horn', t: EXH });
     c.hornUntil = EXH + HORN_TICKS; if (rec) rec.hornUntil = EXH + HORN_TICKS;
     L.on && L(`t${EXH} ${c.name} Soulflame horn (${c.spec}% left): ${c.name}${rec ? ` and ${rec.name}` : ''} can't miss their next maul / BGS`);
@@ -206,8 +250,9 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
   for (let t = EXH + 1; t <= EXH + 3000 && kill == null; t++) {
     // ---- hits landing
     const landing = hits.filter((h) => h[0] === t); hits = hits.filter((h) => h[0] !== t);
-    for (const [, p, amt, label, kind] of landing) {
-      if (kill != null) break;
+    for (const [, p, amt, label, kind, hit] of landing) {
+      if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${p.name} ${label} lands after the kill (overkill)`); } break; }
+      if (kind === 'maul' && hit) maulsLanded++;
       if (kind === 'ralos') {                                         // two rolls; a hit (1+) drains before the second roll
         let total = 0; const parts = [];
         for (let k = 0; k < 2; k++) {
@@ -224,8 +269,9 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       } else damage(t, amt, `${p.name} ${label}`, kind);
     }
     if (kill != null) break;
-    // ---- spec regen, Lightbearer, thralls
+    // ---- spec regen, Lightbearer, a surge that was waiting on its cooldown, thralls
     for (const p of ps) {
+      if (p.surgePlan && !p.surged && p.firstSpec && t >= p.surgeReady && p.spec <= 75) drinkSurge(p, t);
       const wantLb = p.lbLeft > 0 && p.spec < 100 && !p.regenHold;
       if (wantLb !== p.lb) p.lb = wantLb;
       if (!p.regenHold && p.spec < 100) {
@@ -240,35 +286,38 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     // ---- player attacks, in PID order
     for (const p of pid) {
       if (t !== p.next) continue;
-      let act = defAct(p) || dpsAct(p, t) || 'scythe';
+      const slot = defAct(p);
+      let act = slot ? (slot.useBgs ? 'bgs' : slot.spec) : dpsAct(p, t) || 'scythe';
       // the tick fix: their scythe / ZCB would go off on the i3 before the screech (they saw him under 25% by the tick before)
       if (screech != null && t === screech - 1 && dropAt < t && (act === 'scythe' || act === 'zcb')) {
         const f = p.fix === 'claw' && p.spec < 50 ? 'scratch' : p.fix;
         st.fixes.push({ i: p.i, fix: f, t }); act = `fix:${f}`;
       }
-      if (act !== 'scythe' && !act.startsWith('fix:')) st.specLog.push({ i: p.i, kind: act, t });
+      if (slot) slot.done = true;
+      if (act !== 'scythe' && !act.startsWith('fix:')) st.specLog.push({ i: p.i, kind: act, t, when: slot ? slot.when : undefined });
+      const tag = slot && slot.when !== 'always' ? ` (${slot.when === 'short' ? 'mauls short' : 'backup'})` : '';
       if (act === 'maul' || act === 'bgs') {
-        spend(p, 50, t); if (!p.defDone) p.defDone = true; else p.backupDone = true;
+        spend(p, 50, t);
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;
         if (act === 'maul') {
           st.specs.maul++;
           const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25), hit = horned || rng.random() < ch;
           const d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
-          if (hit) { st.specs.maulHit++; maulHits++; lowerDef(t, `${p.name} Elder maul`, Math.floor(defLvl * 0.35)); }
-          hits.push([t + MELEE_DELAY, p, d, `Elder maul spec${horned ? ' (horned)' : ''}${hit ? '' : ' misses'}`, 'maul']);
+          if (hit) { st.specs.maulHit++; lowerDef(t, `${p.name} Elder maul`, Math.floor(defLvl * 0.35)); }
+          hits.push([t + MELEE_DELAY, p, d, `Elder maul spec${horned ? ' (horned)' : ''}${hit ? '' : ' misses'}`, 'maul', hit]);
         } else {
           st.specs.bgs++;
           const [ch, mx0] = melee(p, 'Bandos godsword', 1, defLvl, 2), mx = Math.floor(Math.floor(mx0 * 1.1) * 1.1), hit = horned || rng.random() < ch;
           const d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
           if (hit) { st.specs.bgsHit++; lowerDef(t, `${p.name} BGS`, d); }
-          hits.push([t + MELEE_DELAY, p, d, `BGS spec${horned ? ' (horned)' : ''}${hit ? '' : ' misses'}`, 'bgs']);
+          hits.push([t + MELEE_DELAY, p, d, `BGS spec${horned ? ' (horned)' : ''}${hit ? '' : ' misses'}`, slot && slot.useBgs ? 'maul' : 'bgs', hit]);
         }
-        L.on && L(`t${t} ${p.name} ${act === 'maul' ? 'Elder maul' : 'BGS'} spec (${p.spec}% left)`);
+        L.on && L(`t${t} ${p.name} ${act === 'maul' ? 'Elder maul' : 'BGS'} spec${tag} (${p.spec}% left)`);
         p.next = t + 6;
       } else if (act === 'ralos') {
-        spend(p, 50, t); if (!p.defDone) p.defDone = true; else p.backupDone = true; st.specs.ralos++;
+        spend(p, 50, t); st.specs.ralos++;
         hits.push([t + RALOS_DELAY, p, null, 'Ralos Spec', 'ralos']);
-        L.on && L(`t${t} ${p.name} Ralos Spec (${p.spec}% left), lands t${t + RALOS_DELAY}`);
+        L.on && L(`t${t} ${p.name} Ralos Spec${tag} (${p.spec}% left), lands t${t + RALOS_DELAY}`);
         p.next = t + 6;
       } else if (act === 'zcb') {
         spend(p, ZCB_SPEC, t); st.specs.zcb++;
@@ -298,6 +347,9 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       }
     }
   }
-  return { end: kill, startHp: START, heals: nHeals, screech, dropAt, defZeroAt, defEnd: defLvl, defLastAt: lastDefAt, maulHits, ...st,
-    players: ps.map((p) => ({ name: p.name, spec: p.spec, def: p.def, backup: p.backup, dps: p.dps, fix: p.fix })) };
+  const end = kill == null ? null : kill + anim;
+  return { end, kill, anim, startHp: START, heals: nHeals, screech, dropAt, defZeroAt, defEnd: defLvl, defLastAt: lastDefAt, maulHits: maulsLanded, ...st,
+    players: ps.map((p) => ({ name: p.name, spec: p.spec, surgeAt: p.surgeAt,
+      // surge cooldown left after the room (it doesn't tick between rooms)
+      surgeCd: end == null ? 0 : p.surgeAt != null ? Math.max(0, p.surgeAt + SURGE_CD - end) : Math.max(0, p.surgeReady - end) })) };
 }
