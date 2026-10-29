@@ -278,7 +278,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: c.prefire || '', pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? 100),
     surgePlan: !!c.surge, regen: 0, specs: [0, 1, 2].map((k) => ({ ...S_('none'), ...((c.specs || specsDefault[i] || [])[k] || {}) })), hornDone: [false, false, false],
-    hornUntil: -1, surged: false, surgeAt: null, zcbCarry: -1, vengPops: [0, 0, 0], orbedDown: -1, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: Number(c.lbCycles || 0) > 0, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
+    hornUntil: -1, surged: false, surgeAt: null, zcbCarry: -1, vengPops: [0, 0, 0], orbedDown: -1, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: false, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
     role: c.role || ROLES[i], mauled: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
   for (const p of ps) p.regenHold = p.spec < 100;
@@ -789,6 +789,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     // ---- spec regen (10% per 50 ticks below 100) and thralls (0-3 every 4 ticks, landing a tick later; not in a maze)
     for (const p of alive()) {
+      // Lightbearer only while it's doing something: at 100% (or waiting on a 95% start's first spec) they wear Ultor and
+      // go back on Lightbearer for the cycles left once their spec is below 100 again
+      const wantLb = p.lbLeft > 0 && p.spec < 100 && !p.regenHold;
+      if (wantLb !== p.lb) { p.lb = wantLb; if (p.lbLeft > 0 && p.lbStarted) L.on && L(`t${t} ${p.name} ${wantLb ? `back on Lightbearer (${p.lbLeft} cycles left)` : `at 100% - Ultor until they spec (${p.lbLeft} Lightbearer cycles left)`}`); if (wantLb) p.lbStarted = true; }
       if (p.regenHold) { /* waiting for their first spec */ } else if (p.spec < 100) {
         if (++p.regen >= (p.lb ? 25 : 50)) {                             // Lightbearer: a regen every 25 ticks
           p.regen = 0; p.spec = Math.min(100, p.spec + 10);
