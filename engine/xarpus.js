@@ -150,7 +150,7 @@ export function defaultXarpus(team) {
  * zcbBelow (ZCB_BELOW), maulTarget (MAUL_TARGET)}. Returns {end, kill, startHp, heals, screech, ..., players: [{surgeCd (left at
  * the end of the room), spec}]}.
  */
-export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAULT[team], exactHeals = false, defStop = DEF_STOP, zcbBelow = ZCB_BELOW, maulTarget = MAUL_TARGET } = {}) {
+export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAULT[team], exactHeals = false, defStop = DEF_STOP, zcbBelow = ZCB_BELOW, maulTarget = MAUL_TARGET, trace = null } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const EXH = EXHUMED_TICKS[team] || 96, BASE = XARPUS_HP[team] || 5080, SCREECH_HP = Math.floor(BASE * SCREECH_AT);
   const nHeals = rollHeals(heals, rng, exactHeals), START = EXHUMED_HP[team] + nHeals * HEAL[team];
@@ -250,21 +250,25 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
   for (let t = EXH + 1; t <= EXH + 3000 && kill == null; t++) {
     // ---- hits landing
     const landing = hits.filter((h) => h[0] === t); hits = hits.filter((h) => h[0] !== t);
-    for (const [, p, amt, label, kind, hit] of landing) {
+    for (const h of landing) {
+      const [, p, amt, label, kind, hit] = h;
       if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${p.name} ${label} lands after the kill (overkill)`); } break; }
       if (kind === 'maul' && hit) maulsLanded++;
       if (kind === 'ralos') {                                         // two rolls; a hit (1+) drains before the second roll
-        let total = 0; const parts = [];
+        let total = 0; const parts = [], defBeforeRalos = defLvl;
         for (let k = 0; k < 2; k++) {
           const [ch, mx] = ranged(bestWorn(p.gear, 'range', 'Tonalztics of Ralos').set, defLvl, 1.5);
-          const d = rng.random() < ch ? rng.randint(0, Math.floor(mx * 0.75)) : 0;
+          const d = rng.random() < ch ? Math.max(1, rng.randint(0, Math.floor(mx * 0.75))) : 0;   // a hit that passes accuracy: at least 1
           parts.push(d); total += d;
           if (d >= 1) { st.specs.ralosHits++; lowerDef(t, `${p.name} Ralos Spec hit ${k + 1}`, RALOS_DRAIN); }
         }
+        if (h.tr) Object.assign(h.tr, { amt: total, parts: parts.join('/'), def: defBeforeRalos, defAfter: defLvl });
         damage(t, total, `${p.name} Ralos Spec ${parts.join('/')}`, 'ralos');
       } else if (kind === 'zcb') {
         const [ch] = ranged(bestWorn(p.gear, 'range', 'Zaryte crossbow').set, defLvl, 2);
-        if (rng.random() < ch) damage(t, Math.min(110, Math.floor(hp * 0.22)), `${p.name} ZCB spec ruby`, 'zcb');
+        const ok = rng.random() < ch, ruby = Math.min(110, Math.floor(hp * 0.22));
+        if (h.tr) h.tr.amt = ok ? ruby : 0;
+        if (ok) damage(t, ruby, `${p.name} ZCB spec ruby`, 'zcb');
         else L.on && L(`t${t} ${p.name} ZCB spec misses`);
       } else damage(t, amt, `${p.name} ${label}`, kind);
     }
@@ -284,8 +288,10 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       if (p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); p.thrallNext = t + 4; }
     }
     // ---- player attacks, in PID order
+    const hpNow = hp;                                                 // (trace: his HP as the attacks go off)
     for (const p of pid) {
       if (t !== p.next) continue;
+      const n0 = hits.length, d0 = defLvl;
       const slot = defAct(p);
       let act = slot ? (slot.useBgs ? 'bgs' : slot.spec) : dpsAct(p, t) || 'scythe';
       // the tick fix: their scythe / ZCB would go off on the i3 before the screech (they saw him under 25% by the tick before)
@@ -331,13 +337,13 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
         L.on && L(`t${t} ${p.name} claw spec${act === 'fix:claw' ? ' (tick fix)' : ''} (${p.spec}% left)`);
         p.next = t + 4;
       } else if (act === 'fix:scratch') {
-        const [ch, mx] = melee(p, 'Dragon claws', 1, defLvl), d = rng.random() < ch ? rng.randint(0, mx) : 0;
+        const [ch, mx] = melee(p, 'Dragon claws', 1, defLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
         hits.push([t + MELEE_DELAY, p, d, 'claw scratch (tick fix)', 'scratch']); p.next = t + 4;
       } else if (act === 'fix:bp') {
-        const [ch, mx] = ranged(bpSet(p), defLvl), d = rng.random() < ch ? rng.randint(0, mx) : 0;
+        const [ch, mx] = ranged(bpSet(p), defLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
         hits.push([t + BP_DELAY, p, d, 'blowpipe (tick fix)', 'bp']); p.next = t + 2;
       } else if (act === 'fix:ayak') {
-        const [ch, mx] = ayak(p), d = rng.random() < ch ? rng.randint(0, mx) : 0;
+        const [ch, mx] = ayak(p), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
         hits.push([t + AYAK_DELAY, p, d, 'Ayak (tick fix)', 'ayak']); p.next = t + 3;
       } else {                                                        // scythe (fix 'tick': a scythe, next attack a tick late)
         const [ch, mx] = melee(p, 'Scythe of vitur', 1, defLvl);
@@ -345,9 +351,14 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
         hits.push([t + MELEE_DELAY, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}${act === 'fix:tick' ? ' (tick fix: next swing a tick late)' : ''}`, 'scythe']);
         p.next = t + (act === 'fix:tick' ? 6 : 5);
       }
+      if (trace) for (const h of hits.slice(n0)) {                   // this attack: his HP / Defence as it goes off, Defence after a maul / BGS
+        h.tr = { t, lands: h[0], name: p.name, what: h[3], kind: h[4], amt: h[2], hp: hpNow, def: d0, defAfter: defLvl };
+        trace.push(h.tr);
+      }
     }
   }
   const end = kill == null ? null : kill + anim;
+  if (trace) trace.sort((a, b) => a.t - b.t);
   return { end, kill, anim, startHp: START, heals: nHeals, screech, dropAt, defZeroAt, defEnd: defLvl, defLastAt: lastDefAt, maulHits: maulsLanded, ...st,
     players: ps.map((p) => ({ name: p.name, spec: p.spec, surgeAt: p.surgeAt,
       // surge cooldown left after the room (it doesn't tick between rooms)
