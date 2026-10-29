@@ -47,8 +47,8 @@ export class SoloPool {
     for (let a = from; a < to; a += per) parts.push(this.task({ ...common, configs, from: a, to: Math.min(to, a + per) }));
     const res = await Promise.all(parts);
     return configs.map((_, i) => {
-      const out = { totals: [], split: { p1: [], p2: [], p3: [], sets: [] } };
-      for (const r of res) { out.totals.push(...r[i].totals); for (const k of Object.keys(out.split)) out.split[k].push(...r[i].split[k]); }
+      const out = { totals: [], downs: [], split: { p1: [], p2: [], p3: [], sets: [] } };
+      for (const r of res) { out.totals.push(...r[i].totals); out.downs.push(...r[i].downs); for (const k of Object.keys(out.split)) out.split[k].push(...r[i].split[k]); }
       return out;
     });
   }

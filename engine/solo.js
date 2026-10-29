@@ -45,7 +45,7 @@ function shadowVs(p, mdef) {
   return [ch, mx];
 }
 
-/** The solo player's config: {name, startSpec, godbook, ringSwitch, shadow, shadowLB, shadowCamp, shadow31, deepProc,
+/** The solo player's config: {name, startSpec, godbook, lbP2, lbReds, shadow, shadowLB, shadowCamp, shadow31, deepProc,
  *  deepThr, ayakP2, ayakAmount, commit: {c100, c80, c50, c30, c0}, + gear (applyToCfg)}. */
 export function run_solo(cfg, rng, log = null, scope = 'full') {
   const L = log != null ? ((s) => log.push(s)) : (() => {}); L.on = log != null;
@@ -59,12 +59,15 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   p.has3 = cfg.has3Tick || 'Ayak';
   const st = { purples: 0, purple_pops: 0, redemptions: 0, drained: 0, rends: 0, ayak: 0, sets: 0, commit_set: null, dc: 0, crab_kills: 0, claws: 0, halb: 0, shadows: 0, ayak_fix: 0 };
   const out = { st, players: [p], pid: [p] };
+  // Lightbearer in P2: LB cycles before reds (regens on it from the start of P2), then Ultor; at the first reds shield
+  // back on it for the LB cycles in reds, then Ultor. (P1: Lightbearer the whole phase.) Off it at 100% (no regen there).
+  const lb = { counting: false, left: 0 };
   const regen = (t, tag = '') => {
     if (p.auto_r === t) { const o = p.spec; p.spec = Math.min(100, p.spec + 10); p.regen_timer = 0; p.auto_r = null; L.on && L(`t${rjust(t, 4)} ${tag}regen the tick after the first spec (godbook) ${fx(o)}% -> ${fx(p.spec)}%`); return; }
     if (p.auto_r === 'pending') return;
     if (p.spec < 100) {
       p.regen_timer += 1;
-      if (p.regen_timer >= p.regen_period()) { p.regen_timer = 0; const o = p.spec; p.spec = Math.min(100, p.spec + 10); L.on && L(`t${rjust(t, 4)} ${tag}regen ${fx(o)}% -> ${fx(p.spec)}%`); }
+      if (p.regen_timer >= p.regen_period()) { p.regen_timer = 0; const o = p.spec; p.spec = Math.min(100, p.spec + 10); if (lb.counting && p.ring === 'Lightbearer') lb.left -= 1; L.on && L(`t${rjust(t, 4)} ${tag}regen ${fx(o)}% -> ${fx(p.spec)}%`); }
     } else p.regen_timer = 0;
   };
   const surge = (t, tag = '') => {
@@ -132,13 +135,14 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const MX = P2_HP[1], REDS = P2_REDS[1];
   hp = MX; vq = [];
   let mdef = MDEF;
-  const rs = cfg.ringSwitch === '' || cfg.ringSwitch == null ? null : Number(cfg.ringSwitch);
+  const lbP2 = Math.max(0, Number(cfg.lbP2) || 0), lbReds = Math.max(0, Number(cfg.lbReds) || 0);
+  lb.counting = true; lb.left = lbP2;
   const ayakOn = !!cfg.ayakP2 && (cfg.ayakAmount ?? 0) > 0, ayakGoal = Math.min(MDEF, Number(cfg.ayakAmount) || 0);
   const draining = () => ayakOn && MDEF - mdef < ayakGoal;
   let lastMiss = false;                                         // confliction gauntlets: a missed magic hit -> next magic rolls twice
   const ringCheck = (t, tag = '') => {
     if (p.ring !== 'Lightbearer') return;
-    if (rs == null ? true : p.spec >= rs) { p.ring = 'Ultor'; p.regen_timer = 0; L.on && L(`t${rjust(t, 4)} ${tag}swaps to Ultor (spec ${fx(p.spec)}%)`); }
+    if (lb.left <= 0 || p.spec >= 100) { p.ring = 'Ultor'; p.regen_timer = 0; L.on && L(`t${rjust(t, 4)} ${tag}swaps to Ultor (spec ${fx(p.spec)}%)`); }
   };
   const magicHit = (t, a, mx, delay, label, target, tag = '') => {   // ayak / Soul Rend: accuracy vs her magic defence now
     const ch = hit_chance(a, magicDef(mdef));
@@ -272,6 +276,8 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const crab0 = floordiv(CRAB_BASE_HP * P2_HP[1], 3500);
   const pc = crab && (crab.alive || crab.expl != null) ? { alive: crab.alive, expl: crab.expl != null } : null;
   let P = shield, kill2 = null, since_ltg = regular % 5;
+  lb.left = lbReds;                                             // LB cycles in reds, from the first shield
+  if (lbReds > 0 && p.ring !== 'Lightbearer' && p.spec < 100) { p.ring = 'Lightbearer'; p.regen_timer = 0; L.on && L(`t${rjust(P, 4)} back on Lightbearer for ${lbReds} cycle${lbReds === 1 ? '' : 's'} in reds`); }
   const redsMode = cfg.shadow ? (cfg.redsMode || 'scythe') : 'scythe';   // reds: scythe | shadow (crab and Verzik) | shadowCrab
   const crabShadow = (r) => redsMode !== 'scythe' && r + SHADOW_DELAY_NEAR <= CRAB_HEAL_R;
   const shadowCrabNums = () => { const ring = p.ring === 'Lightbearer' ? 'Lightbearer' : 'Ultor ring'; const [, mx, c] = shadow_attack([...p.mage_gear.filter((n) => ITEMS[n]), ring], p.mag, { def_roll: CRAB_DEF_ROLL }); return [c, mx]; };

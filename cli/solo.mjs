@@ -10,7 +10,7 @@ Object.assign(g.mage, { head: 'Ancestral hat', body: 'Ancestral robe top', legs:
 Object.assign(g.melee, { head: 'Torva full helm', body: 'Torva platebody', legs: 'Torva platelegs' });
 g.weapons.push('Toxic blowpipe', "Tumeken's shadow", 'Eye of ayak', 'Elder maul');
 const base = applyToCfg({ name: 'Solo' }, g);
-const cfg = { ...base, shadow: base.hasShadow, deepProc: base.hasShadow, deepThr: Number(arg('deep', 37)), shadow31: arg('s31', '0') === '1', shadowCamp: arg('camp', '0') === '1', ayakP2: arg('ayak', '0') === '1', ayakAmount: Number(arg('amt', 70)), redsMode: arg('reds', 'scythe'), godbook: arg('gb', '0') === '1',
+const cfg = { ...base, shadow: base.hasShadow, deepProc: base.hasShadow, deepThr: Number(arg('deep', 37)), shadow31: arg('s31', '0') === '1', shadowCamp: arg('camp', '0') === '1', ayakP2: arg('ayak', '0') === '1', ayakAmount: Number(arg('amt', 70)), redsMode: arg('reds', 'scythe'), lbP2: Number(arg('lbp2', 0)), lbReds: Number(arg('lbreds', 0)), godbook: arg('gb', '0') === '1',
   commit: { c100: Number(arg('c100', 12)), c80: Number(arg('c80', 9)), c50: Number(arg('c50', 7)), c30: Number(arg('c30', 5)), c0: Number(arg('c0', 5)) } };
 if (process.argv.includes('--log')) { const log = []; const r = run_solo(cfg, new Rng(arg('seed', 'x#1')), log); console.log(log.join('\n')); console.log(r.end, r.st); }
 else {
@@ -26,8 +26,8 @@ if (process.argv.includes('--acc')) {
 if (process.argv.includes('--solve')) {
   const { solveSolo, evalSolo } = await import('/root/repo/engine/solosolve.js');
   const t0 = Date.now();
-  const out = await solveSolo({ start: { commit: { c100: 12, c80: 9, c50: 7, c30: 5, c0: 5 }, shadowMode: '31', ayak: 0, godbook: false, ringSwitch: '' }, allow: { commit: true, shadow: true, ayak: true, godbook: false, ring: false }, hasShadow: true, hasAyak: true,
+  const out = await solveSolo({ start: { commit: { c100: 12, c80: 9, c50: 7, c30: 5, c0: 5 }, shadowMode: '31', ayak: 0, godbook: false, lbP2: 0, lbReds: 0 }, allow: { commit: true, shadow: false, ayak: false, godbook: false, lb: true }, targets: arg('downs') ? arg('downs').split(',').map(Number) : [], hasShadow: true, hasAyak: true,
     rounds: 5, stages: [[40, 0.25], [150, 3], [500, 1]], finalRaids: 800, top: 5 }, async (s, a, b, seed) => evalSolo(s, cfg, a, b, seed), (m) => process.stdout.write(`\r${m.padEnd(80)}`));
   console.log(`\n${((Date.now() - t0) / 1000).toFixed(0)}s`);
-  for (const r of out) { const v = r.totals.slice().sort((a, b) => a - b); console.log((v[v.length >> 1] * 0.6).toFixed(1), JSON.stringify(r.s.commit), r.s.shadowMode, r.s.ayak, (r.s.path || []).join(' > ')); }
+  for (const r of out) { const v = r.totals.slice().sort((a, b) => a - b); console.log((v[v.length >> 1] * 0.6).toFixed(1), r.downs ? `<=6: ${(r.downs.filter((x) => x <= 6).length / r.downs.length * 100).toFixed(1)}%` : '', JSON.stringify(r.s.commit), 'LB', r.s.lbP2, r.s.lbReds, (r.s.path || []).join(' > ')); }
 }

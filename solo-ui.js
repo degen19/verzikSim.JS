@@ -17,7 +17,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const loadKey = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch { return d; } };
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 export const DEATHS_NOTE = '*This does not yet take into account deaths and assumes you live every raid. Death tracking will come at a later date*';
-const blankSet = () => ({ gearSet: 'A', godbook: false, ringSwitch: '', shadowCamp: false, shadowLB: false, shadow31: false, deepProc: false, deepThr: DEEP_THR,
+const blankSet = () => ({ gearSet: 'A', godbook: false, lbP2: 0, lbReds: 0, shadowCamp: false, shadowLB: false, shadow31: false, deepProc: false, deepThr: DEEP_THR,
   ayakP2: false, ayakAmount: 70, redsMode: 'scythe', commit: { ...COMMIT_DEFAULT } });
 const fsec = (t) => { const s = t * 0.6, m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(1)}`; };
 const COMMIT_LABEL = { c100: '100% spec', c80: '80%+ spec', c50: '50%+ spec', c30: '30%+ spec', c0: 'under 30%' };
@@ -34,7 +34,7 @@ export function createSolo(host) {
   const cfgOfSet = (st) => {
     const g = gearOf(st) || blankPlayer(0), base = applyToCfg({ name: g.name || 'Solo' }, g);
     const sh = base.hasShadow;
-    return { ...base, name: base.name || 'Solo', godbook: !!st.godbook, ringSwitch: st.ringSwitch ?? '', shadow: sh,
+    return { ...base, name: base.name || 'Solo', godbook: !!st.godbook, lbP2: Number(st.lbP2) || 0, lbReds: Number(st.lbReds) || 0, shadow: sh,
       shadowCamp: sh && !!st.shadowCamp, shadowLB: sh && !!st.shadowLB, shadow31: sh && !!st.shadow31, deepProc: sh,                                                         // solos always deep proc with a shadow deepThr: Number(st.deepThr) || DEEP_THR,
       ayakP2: (g.weapons || []).includes('Eye of ayak') && !!st.ayakP2, ayakAmount: Number(st.ayakAmount) || 0, redsMode: sh ? st.redsMode || 'scythe' : 'scythe', commit: { ...st.commit }, hasAyak: (g.weapons || []).includes('Eye of ayak') };
   };
@@ -61,11 +61,12 @@ export function createSolo(host) {
         if it beats the current setup; the top setups are then played on more raids and ranked: with breakpoints by the share finished at the
         fastest one (then the next), otherwise by the median.</p>
       <div class="row">
+        <label title="Reds sets: rank by the share of raids killed in at most this many sets (several: the lowest first), before breakpoints and the median">Target down (optional)<input data-v="downs" placeholder="e.g. 7 or 6, 7, 8" style="width:120px"></label>
         <label>Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label>Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
         <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
       </div>
-      <div class="row" style="margin-top:6px">${[['shadow', 'Shadow mode'], ['ayak', 'Ayak P2'], ['godbook', 'Godbook'], ['ring', 'Ring switch']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
+      <div class="row" style="margin-top:6px">${[['shadow', 'Shadow mode'], ['ayak', 'Ayak P2'], ['godbook', 'Godbook'], ['lb', 'Lightbearer cycles']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>
     </details></div>`;
   const cfgEl = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), sol = host.querySelector('[data-solve]');
@@ -96,7 +97,8 @@ export function createSolo(host) {
       <div class="row wrap" style="gap:14px;align-items:end">
         <label>Gear<select data-s="gearSet">${GEAR_SETS.map((k) => `<option value="${k}" ${k === st.gearSet ? 'selected' : ''}>Gear set ${k}${gearSet(loadGear(), 1, k) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         ${chk('godbook', 'Godbook (95% start)', st.godbook, 'Start P1 at 95%: no regen before the first Dawn spec, then a regen the tick after it')}
-        <label title="P2: swap Lightbearer -> Ultor once spec reaches this %. Blank: Ultor from the start of P2">Ring switch %<input data-s="ringSwitch" type="number" min="0" max="100" step="10" value="${esc(st.ringSwitch)}" placeholder="P2 start" style="width:80px"></label>
+        <label title="P2 before reds: spec regens on Lightbearer from the start of P2 (0-5), then Ultor. (P1 is always on Lightbearer.)">LB cycles before reds<input data-s="lbP2" type="number" min="0" max="5" value="${esc(st.lbP2)}" style="width:70px"></label>
+        <label title="Reds: back on Lightbearer at the first shield for this many spec regens (0-5), then Ultor">LB cycles in reds<input data-s="lbReds" type="number" min="0" max="5" value="${esc(st.lbReds)}" style="width:70px"></label>
       </div>
       <h4 style="margin:12px 0 4px">Shadow ${sh ? '' : '<span class="muted small">(no Tumeken\'s shadow in this Gear set)</span>'}</h4>
       <div class="row wrap" style="gap:14px;align-items:end">
@@ -152,7 +154,7 @@ export function createSolo(host) {
     if (t.dataset.commit) { st.commit[t.dataset.commit] = Math.max(0, Math.min(100, Number(t.value) || 0)); persist(); return; }
     const k = t.dataset.s; if (!k) return;
     if (t.type === 'checkbox') st[k] = t.checked;
-    else if (k === 'ringSwitch') st[k] = t.value === '' ? '' : Math.max(0, Math.min(100, Number(t.value) || 0));
+    else if (k === 'lbP2' || k === 'lbReds') st[k] = Math.max(0, Math.min(5, Math.trunc(Number(t.value) || 0)));
     else if (k === 'gearSet' || k === 'redsMode') st[k] = t.value;
     else st[k] = Number(t.value) || 0;
     if (k === 'shadowCamp' && t.checked) { st.shadow31 = false; st.shadowLB = false; }       // camp covers 3:1 / while LB
@@ -213,8 +215,8 @@ export function createSolo(host) {
     thorough: { rounds: 14, stages: [[100, 0.3], [400, 5], [1500, 1]], final: 5000 } };
   const solState = () => { const r = root(); r.solve ||= { bps: '', effort: 'normal', allow: { shadow: false, ayak: false, godbook: false, ring: false } }; return r.solve; };
   const showSol = () => {
-    const v = solState(); sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="effort"]').value = v.effort;
-    for (const k of ['shadow', 'ayak', 'godbook', 'ring']) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
+    const v = solState(); sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="downs"]').value = v.downs || ''; sol.querySelector('[data-v="effort"]').value = v.effort;
+    for (const k of ['shadow', 'ayak', 'godbook', 'lb']) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
   };
   sol.addEventListener('change', (e) => {
     const v = solState(), t = e.target;
@@ -222,14 +224,15 @@ export function createSolo(host) {
     if (t.dataset.va) v.allow[t.dataset.va] = t.checked;
     persist();
   });
-  let solver = null, results = null, lastBps = [];
+  let solver = null, results = null, lastBps = [], lastDowns = [];
   const settingsOf = (st, c, allow) => ({ commit: { ...st.commit }, shadowMode: allow.shadow && c.hasShadow ? shadowModeOf(c) : null,
-    ayak: allow.ayak && c.hasAyak ? (c.ayakP2 ? Number(st.ayakAmount) || 0 : 0) : null, godbook: !!st.godbook, ringSwitch: st.ringSwitch ?? '' });
+    ayak: allow.ayak && c.hasAyak ? (c.ayakP2 ? Number(st.ayakAmount) || 0 : 0) : null, godbook: !!st.godbook,
+    lbP2: allow.lb ? Number(st.lbP2) || 0 : null, lbReds: allow.lb ? Number(st.lbReds) || 0 : null });
   const describe = (s, hasShadow, hasAyak) => [
     COMMIT_KEYS.map(([k]) => `${COMMIT_LABEL[k]}: ${s.commit[k] ? `${s.commit[k]}%` : 'never'}`).join(', '),
     hasShadow && s.shadowMode != null ? (SHADOW_MODES.find((m) => m[0] === s.shadowMode) || ['', 'No shadow'])[1] : null,
     hasAyak && s.ayak != null ? (s.ayak ? `Ayak P2 to ${s.ayak}` : 'no Ayak P2') : null,
-    s.godbook ? 'godbook' : null, s.ringSwitch !== '' && s.ringSwitch != null ? `Ultor at ${s.ringSwitch}%` : null,
+    s.godbook ? 'godbook' : null, s.lbP2 != null ? `LB cycles: ${s.lbP2} before reds, ${s.lbReds} in reds` : null,
   ].filter(Boolean).join(' · ');
   sol.addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -237,7 +240,7 @@ export function createSolo(host) {
     const vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
     if (b.dataset.vuse != null && results) {
       const s = results[Number(b.dataset.vuse)].s, st = cur();
-      st.commit = { ...s.commit }; st.godbook = !!s.godbook; st.ringSwitch = s.ringSwitch ?? '';
+      st.commit = { ...s.commit }; st.godbook = !!s.godbook; if (s.lbP2 != null) { st.lbP2 = s.lbP2; st.lbReds = s.lbReds; }
       if (s.shadowMode != null) Object.assign(st, { shadowCamp: s.shadowMode === 'camp', shadow31: s.shadowMode === '31' || s.shadowMode === 'lb31', shadowLB: s.shadowMode === 'lb' || s.shadowMode === 'lb31' });
       if (s.ayak != null) { st.ayakP2 = s.ayak > 0; if (s.ayak > 0) st.ayakAmount = s.ayak; }
       persist(); render(); status.textContent = `Set ${root().cur} now uses setup #${Number(b.dataset.vuse) + 1}.`; return;
@@ -246,13 +249,16 @@ export function createSolo(host) {
     if (b.dataset.vact !== 'run' || solver) return;
     const v = solState(); err.textContent = '';
     let bps = []; try { bps = String(v.bps || '').trim() ? parseBreakpoints(v.bps) : []; } catch (x) { err.textContent = x.message; return; }
+    const downs = [...new Set(String(v.downs || '').split(/[\s,]+/).filter(Boolean).map(Number))];
+    if (downs.some((n) => !Number.isInteger(n) || n < 1 || n > 60)) { err.textContent = 'Target down: whole numbers of reds sets, e.g. 7 or 6, 7, 8'; return; }
+    downs.sort((a, b) => a - b);
     const st = cur(), c = cfgOfSet(st), eff = EFFORT[v.effort] || EFFORT.normal;
     const base = { ...c }, start = settingsOf(st, c, v.allow);
     solver = { stopped: false, pool: new SoloPool(base) }; const me = solver;
-    vbtn('run').disabled = true; vbtn('stop').disabled = false; out.innerHTML = ''; lastBps = bps;
+    vbtn('run').disabled = true; vbtn('stop').disabled = false; out.innerHTML = ''; lastBps = bps; lastDowns = downs;
     const t0 = performance.now();
     try {
-      results = await solveSolo({ start, allow: { commit: true, ...v.allow }, hasShadow: !!c.hasShadow, hasAyak: !!c.hasAyak, bps, rounds: eff.rounds, stages: eff.stages, finalRaids: eff.final, top: 10 },
+      results = await solveSolo({ start, allow: { commit: true, ...v.allow }, hasShadow: !!c.hasShadow, hasAyak: !!c.hasAyak, bps, targets: downs, rounds: eff.rounds, stages: eff.stages, finalRaids: eff.final, top: 10 },
         (cfgs, from, to, seed) => me.pool.run(cfgs, from, to, seed), (m) => { status.textContent = m; }, () => me.stopped);
       status.textContent = me.stopped ? 'Stopped.' : `Done in ${((performance.now() - t0) / 1000).toFixed(0)}s.`;
       showResults(!!c.hasShadow, !!c.hasAyak);
@@ -267,9 +273,9 @@ export function createSolo(host) {
     const ft = (x) => (x == null || Number.isNaN(x) ? '-' : x >= 99999 ? 'failed' : fsec(x));
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">Solo Verzik: solver - top ${results.length}</h3>
       <div class="sub">Each played on the same ${results[0].totals.length.toLocaleString()} raids. Times: median. ${esc(DEATHS_NOTE)}</div>
-      <div class="scroll"><table><tr><th>#</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>P2</th><th>P3</th><th>Reds sets</th><th style="text-align:left">Setup</th><th></th></tr>
+      <div class="scroll"><table><tr><th>#</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${lastDowns.map((n) => `<th>${n}-down or better</th>`).join('')}${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>P2</th><th>P3</th><th>Reds sets</th><th style="text-align:left">Setup</th><th></th></tr>
       ${results.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b), sets = r.split.sets;
-        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td><td>${sets.length ? (sets.reduce((s, x) => s + x, 0) / sets.length).toFixed(2) : '-'}</td><td style="text-align:left;white-space:normal;min-width:260px">${esc(describe(r.s, hasShadow, hasAyak))}</td><td><button class="ghost sm" data-vuse="${i}">Use this setup</button></td></tr>`; }).join('')}
+        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${lastDowns.map((n) => `<td>${(r.downs.filter((x) => x <= n).length / r.downs.length * 100).toFixed(1)}%</td>`).join('')}${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td><td>${sets.length ? (sets.reduce((s, x) => s + x, 0) / sets.length).toFixed(2) : '-'}</td><td style="text-align:left;white-space:normal;min-width:260px">${esc(describe(r.s, hasShadow, hasAyak))}</td><td><button class="ghost sm" data-vuse="${i}">Use this setup</button></td></tr>`; }).join('')}
       </table></div></div>`;
   }
 

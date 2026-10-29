@@ -73,6 +73,19 @@ function bpRows(res, bps) {
   ]);
 }
 
+/** Solo: kills by the number of reds sets ("downs") - for each set count marked (all counts seen if none), the share of kills
+ *  done in exactly that many sets and in that many or fewer. */
+function redsSetsHtml(res, labels, marks = []) {
+  const sets = res.map((r) => (r.solo && r.solo.sets) || []);
+  let ns = (marks || []).slice();
+  if (!ns.length) { const all = sets.flat(); if (!all.length) return ''; for (let n = Math.min(...all); n <= Math.max(...all); n++) ns.push(n); }
+  const p = (v, f) => (v.length ? `${(v.filter(f).length / v.length * 100).toFixed(1)}%` : '-');
+  const avg = (v) => (v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2) : '-');
+  const head = `<tr><th rowspan="2">Reds sets</th>${labels.map((l, k) => `<th colspan="2" style="color:${COL[k]}">${esc(l)}</th>`).join('')}</tr><tr>${labels.map(() => '<th>Exactly</th><th>Or fewer</th>').join('')}</tr>`;
+  const rows = ns.map((n) => `<tr><td>${n}-down</td>${sets.map((v) => `<td>${p(v, (x) => x === n)}</td><td>${p(v, (x) => x <= n)}</td>`).join('')}</tr>`).join('');
+  return `<h3>Reds sets</h3><div class="sub">Share of kills by how many reds sets P2 took (a 7-down = killed in the 7th set)${marks && marks.length ? ' - the sets marked in the report settings' : ''}. Average: ${sets.map((v, k) => `${esc(labels[k])} ${avg(v)}`).join(' · ')}.</div><table>${head}${rows}</table>`;
+}
+
 function oddsRows(res, team, bps = [], opts = {}) {
   const scope = scopeOfRes(res);
   const fastestRows = [
@@ -105,7 +118,6 @@ function oddsRows(res, team, bps = [], opts = {}) {
     return [
       ['Success (all runs)', res.map((r) => pct(r.total.length, r.runs))],
       ['Reds sets (average)', avg('sets')],
-      ...(opts.markSets || []).map((n) => [`Killed in ${n} reds set${n === 1 ? '' : 's'} (of kills)`, share('sets', (x) => x === n)]),
       ['Purples before reds (average)', avg('purples')],
       ['Purples before reds: 0 / 1 / 2 / 3+', res.map((r) => { const v = so(r, 'purples'), n = v.length || 1; return [0, 1, 2].map((x) => `${(v.filter((y) => y === x).length / n * 100).toFixed(0)}%`).concat(`${(v.filter((y) => y >= 3).length / n * 100).toFixed(0)}%`).join(' / '); })],
       ['Committed to the kill (of kills)', share('commit', (x) => x > 0)],
@@ -369,7 +381,7 @@ ${team === 1 ? '<div class="sub"><b>*This does not yet take into account deaths 
 <div class="sub">${runs.toLocaleString()} raids per set · ${timesAre} · charts use each set's successful runs · ${what} · sim v${VERSION}</div>
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3><div class="sub">Median / Top 10% / Top 25% / Bottom 25% are of each set's <b>successful runs only</b> (${res.map((r, k) => `${esc(labels[k])}: ${r.total.length.toLocaleString()} kills of ${r.runs.toLocaleString()} attempts`).join(' · ')}). ${team === 1 ? '' : 'Failed raids have no room time, so they aren\'t in these columns - see "% of all attempts" below for odds per attempt.'}</div>${splits}${team === 2 ? '<div class="sub" style="margin-top:6px">Depth = Verzik HP % when the shield goes up (lower = deeper), averaged over the runs in each room-time bucket (Median = runs around the median room time).</div>' : ''}
-<h3>Odds</h3>${odds}
+<h3>Odds</h3>${odds}${team === 1 && scope !== 'p1' ? redsSetsHtml(res, labels, opts.markSets) : ''}
 <h3>How often each room time happens (per second, % of successful runs)</h3>${legend}<div class="scroll">${histogramSvg(res, labels)}</div>
 ${team === 1 ? `<h3>Finished by this time or faster - % of kills</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div>${legend}<div class="scroll">${cumulativeSvg(res, labels, bps)}</div>`
     : `<h3>Finished by this time or faster - % of successful runs</h3>${legend}<div class="scroll">${cumulativeSvg(res, labels)}</div>
