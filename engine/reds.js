@@ -442,7 +442,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           p.next_attack = t + 4;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, `
             + `max ${mx}) -> ${pylist(hits)}`);
-        } else if (r === 40 && p.spec >= 30 && !ga(p, 'horn_p2', false) && r40_halberd_ok(hp, team, cfgs)) {
+        } else if (r === 40 && p.spec >= 30 && p.has_halb !== false && !ga(p, 'horn_p2', false) && r40_halberd_ok(hp, team, cfgs)) {
           const old = p.spec; p.spec -= 30;
           const [ch1, m] = p3.melee(p, p3.HALB, P2_DEF[1]); const [ch2] = p3.melee(p, p3.HALB, P2_DEF[1], 0.75);
           const hits = [ch1, ch2].map((c) => (rng.random() < c ? Math.max(1, rng.randint(0, m)) + p3.halb_bonus(m) : 0));

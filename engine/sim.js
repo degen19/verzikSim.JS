@@ -361,6 +361,7 @@ export class Player {
     this.default_swap = this.lb && this.target_spec == null;   // neither % set: default Ultor swap (default_transition)
     this.default_wait = false;
     this.purple = dget(cfg, 'PurpleDC', false);
+    this.has_halb = dget(cfg, 'hasHalb', true) !== false;   // no Crystal halberd (Gear tab): no chally
     this.has_bp = dget(cfg, 'hasBP', true) !== false;   // no blowpipe: no B in P1, no blowpipe fills, can't pop the purple
     this.purple2nd = dget(cfg, 'Purple2DC', false);
     this.has3 = dget(cfg, 'has3Tick') || false;

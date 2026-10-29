@@ -697,7 +697,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
   }
   if (r === 40 && p.spec >= 30 && dget(st, 'hp_now', 10 ** 6) < P2_HP[2] * LAST_HIT_THR / 100) {
     // under the scythe last-hit threshold: scythe, not halberd
-  } else if (r === 40 && p.spec >= 30) {
+  } else if (r === 40 && p.spec >= 30 && p.has_halb !== false) {
     p.spec -= 30;
     const [ch1, m] = p3.melee(p, p3.HALB, P2_DEF[1]);
     const [ch2] = p3.melee(p, p3.HALB, P2_DEF[1], 0.75);

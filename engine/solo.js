@@ -420,7 +420,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
         if (cfg.shadow && cfg.shadow31) return shadow(t, '3:1', tag);
         p.next_attack = t + 1; return;
       }
-      if (r === 40 && p.spec >= 30 && hp >= MX * LAST_HIT_THR / 100) {
+      if (r === 40 && p.spec >= 30 && p.has_halb !== false && hp >= MX * LAST_HIT_THR / 100) {
         p.spec -= 30; st.halb += 1;
         const [c1, m] = p3.melee(p, p3.HALB, P2_DEF[1]), [c2] = p3.melee(p, p3.HALB, P2_DEF[1], 0.75);
         const hb = (d) => (d > 0 ? d + p3.halb_bonus(m) : 0), hits = [hb(roll(rng, c1, m)), hb(roll(rng, c2, m))];

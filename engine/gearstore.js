@@ -15,6 +15,7 @@ export function loadGear() {
   for (const t of Object.keys(s)) if (s[t] && s[t].players && !s[t].sets) s[t] = { sets: { A: { players: s[t].players } }, link: {} };   // first preview
   for (const t of Object.values(s)) for (const set of Object.values((t && t.sets) || {})) for (const p of set.players || []) {   // renamed items
     if (Array.isArray(p.weapons)) p.weapons = p.weapons.map((w) => (w === 'Smoke ancient sceptre' ? 'Shadow ancient sceptre' : w));
+    if (!p.halbSet) { p.weapons = [...new Set([...(p.weapons || []), 'Crystal halberd'])]; p.halbSet = true; }   // the halberd became a Gear tab item: everyone had one before
   }
   return s;
 }

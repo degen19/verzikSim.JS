@@ -38,6 +38,8 @@ export const CLAW = { atk: 57, str: 56 };
 export const HALB = { atk: 110, str: 118 };
 /** Halberd spec boost: each hit that passes accuracy rolls 1..max as normal, then adds floor(max / 10). */
 export const halb_bonus = (m) => floordiv(m, 10);
+/** A halberd spec now: 30% spec and a Crystal halberd (Gear tab). */
+export const canH = (p) => p.spec >= 30 && p.has_halb !== false;
 export const THREE = { atk: 120, str: 40 };                   // has3Tick weapon: crush
 export let P3_CRUSH = (150 + 9) * (70 + 64);                  // 21,306
 export let P3_MAGIC = (150 + 9) * (100 + 64);                 // 26,076 (magic uses her Defence level)
@@ -181,7 +183,7 @@ export function plan_first(p, t, end, blocked, pl, allow_claw, chally_ok) {
     if (allow_claw && avail(a, spent) >= 50) opts.push(['C', pl.C, 4, 50]);
     if (truthy(p.has3)) opts.push(['3', pl.T3, 3, 0]);
     opts.push(['X', pl.scratch * SCRATCH_W, 4, 0]);   // claw scratch: last resort (claw > scythe > halberd > scratch)
-    if (avail(a, spent) >= 30 && (a + 7 > end || chally_ok)) opts.push(['H', pl.H, 7, 30]);
+    if (p.has_halb !== false && avail(a, spent) >= 30 && (a + 7 > end || chally_ok)) opts.push(['H', pl.H, 7, 30]);   // no Crystal halberd: no chally
     opts.push(['W', 0.0, 1, 0]);                      // waiting only wins when it's strictly better
     for (const [code, val, ln, cost] of opts) {
       const v = val + f(a + ln, spent + cost)[0];
@@ -730,17 +732,17 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       let use = 'S';
       // ---- duo: halberd on chart tick 67 (her move to webs comes next) -> 3-tick drag
       if (duo && p !== tank && V['cycle'] === 1 && V['ev'] === 'move' && st['below20'] === null &&
-          V['cd'] === 7 && t === V['at'] - 2 && p.spec >= 30) {
+          V['cd'] === 7 && t === V['at'] - 2 && canH(p)) {
         use = 'H'; V['drag3'] = true;
         L.on && L(`t${rjust(t, 4)} ${p.name}: 30%+ before webs -> halberd, Verzik will drag 3 ticks`);
       // ---- tank's 13th swing: get back on the team's rhythm
       } else if (team !== 1 && p === tank && !p.special_done && n === 13 && (V['ev'] === 'auto' || V['ev'] === 'move')) {   // solos: no ticks lost into webs
         p.special_done = true;
         const nt_h = duo && others.length > 0 && st['below20'] === null && V['cd'] === 7 &&
-          spec_at(others[0], t, V['ev'] === 'auto' ? (V['a9'] || V['at']) + 5 : V['at'] - 2) >= 30;
+          others[0].has_halb !== false && spec_at(others[0], t, V['ev'] === 'auto' ? (V['a9'] || V['at']) + 5 : V['at'] - 2) >= 30;
         if (nt_h) {
           use = 'S';                                  // duo drag path: the drag lines them up
-        } else if (p.spec >= 30 && (duo || p.has3 !== 'Obligator')) {
+        } else if (canH(p) && (duo || p.has3 !== 'Obligator')) {
           use = 'H'; st['tank_early_chally'] = true; p.resync_after = true;
         } else if (duo && p.has3 !== 'Obligator' && p.hp < 40 && truthy(p.pool.take('shark'))) {
           use = 'F'; p.resync_after = true;           // duo: under 40 HP, a shark in those 3 ticks instead
@@ -770,7 +772,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       } else if (hp <= chally_hp) {
         if (p.spec >= 50) {
           use = 'C';
-        } else if (p.spec >= 30 && !p.halb_done) {
+        } else if (canH(p) && !p.halb_done) {
           use = 'H';
         } else if (truthy(ga(p, 'horn_p3', false)) && !truthy(p.horn_used_p3) && p.spec >= 25) {
           const nic = (q) => q.spec >= 50;
@@ -780,6 +782,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         }
       }
       // ---- do it
+      if (use === 'H' && p.has_halb === false) use = 'S';             // no Crystal halberd (safety net)
       if (use === 'F') {
         const old = p.hp; supplies.eat_shark(p); st['eats'] += 1;
         p.next_attack = t + 3;
@@ -924,23 +927,23 @@ export function window_choice(p, t, y5, blocked, duo, webs_last, chally_ok, is_t
   if (duo && p.spec >= 50 && swings.length === 2) {
     // 2nd-to-last swing before yellows with a claw they didn't use earlier: claw + last swing if that beats
     // scythe + last swing (last swing = halberd with 30% left, else scythe)
-    const keep = p.pl.S + (p.spec >= 30 ? p.pl.H : p.pl.S);
-    const use_c = p.pl.C + (p.spec - 50 >= 30 ? p.pl.H : p.pl.S);
+    const keep = p.pl.S + (canH(p) ? p.pl.H : p.pl.S);
+    const use_c = p.pl.C + (p.spec - 50 >= 30 && p.has_halb !== false ? p.pl.H : p.pl.S);
     if (use_c > keep) return 'C';
   }
   if (last) {
     if (gap === 4 && duo) {
       // duo never scratches before yellows: a 4-tick gap is a claw + one more scythe if that beats the
       // halberd (or scythe) they'd otherwise finish with, else they just finish
-      const fin = p.spec >= 30 ? p.pl.H : p.pl.S;
+      const fin = canH(p) ? p.pl.H : p.pl.S;
       if (p.spec >= 50 && p.pl.C + p.pl.S > fin) return 'C';
-      return p.spec >= 30 ? 'H' : 'S';
+      return canH(p) ? 'H' : 'S';
     }
     if (gap === 4) return 'X';
     if (gap === 3 && truthy(p.has3)) return '3';
-    return p.spec >= 30 ? 'H' : 'S';
+    return canH(p) ? 'H' : 'S';
   }
-  if (chally_ok && p.spec >= 30 && !duo) return 'H';
+  if (chally_ok && canH(p) && !duo) return 'H';
   return 'S';
 }
 
