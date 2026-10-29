@@ -141,12 +141,15 @@ export const SPEC_COST = { maul: 50, claws: 50, zcb: 75, horn: 25 };
 const S_ = (spec, o = {}) => ({ spec, backup: false, horn: false, ...o });
 /** The default specs (players 1-5), by scale: 5s - P1 horns and mauls P1, mauls P2; P2 mauls P1 and P3; P3 / P4 ZCB
  *  in P1 and back up in P3 (ZCB, or a maul if needed); P5 mauls P2 and P3. 4s: the same without P4. 3s: P1 mauls P1
- *  and P2, P2 P1 and P3, P3 P2 and P3. */
+ *  and P2, P2 P1 and P3, P3 P2 and P3. Duos: both maul in P1; A mauls P2, B P3 - if both P1 mauls miss, A backs up
+ *  (duoBackup); if that misses too, they swap: B mauls P2, A camps Lightbearer to maul P3. Solos: a maul each phase. */
 export function defaultSpecs(team) {
   const A = [S_('maul', { horn: true }), S_('maul'), S_('none')], B = [S_('maul'), S_('none'), S_('maul')];
   const C = [S_('zcb'), S_('none'), S_('zcb', { backup: true })], E = [S_('none'), S_('maul'), S_('maul')];
   if (team >= 5) return [A, B, C, C, E];
   if (team === 4) return [A, B, C, E];
+  if (team === 2) return [[S_('maul', { duoBackup: true }), S_('maul'), S_('none')], [S_('maul'), S_('none'), S_('maul')]];
+  if (team === 1) return [[S_('maul'), S_('maul'), S_('maul')]];   // solos: one spec a phase
   return [[S_('maul'), S_('maul'), S_('none')], [S_('maul'), S_('none'), S_('maul')], [S_('none'), S_('maul'), S_('maul')]].slice(0, team);
 }
 /** The default setup that goes with them (prefire, start spec, surge): 5s / 4s - P1 and P2 Twisted bow, the rest a ZCB
@@ -247,7 +250,7 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * defaultSpecs()), lbCycles? (spec regens on Lightbearer, then Ultor), mazes? (how they
  * cross each maze: ['pneck' | 'redemption' | 'shark' | 'run', ...]; default defaultMazes())}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
  * instance 0-3 (default 0); splitBall: everyone shares the death ball when they all can take it, otherwise the target
- * tick-eats it alone (default true; false: always the target alone); stallTick: a target with no Guthix rest is tick-healed
+ * tick-eats it alone (default true; false: always the target alone; duos never split it); stallTick: a target with no Guthix rest is tick-healed
  * (3-tick stall, a teammate's Heal Other) before using a shark (default false); clawBelow: P3 HP below which a planned ZCB becomes claws (default 450); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
@@ -346,7 +349,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     pendingStall = { at: m + 8, runners: stallers };
   };
   let pendingStall = null, pendingSharks = [];
-  let magicCount = 0, ball = null, skipAt = -1;     // the death ball: magic attacks since the last one, the ball in flight, her skipped attack
+  let magicCount = 0, ball = null, skipAt = -1;
+  const maulHits = [0, 0, 0];                       // mauls that hit, by phase     // the death ball: magic attacks since the last one, the ball in flight, her skipped attack
   /** Running the maze (everyone, if anyone picked Run): a real maze is rolled. Everyone's first move is on T+5. The
    *  player under (teleported to column 6, two south of row A) reaches the first tile in 1-3 ticks by its column - a
    *  light shows there - and runs the best route from the next tick (a tick later on columns 12-13, so the runners are
@@ -449,6 +453,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (p.zcbCarry === ph && !alive().some(mauls) && p.spec >= ZCB_SPEC && has('Zaryte crossbow') && !zcbWasted) { p.zcbCarry = -1; return 'zcbCarry'; }
     if (!sp.backup) {
       if (sp.spec === 'maul' && !p.mauled[ph] && has('Elder maul')) return p.spec >= 50 && !hornWait(p, ph) ? 'maul' : 'scythe';
+      // duos: both P1 mauls missed - one backup maul once they've landed
+      if (sp.duoBackup && p.mauled[ph] === 1 && !alive().some(mauls) && !anyMaulPending() && !maulHits[ph] && p.spec >= 50 && has('Elder maul')) { p.duoBackingUp = true; return 'maul'; }
       if (p.specDone[ph] || sp.spec === 'none') return 'scythe';
       if (sp.spec === 'zcb') {
         if (alive().some(mauls) || p.spec < ZCB_SPEC || !has('Zaryte crossbow')) return 'scythe';
@@ -586,7 +592,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (!blocked && mazes.length < 2 && kill == null) {
       const ph = mazes.length, near = hp - stopAt <= MAX * ORB_DOWN_AT;
       for (const p of alive()) {
-        if (p.how[ph] !== 'redemption' || p.orbedDown === ph || p.restores < 1 || t < p.prayOffUntil || t < (p.healFrom || 0) || meleeable(p, t)) continue;
+        if (p.how[ph] !== 'redemption' || p.hp <= REDEMPTION_HP || p.restores < 1 || t < p.prayOffUntil || t < (p.healFrom || 0) || meleeable(p, t)) continue;
+        if (p.orbedDown === ph) { p.hp = REDEMPTION_HP; L.on && L(`t${t} ${p.name} locator orbs back down to ${REDEMPTION_HP} HP`); continue; }   // pushed back up (a heal, a tick-eat): down again
         const done = p.vengPops[ph] >= 2 || (p.vengPops[ph] >= 1 && p.hp <= ORB_MAX) || p.hp <= ORB_MAX;
         if (!done && !near) continue;
         const nRun = alive().length - 1;
@@ -601,20 +608,24 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         p.hp = REDEMPTION_HP; p.orbedDown = ph;
       }
     }
-    // ---- locator orb (redemption skippers, after the second maze): at 1 HP with Redemption up, the orb hits them for
-    // 0 -> Redemption heals them to 25 (a restore sip for their prayer), and they Heal Other the player with veng up
-    // below, but closest to, 50. Between swings (not on their attack tick, once a swing), only with no orb landing on
-    // them in the next 3 ticks, and with a restore sip left (after their first swing; sips 3 ticks apart).
-    if (!blocked && mazes.length >= 2 && kill == null) {
-      for (const p of alive().filter((q) => q.gear.locator && q.how.includes('redemption') && q.restores >= 1 && q.hp < REDEMPTION_HP + REDEMPTION_HEAL)) {
-        if (t === p.next || meleeable(p, t) || t < p.cycleAfter || t < (p.sipReady || 0) || !p.swings[2] || t < (p.healFrom || 0) || t < p.noVengUntil) continue;
+    // ---- locator orb (redemption skippers - after the second maze; in duos, every phase): at 1 HP with Redemption up,
+    // the orb hits them for 0 -> Redemption heals them to 25 (a restore sip for their prayer), and they Heal Other the
+    // player with veng up below, but closest to, 50 (duos: their partner at 50 or less, so they can veng). Between swings
+    // (not on their attack tick, once a swing), only with no orb landing on them in the next 3 ticks, keeping a restore
+    // sip for each redemption skip still to come (after their first swing of the phase; sips 3 ticks apart). With a
+    // redemption skip next, they orb straight back down to 1 HP.
+    if (!blocked && (mazes.length >= 2 || team === 2) && kill == null) {
+      const ph = Math.min(mazes.length, 2), keep = (q) => q.how.slice(mazes.length).filter((h) => h === 'redemption').length;
+      for (const p of alive().filter((q) => q.gear.locator && q.how.includes('redemption') && q.restores >= 1 + keep(q) && q.hp < REDEMPTION_HP + REDEMPTION_HEAL)) {
+        if (t === p.next || meleeable(p, t) || t < p.cycleAfter || t < (p.sipReady || 0) || !p.swings[ph] || t < (p.healFrom || 0) || t < p.noVengUntil) continue;
         if (orbs.some((o) => o[1] === p && o[0] >= t && o[0] <= t + 3)) continue;
-        const q = alive().filter((x) => x !== p && x.veng && x.hp < ORB_MAX).sort((a, b) => b.hp - a.hp)[0];
+        const q = team === 2 ? alive().find((x) => x !== p && x.hp <= ORB_MAX && !redeemAhead(x)) : alive().filter((x) => x !== p && x.veng && x.hp < ORB_MAX).sort((a, b) => b.hp - a.hp)[0];
         if (!q) continue;
         const old = p.hp; p.hp = REDEMPTION_HP + REDEMPTION_HEAL; p.restores--; st.restores++; st.locator++; p.sipReady = t + 3;
         const give = Math.min(Math.floor(p.hp * 0.75), 99 - q.hp); p.hp -= give; q.hp += give;
         p.cycleAfter = p.next + 1;                                      // once between swings
         L.on && L(`t${t} ${p.name} locator orb -> Redemption (${old} -> 25, restore: ${p.restores} left), heals other ${q.name} (+${give}): ${p.name} ${p.hp}, ${q.name} ${q.hp}`);
+        if (p.how[mazes.length] === 'redemption' && mazes.length < 2) { p.hp = REDEMPTION_HP; p.orbedDown = mazes.length; }   // straight back down for the skip
       }
     }
     // ---- damage on her this tick
@@ -640,7 +651,19 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           damage(t, r, `${p.name} ZCB spec ruby`, 'zcb');
         } else L.on && L(`t${t} ${p.name} ZCB spec misses`);
       } else if (kind === 'maul') {
+        if (h[5]) maulHits[phase]++;
         if (h[5] && defLvl > SOTE.defFloor) { defLvl = Math.max(SOTE.defFloor, defLvl - Math.floor(defLvl * 0.35)); L.on && L(`t${t} Elder maul lowers her Defence -> ${defLvl}`); }
+        if (p.duoBackingUp && phase === 0) {                          // duos: the backup landed
+          p.duoBackingUp = false;
+          if (!maulHits[0]) {                                          // missed again: B mauls P2, A camps Lightbearer for P3
+            const b = ps.find((q) => q !== p && !q.dead);
+            if (b) { b.specs[1] = { ...S_('maul') }; b.specs[2] = { ...S_('none') }; }
+            p.specs[1] = { ...S_('none') }; p.specs[2] = { ...S_('maul') };
+            const need = Math.max(0, Math.ceil((50 - p.spec) / 10));
+            if (need) { p.lb = true; p.lbLeft = need; }
+            L.on && L(`t${t} ${p.name}'s backup missed too: ${b ? b.name : '-'} mauls P2, ${p.name} camps Lightbearer (${need} regens) to maul P3`);
+          }
+        }
         damage(t, h[2], `${p.name} ${label}`, 'maul');
       } else damage(t, h[2], `${p.name} ${label}`, kind || 'scythe');
     }
@@ -692,7 +715,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // P3 to whoever is closest to taking a veng safely (the highest HP at 50 or less, else the lowest)
     if (ball && t === ball.at - 1 && kill == null && !ball.tgt.dead && !blocked) {
       const live = alive(), n = live.length, tb = BALL[Math.min(5, n)] || BALL[1], share = tb[n] ?? tb[1], tg = ball.tgt;
-      const willEat = !(splitBall && n > 1 && live.every((q) => q.hp > share)) && (tg.rests > 0 || tg.sharks > 0 || stallTick);
+      const willEat = !(splitBall && team > 2 && n > 1 && live.every((q) => q.hp > share)) && (tg.rests > 0 || tg.sharks > 0 || stallTick);
       if (willEat && tg.hp > 1 && !meleeable(tg, t)) {
         const nRun = n - 1, others = live.filter((q) => q !== tg);
         let order;
@@ -710,7 +733,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (ball && t === ball.at && kill == null) {
       const live = alive(), n = live.length, tb = BALL[Math.min(5, n)] || BALL[1], share = tb[n] ?? tb[1];
       const tgt = ball.tgt.dead ? null : ball.tgt; ball = null;
-      if (splitBall && n > 1 && live.every((q) => q.hp > share)) {
+      if (splitBall && team > 2 && n > 1 && live.every((q) => q.hp > share)) {
         for (const q of live) q.hp -= share;
         st.ballSplit++; L.on && L(`t${t} death ball shared by ${n}: ${share} each`);
       } else if (tgt) {

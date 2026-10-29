@@ -37,8 +37,9 @@ if (process.argv.includes('--full')) {
   const LET = { p: 'pneck', r: 'redemption', s: 'shark', u: 'run' };
   const mzArg = process.argv.find((x) => x.startsWith('--mazes=')), mz = mzArg ? mzArg.split('=')[1].split(',').map((x) => [...x].map((c) => LET[c])) : null;
   const pneckArg = process.argv.find((x) => x.startsWith('--pnecks=')), pnArr = pneckArg ? pneckArg.split('=')[1].split(',').map(Number) : null;
+  const sharkArg = process.argv.find((x) => x.startsWith('--sharks=')), shArr = sharkArg ? sharkArg.split('=')[1].split(',').map(Number) : null;
   const setup = defaultSetup(team);   // the default specs' prefires / start spec / surges
-  const full = players.map((p, k) => ({ ...p, ...setup[k], pnecks: pnArr ? (pnArr[k] ?? 2) : 2, sharks: pnArr && (pnArr[k] ?? 2) < 2 ? 3 : 4, rests: 4, ...(mz && mz[k] ? { mazes: mz[k] } : {}) }));
+  const full = players.map((p, k) => ({ ...p, ...setup[k], pnecks: pnArr ? (pnArr[k] ?? 2) : 2, sharks: shArr ? (shArr[k] ?? 4) : pnArr && (pnArr[k] ?? 2) < 2 ? 3 : 4, rests: 4, ...(mz && mz[k] ? { mazes: mz[k] } : {}) }));
   if (showLog) { const log = []; runSote(full, team, new Rng('full#0'), log, { entry }); console.log('\n--- full raid log ---\n' + log.filter((l) => /MAZE|under|stall|shark|DIES|overkill|necklace|dies|^t(3[5-9]|4\d|5[0-9]) /.test(l)).join('\n')); }
   const ends = [], m1 = [], m2 = []; let deaths = 0, late = 0, runs = 0, runLost = 0, loc = 0, rd = 0, rdDead = 0, sh = 0, sk = 0, skDead = 0, rs = 0, pn = 0, fails = 0, stallDeaths = 0; const splits = {}, surges = {}, dm = {}, sp = { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0 };
   for (let i = 0; i < N; i++) {

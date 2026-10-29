@@ -143,16 +143,16 @@ let room = 'verzik';
 /** Solo: only the Gear tab so far - Verzik is greyed out ("soon") like the other rooms. */
 function soloMode() {
   const solo = team() === 1;
-  for (const [r, label] of [['verzik', 'Verzik'], ['sote', 'Sotetseg']]) {
+  for (const [r, label] of [['verzik', 'Verzik']]) {
     const b = $('rooms').querySelector(`[data-room="${r}"]`);
     b.disabled = solo;
     b.innerHTML = solo ? `${label} <span class="soon">soon</span>` : label;
     b.title = solo ? 'Solos are coming soon - the Gear tab works for them already' : '';
   }
-  if (solo && room !== 'gear') showRoom('gear');
+  if (solo && room === 'verzik') showRoom('gear');
 }
 function showRoom(r, push = true) {
-  room = r === 'gear' || team() === 1 ? 'gear' : r === 'sote' ? 'sote' : 'verzik';
+  room = r === 'gear' ? 'gear' : r === 'sote' ? 'sote' : team() === 1 ? 'gear' : 'verzik';
   [...$('rooms').querySelectorAll('[data-room]')].forEach((b) => b.classList.toggle('on', b.dataset.room === room));
   $('room-gear').hidden = room !== 'gear';
   $('room-sote').hidden = room !== 'sote';
