@@ -93,7 +93,11 @@ export function createSote(host, { getTeam }) {
       <div data-verr class="err"></div>
       <div data-vout style="margin-top:8px"></div>
     `)}`;
-  wireSubtabs(host, 'verzikSim.soteTabs.v1');                         // Report / Optimizer / Solver tabs; settings can be minimized
+  wireSubtabs(host, 'verzikSim.soteTabs.v1');
+  host.querySelector('[data-settabs]').addEventListener('click', (e) => {   // a set tab: switch to that set
+    const b = e.target.closest('button[data-set]'); if (!b) return;
+    const r = rootState(); r.cur = b.dataset.set; r.sets[r.cur] ||= structuredClone({ gearSet: tstate().gearSet, players: [] }); setMsg = ''; persist(); refreshAll();
+  });                         // Report / Optimizer / Solver tabs; settings can be minimized
   const root = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), opt = host.querySelector('[data-opt]'), sol = host.querySelector('[data-solve]');
   const $r = (k) => rep.querySelector(`[data-r="${k}"]`);
   const team = () => Number(getTeam()) || 4;
@@ -133,7 +137,6 @@ export function createSote(host, { getTeam }) {
   function setBar() {
     const r = rootState(), list = saved[team()] || [];
     return `<div class="row wrap" style="gap:10px;align-items:end;margin:4px 0 10px">
-      <div><div class="muted small">Set</div><div class="seg">${SETS.map((k) => `<button data-set="${k}" class="${k === r.cur ? 'on' : ''}" title="${r.sets[k] ? '' : 'Empty - opens a blank set'}">Set ${k}${r.sets[k] ? '' : ' (empty)'}</button>`).join('')}</div></div>
       <div><div class="muted small">Copy set ${r.cur} to</div>${SETS.filter((k) => k !== r.cur).map((k) => `<button class="ghost sm" data-copyset="${k}" title="Replace set ${k} with a copy of set ${r.cur}">Set ${k}</button>`).join(' ')}</div>
       <button class="ghost sm" data-clearset title="Start set ${r.cur} over from a blank setup (its Gear set stays)">Clear set ${r.cur}</button>
       <label>Saved sets<select data-saved="pick"><option value="">(choose a set)</option>${list.map((x) => `<option value="${x.id}" ${x.id === savedPick ? 'selected' : ''}>${esc(x.name)} · ${when(x.saved)}</option>`).join('')}</select></label>
@@ -147,7 +150,14 @@ export function createSote(host, { getTeam }) {
     </div>`;
   }
 
+  /** Sets A / B / C as tabs on the settings card; the card takes the current set's colour. */
+  function setTabs(cur, has) {
+    const tb = host.querySelector('[data-settabs]'), card = host.querySelector('[data-setcard]');
+    tb.innerHTML = SETS.map((k) => `<button data-set="${k}" class="${k === cur ? 'on' : ''}" title="${has(k) ? `Set ${k}` : 'Empty - opens a new set'}">Set ${k}${has(k) ? '' : ' <span class="muted">(empty)</span>'}</button>`).join('');
+    card.dataset.setcol = cur;
+  }
   function render() {
+    setTabs(rootState().cur, (k) => !!rootState().sets[k]);
     const st = tstate(), g = loadGear(), set = gearSet(g, team(), st.gearSet);
     const gp = set ? playersOf(set, team()) : null;
     const pname = (k) => (gp && gp[k] && gp[k].name) || `Player ${k + 1}`;

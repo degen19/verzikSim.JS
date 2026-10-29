@@ -258,9 +258,15 @@ export function createBuilder(root, { onChange }) {
   function draw() {
     const d = tpl[team].descs[block].tables;
     const teamFields = d.team.map((f) => `<label title="${esc(HELP[f.header] || '')}">${esc(f.header)}${input(f, vals()[f.key] ?? f.def)}</label>`).join('');
+    const tabs = document.getElementById('builderTabs');               // Sets A / B / C as tabs on the chart card, in their chart colours
+    if (tabs) {
+      tabs.innerHTML = BLOCKS.map((b) => `<button data-block="${b}" class="${block === b ? 'on' : ''}">Set ${b}${b === 'A' ? '' : ' <span class="muted">(optional)</span>'}</button>`).join('');
+      if (!tabs.dataset.wired) { tabs.dataset.wired = '1'; tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-block]'); if (b) { block = b.dataset.block; render(); } }); }
+    }
+    root.dataset.setcol = block;
     root.innerHTML = `${libBar()}
       <div class="row between">
-        <div class="seg">${BLOCKS.map((b) => `<button data-block="${b}" class="${block === b ? 'on' : ''}">Set ${b}${b === 'A' ? '' : ' (optional)'}</button>`).join('')}</div>
+        <div></div>
         <div class="row">
           ${BLOCKS.filter((b) => b !== block).map((b) => `<button class="ghost sm" data-act="copy" data-to="${b}">Copy Set ${block} to Set ${b}</button>`).join('')}
           <button class="ghost sm" data-act="reset">Reset this set</button>

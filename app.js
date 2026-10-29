@@ -65,6 +65,7 @@ $('src').addEventListener('click', async (e) => {
   [...$('src').children].forEach((x) => x.classList.toggle('on', x === b));
   $('imp').hidden = source !== 'import';
   $('builder').hidden = source !== 'build';
+  $('builderTabs').hidden = source !== 'build';
   if (source === 'build') {
     $('status').textContent = 'Building on the page - fill in the tables below, then Run or open the Optimizer.';
     try { await builder.show(team()); } catch (err) { $('status').textContent = err.message; }

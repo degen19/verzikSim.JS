@@ -73,11 +73,22 @@ export function createSolo(host) {
       <div class="row" style="margin-top:6px">${[['shadow', 'Shadow mode'], ['ayak', 'Ayak P2'], ['godbook', 'Godbook'], ['lb', 'Lightbearer cycles'], ['lbcamp', 'LB P2 Until Reds'], ['flick', 'LB Flick Reds']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>
     `)}`;
-  wireSubtabs(host, 'verzikSim.soloTabs.v1');                         // Report / Optimizer / Solver tabs; settings can be minimized
+  wireSubtabs(host, 'verzikSim.soloTabs.v1');
+  host.querySelector('[data-settabs]').addEventListener('click', (e) => {   // a set tab: switch to that set
+    const b = e.target.closest('button[data-set]'); if (!b) return;
+    const r = root(); r.cur = b.dataset.set; r.sets[r.cur] ||= blankSet(); setMsg = ''; persist(); refreshAll();
+  });                         // Report / Optimizer / Solver tabs; settings can be minimized
   const cfgEl = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), sol = host.querySelector('[data-solve]');
 
   // ---------------------------------------------------------------- settings
+  /** Sets A / B / C as tabs on the settings card; the card takes the current set's colour. */
+  function setTabs(cur, has) {
+    const tb = host.querySelector('[data-settabs]'), card = host.querySelector('[data-setcard]');
+    tb.innerHTML = SETS.map((k) => `<button data-set="${k}" class="${k === cur ? 'on' : ''}" title="${has(k) ? `Set ${k}` : 'Empty - opens a new set'}">Set ${k}${has(k) ? '' : ' <span class="muted">(empty)</span>'}</button>`).join('');
+    card.dataset.setcol = cur;
+  }
   function render() {
+    setTabs(root().cur, (k) => !!root().sets[k]);
     const r = root(), st = cur(), g = gearOf(st), w = (g && g.weapons) || [];
     const sh = w.includes("Tumeken's shadow"), ay = w.includes('Eye of ayak'), bp = w.includes('Toxic blowpipe');
     const chk = (k, l, on, title, dis) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="${esc(title)}"><input type="checkbox" data-s="${k}" ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}>${l}</label>`;
@@ -88,7 +99,6 @@ export function createSolo(host) {
         otherwise in their mage gear, surge straight after the first spec and camp Lightbearer all of P1, with a melee thrall; once she's within 1% they scythe it
         off. Gear comes from the Gear tab (solo Gear set).</p>
       <div class="row wrap" style="gap:10px;align-items:end;margin:4px 0 10px">
-        <div><div class="muted small">Set</div><div class="seg">${SETS.map((k) => `<button data-set="${k}" class="${k === r.cur ? 'on' : ''}">Set ${k}${r.sets[k] ? '' : ' (empty)'}</button>`).join('')}</div></div>
         <div><div class="muted small">Copy set ${r.cur} to</div>${SETS.filter((k) => k !== r.cur).map((k) => `<button class="ghost sm" data-copyset="${k}">Set ${k}</button>`).join(' ')}</div>
         <button class="ghost sm" data-clearset title="Start set ${r.cur} over from the default settings (its Gear set stays)">Clear set ${r.cur}</button>
         <label>Saved sets<select data-saved="pick"><option value="">(choose a set)</option>${list.map((x) => `<option value="${x.id}" ${x.id === savedPick ? 'selected' : ''}>${esc(x.name)} · ${new Date(x.saved).toLocaleDateString()}</option>`).join('')}</select></label>

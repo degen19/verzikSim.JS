@@ -3,7 +3,7 @@
 const MIN_TITLE = 'Hide this section (a running report or search keeps going); click any tab to show it again';
 
 /** The settings card: a title, a Minimize settings button, and the body (`inner` goes in [data-cfgbody]). */
-export const settingsCard = (title, inner) => `<div class="card"><div class="row between"><h3 style="margin:0">${title}</h3>
+export const settingsCard = (title, inner) => `<div class="settabs" data-settabs></div><div class="card" data-setcard><div class="row between"><h3 style="margin:0">${title}</h3>
   <button class="ghost sm" data-cfgmin title="Hide the settings - the Report, Optimizer and Solver still use them">Minimize settings</button></div>
   <div data-cfgbody style="margin-top:10px">${inner}</div></div>`;
 /** The tab row: [[key, label], ...] + Minimize. */
