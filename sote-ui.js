@@ -16,6 +16,7 @@ import { solveSote } from './engine/sotesolve.js';
 import { SotePool } from './sote-solver-pool.js';
 import { defaultMazes, MAZE_HOW, defaultSpecs, SPECS, SPEC_COST, CLAW_BELOW } from './engine/sote.js';
 import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
+import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 
 const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -38,10 +39,12 @@ const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 2, sha
  *  from the others, eating sharks / Guthix rests through it. Run: everyone runs that maze (slower). */
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
+
 export function createSote(host, { getTeam }) {
   let state = load();
-  host.innerHTML = `<div data-cfg></div>
-    <details class="video" data-rep open style="margin-top:14px"><summary>Report</summary>
+  host.innerHTML = `${settingsCard('Sotetseg settings', '<div data-cfg></div>')}
+    ${tabsHtml([['rep', 'Report'], ['opt', 'Optimizer'], ['solve', 'Solver']])}
+    ${pane('rep', 'data-rep', `
       <div class="row" style="margin-top:10px">
         <label>Raids<input data-r="raids" type="number" min="100" step="500" style="width:90px"></label>
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
@@ -52,8 +55,21 @@ export function createSote(host, { getTeam }) {
       <div data-rstatus class="muted" style="margin-top:8px"></div>
       <div data-rerr class="err"></div>
       <div data-rout style="margin-top:8px"></div>
-    </details>
-    <details class="video" data-solve style="margin-top:14px"><summary>Solver</summary>
+    `)}
+    ${pane('opt', 'data-opt', `
+      <p class="muted small" style="margin-top:8px">Plays the setup above entered on each instance (i0-i3), on the same raids, and ranks them: with breakpoints by the
+        share finished at the fastest breakpoint (then the next), otherwise by the median room time.</p>
+      <div class="row">
+        <label>Raids per instance<input data-o="raids" type="number" min="100" step="500" style="width:90px"></label>
+        <label>Seed (optional)<input data-o="seed" placeholder="random" style="width:100px"></label>
+        <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-o="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
+        <button data-oact="run">Find the best entry</button><button data-oact="stop" class="ghost" disabled>Stop</button>
+      </div>
+      <div data-ostatus class="muted" style="margin-top:8px"></div>
+      <div data-oerr class="err"></div>
+      <div data-oout style="margin-top:8px"></div>
+    `)}
+    ${pane('solve', 'data-solve', `
       <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's prefire, start spec, surge, Lightbearer cycles and
         specs in each phase (and the entry instance), within the Surge potions / Lightbearers limits and the gear each player has. Each round it tries
         every single change to one player - on a few raids, then the best on more - and keeps the best if it beats the current setup, until nothing
@@ -70,20 +86,8 @@ export function createSote(host, { getTeam }) {
       <div data-vstatus class="muted" style="margin-top:8px"></div>
       <div data-verr class="err"></div>
       <div data-vout style="margin-top:8px"></div>
-    </details>
-    <details class="video" data-opt style="margin-top:14px"><summary>Optimizer - entry instance</summary>
-      <p class="muted small" style="margin-top:8px">Plays the setup above entered on each instance (i0-i3), on the same raids, and ranks them: with breakpoints by the
-        share finished at the fastest breakpoint (then the next), otherwise by the median room time.</p>
-      <div class="row">
-        <label>Raids per instance<input data-o="raids" type="number" min="100" step="500" style="width:90px"></label>
-        <label>Seed (optional)<input data-o="seed" placeholder="random" style="width:100px"></label>
-        <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-o="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
-        <button data-oact="run">Find the best entry</button><button data-oact="stop" class="ghost" disabled>Stop</button>
-      </div>
-      <div data-ostatus class="muted" style="margin-top:8px"></div>
-      <div data-oerr class="err"></div>
-      <div data-oout style="margin-top:8px"></div>
-    </details>`;
+    `)}`;
+  wireSubtabs(host, 'verzikSim.soteTabs.v1');                         // Report / Optimizer / Solver tabs; settings can be minimized
   const root = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), opt = host.querySelector('[data-opt]'), sol = host.querySelector('[data-solve]');
   const $r = (k) => rep.querySelector(`[data-r="${k}"]`);
   const team = () => Number(getTeam()) || 4;

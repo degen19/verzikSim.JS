@@ -1,6 +1,6 @@
 // Verzik for solos: no chart - the room settings below (P1 plays itself: Dawn spec off cooldown, Dawn autos, Lightbearer).
 // Sets A / B / C (switch, copy, save in this browser or to a file), a Report comparing the ticked sets, and the Solver
-// (Commit % for each spec level, and optionally the shadow mode, Ayak P2, godbook and ring switch). Gear: the Gear tab.
+// (Commit % for each spec level, and optionally the shadow mode, Ayak P2, godbook and Lightbearer cycles). Gear: the Gear tab.
 import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { applyToCfg, blankPlayer } from './engine/loadout.js';
 import { reportHtml, reportPage } from './engine/report.js';
@@ -9,6 +9,7 @@ import { COMMIT_KEYS, COMMIT_DEFAULT, DEEP_THR } from './engine/solo.js';
 import { solveSolo, cfgOf, shadowModeOf, SHADOW_MODES } from './engine/solosolve.js';
 import { SoloPool } from './solo-solver-pool.js';
 import { SimPool } from './pool.js';
+import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 
 const STORE = 'verzikSim.solo.v1';             // {cur, sets: {A, B?, C?}, report, solve}
 const SAVED = 'verzikSim.soloSaved.v1';        // [{id, name, saved, set}]
@@ -21,6 +22,7 @@ const blankSet = () => ({ gearSet: 'A', surgeDoses: 1, godbook: false, lbP2: 0, 
   ayakP2: false, ayakAmount: 70, redsMode: 'scythe', commit: { ...COMMIT_DEFAULT } });
 const fsec = (t) => { const s = t * 0.6, m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(1)}`; };
 const COMMIT_LABEL = { c100: '100% spec', c80: '80%+ spec', c50: '50%+ spec', c30: '30%+ spec', c0: 'under 30%' };
+
 
 export function createSolo(host) {
   let state = loadKey(STORE, {}), saved = loadKey(SAVED, []), savedPick = '', setMsg = '';
@@ -39,8 +41,9 @@ export function createSolo(host) {
       ayakP2: (g.weapons || []).includes('Eye of ayak') && !!st.ayakP2, ayakAmount: Number(st.ayakAmount) || 0, redsMode: sh ? st.redsMode || 'scythe' : 'scythe', commit: { ...st.commit }, hasAyak: (g.weapons || []).includes('Eye of ayak') };
   };
 
-  host.innerHTML = `<div class="card"><div data-cfg></div></div>
-    <div class="card" style="margin-top:14px"><details class="video" data-rep open><summary>Report</summary>
+  host.innerHTML = `${settingsCard('Solo Verzik settings', '<div data-cfg></div>')}
+    ${tabsHtml([['rep', 'Report'], ['solve', 'Solver']])}
+    ${pane('rep', 'data-rep', `
       <div class="row" style="margin-top:10px">
         <label title="How far each raid is simulated">Phases<select data-r="scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option><option value="p1">P1 only</option></select></label>
         <label>Raids per set<input data-r="raids" type="number" min="100" step="1000" style="width:90px"></label>
@@ -52,12 +55,12 @@ export function createSolo(host) {
       </div>
       <div data-rstatus class="muted" style="margin-top:8px"></div><div class="bar"><div data-prog></div></div>
       <div data-rerr class="err"></div><div data-rout style="margin-top:8px"></div>
-    </details></div>
-    <div class="card" style="margin-top:14px"><details class="video" data-solve><summary>Solver</summary>
+    `)}
+    ${pane('solve', 'data-solve', `
       <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above. Commit % (always): for each spec level at a reds shield,
         how low Verzik must be (% of P2 HP) for the player to commit to the kill - one swing on the crab for the Death Charge, then the spec
         sequence (two claws, claw > shadow > scythes, claw > scratch > scythes, or scythes; halberd on r40 with 30%+). Optionally also the shadow
-        mode, Ayak P2 amount, godbook and ring switch. Each round tries every single change on a few raids, then the best on more, and keeps the best
+        mode, Ayak P2 amount, godbook and Lightbearer cycles (before reds / in reds). With a Target down it ranks by the share of raids killed in that many reds sets or fewer first. Each round tries every single change on a few raids, then the best on more, and keeps the best
         if it beats the current setup; the top setups are then played on more raids and ranked: with breakpoints by the share finished at the
         fastest one (then the next), otherwise by the median.</p>
       <div class="row">
@@ -68,7 +71,8 @@ export function createSolo(host) {
       </div>
       <div class="row" style="margin-top:6px">${[['shadow', 'Shadow mode'], ['ayak', 'Ayak P2'], ['godbook', 'Godbook'], ['lb', 'Lightbearer cycles']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>
-    </details></div>`;
+    `)}`;
+  wireSubtabs(host, 'verzikSim.soloTabs.v1');                         // Report / Optimizer / Solver tabs; settings can be minimized
   const cfgEl = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), sol = host.querySelector('[data-solve]');
 
   // ---------------------------------------------------------------- settings
