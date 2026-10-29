@@ -2,6 +2,7 @@
 
 import { VERSION } from './version.js';
 import { FLAGS as SUPPLY_FLAGS } from './supplies.js';
+import { installMagnifier } from './magnify.js';
 
 const COL = ['#2a78d6', '#d64545', '#2f9e61'];
 export const WEBS_TICK = 72;     // 4-5 man: P3 tick (1 = P3 attackable) the 20% proc must land on or before to count as before webs
@@ -390,8 +391,11 @@ ${team === 1 ? `<h3>Finished by this time or faster - % of kills</h3><div class=
 }
 
 /** A complete standalone HTML file. */
+/** The chart magnifier for report pages saved to a file. */
+export const MAGNIFY_SCRIPT = `<script>(${installMagnifier.toString()})(document);</script>`;
+
 export function reportPage(res, labels, team, runs, opts = {}) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Verzik ${team}-man report</title><style>body{margin:0;padding:16px;background:#dadde0}${REPORT_CSS}</style></head>
-<body>${reportHtml(res, labels, team, runs, opts)}</body></html>`;
+<body>${reportHtml(res, labels, team, runs, opts)}${MAGNIFY_SCRIPT}</body></html>`;
 }

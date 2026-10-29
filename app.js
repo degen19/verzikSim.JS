@@ -13,10 +13,12 @@ import { createSote } from './sote-ui.js';
 import { createSolo } from './solo-ui.js';
 import { withGear, importGear, absorbValues } from './engine/gearstore.js';
 import { SimPool } from './pool.js';
+import { installMagnifier } from './engine/magnify.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const style = document.createElement('style'); style.textContent = REPORT_CSS; document.head.appendChild(style);
+installMagnifier(document);                                              // Magnify button on every report chart
 $('ver').textContent = `v${VERSION}`;
 // light / dark switch (saved in this browser)
 const themeLabel = () => { $('theme').textContent = document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode'; };

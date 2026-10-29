@@ -2,7 +2,7 @@
 // (median / top 10% / top 25% / bottom 25% / fastest) - with the Verzik report's charts and breakpoints.
 import { runSote } from './sote.js';
 import { Rng } from './rng.js';
-import { histogramSvg, cumulativeSvg, REPORT_CSS } from './report.js';
+import { histogramSvg, cumulativeSvg, REPORT_CSS, MAGNIFY_SCRIPT } from './report.js';
 import { VERSION } from './version.js';
 
 const fmt = (t) => { const s = t * 0.6; return s >= 60 ? `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}` : `${s.toFixed(1)}s`; };
@@ -86,5 +86,5 @@ export function soteReportHtml(resIn, team, opts = {}) {
 export function soteReportPage(res, team, opts = {}) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sotetseg ${team}-man report</title><style>body{margin:0;padding:16px;background:#dadde0}${REPORT_CSS}</style></head>
-<body>${soteReportHtml(res, team, opts)}</body></html>`;
+<body>${soteReportHtml(res, team, opts)}${MAGNIFY_SCRIPT}</body></html>`;
 }
