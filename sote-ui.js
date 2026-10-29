@@ -31,7 +31,7 @@ export const PREFIRES = [
   ["Tumeken's shadow", "Tumeken's shadow", "Tumeken's shadow"],
 ];
 const STYLE = { 'Twisted bow': 'range', 'Zaryte crossbow': 'range', 'Shadow ancient sceptre': 'mage', "Tumeken's shadow": 'mage' };
-const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 0, sharks: 0, rests: 0, restores: 3, prefire: '' });
+const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 2, sharks: 3, rests: 0, restores: 3, prefire: '' });
 /** How each player crosses each maze (First maze / Second maze; default by their phoenix necklaces - defaultMazes):
  *  Pneck: stall on the maze with a phoenix necklace. Redemption (1-4s, with a locator orb from the Gear tab): orb down to
  *  1 HP and stall with Redemption (a restore sip a maze; they swing a tick late). Shark (one player at most): skip away
