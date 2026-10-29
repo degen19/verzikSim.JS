@@ -142,14 +142,15 @@ const S_ = (spec, o = {}) => ({ spec, backup: false, horn: false, ...o });
 /** The default specs (players 1-5), by scale: 5s - P1 horns and mauls P1, mauls P2; P2 mauls P1 and P3; P3 / P4 ZCB
  *  in P1 and back up in P3 (ZCB, or a maul if needed); P5 mauls P2 and P3. 4s: the same without P4. 3s: P1 mauls P1
  *  and P2, P2 P1 and P3, P3 P2 and P3. Duos: both maul in P1; A mauls P2, B P3 - if both P1 mauls miss, A backs up
- *  (duoBackup); if that misses too, they swap: B mauls P2, A camps Lightbearer to maul P3. Solos: a maul each phase. */
+ *  (duoBackup); if that misses too, they swap: B mauls P2, A camps Lightbearer to maul P3. Solos: a maul landed each
+ *  phase - another while they have the spec, until one hits (untilHit). */
 export function defaultSpecs(team) {
   const A = [S_('maul', { horn: true }), S_('maul'), S_('none')], B = [S_('maul'), S_('none'), S_('maul')];
   const C = [S_('zcb'), S_('none'), S_('zcb', { backup: true })], E = [S_('none'), S_('maul'), S_('maul')];
   if (team >= 5) return [A, B, C, C, E];
   if (team === 4) return [A, B, C, E];
   if (team === 2) return [[S_('maul', { duoBackup: true }), S_('maul'), S_('none')], [S_('maul'), S_('none'), S_('maul')]];
-  if (team === 1) return [[S_('maul'), S_('maul'), S_('maul')]];   // solos: one spec a phase
+  if (team === 1) return [[S_('maul', { untilHit: true }), S_('maul', { untilHit: true }), S_('maul', { untilHit: true })]];   // solos: a maul landed each phase
   return [[S_('maul'), S_('maul'), S_('none')], [S_('maul'), S_('none'), S_('maul')], [S_('none'), S_('maul'), S_('maul')]].slice(0, team);
 }
 /** The default setup that goes with them (prefire, start spec, surge): 5s / 4s - P1 and P2 Twisted bow, the rest a ZCB
@@ -455,6 +456,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (p.zcbCarry === ph && !alive().some(mauls) && p.spec >= ZCB_SPEC && has('Zaryte crossbow') && !zcbWasted) { p.zcbCarry = -1; return 'zcbCarry'; }
     if (!sp.backup) {
       if (sp.spec === 'maul' && !p.mauled[ph] && has('Elder maul')) return p.spec >= 50 && !hornWait(p, ph) ? 'maul' : 'scythe';
+      // until one lands (solos): another maul once the last has landed and missed
+      if (sp.untilHit && sp.spec === 'maul' && p.mauled[ph] >= 1 && !maulHits[ph] && !anyMaulPending() && p.spec >= 50 && has('Elder maul')) return 'maul';
       // duos: both P1 mauls missed - one backup maul once they've landed
       if (sp.duoBackup && p.mauled[ph] === 1 && !alive().some(mauls) && !anyMaulPending() && !maulHits[ph] && p.spec >= 50 && has('Elder maul')) { p.duoBackingUp = true; return 'maul'; }
       if (p.specDone[ph] || sp.spec === 'none') return 'scythe';
