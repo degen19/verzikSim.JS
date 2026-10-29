@@ -142,7 +142,8 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   lb.counting = true; lb.left = cfg.lbCamp ? Infinity : lbP2;      // LB P2 Until Reds: Lightbearer the whole of P2 before reds
   lb.camp = !!cfg.lbCamp;
   const ayakOn = !!cfg.ayakP2 && (cfg.ayakAmount ?? 0) > 0, ayakGoal = Math.min(MDEF, Number(cfg.ayakAmount) || 0);
-  const draining = () => ayakOn && MDEF - mdef < ayakGoal;
+  const ayakMax = Math.max(1, Math.min(3, Math.trunc(Number(cfg.ayakSpecs ?? 2)) || 2));   // Soul Rends at most (1-3, default 2)
+  const draining = () => ayakOn && st.rends < ayakMax && MDEF - mdef < ayakGoal;
   let lastMiss = false;                                         // confliction gauntlets: a missed magic hit -> next magic rolls twice
   const ringCheck = (t, tag = '') => {
     if (p.ring !== 'Lightbearer') return;
@@ -197,7 +198,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   /** The guard: Soul Rend while she's above the Ayak Amount, else a claw spec (melee: not on her attack tick). */
   const specGuard = (t, verz, tag = '') => {
     if (!overflow() || p.spec < 50) return false;
-    if (draining() || (ayakOn && mdef > MDEF - ayakGoal)) { rend(t, tag); return true; }
+    if (draining()) { rend(t, tag); return true; }
     if (!verz) { claw(t, tag); return true; }
     return false;
   };

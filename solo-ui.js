@@ -19,7 +19,7 @@ const loadKey = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || 
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 export const DEATHS_NOTE = '*This does not yet take into account deaths and assumes you live every raid. Death tracking will come at a later date*';
 const blankSet = () => ({ gearSet: 'A', surgeDoses: 1, godbook: false, lbP2: 0, lbCamp: false, lbReds: 0, lbFlick: 0, bfHp: '', bfIn: ['P2 Verzik', 'P2 crabs', 'P3'], shadowCamp: false, shadowLB: false, shadow31: false, deepProc: false, deepThr: DEEP_THR,
-  ayakP2: false, ayakAmount: 70, redsMode: 'scythe', commit: { ...COMMIT_DEFAULT } });
+  ayakP2: false, ayakAmount: 70, ayakSpecs: 2, redsMode: 'scythe', commit: { ...COMMIT_DEFAULT } });
 const fsec = (t) => { const s = t * 0.6, m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(1)}`; };
 const COMMIT_LABEL = { c100: '100% spec', c80: '80%+ spec', c50: '50%+ spec', c30: '30%+ spec', c0: 'under 30%' };
 
@@ -38,7 +38,7 @@ export function createSolo(host) {
     const sh = base.hasShadow;
     return { ...base, name: base.name || 'Solo', surgeDoses: Number(st.surgeDoses ?? 1), godbook: !!st.godbook, lbP2: Number(st.lbP2) || 0, lbReds: Number(st.lbReds) || 0, lbFlick: Number(st.lbFlick) || 0, lbCamp: !!st.lbCamp, ...(st.bfHp !== '' && st.bfHp != null ? { bloodFuryHp: Number(st.bfHp) } : {}), bfIn: st.bfIn || ['P2 Verzik', 'P2 crabs', 'P3'], shadow: sh,
       shadowCamp: sh && !!st.shadowCamp, shadowLB: sh && !!st.shadowLB, shadow31: sh && !!st.shadow31, deepProc: sh,                                                         // solos always deep proc with a shadow deepThr: Number(st.deepThr) || DEEP_THR,
-      ayakP2: (g.weapons || []).includes('Eye of ayak') && !!st.ayakP2, ayakAmount: Number(st.ayakAmount) || 0, redsMode: sh ? st.redsMode || 'scythe' : 'scythe', commit: { ...st.commit }, hasAyak: (g.weapons || []).includes('Eye of ayak') };
+      ayakP2: (g.weapons || []).includes('Eye of ayak') && !!st.ayakP2, ayakAmount: Number(st.ayakAmount) || 0, ayakSpecs: Number(st.ayakSpecs) || 2, redsMode: sh ? st.redsMode || 'scythe' : 'scythe', commit: { ...st.commit }, hasAyak: (g.weapons || []).includes('Eye of ayak') };
   };
 
   host.innerHTML = `${settingsCard('Solo Verzik settings', '<div data-cfg></div>')}
@@ -123,6 +123,7 @@ export function createSolo(host) {
         <label title="Solos always deep proc with a shadow: below this % of P2 HP every attack is a shadow from max distance">Deep proc HP %<input data-s="deepThr" type="number" min="1" max="100" value="${esc(st.deepThr)}" style="width:70px" ${sh ? '' : 'disabled'}></label>
         ${chk('ayakP2', 'Ayak P2', st.ayakP2, 'Eye of ayak in P2: ayak autos until one misses (Confliction gauntlets then roll accuracy twice), then Soul Rend (50%: 2x accuracy, +30% max), which lowers her magic defence (70) by the damage - until it is down by the Ayak Amount', !ay)}
         <label title="Stop Soul Rending once her magic defence is down by this much (0-70)">Ayak Amount<input data-s="ayakAmount" type="number" min="0" max="70" value="${esc(st.ayakAmount)}" style="width:70px" ${ay ? '' : 'disabled'}></label>
+        <label title="Soul Rends at most - they stop even if her magic defence isn't down by the Ayak Amount yet">Ayak specs (max)<select data-s="ayakSpecs" ${ay ? '' : 'disabled'}>${[1, 2, 3].map((n) => `<option value="${n}" ${n === (Number(st.ayakSpecs) || 2) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         ${ay ? '' : '<span class="muted small">Ayak P2 needs an Eye of ayak in this Gear set</span>'}
       </div>
       <h4 style="margin:12px 0 4px">Commit % <span class="muted small">- at a reds shield, commit to the kill when Verzik is at or below this % of P2 HP for the spec they have (0 = never)</span></h4>
