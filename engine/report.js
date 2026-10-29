@@ -125,7 +125,7 @@ function oddsRows(res, team, bps = [], opts = {}) {
       ['Death Charges (average)', avg('dc', 1)],
       ['Red crabs killed (average)', avg('crab_kills', 1)],
       ['Ayak: magic defence drained (average)', avg('drained', 1)],
-      ['Soul Rends (average)', avg('rends', 1)],
+      ['Ayak Specs (average)', avg('rends', 1)],
       ['Ayak tick fixes in reds (average)', avg('ayak_fix', 1)],
       ['Locator orb + Redemption on lightning (average)', avg('redemptions', 1)],
       ['Avg reds proc depth (Verzik HP %)', res.map((r) => (r.depth.length ? `${mean(r.depth).toFixed(1)}%` : '-'))],

@@ -30,7 +30,7 @@ export const DEEP_THR = 37;                // solo deep proc: below this % of P2
 const magicDef = (mdef) => (MAG_DEF_LVL + 9) * (Math.max(0, mdef) + 64);
 const roll = (rng, ch, m) => (rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0);
 
-/** Eye of ayak in their mage gear (on Augury): [attack roll, max]. Soul Rend: 2x accuracy, +30% max. */
+/** Eye of ayak in their mage gear (on Augury): [attack roll, max]. Ayak Spec: 2x accuracy, +30% max. */
 export function ayakMage(p, spec = false) {
   const ring = p.ring === 'Lightbearer' ? 'Lightbearer' : 'Ultor ring';
   const tt = totals([...p.mage_gear.filter((n) => ITEMS[n]), ring, 'Eye of ayak']);
@@ -142,14 +142,14 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   lb.counting = true; lb.left = cfg.lbCamp ? Infinity : lbP2;      // LB P2 Until Reds: Lightbearer the whole of P2 before reds
   lb.camp = !!cfg.lbCamp;
   const ayakOn = !!cfg.ayakP2 && (cfg.ayakAmount ?? 0) > 0, ayakGoal = Math.min(MDEF, Number(cfg.ayakAmount) || 0);
-  const ayakMax = Math.max(1, Math.min(3, Math.trunc(Number(cfg.ayakSpecs ?? 2)) || 2));   // Soul Rends at most (1-3, default 2)
+  const ayakMax = Math.max(1, Math.min(3, Math.trunc(Number(cfg.ayakSpecs ?? 2)) || 2));   // Ayak Specs at most (1-3, default 2)
   const draining = () => ayakOn && st.rends < ayakMax && MDEF - mdef < ayakGoal;
   let lastMiss = false;                                         // confliction gauntlets: a missed magic hit -> next magic rolls twice
   const ringCheck = (t, tag = '') => {
     if (p.ring !== 'Lightbearer') return;
     if (lb.left <= 0 || (p.spec >= 100 && !lb.camp)) { p.ring = 'Ultor'; p.regen_timer = 0; L.on && L(`t${rjust(t, 4)} ${tag}swaps to Ultor (spec ${fx(p.spec)}%)`); }
   };
-  const magicHit = (t, a, mx, delay, label, target, tag = '') => {   // ayak / Soul Rend: accuracy vs her magic defence now
+  const magicHit = (t, a, mx, delay, label, target, tag = '') => {   // ayak / Ayak Spec: accuracy vs her magic defence now
     const ch = hit_chance(a, magicDef(mdef));
     const ok = rng.random() < ch || (lastMiss && rng.random() < ch);
     const d = ok ? Math.max(1, rng.randint(0, mx)) : 0;
@@ -161,8 +161,8 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const rend = (t, tag = '') => {
     const o = p.spec; p.spec -= 50; st.rends += 1;
     const [a, mx] = ayakMage(p, true);
-    const d = magicHit(t, a, mx, 2, 'Soul Rend', 'v', tag);
-    if (d > 0) { const o2 = mdef; mdef = Math.max(0, mdef - d); st.drained += o2 - mdef; L.on && L(`t${rjust(t, 4)} ${tag}Soul Rend drains her magic defence ${o2} -> ${mdef} (spec ${fx(o)}% -> ${fx(p.spec)}%)`); }
+    const d = magicHit(t, a, mx, 2, 'Ayak Spec', 'v', tag);
+    if (d > 0) { const o2 = mdef; mdef = Math.max(0, mdef - d); st.drained += o2 - mdef; L.on && L(`t${rjust(t, 4)} ${tag}Ayak Spec drains her magic defence ${o2} -> ${mdef} (spec ${fx(o)}% -> ${fx(p.spec)}%)`); }
     p.next_attack = t + 5; p.in_mage = true;
   };
   const ayakAuto = (t, target = 'v', tag = '') => {
@@ -195,7 +195,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   };
   /** Spec about to go over 100 (at 100, or a regen due before their next attack would cap it). */
   const overflow = () => p.spec >= 100 || (p.spec > 90 && p.auto_r == null && p.regen_period() - p.regen_timer <= 5);
-  /** The guard: Soul Rend while she's above the Ayak Amount, else a claw spec (melee: not on her attack tick). */
+  /** The guard: Ayak Spec while she's above the Ayak Amount, else a claw spec (melee: not on her attack tick). */
   const specGuard = (t, verz, tag = '') => {
     if (!overflow() || p.spec < 50) return false;
     if (draining()) { rend(t, tag); return true; }
