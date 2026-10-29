@@ -236,6 +236,7 @@ export function redemptionSkip(hp, team, runners = team - 1) {
  *  then a redemption skip (vengs the first phase freely), else a shark skip then the necklace; none - redemption skips
  *  with a locator orb, else shark skips. Solos: a necklace before a redemption skip. */
 export function defaultMazes(pnecks, locator, team) {
+  if (team === 1) return ['redemption', 'redemption'];   // solos always redemption skip
   const red = locator && team <= 4;
   if (pnecks >= 2) return ['pneck', 'pneck'];
   if (pnecks === 1) return red ? ['pneck', 'redemption'] : ['shark', 'pneck'];
@@ -282,6 +283,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   for (const p of ps) p.regenHold = p.spec < 100;
   // how each player crosses each maze (redemption: 1-4s with a locator orb, else a stall)
   ps.forEach((p, i) => {
+    if (team === 1) { p.gear = { ...p.gear, locator: true }; p.how = ['redemption', 'redemption']; p.sharkMazes = []; return; }   // solos always redemption skip
     p.how = (players[i].mazes || defaultMazes(p.pnecks, !!p.gear.locator, team)).slice(0, 2)
       .map((h) => (h === 'redemption' && !(p.gear.locator && team <= 4) ? 'pneck' : h));
     p.sharkMazes = [0, 1].filter((k) => p.how[k] === 'shark');
@@ -708,7 +710,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // ---- the death ball lands: shared if everyone can take their share (splitBall), else the target tick-eats it - the
     // hit takes them to 0 and food that tick lands before the death check: a Guthix rest if they have one (to 5 HP, no
     // attack delay - it's a potion), else a shark (to 20 HP, no attack for 3 ticks); with neither, tick-healed (a 3-tick
-    // stall; the lowest-HP teammate Heal Others them before it ends - the least goes to waste). A maze proc first: it does nothing. Veng doesn't
+    // stall; the lowest-HP teammate Heal Others them before it ends - the least goes to waste). Solos tick-eat with purple
+    // sweets (1-3 HP, unlimited) after any Guthix rest. A maze proc first: it does nothing. Veng doesn't
     // reflect it. The count of magic attacks carries over through the mazes.
     // the tick before: a target who'll tick-eat it (they end up on 5 / 20 HP anyway) Heal Others their HP away first -
     // P1 / P2 to the lowest-HP teammate who isn't redemption skipping and won't be left at an HP that dies on the maze;
@@ -749,6 +752,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         if (tgt.rests > 0) {                                           // a Guthix rest first (no attack delay)
           const old = tgt.hp; tgt.hp = REST_HEAL; tgt.rests--; st.rests++; st.ballEat++;
           L.on && L(`t${t} death ball on ${tgt.name} alone (${full}): tick-eats it with a Guthix rest, ${old} -> 0 -> ${tgt.hp} (${tgt.rests} sips left)`);
+        } else if (team === 1) {                                       // solos: purple sweets (1-3, as many as they like)
+          const old = tgt.hp; tgt.hp = rng.randint(1, 3); st.ballEat++; tgt.eatReady = t + 3;
+          if (tgt.next < t + 3) { tgt.next = t + 3; if (flinches(tgt) && isHerTick(tgt.next + 1)) tgt.next++; }
+          L.on && L(`t${t} death ball on ${tgt.name} (${full}): tick-eats it with purple sweets, ${old} -> 0 -> ${tgt.hp}`);
         } else if (stallTick && give > 0) tickHeal();                  // Stall tick-eat: keep the shark for the mazes
         else if (tgt.sharks > 0) {
           const old = tgt.hp; tgt.hp = SHARK_HEAL; tgt.sharks--; st.sharks++; st.ballEat++; tgt.eatReady = t + 3;
