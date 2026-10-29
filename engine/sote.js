@@ -163,6 +163,11 @@ const ROLES = ['A', 'B', 'C', 'D', 'E'];
 export const HORN_TICK = 8;                                       // a phase 1 horn: after the prefire, while running in
 export const ORB_DOWN_AT = 0.09;  // a redemption skipper orbs down regardless once she's within 9% (of her HP) of the maze
 export const ZCB_MARGIN = 100;    // P1 / P2: no ZCB unless its ruby (+ this for the team's hits as it flies) fits before the maze
+// ---- the death ball: every 11th magic attack (after 10 magic orbs - melees and splits don't count) is a ball at a
+// random player instead. She skips her next attack, attacks as normal after that, and the ball lands on the tick of what
+// would be her third attack after it. Its damage is shared by the players standing on it (by players alive / sharing):
+export const BALL = { 5: { 5: 14, 4: 21, 3: 38, 2: 87, 1: 350 }, 4: { 4: 17, 3: 31, 2: 70, 1: 280 }, 3: { 3: 23, 2: 52, 1: 210 }, 2: { 2: 35, 1: 140 }, 1: { 1: 70 } };
+export const BALL_EVERY = 10, BALL_LANDS = 15;
 export const CLAW_BELOW = 450;   // P3: a planned ZCB becomes claws once she's below this HP (the ruby's 22% is small by then)
 export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, ZCB_SPEC = 75, ZCB_DELAY = 2;
 // ZCB spec (75%): double accuracy, guaranteed ruby bolt (22% of her HP, max 110), lands 2 ticks later (assumed), 5-tick
@@ -241,7 +246,8 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * pnecks, sharks, rests?, restores?, prefire?, surge?, startSpec?, specs? ([P1, P2, P3] - see SPECS; default
  * defaultSpecs()), lbCycles? (spec regens on Lightbearer, then Ultor), mazes? (how they
  * cross each maze: ['pneck' | 'redemption' | 'shark' | 'run', ...]; default defaultMazes())}]. opts: {upTo: 1 = stop at the first maze, 2 = the second, 3 = the kill (default); entry: room entry
- * instance 0-3 (default 0); clawBelow: P3 HP below which a planned ZCB becomes claws (default 450); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
+ * instance 0-3 (default 0); splitBall: everyone shares the death ball when they all can take it, otherwise the target
+ * tick-eats it alone with a shark (default true; false: always the target alone); clawBelow: P3 HP below which a planned ZCB becomes claws (default 450); chanceAt: chance veng threshold - after the second maze, at or below this share of her HP
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
  * Mazes (skip / stall): the hit that reaches 66.6% / 33.3% (tick T) teleports everyone (T..T+4). One random player goes
@@ -252,7 +258,7 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, clawBelow = CLAW_BELOW } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, clawBelow = CLAW_BELOW, splitBall = true } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const specsDefault = defaultSpecs(team);
   const MAX = SOTE_HP[team] || 4000;
@@ -262,7 +268,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
   const back = [];                              // the tick she's interactable again after each maze
   const mazes = [];
-  const st = { specLog: [], specMissed: [], dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, sharks: 0, rests: 0, restores: 0, locator: 0, lateOrb: 0, runs: [], stalls: [], sharkSkips: [] };
+  const st = { specLog: [], specMissed: [], dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, balls: 0, ballSplit: 0, ballEat: 0, sharks: 0, rests: 0, restores: 0, locator: 0, lateOrb: 0, runs: [], stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: c.prefire || '', pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? 100),
     surgePlan: !!c.surge, regen: 0, specs: [0, 1, 2].map((k) => ({ ...S_('none'), ...((c.specs || specsDefault[i] || [])[k] || {}) })), hornDone: [false, false, false],
@@ -295,11 +301,14 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const isHerTick = (x) => x >= nextAttack && (x - nextAttack) % ATTACK_EVERY === 0;
   /** Their next attack after one on tick t with this speed: on time, but never the tick before her attack (the flinch:
    *  she can only melee a player who attacked the tick before) - then a tick later. */
-  const nextAfter = (t, speed) => (isHerTick(t + speed + 1) ? t + speed + 1 : t + speed);
+  // duos and solos don't flinch (more melees, fewer magic attacks - fewer death balls) unless a melee through prayer
+  // (max 27) could kill them
+  const flinches = (p) => team > 2 || !p || p.hp <= Math.floor(MELEE_MAX * 0.6);
+  const nextAfter = (t, speed, p) => (flinches(p) && isHerTick(t + speed + 1) ? t + speed + 1 : t + speed);
   const startMaze = (t) => {
     mazes.push(t);
     L.on && L(`t${t} *** MAZE ${mazes.length} (${mazes.length === 1 ? '66.6' : '33.3'}%) ***`);
-    blocked = true; hits = []; orbs = []; for (const p of ps) { p.pending = []; p.thrallNext = null; }   // thralls stop until they attack again
+    blocked = true; hits = []; orbs = []; ball = null; skipAt = -1;   // a death ball on its way is gone too for (const p of ps) { p.pending = []; p.thrallNext = null; }   // thralls stop until they attack again
     defLvl = SOTE.def; drained = false;
     let m = t + 5; while (instanceOf(m, entry) !== 0) m++;           // runners: click on the first i3 from T+4, move on the i0 after
     attackable = m + 9; nextAttack = m + 10; back.push(attackable);
@@ -336,6 +345,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     pendingStall = { at: m + 8, runners: stallers };
   };
   let pendingStall = null, pendingSharks = [];
+  let magicCount = 0, ball = null, skipAt = -1;     // the death ball: magic attacks since the last one, the ball in flight, her skipped attack
   /** Running the maze (everyone, if anyone picked Run): a real maze is rolled. Everyone's first move is on T+5. The
    *  player under (teleported to column 6, two south of row A) reaches the first tile in 1-3 ticks by its column - a
    *  light shows there - and runs the best route from the next tick (a tick later on columns 12-13, so the runners are
@@ -671,18 +681,63 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       }
     }
     orbs = orbs.filter((o) => o[0] !== t);
+    // ---- the death ball lands: shared if everyone can take their share (splitBall), else the target tick-eats it - the
+    // hit takes them to 0 and food that tick lands before the death check: a Guthix rest if they have one (to 5 HP, no
+    // attack delay - it's a potion), else a shark (to 20 HP, no attack for 3 ticks). A maze proc first: it does nothing.
+    // the tick before: a target who'll tick-eat it (they end up on 5 / 20 HP anyway) Heal Others their HP away first -
+    // P1 / P2 to the lowest-HP teammate who isn't redemption skipping and won't be left at an HP that dies on the maze;
+    // P3 to whoever is closest to taking a veng safely (the highest HP at 50 or less, else the lowest)
+    if (ball && t === ball.at - 1 && kill == null && !ball.tgt.dead && !blocked) {
+      const live = alive(), n = live.length, tb = BALL[Math.min(5, n)] || BALL[1], share = tb[n] ?? tb[1], tg = ball.tgt;
+      const willEat = !(splitBall && n > 1 && live.every((q) => q.hp > share)) && (tg.rests > 0 || tg.sharks > 0);
+      if (willEat && tg.hp > 1 && !meleeable(tg, t)) {
+        const nRun = n - 1, others = live.filter((q) => q !== tg);
+        let order;
+        if (mazes.length < 2) order = others.filter((q) => !redeemAhead(q)).sort((a, b) => a.hp - b.hp);
+        else { const low = others.filter((q) => q.hp <= ORB_MAX).sort((a, b) => b.hp - a.hp); order = low.length ? low : others.sort((a, b) => a.hp - b.hp); }
+        for (const q of order) {
+          const give = Math.min(Math.floor(tg.hp * 0.75), 99 - q.hp);
+          if (give <= 0 || (mazes.length < 2 && !q.how.slice(mazes.length).includes('redemption') && stallDead(q.hp + give, q, nRun))) continue;
+          tg.hp -= give; q.hp += give;
+          L.on && L(`t${t} ${tg.name} heals other ${q.name} (+${give}) before tick-eating the death ball: ${tg.name} ${tg.hp}, ${q.name} ${q.hp}`);
+          break;
+        }
+      }
+    }
+    if (ball && t === ball.at && kill == null) {
+      const live = alive(), n = live.length, tb = BALL[Math.min(5, n)] || BALL[1], share = tb[n] ?? tb[1];
+      const tgt = ball.tgt.dead ? null : ball.tgt; ball = null;
+      if (splitBall && n > 1 && live.every((q) => q.hp > share)) {
+        for (const q of live) q.hp -= share;
+        st.ballSplit++; L.on && L(`t${t} death ball shared by ${n}: ${share} each`);
+      } else if (tgt) {
+        const full = tb[1];
+        if (tgt.rests > 0) {
+          const old = tgt.hp; tgt.hp = REST_HEAL; tgt.rests--; st.rests++; st.ballEat++;
+          L.on && L(`t${t} death ball on ${tgt.name} alone (${full}): tick-eats it with a Guthix rest, ${old} -> 0 -> ${tgt.hp} (${tgt.rests} sips left)`);
+        } else if (tgt.sharks > 0) {
+          const old = tgt.hp; tgt.hp = SHARK_HEAL; tgt.sharks--; st.sharks++; st.ballEat++; tgt.eatReady = t + 3;
+          if (tgt.next < t + 3) { tgt.next = t + 3; if (isHerTick(tgt.next + 1)) tgt.next++; }
+          L.on && L(`t${t} death ball on ${tgt.name} alone (${full}): tick-eats it with a shark, ${old} -> 0 -> ${tgt.hp} (${tgt.sharks} left)`);
+        } else { hurt(t, tgt, full); L.on && L(`t${t} death ball on ${tgt.name} alone (${full}), nothing to tick-eat it with`); }
+      }
+    }
     // ---- her attack
-    if (!blocked && t === nextAttack && alive().length) {
+    if (!blocked && t === nextAttack && alive().length && t === skipAt) { nextAttack += ATTACK_EVERY; L.on && L(`t${t} SOTETSEG skips her attack (death ball)`); }
+    else if (!blocked && t === nextAttack && alive().length) {
       nextAttack += ATTACK_EVERY;
       const tgt = rng.choice(alive());
-      if (tgt.lastMelee === t - 1 && rng.random() < 0.5) {
+      if (magicCount >= BALL_EVERY) {                                  // the death ball
+        magicCount = 0; st.balls++; ball = { at: t + BALL_LANDS, tgt }; skipAt = t + ATTACK_EVERY;
+        L.on && L(`t${t} SOTETSEG death ball -> ${tgt.name}, lands t${t + BALL_LANDS}`);
+      } else if (tgt.lastMelee === t - 1 && rng.random() < 0.5) {
         st.melees++;
         const ch = hit_chance((SOTE.atk + 9) * (SOTE.accMelee + 64), playerDef(tgt, 'crush'));
         const d = rng.random() < ch ? rng.randint(0, Math.floor(MELEE_MAX * 0.6)) : 0;   // prayed: max -40%
         tgt.pending.push([t + 1, d]);
         L.on && L(`t${t} SOTETSEG melees ${tgt.name} (lands t${t + 1}: ${d})`);
       } else {
-        orbs.push([t + ORB_DELAY, tgt, 'mage', false]);
+        orbs.push([t + ORB_DELAY, tgt, 'mage', false]); magicCount++;
         L.on && L(`t${t} SOTETSEG magic orb -> ${tgt.name}, lands t${t + ORB_DELAY}`);
       }
     }
@@ -712,7 +767,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         spend(p, ZCB_SPEC, t); if (act === 'zcb') p.specDone[ph]++; st.specs.zcb++;
         hits.push([t + ZCB_DELAY, p, 0, 'ZCB spec', 'zcb']);
         L.on && L(`t${t} ${p.name} ZCB spec (${p.spec}% left)`);
-        p.next = nextAfter(t, 5);
+        p.next = nextAfter(t, 5, p);
       } else if (act === 'maul') {
         spend(p, 50, t); p.mauled[ph]++; p.specDone[ph]++; st.specs.maul++;
         const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25);
@@ -721,17 +776,17 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         if (hit) st.specs.maulHit++;
         hits.push([t + 1, p, d, `Elder maul spec ${hit ? d : 'misses'}`, 'maul', hit]);
         L.on && L(`t${t} ${p.name} Elder maul spec${horned ? ' (horned)' : ''} (${p.spec}% left)`);
-        p.lastMelee = t; p.next = nextAfter(t, 6);
+        p.lastMelee = t; p.next = nextAfter(t, 6, p);
       } else if (act === 'claw') {
         spend(p, 50, t); p.specDone[ph]++; st.specs.claw++;
         const parts = clawSpec(p, defLvl, rng);
         hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `claw spec ${parts.join('/')}`, 'claw']);
-        p.lastMelee = t; p.next = nextAfter(t, 4);
+        p.lastMelee = t; p.next = nextAfter(t, 4, p);
       } else {
         const [ch, mx] = scythe(p, defLvl);
         const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m) => (rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
         hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}`, null]);
-        p.lastMelee = t; p.next = nextAfter(t, 5);
+        p.lastMelee = t; p.next = nextAfter(t, 5, p);
       }
     }
   }
