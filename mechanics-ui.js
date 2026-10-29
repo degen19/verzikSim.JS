@@ -1,6 +1,9 @@
-// "View mechanics & behavior": shows the chart template's Mechanics & behavior sheet on the page.
-// Read straight from verzik_chart_template.xlsx, so it always matches the template.
+// "View mechanics & behavior": each boss's mechanics, picked at the top (opens on the boss of the tab you're on).
+// Verzik: the chart template's Mechanics & behavior sheet, read straight from verzik_chart_template.xlsx so it always
+// matches the template. Sotetseg: engine/sotemech.js.
 import { readXlsx } from './engine/xlsx.js';
+import { SOTE_MECHANICS } from './engine/sotemech.js';
+const BOSSES = [['verzik', 'Verzik', 'Set on the chart'], ['sote', 'Sotetseg', 'Set in the Sotetseg tab']];
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -22,17 +25,21 @@ export async function loadMechanics() {
   return { intro, sections };
 }
 
-export function createMechanics(details, body) {
-  let data = null;
+export function createMechanics(details, body, { getRoom } = {}) {
+  let data = null, boss = null, picked = null;       // picked: the boss chosen in the section (else the tab's)
+  const cache = {};
   async function render() {
-    if (!data) {
+    const want = picked || ((getRoom && getRoom()) === 'sote' ? 'sote' : 'verzik');
+    if (!data || want !== boss) {
+      boss = want;
       body.innerHTML = '<p class="muted">Loading...</p>';
-      try { data = await loadMechanics(); } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+      try { data = cache[boss] ||= boss === 'sote' ? SOTE_MECHANICS : await loadMechanics(); } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
       body.innerHTML = `
+        <div class="row" style="margin:0 0 8px"><label>Boss<select id="m-b">${BOSSES.map(([v, l]) => `<option value="${v}" ${v === boss ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
         ${data.intro.map((t) => `<p class="muted small">${esc(t)}</p>`).join('')}
         <div class="row" style="margin:8px 0">
-          <label>Search<input id="m-q" placeholder="e.g. brew, purple, horn" style="width:220px"></label>
-          <label>Scale<select id="m-s"><option value="">All scales</option><option value="duo">Duo</option><option value="team">3-5 man</option></select></label>
+          <label>Search<input id="m-q" placeholder="e.g. ${boss === 'sote' ? 'maze, ball, horn' : 'brew, purple, horn'}" style="width:220px"></label>
+          <label>Scale<select id="m-s"><option value="">All scales</option>${boss === 'sote' ? '<option value="solo">Solo</option>' : ''}<option value="duo">Duo</option><option value="team">3-5 man</option></select></label>
         </div>
         <div class="row" style="margin:0 0 6px"><button class="ghost sm" id="m-all">Expand all</button><button class="ghost sm" id="m-none">Collapse all</button></div>
         <div id="m-list"></div>`;
@@ -40,6 +47,7 @@ export function createMechanics(details, body) {
       body.querySelector('#m-none').addEventListener('click', () => body.querySelectorAll('details.msec').forEach((d) => { d.open = false; }));
       body.querySelector('#m-q').addEventListener('input', list);
       body.querySelector('#m-s').addEventListener('input', list);
+      body.querySelector('#m-b').addEventListener('change', (e) => { picked = e.target.value; render(); });
     }
     list();
   }
@@ -49,14 +57,15 @@ export function createMechanics(details, body) {
     const scaleOk = (sc) => {
       const x = sc.toLowerCase();
       if (!s || x.includes('all')) return true;
-      if (s === 'duo') return x.includes('duo') || x.includes('2');
+      if (s === 'solo') return x.includes('solo') || /(^|[^-\d])1([^\d]|$)|1-/.test(x);
+      if (s === 'duo') return x.includes('duo') || /2/.test(x) || /1-[345]/.test(x);
       return x.includes('3') || x.includes('4') || x.includes('5');
     };
     const hit = (r) => !q || [r.topic, r.what, r.input].some((t) => t.toLowerCase().includes(q));
     const html = data.sections.map((sec) => {
       const rows = sec.rows.filter((r) => scaleOk(r.scales) && hit(r));
       if (!rows.length) return '';
-      return `<details class="msec" ${q ? 'open' : ''}><summary>${esc(sec.title)} <span class="muted small">(${rows.length})</span></summary><div class="scroll"><table class="bt mech"><tr><th>Topic</th><th>Scales</th><th>What the sim does</th><th>Set on the chart</th></tr>${
+      return `<details class="msec" ${q ? 'open' : ''}><summary>${esc(sec.title)} <span class="muted small">(${rows.length})</span></summary><div class="scroll"><table class="bt mech"><tr><th>Topic</th><th>Scales</th><th>What the sim does</th><th>${(BOSSES.find((x) => x[0] === boss) || BOSSES[0])[2]}</th></tr>${
         rows.map((r) => `<tr><td class="rl">${esc(r.topic)}</td><td>${esc(r.scales)}</td><td class="what">${esc(r.what)}</td><td class="inp">${esc(r.input)}</td></tr>`).join('')}</table></div></details>`;
     }).join('');
     body.querySelector('#m-list').innerHTML = html || '<p class="muted">Nothing matches.</p>';

@@ -26,7 +26,7 @@ $('theme').addEventListener('click', () => {
   try { localStorage.setItem('verzikSim.theme', t); } catch { /* ignore */ }
   themeLabel();
 });
-createMechanics($('mech'), $('mechBody'));
+createMechanics($('mech'), $('mechBody'), { getRoom: () => room });
 // the walkthrough video only loads when it's opened
 $('video').addEventListener('toggle', () => { const f = $('vframe'); if ($('video').open && !f.src) f.src = f.dataset.src; });
 
