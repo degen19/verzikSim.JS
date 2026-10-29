@@ -8,12 +8,12 @@
 import { run_solo, COMMIT_KEYS } from './solo.js';
 import { Rng } from './rng.js';
 
-export const COMMIT_VALUES = [0, 4, 6, 8, 10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 50];
+export const COMMIT_VALUES = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20];
 export const SHADOW_MODES = [['none', 'No shadow'], ['camp', 'Shadow camp'], ['31', '3:1'], ['lb', 'Shadow while LB'], ['lb31', 'Shadow while LB + 3:1']];
 export const AYAK_VALUES = [0, 20, 35, 50, 70];
 export const RING_VALUES = ['', 50, 70, 90, 100];
 
-/** The searched settings applied to a base config. s: {commit: {c100..c0}, shadowMode, ayak, godbook, ringSwitch}. */
+/** The searched settings applied to a base config. s: {commit: {c100, c80, c50, c30}, shadowMode, ayak, godbook, ringSwitch}. */
 export function cfgOf(base, s) {
   const c = { ...base, commit: { ...s.commit }, godbook: !!s.godbook, ringSwitch: s.ringSwitch ?? '' };
   if (s.shadowMode != null) {
@@ -52,7 +52,7 @@ const keyOf = (s) => JSON.stringify([s.commit, s.shadowMode, s.ayak, !!s.godbook
 export function neighbours(s, ctx) {
   const out = [], push = (patch, what) => out.push({ ...s, ...patch, commit: { ...s.commit, ...(patch.commit || {}) }, what, path: [...(s.path || []), what] });
   if (ctx.allow.commit) {
-    for (const [k, at] of COMMIT_KEYS) for (const v of COMMIT_VALUES) if (v !== Number(s.commit[k] || 0)) push({ commit: { [k]: v } }, `Commit ${v ? `${v}%` : 'never'} with ${at === 100 ? '100%' : at ? `${at}%+` : 'under 50%'} spec`);
+    for (const [k, at] of COMMIT_KEYS) for (const v of COMMIT_VALUES) if (v !== Number(s.commit[k] || 0)) push({ commit: { [k]: v } }, `Commit ${v ? `${v}%` : 'never'} with ${at === 100 ? '100%' : `${at}%+`} spec`);
   }
   if (ctx.allow.shadow && ctx.hasShadow) for (const [m, l] of SHADOW_MODES) if (m !== s.shadowMode) push({ shadowMode: m }, l);
   if (ctx.allow.ayak && ctx.hasAyak) for (const v of AYAK_VALUES) if (v !== s.ayak) push({ ayak: v }, v ? `Ayak P2 to ${v}` : 'No Ayak P2');

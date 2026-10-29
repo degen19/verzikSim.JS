@@ -23,7 +23,9 @@ export const MDEF = 70;                   // Verzik P2 magic defence bonus (her 
 export const MAG_DEF_LVL = 200;
 export const SET_LEN = 44;                // reds sets back to back: the next shield 44 ticks after the last
 export const LAST_HIT_THR = 2.0;          // commit set r40: under 2% scythe, not halberd
-export const COMMIT_KEYS = [['c100', 100], ['c80', 80], ['c50', 50], ['c0', 0]];   // Commit % by spec at the shield
+export const COMMIT_KEYS = [['c100', 100], ['c80', 80], ['c50', 50], ['c30', 30]];   // Commit % by spec at the shield (under 30%: never)
+export const COMMIT_DEFAULT = { c100: 12, c80: 9, c50: 7, c30: 5 };
+export const DEEP_THR = 37;                // solo deep proc: below this % of P2 HP
 
 const magicDef = (mdef) => (MAG_DEF_LVL + 9) * (Math.max(0, mdef) + 64);
 const roll = (rng, ch, m) => (rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0);
@@ -44,7 +46,7 @@ function shadowVs(p, mdef) {
 }
 
 /** The solo player's config: {name, startSpec, godbook, ringSwitch, shadow, shadowLB, shadowCamp, shadow31, deepProc,
- *  deepThr, ayakP2, ayakAmount, commit: {c100, c80, c50, c0}, + gear (applyToCfg)}. */
+ *  deepThr, ayakP2, ayakAmount, commit: {c100, c80, c50, c30}, + gear (applyToCfg)}. */
 export function run_solo(cfg, rng, log = null, scope = 'full') {
   const L = log != null ? ((s) => log.push(s)) : (() => {}); L.on = log != null;
   const pool = new supplies.Pool([{ ...cfg, brewSips: 999, scbSips: 999, restoreSips: 999, sharks: 999 }], 1);
@@ -197,7 +199,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   };
   const shadowMode = () => {
     if (!cfg.shadow) return null;
-    if (cfg.deepProc && hp <= MX * (cfg.deepThr ?? 42) / 100) return 'deep proc';
+    if (cfg.deepProc && hp <= MX * (cfg.deepThr ?? DEEP_THR) / 100) return 'deep proc';
     if (cfg.shadowCamp) return 'camp';
     if (cfg.shadowLB && p.ring === 'Lightbearer') return 'while LB';
     return null;
@@ -280,11 +282,11 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     let ch = crab0, crabDone = false;
     if (p.next_attack < P) p.next_attack = P;
     // commit: at the shield, Verzik at or below the Commit % for the spec they have
-    const cp = COMMIT_KEYS.find(([, at]) => p.spec >= at), cpct = cfg.commit ? Number(cfg.commit[cp[0]]) : NaN;
+    const cp = COMMIT_KEYS.find(([, at]) => p.spec >= at), cpct = cp && cfg.commit ? Number(cfg.commit[cp[0]]) : NaN;
     const commit = Number.isFinite(cpct) && cpct > 0 && hp <= MX * cpct / 100;
     if (commit && st.commit_set == null) st.commit_set = s;
     let plan = null, claws = 0, scratched = false, firstCol = false, dcSwing = false;
-    L.on && L(`\n=== REDS SET ${s} === r0 = t${P}. Verzik ${hp} (${fx(hp / MX * 100, 1)}%), spec ${fx(p.spec)}%${commit ? ` - COMMIT (<= ${cpct}% at ${cp[1]}%+ spec)` : ''}`);
+    L.on && L(`\n=== REDS SET ${s} === r0 = t${P}. Verzik ${hp} (${fx(hp / MX * 100, 1)}%), spec ${fx(p.spec)}%${commit ? ` - COMMIT (<= ${cpct}% at ${cp && cp[1]}%+ spec)` : ''}`);
     for (let r = 0; r < SET_LEN; r++) {
       t = P + r;
       const tag = `s${s} r${r} `;
