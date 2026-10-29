@@ -130,8 +130,8 @@
     [data-set="A"], [data-block="A"], [data-setcol="A"], [data-copyset="A"], [data-to="A"] { --c: var(--setA); }
     [data-set="B"], [data-block="B"], [data-setcol="B"], [data-copyset="B"], [data-to="B"] { --c: var(--setB); }
     [data-set="C"], [data-block="C"], [data-setcol="C"], [data-copyset="C"], [data-to="C"] { --c: var(--setC); }
-    [data-setcol], .settabs button { --tint: color-mix(in srgb, var(--c) 9%, var(--card)); }
-    :root[data-theme="dark"] [data-setcol], :root[data-theme="dark"] .settabs button { --tint: color-mix(in srgb, var(--c) 11%, var(--card)); }
+    [data-setcol], .settabs button { --tint: color-mix(in srgb, var(--c) 6%, var(--card)); }
+    :root[data-theme="dark"] [data-setcol], :root[data-theme="dark"] .settabs button { --tint: color-mix(in srgb, var(--c) 8%, var(--card)); }
     .settabs { display: flex; gap: 4px; margin-top: 12px; }
     .settabs button { background: var(--card); color: var(--ink2); border: 1px solid var(--line); border-bottom: 0; border-top: 4px solid color-mix(in srgb, var(--c) 35%, var(--line)); border-radius: 9px 9px 0 0; padding: 7px 18px; font-weight: 600; }
     .settabs button.on { color: var(--c); border-top-color: var(--c); background: var(--tint); position: relative; z-index: 1; margin-bottom: -1px; }
