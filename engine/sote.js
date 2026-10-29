@@ -683,7 +683,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     orbs = orbs.filter((o) => o[0] !== t);
     // ---- the death ball lands: shared if everyone can take their share (splitBall), else the target tick-eats it - the
     // hit takes them to 0 and food that tick lands before the death check: a Guthix rest if they have one (to 5 HP, no
-    // attack delay - it's a potion), else a shark (to 20 HP, no attack for 3 ticks). A maze proc first: it does nothing.
+    // attack delay - it's a potion), else a shark (to 20 HP, no attack for 3 ticks); with neither, tick-healed (a 3-tick
+    // stall; the healthiest teammate Heal Others them before it ends). A maze proc first: it does nothing. Veng doesn't
+    // reflect it. The count of magic attacks carries over through the mazes.
     // the tick before: a target who'll tick-eat it (they end up on 5 / 20 HP anyway) Heal Others their HP away first -
     // P1 / P2 to the lowest-HP teammate who isn't redemption skipping and won't be left at an HP that dies on the maze;
     // P3 to whoever is closest to taking a veng safely (the highest HP at 50 or less, else the lowest)
@@ -719,7 +721,15 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           const old = tgt.hp; tgt.hp = SHARK_HEAL; tgt.sharks--; st.sharks++; st.ballEat++; tgt.eatReady = t + 3;
           if (tgt.next < t + 3) { tgt.next = t + 3; if (isHerTick(tgt.next + 1)) tgt.next++; }
           L.on && L(`t${t} death ball on ${tgt.name} alone (${full}): tick-eats it with a shark, ${old} -> 0 -> ${tgt.hp} (${tgt.sharks} left)`);
-        } else { hurt(t, tgt, full); L.on && L(`t${t} death ball on ${tgt.name} alone (${full}), nothing to tick-eat it with`); }
+        } else {                                                       // no food: tick-healed - a 3-tick stall, and the healthiest teammate Heal Others them before it ends
+          const c = live.filter((q) => q !== tgt && q.hp > 1 && !meleeable(q, t)).sort((a, b) => b.hp - a.hp)[0];
+          const give = c ? Math.min(Math.floor(c.hp * 0.75), 99) : 0;
+          if (give > 0) {
+            const old = tgt.hp; c.hp -= give; tgt.hp = give; st.ballEat++;
+            if (tgt.next < t + 3) { tgt.next = t + 3; if (flinches(tgt) && isHerTick(tgt.next + 1)) tgt.next++; }
+            L.on && L(`t${t} death ball on ${tgt.name} alone (${full}), no food: tick-healed - ${old} -> 0, ${c.name} heals other +${give} (${c.name} ${c.hp})`);
+          } else { hurt(t, tgt, full); L.on && L(`t${t} death ball on ${tgt.name} alone (${full}), no food and nobody to heal them`); }
+        }
       }
     }
     // ---- her attack
