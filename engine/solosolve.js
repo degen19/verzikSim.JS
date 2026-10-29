@@ -17,6 +17,8 @@ export const LB_VALUES = [0, 1, 2, 3, 4, 5];
 export function cfgOf(base, s) {
   const c = { ...base, commit: { ...s.commit }, godbook: !!s.godbook };
   if (s.lbP2 != null) Object.assign(c, { lbP2: s.lbP2, lbReds: s.lbReds });
+  if (s.lbFlick != null) c.lbFlick = s.lbFlick;
+  if (s.lbCamp != null) c.lbCamp = s.lbCamp;
   if (s.shadowMode != null) {
     const m = c.hasShadow ? s.shadowMode : 'none';
     Object.assign(c, { shadow: !!c.hasShadow, deepProc: !!c.hasShadow, shadowCamp: m === 'camp', shadow31: m === '31' || m === 'lb31', shadowLB: m === 'lb' || m === 'lb31' });
@@ -31,9 +33,9 @@ export function evalSolo(settings, base, from, to, seed) {
   return settings.map((s) => {
     const cfg = cfgOf(base, s), totals = [], downs = [], split = { p1: [], p2: [], p3: [], sets: [] };
     for (let i = from; i < to; i++) {
-      const r = run_solo(cfg, new Rng(`${seed}#${i}`));
+      const r = run_solo(cfg, new Rng(`${seed}#${i}`), null, cfg.scope === 'p2' ? 'p2' : 'full');   // the Solver stops at P2 or plays it all
       if (r.end == null) { totals.push(99999); downs.push(999); continue; }
-      totals.push(r.end); downs.push(r.st.sets); split.p1.push(r.p1); split.p2.push(r.p2 - r.p1); split.p3.push(r.end - r.p2); split.sets.push(r.st.sets);
+      totals.push(r.end); downs.push(r.st.sets); split.p1.push(r.p1); split.p2.push(r.p2 - r.p1); if (cfg.scope !== 'p2') split.p3.push(r.end - r.p2); split.sets.push(r.st.sets);
     }
     return { totals, downs, split };
   });
@@ -50,7 +52,7 @@ export function scoreOf(totals, bps = [], downs = null, targets = []) {
     ...asc.map((b) => -v.filter((t) => t * 0.6 <= b + 1e-9).length / v.length), med(v), q10(v)];
 }
 export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i] - 1e-12) return true; if (a[i] > b[i] + 1e-12) return false; } return false; };
-const keyOf = (s) => JSON.stringify([s.commit, s.shadowMode, s.ayak, !!s.godbook, s.lbP2 ?? null, s.lbReds ?? null]);
+const keyOf = (s) => JSON.stringify([s.commit, s.shadowMode, s.ayak, !!s.godbook, s.lbP2 ?? null, s.lbReds ?? null, s.lbFlick ?? null, s.lbCamp ?? null]);
 
 /** Every single change the ticked options allow. ctx.allow: {commit, shadow, ayak, godbook, lb}; ctx.hasShadow / hasAyak. */
 export function neighbours(s, ctx) {
@@ -61,6 +63,8 @@ export function neighbours(s, ctx) {
   if (ctx.allow.shadow && ctx.hasShadow) for (const [m, l] of SHADOW_MODES) if (m !== s.shadowMode) push({ shadowMode: m }, l);
   if (ctx.allow.ayak && ctx.hasAyak) for (const v of AYAK_VALUES) if (v !== s.ayak) push({ ayak: v }, v ? `Ayak P2 to ${v}` : 'No Ayak P2');
   if (ctx.allow.godbook) push({ godbook: !s.godbook }, s.godbook ? '100% start' : 'Godbook (95%)');
+  if (ctx.allow.flick) for (let v = 0; v <= 7; v++) if (v !== (s.lbFlick || 0)) push({ lbFlick: v }, v ? `LB Flick Reds ${v} set${v === 1 ? '' : 's'}` : 'No LB flick');
+  if (ctx.allow.lb) push({ lbCamp: !s.lbCamp }, s.lbCamp ? 'No LB P2 Until Reds' : 'LB P2 Until Reds');
   if (ctx.allow.lb) {
     for (const v of LB_VALUES) if (v !== (s.lbP2 || 0)) push({ lbP2: v, lbReds: s.lbReds || 0 }, `LB cycles before reds ${v}`);
     for (const v of LB_VALUES) if (v !== (s.lbReds || 0)) push({ lbP2: s.lbP2 || 0, lbReds: v }, `LB cycles in reds ${v}`);

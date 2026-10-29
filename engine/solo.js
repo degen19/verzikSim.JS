@@ -6,7 +6,7 @@
 //
 // Deaths aren't tracked yet: HP never drops below 1 (supplies.FLAGS.DEATHS), and supplies are plentiful.
 import * as supplies from './supplies.js';
-import { Player, roll_attack, hit_chance, auto_surge, P1_HP, AUTO_QUEUE_FIRST, AUTO_EVERY, AUTO_DELAY, SHADOW_MAGIC } from './sim.js';
+import { Player, roll_attack, hit_chance, auto_surge, bf_swap, bf_heal, P1_HP, AUTO_QUEUE_FIRST, AUTO_EVERY, AUTO_DELAY, SHADOW_MAGIC } from './sim.js';
 import { P2_HP, P2_REDS, P2_DEF, scythe_roll, blowpipe_chance, BP_DELAY, PURPLE_CD_ATTACKS, PURPLE_FIRST_HEAL, SHADOW_DELAY_NEAR, SHADOW_DELAY_DEEP } from './p2.js';
 import { CRAB_BASE_HP, CRAB_DEF_ROLL, CLAW, SHIELD, VERZ_ATTACKS, CRAB_HEAL_R, melee_max_acc, claw_spec } from './reds.js';
 import { crab_scythe_exp, verzik_scythe_exp, collisions_ahead, _exp_capped } from './duo_reds.js';
@@ -58,7 +58,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   p.surge_left = Math.max(0, Math.trunc(Number(cfg.surgeDoses ?? 1)));   // surge pot doses: one a drink
   p.auto_r = cfg.godbook ? 'pending' : null;                    // godbook: 95%, no regen before the first spec, then one
   p.has3 = cfg.has3Tick || 'Ayak';
-  const st = { purples: 0, purple_pops: 0, redemptions: 0, drained: 0, rends: 0, ayak: 0, sets: 0, commit_set: null, dc: 0, crab_kills: 0, claws: 0, halb: 0, shadows: 0, ayak_fix: 0 };
+  const st = { purples: 0, purple_pops: 0, redemptions: 0, drained: 0, rends: 0, ayak: 0, flicks: 0, sets: 0, commit_set: null, dc: 0, crab_kills: 0, claws: 0, halb: 0, shadows: 0, ayak_fix: 0 };
   const out = { st, players: [p], pid: [p] };
   // Lightbearer in P2: LB cycles before reds (regens on it from the start of P2), then Ultor; at the first reds shield
   // back on it for the LB cycles in reds, then Ultor. (P1: Lightbearer the whole phase.) Off it at 100% (no regen there).
@@ -137,14 +137,16 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const MX = P2_HP[1], REDS = P2_REDS[1];
   hp = MX; vq = [];
   let mdef = MDEF;
-  const lbP2 = Math.max(0, Number(cfg.lbP2) || 0), lbReds = Math.max(0, Number(cfg.lbReds) || 0);
-  lb.counting = true; lb.left = lbP2;
+  const flickN = Math.max(0, Math.min(7, Number(cfg.lbFlick) || 0));   // LB Flick Reds: sets (overrides LB cycles in reds)
+  const lbP2 = Math.max(0, Number(cfg.lbP2) || 0), lbReds = flickN ? 0 : Math.max(0, Number(cfg.lbReds) || 0);
+  lb.counting = true; lb.left = cfg.lbCamp ? Infinity : lbP2;      // LB P2 Until Reds: Lightbearer the whole of P2 before reds
+  lb.camp = !!cfg.lbCamp;
   const ayakOn = !!cfg.ayakP2 && (cfg.ayakAmount ?? 0) > 0, ayakGoal = Math.min(MDEF, Number(cfg.ayakAmount) || 0);
   const draining = () => ayakOn && MDEF - mdef < ayakGoal;
   let lastMiss = false;                                         // confliction gauntlets: a missed magic hit -> next magic rolls twice
   const ringCheck = (t, tag = '') => {
     if (p.ring !== 'Lightbearer') return;
-    if (lb.left <= 0 || p.spec >= 100) { p.ring = 'Ultor'; p.regen_timer = 0; L.on && L(`t${rjust(t, 4)} ${tag}swaps to Ultor (spec ${fx(p.spec)}%)`); }
+    if (lb.left <= 0 || (p.spec >= 100 && !lb.camp)) { p.ring = 'Ultor'; p.regen_timer = 0; L.on && L(`t${rjust(t, 4)} ${tag}swaps to Ultor (spec ${fx(p.spec)}%)`); }
   };
   const magicHit = (t, a, mx, delay, label, target, tag = '') => {   // ayak / Soul Rend: accuracy vs her magic defence now
     const ch = hit_chance(a, magicDef(mdef));
@@ -227,6 +229,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
       if (h[4] === 'purple') { dc(t, 'purple crab pops'); st.purple_pops += 1; continue; }
       hp -= h[3];
       L.on && L(`t${rjust(t, 4)} ${h[2]} ${h[3]} -> Verzik ${hp}`);
+      bf_heal(p, h[2], h[3], rng, L, t);                            // Blood fury: 20% of melee hits heal 30%
       if (hp <= REDS && proc == null) { proc = t; shield = t + pymod(-(t - (K + 1)), 4); L.on && L(`t${rjust(t, 4)} at/below 35% - shield t${shield}`); }
     }
     if (shield === t) break;
@@ -244,7 +247,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     }
     for (const [, d] of pend.filter((x) => x[0] === t)) lightning(t, d);
     for (let i = pend.length - 1; i >= 0; i--) if (pend[i][0] === t) pend.splice(i, 1);
-    regen(t); surge(t); ringCheck(t);
+    regen(t); surge(t); ringCheck(t); bf_swap(p, 'P2 Verzik', L, t);   // Rancour + Blood fury: by the threshold
     if (p.thrall_next != null && t === p.thrall_next) { vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'v']); p.thrall_next = t + 4; }
     if (t < p.next_attack) continue;
     if (crab && crab.alive && t >= crab.bp_from && p.has_bp) {
@@ -278,13 +281,14 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const crab0 = floordiv(CRAB_BASE_HP * P2_HP[1], 3500);
   const pc = crab && (crab.alive || crab.expl != null) ? { alive: crab.alive, expl: crab.expl != null } : null;
   let P = shield, kill2 = null, since_ltg = regular % 5;
-  lb.left = lbReds;                                             // LB cycles in reds, from the first shield
+  lb.left = lbReds; lb.camp = false;                            // LB cycles in reds, from the first shield
   if (lbReds > 0 && p.ring !== 'Lightbearer' && p.spec < 100) { p.ring = 'Lightbearer'; p.regen_timer = 0; L.on && L(`t${rjust(P, 4)} back on Lightbearer for ${lbReds} cycle${lbReds === 1 ? '' : 's'} in reds`); }
-  const redsMode = cfg.shadow ? (cfg.redsMode || 'scythe') : 'scythe';   // reds: scythe | shadow (crab and Verzik) | shadowCrab
-  const crabShadow = (r) => redsMode !== 'scythe' && r + SHADOW_DELAY_NEAR <= CRAB_HEAL_R;
+  const redsMode = cfg.shadow ? (cfg.redsMode || 'scythe') : 'scythe';   // reds: scythe | shadow (crab and Verzik) | shadowCrab | shadowVerz
+  const crabShadow = (r) => (redsMode === 'shadow' || redsMode === 'shadowCrab') && r + SHADOW_DELAY_NEAR <= CRAB_HEAL_R;
+  const verzShadow = redsMode === 'shadow' || redsMode === 'shadowVerz';
   const shadowCrabNums = () => { const ring = p.ring === 'Lightbearer' ? 'Lightbearer' : 'Ultor ring'; const [, mx, c] = shadow_attack([...p.mage_gear.filter((n) => ITEMS[n]), ring], p.mag, { def_roll: CRAB_DEF_ROLL }); return [c, mx]; };
   const crabExp = (r, cap) => { if (crabShadow(r)) { const [c, mx] = shadowCrabNums(); return _exp_capped(pyround(c, 3), [mx], cap); } const [c, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL); return _exp_capped(pyround(c, 3), [mx, floordiv(mx, 2)], cap); };
-  const verzExp = () => { if (redsMode === 'shadow') { const [c, mx] = shadowVs(p, mdef); return c * (mx + 1) / 2; } return verzik_scythe_exp(p); };
+  const verzExp = () => { if (verzShadow) { const [c, mx] = shadowVs(p, mdef); return c * (mx + 1) / 2; } return verzik_scythe_exp(p); };
   for (let s = 1; s <= 60 && kill2 == null; s++, P += SET_LEN) {
     st.sets = s;
     let ch = crab0, crabDone = false;
@@ -294,6 +298,12 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     const commit = Number.isFinite(cpct) && cpct > 0 && hp <= MX * cpct / 100;
     if (commit && st.commit_set == null) st.commit_set = s;
     let plan = null, claws = 0, scratched = false, firstCol = false, dcSwing = false;
+    // LB Flick Reds: the first N sets (not a commit) - Ultor at the shield, 2-4 swings on the crab, then Lightbearer
+    if (flickN) {
+      if (p.ring === 'Lightbearer') { p.ring = 'Ultor'; L.on && L(`t${rjust(P, 4)} s${s} Ultor on for the shield (LB flick - the regen timer keeps counting)`); }
+      lb.left = 0;
+    }
+    const flick = flickN && s <= flickN && !commit ? { swings: 0, done: false } : null;
     L.on && L(`\n=== REDS SET ${s} === r0 = t${P}. Verzik ${hp} (${fx(hp / MX * 100, 1)}%), spec ${fx(p.spec)}%${commit ? ` - COMMIT (<= ${cpct}% at ${cp && cp[1]}%+ spec)` : ''}`);
     for (let r = 0; r < SET_LEN; r++) {
       t = P + r;
@@ -306,11 +316,13 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
           if (ch <= 0) continue;
           ch = Math.max(0, ch - h[3]);
           L.on && L(`t${rjust(t, 4)} ${tag}${h[2]} on the crab ${h[3]} -> crab ${ch}`);
+          bf_heal(p, h[2], h[3], rng, L, t, tag);
           if (ch === 0 && !crabDone) { crabDone = true; st.crab_kills += 1; dc(t, 'red crab dies', tag); }
           continue;
         }
         hp -= h[3];
         L.on && L(`t${rjust(t, 4)} ${tag}${h[2]} ${h[3]} -> Verzik ${hp}`);
+        bf_heal(p, h[2], h[3], rng, L, t, tag);
         if (hp <= 0 && kill2 == null) kill2 = t;
       }
       if (pc && r >= 12 && (r - 12) % 4 === 0 && kill2 == null) {
@@ -330,7 +342,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
       }
       for (const [, d] of pend.filter((x) => x[0] === t)) lightning(t, d, tag);
       for (let i = pend.length - 1; i >= 0; i--) if (pend[i][0] === t) pend.splice(i, 1);
-      regen(t, tag); surge(t, tag); ringCheck(t, tag);
+      regen(t, tag); surge(t, tag); ringCheck(t, tag); bf_swap(p, 'P2 crabs', L, t, tag);
       if (p.thrall_next != null && t === p.thrall_next) {                 // the thrall stays up: the crab during the shield, then Verzik
         if (r >= SHIELD) vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'v']);
         else if (r >= 2 && ch > 0 && !crabDone) vq.push([t + 1, 9, 'Thrall', rng.randint(0, 3), 'crab']);
@@ -343,9 +355,9 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     }
     if (kill2 != null) break;
 
-    function crabHit(t, why, tag) {
+    function crabHit(t, why, tag, melee = false) {
       const r = t - P;
-      if (crabShadow(r)) {
+      if (!melee && crabShadow(r)) {
         const [c, mx] = shadowCrabNums(), d = roll(rng, c, mx);
         vq.push([t + SHADOW_DELAY_NEAR, 0, 'Shadow', d, 'crab']); st.shadows += 1;
         p.next_attack = t + 5; p.in_mage = true;
@@ -366,14 +378,19 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
         return;
       }
       const crabOk = ch > 0 && !crabDone && r >= 2 && r + 1 <= CRAB_HEAL_R;
+      if (r < 2) { p.next_attack = t + 1; return; }                    // the crab isn't attackable yet
+      if (flick && !flick.done) {                                       // LB flick: swings on the crab on Ultor until it's dead (2-4)
+        if (crabOk && flick.swings < 4) { flick.swings += 1; return crabHit(t, `LB flick swing ${flick.swings}`, tag, true); }
+        flick.done = true; st.flicks += 1;
+        if (p.spec < 100) { p.ring = 'Lightbearer'; lb.left = Infinity; L.on && L(`t${rjust(t, 4)} ${tag}LB flick: Lightbearer on after ${flick.swings} crab swings (regen timer ${p.regen_timer}/25)`); }
+      }
       if (r < SHIELD) {                                              // Verzik invulnerable
-        if (r < 2) { p.next_attack = t + 1; return; }
         if (crabOk && (!commit || !dcSwing) && r <= SHIELD - (commit ? 5 : 1)) { dcSwing = true; crabHit(t, commit ? 'DC swing' : 'shield up', tag); return; }
         p.next_attack = P + SHIELD; return;
       }
       if (commit) return commitAttack(t, r, verz, tag);
       if (specGuard(t, verz, tag)) return;
-      if (redsMode === 'shadow') {                                      // shadowing reds: the crab while it's worth more, else Verzik
+      if (verzShadow) {                                                 // shadowing Verzik in reds: the crab while it's worth more, else Verzik
         if (crabOk && crabExp(r, ch) > verzExp()) return crabHit(t, `crab ${ch}`, tag);
         return shadow(t, 'reds', tag);
       }
