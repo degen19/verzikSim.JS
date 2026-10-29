@@ -161,6 +161,7 @@ export function defaultSetup(team) {
 }
 const ROLES = ['A', 'B', 'C', 'D', 'E'];
 export const HORN_TICK = 8;                                       // a phase 1 horn: after the prefire, while running in
+export const ORB_DOWN_AT = 0.07;  // a redemption skipper orbs down regardless once she's within 7% (of her HP) of the maze
 export const CLAW_BELOW = 450;   // P3: a planned ZCB becomes claws once she's below this HP (the ruby's 22% is small by then)
 export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, ZCB_SPEC = 75, ZCB_DELAY = 2;
 // ZCB spec (75%): double accuracy, guaranteed ruby bolt (22% of her HP, max 110), lands 2 ticks later (assumed), 5-tick
@@ -557,9 +558,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // ---- before a redemption skip: there's no time to orb down after the proc, so in the phase before it they pop 1-2
     // vengs (1 if the first left them on 50 or less), Heal Other someone with what they have, then locator orb down to
     // 1 HP. The heal: lowest HP first, never to another redemption skipper, never to an HP that dies on the stall.
-    // Close to the proc (her last 5% before the maze) they do it anyway. Not with their prayer off (an unprayed orb).
+    // Close to the proc (her last 7% before the maze) they do it anyway. Not with their prayer off (an unprayed orb).
     if (!blocked && mazes.length < 2 && kill == null) {
-      const ph = mazes.length, near = hp - stopAt <= MAX * 0.05;
+      const ph = mazes.length, near = hp - stopAt <= MAX * ORB_DOWN_AT;
       for (const p of alive()) {
         if (p.how[ph] !== 'redemption' || p.orbedDown === ph || p.restores < 1 || t < p.prayOffUntil || t < (p.healFrom || 0) || meleeable(p, t)) continue;
         const done = p.vengPops[ph] >= 2 || (p.vengPops[ph] >= 1 && p.hp <= ORB_MAX) || p.hp <= ORB_MAX;
