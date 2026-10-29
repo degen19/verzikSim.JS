@@ -32,37 +32,53 @@ export function addSoteRaids(res, players, team, from, to, { seed = 'sote', entr
 
 const PARTS = [['p1', 'P1 (to the first maze)'], ['maze1', 'First maze'], ['p2', 'P2 (to the second maze)'], ['maze2', 'Second maze'], ['p3', 'P3 (to the kill)']];
 
-/** Report body (a <div class="vz-report">). */
-export function soteReportHtml(res, team, opts = {}) {
-  const bps = opts.breakpoints || [], label = opts.label || 'Sotetseg';
-  const row = (name, arr) => {
-    const v = arr.slice().sort((a, b) => a - b);
-    if (!v.length) return `<tr><td>${name}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
-    return `<tr><td>${name}</td><td>${fmt(v[Math.floor(v.length / 2)])}</td><td>${fmt(q(v, 0.10))}</td><td>${fmt(q(v, 0.25))}</td><td>${fmt(q(v, 0.75))}</td><td>${fmt(v[0])}</td></tr>`;
+const COL = ['#2a78d6', '#d64545', '#2f9e61'];
+const sortedOf = (a) => a.slice().sort((x, y) => x - y);
+
+/** Report body (a <div class="vz-report">). res: one result, or several (sets compared on the same raids) with
+ *  opts.labels. */
+export function soteReportHtml(resIn, team, opts = {}) {
+  const all = Array.isArray(resIn) ? resIn : [resIn], multi = all.length > 1;
+  const labs = all.map((_, i) => (opts.labels || [])[i] || (multi ? `Set ${'ABC'[i]}` : opts.label || 'Sotetseg'));
+  const bps = opts.breakpoints || [];
+  const cells = (arr) => {
+    const v = sortedOf(arr);
+    if (!v.length) return '<td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>';
+    return `<td>${fmt(v[Math.floor(v.length / 2)])}</td><td>${fmt(q(v, 0.10))}</td><td>${fmt(q(v, 0.25))}</td><td>${fmt(q(v, 0.75))}</td><td>${fmt(v[0])}</td>`;
   };
-  const splits = `<table><tr><th>Part</th><th>Median</th><th>Top 10%</th><th>Top 25%</th><th>Bottom 25%</th><th>Fastest</th></tr>${
-    PARTS.map(([k, n]) => row(n, res.split[k])).join('')}${row('<b>Room</b>', res.total)}</table>`;
-  const under = (sec) => res.total.filter((t) => t * 0.6 <= sec + 1e-9).length;
-  const fastest = res.total.length ? Math.min(...res.total) : null;
-  const odds = [
-    ...(res.mazeRuns ? [['Maze runs: ticks after a skip (average)', (res.runLost / res.mazeRuns).toFixed(1)]] : []),
-    ['Fastest room', fastest != null ? fmt(fastest) : '-'],
-    ['Fastest room frequency', fastest != null ? (() => { const n = res.total.filter((x) => x === fastest).length; return `${n.toLocaleString()} of ${res.runs.toLocaleString()} (1 in ${Math.round(res.runs / n).toLocaleString()})`; })() : '-'],
-    ...bps.map((b) => [`${fmtSec(b)} or faster`, pct(under(b), res.total.length)]),
-  ];
-  const miss = Object.entries(res.missed || {}).sort((a, b) => b[1] - a[1]);
-  const missT = miss.length ? `<h3>Planned specs that didn't go off</h3><div class="sub">Share of raids where a planned (not backup) spec or horn never happened in its phase - not enough spec in time, or the phase ended first.</div><table>${miss.map(([n, c]) => `<tr><td>${esc(n)}</td><td>${pct(c, res.runs)}</td></tr>`).join('')}</table>` : '';
-  const oddsT = `<table>${odds.map(([n, v]) => `<tr><td>${n}</td><td>${v}</td></tr>`).join('')}</table>`;
-  const r1 = [{ total: res.total, runs: res.runs }], labs = [label];
-  const med = res.total.length ? fmt(res.total.slice().sort((a, b) => a - b)[Math.floor(res.total.length / 2)]) : '-';
+  const tag = (i) => `<td style="color:${COL[i % 3]};font-weight:600">${esc(labs[i])}</td>`;
+  const splits = `<table><tr><th>Part</th>${multi ? '<th>Set</th>' : ''}<th>Median</th><th>Top 10%</th><th>Top 25%</th><th>Bottom 25%</th><th>Fastest</th></tr>${
+    [...PARTS, ['total', '<b>Room</b>']].map(([k, n]) => all.map((res, i) => `<tr>${i === 0 ? `<td${multi ? ` rowspan="${all.length}"` : ''}>${n}</td>` : ''}${multi ? tag(i) : ''}${cells(k === 'total' ? res.total : res.split[k])}</tr>`).join('')).join('')}</table>`;
+  const oddsOf = (res) => {
+    const under = (sec) => res.total.filter((t) => t * 0.6 <= sec + 1e-9).length;
+    const fastest = res.total.length ? Math.min(...res.total) : null;
+    return [
+      ['Raids that wiped', pct(res.wipes || 0, res.runs)],
+      ['Maze runs: ticks after a skip (average)', res.mazeRuns ? (res.runLost / res.mazeRuns).toFixed(1) : '-'],
+      ['Fastest room', fastest != null ? fmt(fastest) : '-'],
+      ['Fastest room frequency', fastest != null ? (() => { const n = res.total.filter((x) => x === fastest).length; return `${n.toLocaleString()} of ${res.runs.toLocaleString()} (1 in ${Math.round(res.runs / n).toLocaleString()})`; })() : '-'],
+      ...bps.map((b) => [`${fmtSec(b)} or faster`, pct(under(b), res.total.length)]),
+    ];
+  };
+  const od = all.map(oddsOf), anyRuns = all.some((r) => r.mazeRuns), anyWipes = all.some((r) => r.wipes);
+  const oddsT = `<table>${multi ? `<tr><th></th>${labs.map((l, i) => `<th style="color:${COL[i % 3]}">${esc(l)}</th>`).join('')}</tr>` : ''}${
+    od[0].map(([n], j) => ((j === 0 && !anyWipes) || (j === 1 && !anyRuns) ? '' : `<tr><td>${n}</td>${od.map((o) => `<td>${o[j][1]}</td>`).join('')}</tr>`)).join('')}</table>`;
+  const names = [...new Set(all.flatMap((r) => Object.keys(r.missed || {})))].sort((x, y) => Math.max(...all.map((r) => (r.missed?.[y] || 0) / (r.runs || 1))) - Math.max(...all.map((r) => (r.missed?.[x] || 0) / (r.runs || 1))));
+  const missT = names.length ? `<h3>Planned specs that didn't go off</h3><div class="sub">Share of raids where a planned (not backup) spec or horn never happened in its phase - not enough spec in time, or the phase ended first.</div><table>${multi ? `<tr><th></th>${labs.map((l, i) => `<th style="color:${COL[i % 3]}">${esc(l)}</th>`).join('')}</tr>` : ''}${
+    names.map((n) => `<tr><td>${esc(n)}</td>${all.map((r) => `<td>${r.missed?.[n] ? pct(r.missed[n], r.runs) : '-'}</td>`).join('')}</tr>`).join('')}</table>` : '';
+  const series = all.map((r) => ({ total: r.total, runs: r.runs }));
+  const kpis = all.map((r, i) => {
+    const v = sortedOf(r.total);
+    return `<div class="kpi"><b style="color:${COL[i % 3]}">${v.length ? fmt(v[Math.floor(v.length / 2)]) : '-'}</b><span>${multi ? `${esc(labs[i])}: ` : ''}median room</span></div><div class="kpi"><b style="color:${COL[i % 3]}">${v.length ? fmt(v[0]) : '-'}</b><span>${multi ? `${esc(labs[i])}: ` : ''}fastest</span></div>`;
+  }).join('');
   return `<div class="vz-report">
-<h2>${team}-man Sotetseg: room time</h2>
-<div class="sub">${res.runs.toLocaleString()} raids · entry instance ${opts.entry ?? 0} · each maze runs from its proc to the end of the last cycle before she's interactable · sim v${VERSION}</div>
-<div class="kpis"><div class="kpi"><b style="color:#2a78d6">${med}</b><span>median room</span></div><div class="kpi"><b style="color:#2a78d6">${fastest != null ? fmt(fastest) : '-'}</b><span>fastest</span></div></div>
+<h2>${team}-man Sotetseg: room time${multi ? ` - ${all.length} sets compared` : ''}</h2>
+<div class="sub">${all[0].runs.toLocaleString()} raids${multi ? ' per set (the same raids for each)' : ''} · entry instance ${opts.entry ?? 0} · each maze runs from its proc to the end of the last cycle before she's interactable · sim v${VERSION}</div>
+<div class="kpis">${kpis}</div>
 <h3>Splits</h3>${splits}
 <h3>Odds</h3>${oddsT}${missT}
-<h3>How often each room time happens (per second, % of raids)</h3><div class="scroll">${histogramSvg(r1, labs).replace('% of successful runs', '% of raids')}</div>
-<h3>Finished by this time or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${cumulativeSvg(r1, labs, bps).replace('% of successful runs finished by this time', '% of raids finished by this time')}</div>
+<h3>How often each room time happens (per second, % of raids)</h3><div class="scroll">${histogramSvg(series, labs).replace('% of successful runs', '% of raids')}</div>
+<h3>Finished by this time or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${cumulativeSvg(series, labs, bps).replace('% of successful runs finished by this time', '% of raids finished by this time')}</div>
 </div>`;
 }
 

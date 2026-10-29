@@ -12,6 +12,8 @@ import { loadGear, gearSet, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { bestWorn, bonuses, blankPlayer } from './engine/loadout.js';
 import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './engine/sotereport.js';
 import { parseBreakpoints } from './engine/optimize.js';
+import { solveSote } from './engine/sotesolve.js';
+import { SotePool } from './sote-solver-pool.js';
 import { defaultMazes, MAZE_HOW, defaultSpecs, SPECS, SPEC_COST, CLAW_BELOW } from './engine/sote.js';
 import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
 
@@ -44,12 +46,31 @@ export function createSote(host, { getTeam }) {
         <label>Raids<input data-r="raids" type="number" min="100" step="500" style="width:90px"></label>
         <label title="The 4-tick instance the room is entered on (shifts the maze cycle)">Entry instance<select data-r="entry">${[0, 1, 2, 3].map((x) => `<option value="${x}">i${x}</option>`).join('')}</select></label>
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
-        <label title="Target room times (m:ss), rounded down to a tick. Marked on the % of all raids chart and added to Odds.">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
+        <div data-rsets></div>
+        <label title="Target room times (m:ss), rounded down to a tick. Marked on the chart and added to Odds.">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-act="dl" class="ghost" disabled>Download report</button>
       </div>
       <div data-rstatus class="muted" style="margin-top:8px"></div>
       <div data-rerr class="err"></div>
       <div data-rout style="margin-top:8px"></div>
+    </details>
+    <details class="video" data-solve style="margin-top:14px"><summary>Solver</summary>
+      <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's prefire, start spec, surge, Lightbearer cycles and
+        specs in each phase (and the entry instance), within the Surge potions / Lightbearers limits and the gear each player has. Each round it tries
+        every single change to one player - on a few raids, then the best on more - and keeps the best if it beats the current setup, until nothing
+        does. The top setups are then played at every entry instance and ranked: with breakpoints by the share finished at the fastest one (then the
+        next), otherwise by the median. Mazes and supplies stay as set.</p>
+      <div class="row">
+        <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
+        <label title="Quick: fewer raids per try and rounds; Thorough: more (slower, steadier)">Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
+        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        ${[['prefire', 'Prefires'], ['start', 'Start spec'], ['surge', 'Surges'], ['lb', 'Lightbearer'], ['specs', 'Specs'], ['entry', 'Entry instance']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}
+      </div>
+      <div data-vstatus class="muted" style="margin-top:8px"></div>
+      <div data-verr class="err"></div>
+      <div data-vout style="margin-top:8px"></div>
     </details>
     <details class="video" data-opt style="margin-top:14px"><summary>Optimizer - entry instance</summary>
       <p class="muted small" style="margin-top:8px">Plays the setup above entered on each instance (i0-i3), on the same raids, and ranks them: with breakpoints by the
@@ -64,18 +85,56 @@ export function createSote(host, { getTeam }) {
       <div data-oerr class="err"></div>
       <div data-oout style="margin-top:8px"></div>
     </details>`;
-  const root = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), opt = host.querySelector('[data-opt]');
+  const root = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), opt = host.querySelector('[data-opt]'), sol = host.querySelector('[data-solve]');
   const $r = (k) => rep.querySelector(`[data-r="${k}"]`);
   const team = () => Number(getTeam()) || 4;
-  const tstate = () => {
-    const t = team(), st = (state[t] ||= { gearSet: 'A', players: [] });
+  // per scale: {cur: 'A', sets: {A, B?, C?}, report, opt, solve} - a set is everything above the Report (players, gear
+  // set, room settings); the Report compares the sets ticked
+  const rootState = () => {
+    const t = team();
+    let r = state[t];
+    if (!r || !r.sets) {                                              // first preview: one setup -> set A
+      const old = r || { gearSet: 'A', players: [] }, { report, opt, solve } = old;
+      delete old.report; delete old.opt; delete old.solve;
+      r = state[t] = { cur: 'A', sets: { A: old }, report, opt, solve };
+    }
+    if (!r.sets[r.cur]) r.cur = 'A';
+    return r;
+  };
+  const fixSet = (st) => {
+    const t = team();
+    st.gearSet ||= 'A'; st.players ||= [];
     delete st.skip; delete st.sharkSkipper;                          // first preview (one Maze setting for the room)
     while (st.players.length < t) st.players.push(blank());
     for (const p of st.players) { if (p.lbRegens != null) { p.lbCycles ??= p.lbRegens; delete p.lbRegens; } delete p.redeem; }   // first preview
     st.players.length = t;
     return st;
   };
+  const tstate = () => { const r = rootState(); return fixSet(r.sets[r.cur] ||= { gearSet: 'A', players: [] }); };
+  const setOf = (k) => { const r = rootState(); return r.sets[k] ? fixSet(r.sets[k]) : null; };
+  const SETS = ['A', 'B', 'C'];
+  const SAVED = 'verzikSim.soteSaved.v1';                            // {team: [{id, name, saved, set}]}
+  const loadSaved = () => { try { return JSON.parse(localStorage.getItem(SAVED)) || {}; } catch { return {}; } };
+  let saved = loadSaved(), savedPick = '', setMsg = '';
+  const when = (ms) => new Date(ms).toLocaleDateString();
   const persist = () => save(state);
+
+  /** Sets A / B / C (switch, copy to another), and sets saved in this browser or to a file. */
+  function setBar() {
+    const r = rootState(), list = saved[team()] || [];
+    return `<div class="row wrap" style="gap:10px;align-items:end;margin:4px 0 10px">
+      <div><div class="muted small">Set</div><div class="seg">${SETS.map((k) => `<button data-set="${k}" class="${k === r.cur ? 'on' : ''}" title="${r.sets[k] ? '' : 'Empty - opens a blank set'}">Set ${k}${r.sets[k] ? '' : ' (empty)'}</button>`).join('')}</div></div>
+      <div><div class="muted small">Copy set ${r.cur} to</div>${SETS.filter((k) => k !== r.cur).map((k) => `<button class="ghost sm" data-copyset="${k}" title="Replace set ${k} with a copy of set ${r.cur}">Set ${k}</button>`).join(' ')}</div>
+      <label>Saved sets<select data-saved="pick"><option value="">(choose a set)</option>${list.map((x) => `<option value="${x.id}" ${x.id === savedPick ? 'selected' : ''}>${esc(x.name)} · ${when(x.saved)}</option>`).join('')}</select></label>
+      <button class="ghost sm" data-setact="load" ${savedPick ? '' : 'disabled'} title="Replace set ${r.cur} with this one">Load into set ${r.cur}</button>
+      <button class="ghost sm" data-setact="del" ${savedPick ? '' : 'disabled'}>Delete</button>
+      <label>Name<input data-saved="name" placeholder="e.g. 5s horn + ZCBs" style="width:150px"></label>
+      <button class="sm" data-setact="save" title="Save set ${r.cur} under this name (in this browser)">Save set</button>
+      <button class="ghost sm" data-setact="file">Save to file</button>
+      <label class="ghost sm filebtn">Open file<input type="file" accept=".json" data-saved="file" hidden></label>
+      <span class="muted small">${esc(setMsg)}</span>
+    </div>`;
+  }
 
   function render() {
     const st = tstate(), g = loadGear(), set = gearSet(g, team(), st.gearSet);
@@ -160,6 +219,7 @@ export function createSote(host, { getTeam }) {
     root.innerHTML = `<h3 style="margin-top:0">Sotetseg <span class="muted small">(${team()}-man)</span></h3>
       <p class="muted small">Room settings for each player, saved in this browser - the Report and Optimizer below play them (and Full raid will).
         Gear comes from the Gear tab; a prefire needs that weapon in the Gear set (Shadow Barrage: a Shadow ancient sceptre).</p>
+      ${setBar()}
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>Gear set ${x}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         <label title="Surge potions the team can use in this room (the solver won't use more - keep some back for another room)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label title="P3: anyone planned to ZCB claws instead once Sotetseg is below this HP (needs claws and 50% spec)">P3 ZCB → claws below (HP)<input type="number" min="0" step="50" style="width:80px" data-rnum="clawBelow" value="${esc(st.clawBelow ?? CLAW_BELOW)}"></label>
@@ -186,6 +246,44 @@ export function createSote(host, { getTeam }) {
       </details>`;
   }
 
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const r = rootState();
+    if (b.dataset.set) { r.cur = b.dataset.set; r.sets[r.cur] ||= structuredClone({ gearSet: tstate().gearSet, players: [] }); setMsg = ''; persist(); refreshAll(); return; }
+    if (b.dataset.copyset) { r.sets[b.dataset.copyset] = structuredClone(tstate()); delete r.sets[b.dataset.copyset].lastTimes; const rp = repState(); if (!rp.sets.includes(b.dataset.copyset)) rp.sets = SETS.filter((x) => x === b.dataset.copyset || rp.sets.includes(x));
+      setMsg = `Copied set ${r.cur} to set ${b.dataset.copyset}.`; persist(); refreshAll(); return; }
+    const act = b.dataset.setact; if (!act) return;
+    const list = (saved[team()] ||= []);
+    const store = () => { try { localStorage.setItem(SAVED, JSON.stringify(saved)); return true; } catch { return false; } };
+    if (act === 'save') {
+      const name = (root.querySelector('[data-saved="name"]').value || '').trim() || list.find((x) => x.id === savedPick)?.name || '';
+      if (!name) { setMsg = 'Type a name for the set first.'; render(); return; }
+      const old = list.find((x) => x.name === name), entry = { id: old ? old.id : `s${Date.now()}`, name, saved: Date.now(), set: structuredClone(tstate()) };
+      delete entry.set.lastTimes;
+      if (old) Object.assign(old, entry); else list.push(entry);
+      savedPick = entry.id; setMsg = store() ? `Saved "${name}" (${old ? 'updated' : 'new'}).` : 'Could not save (browser storage is off).';
+    } else if (act === 'load' || act === 'del') {
+      const x = list.find((y) => y.id === savedPick); if (!x) return;
+      if (act === 'load') { r.sets[r.cur] = structuredClone(x.set); persist(); setMsg = `Loaded "${x.name}" into set ${r.cur}.`; refreshAll(); return; }
+      saved[team()] = list.filter((y) => y !== x); savedPick = ''; store(); setMsg = `Deleted "${x.name}".`;
+    } else if (act === 'file') {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'soteSet', team: team(), set: tstate() }, null, 1)], { type: 'application/json' }));
+      a.download = `sotetseg_${team()}man_set.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); return;
+    }
+    render();
+  });
+  root.addEventListener('change', async (e) => {
+    if (e.target.dataset.saved === 'pick') { savedPick = e.target.value; setMsg = ''; render(); return; }
+    if (e.target.dataset.saved === 'file') {
+      try {
+        const j = JSON.parse(await e.target.files[0].text());
+        if (j.kind !== 'soteSet' || !j.set) throw new Error('not a saved Sotetseg set');
+        if (Number(j.team) !== team()) throw new Error(`it's a ${j.team}-man set - pick that scale first`);
+        const r = rootState(); r.sets[r.cur] = j.set; persist(); setMsg = `Opened ${e.target.files[0].name} into set ${r.cur}.`; refreshAll();
+      } catch (x) { setMsg = `Couldn't open that file: ${x.message}`; render(); }
+    }
+  });
   root.addEventListener('change', (e) => {
     const t = e.target, st = tstate();
     if (t.dataset.gearset != null) { st.gearSet = t.value; persist(); render(); return; }
@@ -212,13 +310,21 @@ export function createSote(host, { getTeam }) {
 
   // ---- report: the players as set up here (gear from the Gear set), raids in batches so the page stays responsive
   let job = null, lastPage = null;
-  const repState = () => { const st = tstate(); st.report ||= { raids: 2000, entry: 0, seed: '', bps: '' }; return st.report; };
-  const showRep = () => { const r = repState(); $r('raids').value = r.raids; $r('entry').value = r.entry; $r('seed').value = r.seed; $r('bps').value = r.bps; };
+  const repState = () => { const st = rootState(); st.report ||= { raids: 2000, entry: 0, seed: '', bps: '' }; st.report.sets ||= ['A']; st.report.labels ||= {}; return st.report; };
+  const showRep = () => {
+    const r = repState(), rs = rootState(); $r('raids').value = r.raids; $r('entry').value = r.entry; $r('seed').value = r.seed; $r('bps').value = r.bps;
+    rep.querySelector('[data-rsets]').innerHTML = `<div class="muted small">Sets to run (compared on the same raids)</div><div class="row" style="gap:8px">${SETS.map((k) => `<label class="pick" style="flex-direction:row;gap:4px;align-items:center"><input type="checkbox" data-rset-run="${k}" ${rs.sets[k] ? '' : 'disabled'} ${rs.sets[k] && r.sets.includes(k) ? 'checked' : ''}>${k}</label><input data-rlabel="${k}" placeholder="Set ${k} label" value="${esc(r.labels[k] || '')}" style="width:110px" ${rs.sets[k] ? '' : 'disabled'}>`).join('')}</div>`;
+  };
+  rep.addEventListener('change', (e) => {
+    const r = repState();
+    if (e.target.dataset.rsetRun) { const k = e.target.dataset.rsetRun; r.sets = SETS.filter((x) => (x === k ? e.target.checked : r.sets.includes(x))); persist(); }
+    if (e.target.dataset.rlabel) { r.labels[e.target.dataset.rlabel] = e.target.value; persist(); }
+  });
   rep.addEventListener('input', (e) => { const k = e.target.dataset.r; if (!k) return; const r = repState(); r[k] = k === 'raids' || k === 'entry' ? Number(e.target.value) : e.target.value; persist(); });
   rep.addEventListener('change', (e) => { const k = e.target.dataset.r; if (!k) return; const r = repState(); r[k] = k === 'raids' || k === 'entry' ? Number(e.target.value) : e.target.value; persist(); });
   const btn = (a) => rep.querySelector(`[data-act="${a}"]`);
-  const playersNow = () => {
-    const st = tstate(), g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null;
+  const playersNow = (st = tstate()) => {
+    const g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null;
     return st.players.map((p, k) => {
       const gear = gp ? gp[k] : blankPlayer(k), orb = !!gear.locator;
       return { name: gear.name || `Player ${k + 1}`, gear, own: true, prefire: p.prefire || '', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge,
@@ -239,25 +345,30 @@ export function createSote(host, { getTeam }) {
     err.textContent = '';
     let bps = [];
     try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
-    const n = Math.max(100, Number(r.raids) || 2000), t = team(), players = playersNow();
-    const seed = String(r.seed || '').trim() || `r${Date.now()}`, res = newSoteResult();
+    const n = Math.max(100, Number(r.raids) || 2000), t = team();
+    const keys = r.sets.filter((k) => setOf(k));
+    if (!keys.length) { err.textContent = 'Tick at least one set to run.'; return; }
+    const runs = keys.map((k) => { const st = setOf(k); return { k, st, players: playersNow(st), res: newSoteResult(), opts: { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick } }; });
+    const labels = keys.map((k) => (r.labels[k] || '').trim() || `Set ${k}`);
+    const seed = String(r.seed || '').trim() || `r${Date.now()}`;
     job = { stop: false }; const me = job;
     btn('run').disabled = true; btn('stop').disabled = false;
     let i = 0;
     const step = () => {
       if (me.stop || i >= n) {
         job = null; btn('run').disabled = false; btn('stop').disabled = true;
-        if (!res.runs) { status.textContent = 'Stopped.'; return; }
-        const opts = { breakpoints: bps, entry: r.entry };
-        out.innerHTML = soteReportHtml(res, t, opts); lastPage = soteReportPage(res, t, opts); btn('dl').disabled = false;
+        if (!runs[0].res.runs) { status.textContent = 'Stopped.'; return; }
+        const opts = { breakpoints: bps, entry: r.entry, labels }, all = runs.map((x) => x.res);
+        out.innerHTML = soteReportHtml(all, t, opts); lastPage = soteReportPage(all, t, opts); btn('dl').disabled = false;
         const med = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
-        if (res.total.length) { tstate().lastTimes = Object.fromEntries(Object.entries(res.split).map(([k2, v]) => [k2, med(v)])); persist(); render(); }
-        status.textContent = `${me.stop ? 'Stopped at' : 'Done:'} ${res.runs.toLocaleString()} raids.`;
+        for (const x of runs) if (x.res.total.length) x.st.lastTimes = Object.fromEntries(Object.entries(x.res.split).map(([k2, v]) => [k2, med(v)]));
+        persist(); render();
+        status.textContent = `${me.stop ? 'Stopped at' : 'Done:'} ${runs[0].res.runs.toLocaleString()} raids${runs.length > 1 ? ' per set' : ''}.`;
         return;
       }
-      const to = Math.min(n, i + 50);
-      try { addSoteRaids(res, players, t, i, to, { seed, entry: Number(r.entry) || 0, clawBelow: tstate().clawBelow ?? CLAW_BELOW, splitBall: tstate().splitBall !== false, stallTick: !!tstate().stallTick }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
-      i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids`;
+      const to = Math.min(n, i + Math.max(10, Math.floor(50 / runs.length)));
+      try { for (const x of runs) addSoteRaids(x.res, x.players, t, i, to, { seed, entry: Number(r.entry) || 0, ...x.opts }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
+      i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`;
       setTimeout(step, 0);
     };
     step();
@@ -266,7 +377,7 @@ export function createSote(host, { getTeam }) {
   // ---- optimizer: the entry instance (i0-i3) for the setup above, on the same raids at each
   let ojob = null;
   const $o = (k) => opt.querySelector(`[data-o="${k}"]`), obtn = (a) => opt.querySelector(`[data-oact="${a}"]`);
-  const optState = () => { const st = tstate(); st.opt ||= { raids: 2000, seed: '', bps: '' }; return st.opt; };
+  const optState = () => { const st = rootState(); st.opt ||= { raids: 2000, seed: '', bps: '' }; return st.opt; };
   const showOpt = () => { const o = optState(); $o('raids').value = o.raids; $o('seed').value = o.seed; $o('bps').value = o.bps; };
   for (const ev of ['input', 'change']) opt.addEventListener(ev, (e) => { const k = e.target.dataset.o; if (!k) return; optState()[k] = k === 'raids' ? Number(e.target.value) : e.target.value; persist(); });
   const tm = (t) => { const x = t * 0.6; return `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}`; };
@@ -316,5 +427,87 @@ export function createSote(host, { getTeam }) {
     step();
   });
 
-  return { refresh: () => { state = load(); render(); showRep(); showOpt(); } };
+  // ---- solver
+  let vjob = null, vresults = null;
+  const ALLOW = ['prefire', 'start', 'surge', 'lb', 'specs', 'entry'];
+  const solState = () => { const st = rootState(); st.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])) }; return st.solve; };
+  const showSol = () => {
+    const v = solState();
+    sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="effort"]').value = v.effort;
+    for (const k of ALLOW) sol.querySelector(`[data-va="${k}"]`).checked = v.allow[k] !== false;
+  };
+  for (const ev of ['input', 'change']) sol.addEventListener(ev, (e) => {
+    const v = solState();
+    if (e.target.dataset.v) v[e.target.dataset.v] = e.target.value;
+    else if (e.target.dataset.va) v.allow[e.target.dataset.va] = e.target.checked;
+    else return;
+    persist();
+  });
+  const EFFORT = { quick: { rounds: 4, stages: [[30, 0.15], [120, 3], [500, 1]], finalRaids: 1000 },
+    normal: { rounds: 8, stages: [[60, 0.2], [240, 4], [1000, 1]], finalRaids: 2000 },
+    thorough: { rounds: 14, stages: [[100, 0.25], [400, 5], [2000, 1]], finalRaids: 5000 } };
+  const vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
+  const fsec = (t) => { const x = t * 0.6; return x >= 60 ? `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}` : `${x.toFixed(1)}s`; };
+  const KINDS = { none: 'nothing', maul: 'Maul', claws: 'Claws', zcb: 'ZCB', bgs: 'BGS' };
+  const specTxt = (x) => `${x.horn ? 'Horn + ' : ''}${x.backup ? `backup (${x.spec === 'none' ? 'maul if needed' : `maul if needed, else ${KINDS[x.spec]}`})` : KINDS[x.spec] || x.spec}`;
+  const showResults = (bps, t) => {
+    const out = sol.querySelector('[data-vout]');
+    if (!vresults || !vresults.length) { out.innerHTML = ''; return; }
+    const med = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
+    const asc = [...bps].sort((a, b) => a - b);
+    const fs = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floor(b / 60)}:${r < 10 ? '0' : ''}${r}`; };
+    const ft = (x) => (x == null || Number.isNaN(x) ? '-' : x >= 9999 ? 'wiped' : fsec(x));       // 9999: a raid that wiped
+    const wiped = (r) => r.totals.filter((x) => x >= 9999).length / r.totals.length;
+    const allWiped = vresults.every((r) => wiped(r) === 1);
+    out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: solver - top ${vresults.length}</h3>
+      <div class="sub">Each played on the same ${vresults[0].totals.length.toLocaleString()} raids at its best entry instance. Times: median.</div>
+      ${allWiped ? '<p class="err">Every raid wiped with these setups, so there is nothing to rank. Check the mazes and supplies above (phoenix necklaces, sharks) and the gear set - a Report run shows how the room goes.</p>' : ''}
+      <div class="scroll"><table><tr><th>#</th><th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>P1</th><th>Mazes</th><th>P2</th><th>P3</th>${vresults.some((r) => wiped(r) > 0) ? '<th>Wiped</th>' : ''}<th></th></tr>
+      ${vresults.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b);
+        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>i${r.entry}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.maze1) + med(r.split.maze2))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td>${vresults.some((y) => wiped(y) > 0) ? `<td>${(wiped(r) * 100).toFixed(1)}%</td>` : ''}<td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use this setup</button></td></tr>
+        <tr data-vproc="${i}" hidden><td colspan="${11 + asc.length}" style="text-align:left">
+          <div class="small">Entry instance i${r.entry} (median by entry: ${r.byEntry.map((y) => `i${y.entry} ${ft(y.median)}`).join(', ')})</div>
+          <table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
+          ${r.cfg.players.map((p, k) => `<tr><td>${esc(pnameOf(k))}</td><td>${esc(p.prefire || 'none')}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td>${p.specs.map((x) => `<td>${esc(specTxt(x))}</td>`).join('')}</tr>`).join('')}</table></td></tr>`; }).join('')}
+      </table></div></div>`;
+  };
+  const pnameOf = (k) => { const st = tstate(), g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null; return (gp && gp[k] && gp[k].name) || `Player ${k + 1}`; };
+  sol.addEventListener('click', async (e) => {
+    const t0 = e.target;
+    if (t0.dataset.vshow != null) { const row = sol.querySelector(`[data-vproc="${t0.dataset.vshow}"]`); row.hidden = !row.hidden; return; }
+    if (t0.dataset.vuse != null) {                                    // copy the setup into the tab (and the entry into the report)
+      const r = vresults[Number(t0.dataset.vuse)], st = tstate();
+      r.cfg.players.forEach((p, k) => Object.assign(st.players[k], { prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ ...x })) }));
+      repState().entry = r.entry; persist(); render(); showRep();
+      sol.querySelector('[data-vstatus]').textContent = `Setup #${Number(t0.dataset.vuse) + 1} copied into the settings above (entry instance i${r.entry} set in the Report).`;
+      return;
+    }
+    const a = t0.dataset.vact; if (!a) return;
+    if (a === 'stop') { if (vjob) { vjob.stopped = true; vjob.pool.stop(); } return; }
+    if (a !== 'run' || vjob) return;
+    const v = solState(), st = tstate(), status = sol.querySelector('[data-vstatus]'), err = sol.querySelector('[data-verr]');
+    err.textContent = '';
+    let bps = [];
+    try { bps = String(v.bps || '').trim() ? parseBreakpoints(v.bps) : []; } catch (x) { err.textContent = x.message; return; }
+    const t = team(), all = playersNow();
+    const base = all.map((p) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes }));
+    const start = { entry: Number(repState().entry) || 0, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
+    const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick };
+    const pool = new SotePool(base, t, opts);
+    vjob = { stopped: false, pool }; const me = vjob;
+    vbtn('run').disabled = true; vbtn('stop').disabled = false;
+    const ef = EFFORT[v.effort] || EFFORT.normal, t1 = Date.now();
+    try {
+      vresults = await solveSote({ team: t, base, start, gear: all.map((p) => p.gear), allow: { ...Object.fromEntries(ALLOW.map((k) => [k, v.allow[k] !== false])) },
+        surgeLimit: Number.isInteger(st.surgeLimit) ? st.surgeLimit : t, lbRings: Number.isInteger(st.lbRings) ? st.lbRings : t,
+        bps, solveEntry: v.allow.entry !== false, ...ef, top: 10 },
+      (...args) => pool.run(...args), (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; }, () => me.stopped);
+      showResults(bps, t);
+      status.textContent = `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
+    } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
+    finally { pool.stop(); vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
+  });
+
+  function refreshAll() { render(); showRep(); showOpt(); showSol(); }
+  return { refresh: () => { state = load(); saved = loadSaved(); refreshAll(); } };
 }

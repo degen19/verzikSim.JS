@@ -1,0 +1,131 @@
+// Sotetseg Solver: searches each player's prefire, start spec (95 / 100), surge, Lightbearer cycles and specs per phase
+// (None / Maul / Claws / ZCB, Backup, Horn), and the room entry instance, for the best room times.
+//
+// Search: start from the setup given. Each round, every single change to one player is a "neighbour"; neighbours are
+// played on a few raids, the best on more, the best of those on many (successive halving, the same raids for each so
+// they compare fairly), and the best is kept if it beats the current setup on those raids. Repeat until nothing
+// improves (or the round limit). The best setups seen are then played at every entry instance and ranked.
+// Ranking: with breakpoints, the share of raids finished by the fastest breakpoint (then the next ...), then the
+// median; without, the median, then the top 10%.
+import { runSote } from './sote.js';
+import { Rng } from './rng.js';
+
+export const SOLVE_PREFIRES = [['', null], ['Twisted bow', 'Twisted bow'], ['ZCB auto', 'Zaryte crossbow'], ['ZCB spec', 'Zaryte crossbow'],
+  ['Shadow Barrage', 'Shadow ancient sceptre'], ["Tumeken's shadow", "Tumeken's shadow"]];
+const SPEC_OPTS = ['none', 'maul', 'claws', 'zcb'];
+const SPEC_NEEDS = { maul: ['Elder maul', 'Bandos godsword'], claws: ['Dragon claws'], zcb: ['Zaryte crossbow'] };
+
+/** The players for a run: the fixed parts (gear, supplies, mazes) from `base`, the searched parts from `cfg`. */
+export function playersOf(base, cfg) {
+  return base.map((b, k) => ({ ...b, ...cfg.players[k], specs: cfg.players[k].specs.map((x) => ({ ...x })) }));
+}
+
+/** Play `configs` on raids [from, to) (seeds `<seed>#i`) entered on `entry`. Returns per config {totals, split}. */
+export function evalConfigs(configs, base, team, from, to, seed, entry, opts = {}) {
+  return configs.map((cfg) => {
+    const players = playersOf(base, cfg), totals = [], split = { p1: [], maze1: [], p2: [], maze2: [], p3: [] };
+    for (let i = from; i < to; i++) {
+      const r = runSote(players, team, new Rng(`${seed}#${i}`), null, { ...opts, entry });
+      if (r.end == null || !r.split) { totals.push(9999); continue; }       // a wipe counts as very slow
+      totals.push(r.end);
+      for (const k of Object.keys(split)) split[k].push(r.split[k]);
+    }
+    return { totals, split };
+  });
+}
+
+const sorted = (a) => a.slice().sort((x, y) => x - y);
+const med = (v) => v[Math.floor(v.length / 2)];
+const q10 = (v) => v[Math.max(0, Math.floor(v.length * 0.1) - 1)];
+/** Score (lower is better, compared item by item). bps: seconds. */
+export function scoreOf(totals, bps = []) {
+  const v = sorted(totals), asc = [...bps].sort((a, b) => a - b);
+  return [...asc.map((b) => -v.filter((t) => t * 0.6 <= b + 1e-9).length / v.length), med(v), q10(v)];
+}
+export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i] - 1e-12) return true; if (a[i] > b[i] + 1e-12) return false; } return false; };
+export const keyOf = (cfg) => JSON.stringify(cfg.players);
+
+/** Every single change to one player that the settings allow. ctx: {team, gear: [gear], allow: {prefire, start, surge,
+ *  lb, specs}, surgeLimit, lbRings}. */
+export function neighbours(cfg, ctx) {
+  const out = [], P = cfg.players;
+  const own = (k, w) => (ctx.gear[k].weapons || []).includes(w);
+  const push = (k, patch, what) => {
+    const players = P.map((p, j) => (j === k ? { ...p, ...patch, specs: (patch.specs || p.specs).map((x) => ({ ...x })) } : p));
+    out.push({ entry: cfg.entry, players, what });
+  };
+  const surges = P.filter((p) => p.surge).length, lbs = P.filter((p) => p.lbCycles > 0).length;
+  P.forEach((p, k) => {
+    if (ctx.allow.prefire) for (const [v, need] of SOLVE_PREFIRES) if (v !== p.prefire && (!need || own(k, need))) push(k, { prefire: v }, `P${k + 1} prefire ${v || 'none'}`);
+    if (ctx.allow.start) push(k, { startSpec: p.startSpec === 95 ? 100 : 95 }, `P${k + 1} start ${p.startSpec === 95 ? 100 : 95}%`);
+    if (ctx.allow.surge && (p.surge || surges < ctx.surgeLimit)) push(k, { surge: !p.surge }, `P${k + 1} ${p.surge ? 'no surge' : 'surge'}`);
+    if (ctx.allow.lb) for (let c = 0; c <= 5; c++) if (c !== p.lbCycles && (c === 0 || p.lbCycles > 0 || lbs < ctx.lbRings)) push(k, { lbCycles: c }, `P${k + 1} Lightbearer ${c}`);
+    if (ctx.allow.specs) for (let ph = 0; ph < 3; ph++) {
+      const cur = p.specs[ph];
+      for (const s of SPEC_OPTS) for (const backup of [false, true]) {
+        if (s !== 'none' && !(SPEC_NEEDS[s] || []).some((w) => own(k, w))) continue;
+        if (s === 'none' && backup && !SPEC_NEEDS.maul.some((w) => own(k, w))) continue;
+        if (s === cur.spec && backup === !!cur.backup) continue;
+        const specs = p.specs.map((x, j) => (j === ph ? { ...x, spec: s, backup } : x));
+        push(k, { specs }, `P${k + 1} P${ph + 1} ${backup ? 'backup ' : ''}${s}`);
+      }
+      if (ctx.gear[k].horn) { const specs = p.specs.map((x, j) => (j === ph ? { ...x, horn: !x.horn } : x)); push(k, { specs }, `P${k + 1} P${ph + 1} ${cur.horn ? 'no horn' : 'horn'}`); }
+    }
+  });
+  return out;
+}
+
+/**
+ * The search. ctx: {team, base (fixed player parts), start (cfg: {entry, players: [{prefire, startSpec, surge, lbCycles,
+ * specs}]}), gear, allow, surgeLimit, lbRings, bps, solveEntry, rounds, stages: [[raids, keep], ...], finalRaids, top}.
+ * run(configs, from, to, seed, entry) -> Promise<[{totals, split}]>. progress(text, fraction). Returns the top setups:
+ * [{cfg, entry, score, totals, split, byEntry}].
+ */
+export async function solveSote(ctx, run, progress = () => {}, stopped = () => false) {
+  const { bps = [], stages = [[60, 0.2], [240, 4], [1000, 1]], rounds = 8, finalRaids = 2000, top = 10 } = ctx;
+  const seen = new Map();                                            // key -> {cfg, score, raids}
+  const note = (cfg, score, raids) => { const k = keyOf(cfg), o = seen.get(k); if (!o || raids >= o.raids) seen.set(k, { cfg, score, raids }); };
+  let cur = { entry: ctx.start.entry ?? 0, players: ctx.start.players };
+  // the entry instance to search on: the start setup's best
+  if (ctx.solveEntry) {
+    progress('Finding the entry instance to search on...', 0);
+    const rs = await Promise.all([0, 1, 2, 3].map((e) => run([cur], 0, 300, 'entry', e)));
+    let best = 0; for (let e = 1; e < 4; e++) if (better(scoreOf(rs[e][0].totals, bps), scoreOf(rs[best][0].totals, bps))) best = e;
+    cur = { ...cur, entry: best };
+  }
+  const bigN = stages[stages.length - 1][0];
+  for (let round = 1; round <= rounds && !stopped(); round++) {
+    let cands = neighbours(cur, ctx).map((c) => ({ ...c, entry: cur.entry }));
+    const seed = `round${round}`;
+    let pool = cands;
+    for (let si = 0; si < stages.length && pool.length && !stopped(); si++) {
+      const [n, keep] = stages[si];
+      progress(`Round ${round}: trying ${pool.length} change${pool.length === 1 ? '' : 's'} on ${n.toLocaleString()} raids each`, (round - 1 + si / stages.length) / rounds);
+      const res = await run(pool, 0, n, seed, cur.entry);
+      const scored = pool.map((c, i) => ({ c, s: scoreOf(res[i].totals, bps) })).sort((a, b) => (better(a.s, b.s) ? -1 : better(b.s, a.s) ? 1 : 0));
+      if (si === stages.length - 1) { scored.forEach((x) => note(x.c, x.s, n)); pool = scored.map((x) => x.c); break; }
+      const k = keep < 1 ? Math.max(6, Math.ceil(pool.length * keep)) : keep;
+      pool = scored.slice(0, k).map((x) => x.c);
+    }
+    if (stopped() || !pool.length) break;
+    const [curRes] = await run([cur], 0, bigN, seed, cur.entry), curScore = scoreOf(curRes.totals, bps);
+    note(cur, curScore, bigN);
+    const bestC = pool[0], bestS = seen.get(keyOf(bestC)).score;
+    if (!better(bestS, curScore)) { progress(`Round ${round}: no change beats the current setup - done`, 1); break; }
+    cur = { entry: cur.entry, players: bestC.players, what: [...(cur.what || []), bestC.what] };
+    progress(`Round ${round}: kept "${bestC.what}"`, round / rounds);
+  }
+  // the best setups seen, played at every entry instance (or the one searched on) and ranked
+  const ranked = [...seen.values()].sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0)).slice(0, top);
+  const entries = ctx.solveEntry ? [0, 1, 2, 3] : [cur.entry];
+  const out = [];
+  for (const [i, x] of ranked.entries()) {
+    if (stopped()) break;
+    progress(`Checking the top setups at ${entries.length > 1 ? 'every entry instance' : 'the entry instance'}: ${i + 1} / ${ranked.length}`, 1);
+    const rs = await Promise.all(entries.map((e) => run([x.cfg], 0, finalRaids, 'final', e)));
+    const byEntry = entries.map((e, j) => ({ entry: e, score: scoreOf(rs[j][0].totals, bps), totals: rs[j][0].totals, split: rs[j][0].split }));
+    const b = byEntry.reduce((m, y) => (better(y.score, m.score) ? y : m));
+    out.push({ cfg: x.cfg, entry: b.entry, score: b.score, totals: b.totals, split: b.split, byEntry: byEntry.map((y) => ({ entry: y.entry, median: med(sorted(y.totals)) })) });
+  }
+  return out.sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));
+}

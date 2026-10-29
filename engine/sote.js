@@ -395,8 +395,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   // ---- prefires; first scythes on 11 (lined up on her attack ticks)
   for (const p of ps) {
     let after = 0;
+    if (p.prefire === 'ZCB spec' && p.spec < PREFIRE['ZCB spec'].spec) p.prefire = 'ZCB auto';   // not enough spec for it
     if (p.prefire && PREFIRE[p.prefire]) {
       const pf = PREFIRE[p.prefire];
+      if (pf.spec) { spend(p, pf.spec, pf.tick); st.specs.zcb++; }   // a ZCB spec prefire costs its 75% (a surge after it, as any first spec)
       hits.push([pf.tick + pf.delay, p, null, `prefire ${p.prefire}`, p.prefire]);
       after = pf.tick + 5;
       p.thrallNext = pf.tick + 1 + rng.randint(1, 2);             // thrall summoned after the prefire

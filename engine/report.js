@@ -211,8 +211,8 @@ export function cumulativeSvg(res, labels, bps = []) {   // bps: breakpoint line
     for (const b of bps.filter((x) => x >= lo && x <= hi + 1)) {          // the share finished by each breakpoint
       const v = r.total.filter((t) => t * 0.6 <= b + 1e-9).length / n * 100, x = L + pw * (b - lo) / Math.max(1, hi - lo);
       dots.push([x, Y(v)]);
-      g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${T + ph}" class="bp"/><circle cx="${x}" cy="${Y(v)}" r="5" fill="${COL[k]}" style="stroke:var(--surf)" stroke-width="2"><title>${v.toFixed(2)}% at ${fmtSec(b)} or faster</title></circle>`;
-      items.push({ x, y: T, color: 'var(--ink2)', cls: 'ax', text: fmtSec(b), cands: RING([1, 3, 5, 7], [[1, 1], [-1, 1]]) });
+      g += `${k ? '' : `<line x1="${x}" x2="${x}" y1="${T}" y2="${T + ph}" class="bp"/>`}<circle cx="${x}" cy="${Y(v)}" r="5" fill="${COL[k]}" style="stroke:var(--surf)" stroke-width="2"><title>${v.toFixed(2)}% at ${fmtSec(b)} or faster</title></circle>`;
+      if (!k) items.push({ x, y: T, color: 'var(--ink2)', cls: 'ax', text: fmtSec(b), cands: RING([1, 3, 5, 7], [[1, 1], [-1, 1]]) });
       items.push({ x, y: Y(v), color: COL[k], text: `${v.toFixed(1)}%`, cands: RING([1, 2, 3, 4, 5], [[-1, -1], [-1, 1], [1, -1], [1, 1]]) });
     }
     for (const qq of [25, 50, 75]) {
