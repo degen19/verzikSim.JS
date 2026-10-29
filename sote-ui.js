@@ -44,7 +44,6 @@ export function createSote(host, { getTeam }) {
     <details class="video" data-rep open style="margin-top:14px"><summary>Report</summary>
       <div class="row" style="margin-top:10px">
         <label>Raids<input data-r="raids" type="number" min="100" step="500" style="width:90px"></label>
-        <label title="The 4-tick instance the room is entered on (shifts the maze cycle)">Entry instance<select data-r="entry">${[0, 1, 2, 3].map((x) => `<option value="${x}">i${x}</option>`).join('')}</select></label>
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
         <div data-rsets></div>
         <label title="Target room times (m:ss), rounded down to a tick. Marked on the chart and added to Odds.">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
@@ -104,6 +103,7 @@ export function createSote(host, { getTeam }) {
   const fixSet = (st) => {
     const t = team();
     st.gearSet ||= 'A'; st.players ||= [];
+    if (st.entry == null) st.entry = Number(state[t] && state[t].report && state[t].report.entry) || 0;   // was one Report setting for every set
     delete st.skip; delete st.sharkSkipper;                          // first preview (one Maze setting for the room)
     while (st.players.length < t) st.players.push(blank());
     for (const p of st.players) { if (p.lbRegens != null) { p.lbCycles ??= p.lbRegens; delete p.lbRegens; } delete p.redeem; }   // first preview
@@ -221,6 +221,7 @@ export function createSote(host, { getTeam }) {
         Gear comes from the Gear tab; a prefire needs that weapon in the Gear set (Shadow Barrage: a Shadow ancient sceptre).</p>
       ${setBar()}
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>Gear set ${x}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
+        <label title="The 4-tick instance this set enters the room on (shifts the maze cycle). Each set in the Report runs on its own.">Entry instance<select data-entry>${[0, 1, 2, 3].map((x) => `<option value="${x}" ${x === Number(st.entry) ? 'selected' : ''}>i${x}</option>`).join('')}</select></label>
         <label title="Surge potions the team can use in this room (the solver won't use more - keep some back for another room)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label title="P3: anyone planned to ZCB claws instead once Sotetseg is below this HP (needs claws and 50% spec)">P3 ZCB → claws below (HP)<input type="number" min="0" step="50" style="width:80px" data-rnum="clawBelow" value="${esc(st.clawBelow ?? CLAW_BELOW)}"></label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Death ball: when everyone can take an even share, they all share it. Off (or someone too low): the target tick-eats it alone - a Guthix rest if they have one, else a shark - after Heal Othering their HP to a teammate"><input type="checkbox" data-rchk="splitBall" ${st.splitBall === false ? '' : 'checked'}>Split DD if healthy</label>
@@ -287,6 +288,7 @@ export function createSote(host, { getTeam }) {
   root.addEventListener('change', (e) => {
     const t = e.target, st = tstate();
     if (t.dataset.gearset != null) { st.gearSet = t.value; persist(); render(); return; }
+    if (t.dataset.entry != null) { st.entry = Number(t.value) || 0; persist(); return; }
     if (t.dataset.rset) { st[t.dataset.rset] = Number(t.value); persist(); render(); return; }
     if (t.dataset.rchk) { st[t.dataset.rchk] = t.checked; persist(); return; }
     if (t.dataset.rnum) { st[t.dataset.rnum] = t.value === '' ? null : Number(t.value); persist(); return; }
@@ -312,7 +314,7 @@ export function createSote(host, { getTeam }) {
   let job = null, lastPage = null;
   const repState = () => { const st = rootState(); st.report ||= { raids: 2000, entry: 0, seed: '', bps: '' }; st.report.sets ||= ['A']; st.report.labels ||= {}; return st.report; };
   const showRep = () => {
-    const r = repState(), rs = rootState(); $r('raids').value = r.raids; $r('entry').value = r.entry; $r('seed').value = r.seed; $r('bps').value = r.bps;
+    const r = repState(), rs = rootState(); $r('raids').value = r.raids; $r('seed').value = r.seed; $r('bps').value = r.bps;
     rep.querySelector('[data-rsets]').innerHTML = `<div class="muted small">Sets to run (compared on the same raids)</div><div class="row" style="gap:8px">${SETS.map((k) => `<label class="pick" style="flex-direction:row;gap:4px;align-items:center"><input type="checkbox" data-rset-run="${k}" ${rs.sets[k] ? '' : 'disabled'} ${rs.sets[k] && r.sets.includes(k) ? 'checked' : ''}>${k}</label><input data-rlabel="${k}" placeholder="Set ${k} label" value="${esc(r.labels[k] || '')}" style="width:110px" ${rs.sets[k] ? '' : 'disabled'}>`).join('')}</div>`;
   };
   rep.addEventListener('change', (e) => {
@@ -348,7 +350,7 @@ export function createSote(host, { getTeam }) {
     const n = Math.max(100, Number(r.raids) || 2000), t = team();
     const keys = r.sets.filter((k) => setOf(k));
     if (!keys.length) { err.textContent = 'Tick at least one set to run.'; return; }
-    const runs = keys.map((k) => { const st = setOf(k); return { k, st, players: playersNow(st), res: newSoteResult(), opts: { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick } }; });
+    const runs = keys.map((k) => { const st = setOf(k); return { k, st, players: playersNow(st), res: newSoteResult(), opts: { entry: Number(st.entry) || 0, clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick } }; });
     const labels = keys.map((k) => (r.labels[k] || '').trim() || `Set ${k}`);
     const seed = String(r.seed || '').trim() || `r${Date.now()}`;
     job = { stop: false }; const me = job;
@@ -358,7 +360,7 @@ export function createSote(host, { getTeam }) {
       if (me.stop || i >= n) {
         job = null; btn('run').disabled = false; btn('stop').disabled = true;
         if (!runs[0].res.runs) { status.textContent = 'Stopped.'; return; }
-        const opts = { breakpoints: bps, entry: r.entry, labels }, all = runs.map((x) => x.res);
+        const opts = { breakpoints: bps, entries: runs.map((x) => Number(x.st.entry) || 0), labels }, all = runs.map((x) => x.res);
         out.innerHTML = soteReportHtml(all, t, opts); lastPage = soteReportPage(all, t, opts); btn('dl').disabled = false;
         const med = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
         for (const x of runs) if (x.res.total.length) x.st.lastTimes = Object.fromEntries(Object.entries(x.res.split).map(([k2, v]) => [k2, med(v)]));
@@ -367,7 +369,7 @@ export function createSote(host, { getTeam }) {
         return;
       }
       const to = Math.min(n, i + Math.max(10, Math.floor(50 / runs.length)));
-      try { for (const x of runs) addSoteRaids(x.res, x.players, t, i, to, { seed, entry: Number(r.entry) || 0, ...x.opts }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
+      try { for (const x of runs) addSoteRaids(x.res, x.players, t, i, to, { seed, ...x.opts }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`;
       setTimeout(step, 0);
     };
@@ -383,7 +385,7 @@ export function createSote(host, { getTeam }) {
   const tm = (t) => { const x = t * 0.6; return `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}`; };
   opt.addEventListener('click', (e) => {
     const a = e.target.dataset.oact;
-    if (e.target.dataset.useEntry != null) { repState().entry = Number(e.target.dataset.useEntry); persist(); showRep(); rep.open = true; rep.scrollIntoView({ behavior: 'smooth' }); return; }
+    if (e.target.dataset.useEntry != null) { tstate().entry = Number(e.target.dataset.useEntry); persist(); render(); opt.querySelector('[data-ostatus]').textContent = `Set ${rootState().cur} now enters on i${tstate().entry}.`; return; }
     if (!a) return;
     if (a === 'stop') { if (ojob) ojob.stop = true; return; }
     if (a !== 'run' || ojob) return;
@@ -412,7 +414,7 @@ export function createSote(host, { getTeam }) {
       out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: entry instance</h3>
         <div class="sub">${rows[0].n.toLocaleString()} raids per instance, the same raids at each · best: <b>i${best}</b>${bps.length ? ` (most finished by ${fs(asc[0])})` : ' (lowest median)'} · maze = both mazes, proc to interactable (medians)</div>
         <table><tr><th>Rank</th><th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${bps.map((b) => `<th>${fs(b)} or faster</th>`).join('')}<th>Mazes</th><th>P1</th><th></th></tr>
-        ${rows.map((r, j) => `<tr${r.k === best ? ' style="font-weight:700"' : ''}><td>${j + 1}</td><td>i${r.k}</td><td>${tm(r.med)}</td><td>${tm(r.q10)}</td><td>${tm(r.fast)}</td>${r.at.map((x) => `<td>${(x * 100).toFixed(1)}%</td>`).join('')}<td>${(r.maze * 0.6).toFixed(1)}s</td><td>${(r.p1 * 0.6).toFixed(1)}s</td><td><button class="ghost sm" data-use-entry="${r.k}">Use in report</button></td></tr>`).join('')}
+        ${rows.map((r, j) => `<tr${r.k === best ? ' style="font-weight:700"' : ''}><td>${j + 1}</td><td>i${r.k}</td><td>${tm(r.med)}</td><td>${tm(r.q10)}</td><td>${tm(r.fast)}</td>${r.at.map((x) => `<td>${(x * 100).toFixed(1)}%</td>`).join('')}<td>${(r.maze * 0.6).toFixed(1)}s</td><td>${(r.p1 * 0.6).toFixed(1)}s</td><td><button class="ghost sm" data-use-entry="${r.k}">Use for this set</button></td></tr>`).join('')}
         </table></div>`;
       status.textContent = me.stop ? 'Stopped early - partial results.' : 'Done.';
     };
@@ -478,8 +480,8 @@ export function createSote(host, { getTeam }) {
     if (t0.dataset.vuse != null) {                                    // copy the setup into the tab (and the entry into the report)
       const r = vresults[Number(t0.dataset.vuse)], st = tstate();
       r.cfg.players.forEach((p, k) => Object.assign(st.players[k], { prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ ...x })) }));
-      repState().entry = r.entry; persist(); render(); showRep();
-      sol.querySelector('[data-vstatus]').textContent = `Setup #${Number(t0.dataset.vuse) + 1} copied into the settings above (entry instance i${r.entry} set in the Report).`;
+      st.entry = r.entry; persist(); render(); showRep();
+      sol.querySelector('[data-vstatus]').textContent = `Setup #${Number(t0.dataset.vuse) + 1} copied into set ${rootState().cur} (entry instance i${r.entry}).`;
       return;
     }
     const a = t0.dataset.vact; if (!a) return;
@@ -491,7 +493,7 @@ export function createSote(host, { getTeam }) {
     try { bps = String(v.bps || '').trim() ? parseBreakpoints(v.bps) : []; } catch (x) { err.textContent = x.message; return; }
     const t = team(), all = playersNow();
     const base = all.map((p) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes }));
-    const start = { entry: Number(repState().entry) || 0, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
+    const start = { entry: Number(tstate().entry) || 0, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
     const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick };
     const pool = new SotePool(base, t, opts);
     vjob = { stopped: false, pool }; const me = vjob;

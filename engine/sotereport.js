@@ -73,7 +73,7 @@ export function soteReportHtml(resIn, team, opts = {}) {
   }).join('');
   return `<div class="vz-report">
 <h2>${team}-man Sotetseg: room time${multi ? ` - ${all.length} sets compared` : ''}</h2>
-<div class="sub">${all[0].runs.toLocaleString()} raids${multi ? ' per set (the same raids for each)' : ''} · entry instance ${opts.entry ?? 0} · each maze runs from its proc to the end of the last cycle before she's interactable · sim v${VERSION}</div>
+<div class="sub">${all[0].runs.toLocaleString()} raids${multi ? ' per set (the same raids for each)' : ''} · ${opts.entries ? (multi ? `entry instance ${labs.map((l, i) => `${esc(l)} i${opts.entries[i] ?? 0}`).join(', ')}` : `entry instance i${opts.entries[0] ?? 0}`) : `entry instance i${opts.entry ?? 0}`} · each maze runs from its proc to the end of the last cycle before she's interactable · sim v${VERSION}</div>
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3>${splits}
 <h3>Odds</h3>${oddsT}${missT}
