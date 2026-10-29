@@ -51,7 +51,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const p = new Player(1, { ...cfg, lightbearerOn: true, startSpec: cfg.godbook ? 95 : 100 });
   supplies.init_player(p, cfg, pool);
   p.ring = 'Lightbearer';
-  p.mag = cfg.hasShadow || cfg.shadow ? SHADOW_MAGIC : 99;      // boosted for the shadow / Dawn autos
+  p.mag = SHADOW_MAGIC; p.heart = SHADOW_MAGIC;                  // heart boost (112 Magic) the whole room
   p.auto_surge_on = true;
   p.auto_r = cfg.godbook ? 'pending' : null;                    // godbook: 95%, no regen before the first spec, then one
   p.has3 = cfg.has3Tick || 'Ayak';
@@ -270,6 +270,11 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const crab0 = floordiv(CRAB_BASE_HP * P2_HP[1], 3500);
   const pc = crab && (crab.alive || crab.expl != null) ? { alive: crab.alive, expl: crab.expl != null } : null;
   let P = shield, kill2 = null, since_ltg = regular % 5;
+  const redsMode = cfg.shadow ? (cfg.redsMode || 'scythe') : 'scythe';   // reds: scythe | shadow (crab and Verzik) | shadowCrab
+  const crabShadow = (r) => redsMode !== 'scythe' && r + SHADOW_DELAY_NEAR <= CRAB_HEAL_R;
+  const shadowCrabNums = () => { const ring = p.ring === 'Lightbearer' ? 'Lightbearer' : 'Ultor ring'; const [, mx, c] = shadow_attack([...p.mage_gear.filter((n) => ITEMS[n]), ring], p.mag, { def_roll: CRAB_DEF_ROLL }); return [c, mx]; };
+  const crabExp = (r, cap) => { if (crabShadow(r)) { const [c, mx] = shadowCrabNums(); return _exp_capped(pyround(c, 3), [mx], cap); } const [c, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL); return _exp_capped(pyround(c, 3), [mx, floordiv(mx, 2)], cap); };
+  const verzExp = () => { if (redsMode === 'shadow') { const [c, mx] = shadowVs(p, mdef); return c * (mx + 1) / 2; } return verzik_scythe_exp(p); };
   for (let s = 1; s <= 60 && kill2 == null; s++, P += SET_LEN) {
     st.sets = s;
     let ch = crab0, crabDone = false;
@@ -329,6 +334,14 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     if (kill2 != null) break;
 
     function crabHit(t, why, tag) {
+      const r = t - P;
+      if (crabShadow(r)) {
+        const [c, mx] = shadowCrabNums(), d = roll(rng, c, mx);
+        vq.push([t + SHADOW_DELAY_NEAR, 0, 'Shadow', d, 'crab']); st.shadows += 1;
+        p.next_attack = t + 5; p.in_mage = true;
+        L.on && L(`t${rjust(t, 4)} ${tag}Shadow on the crab (${why}) -> ${d}`);
+        return;
+      }
       const [c, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL);
       [mx, floordiv(mx, 2)].forEach((m, k) => vq.push([t + 1, k, `Scythe hit ${k + 1}`, roll(rng, c, m), 'crab']));
       p.next_attack = t + 5; p.in_mage = false;
@@ -350,6 +363,10 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
       }
       if (commit) return commitAttack(t, r, verz, tag);
       if (specGuard(t, verz, tag)) return;
+      if (redsMode === 'shadow') {                                      // shadowing reds: the crab while it's worth more, else Verzik
+        if (crabOk && crabExp(r, ch) > verzExp()) return crabHit(t, `crab ${ch}`, tag);
+        return shadow(t, 'reds', tag);
+      }
       if (verz) {
         if (crabOk) return crabHit(t, 'her attack tick', tag);
         if (p.in_mage && p.has3 === 'Ayak') { st.ayak_fix += 1; return ayakAuto(t, 'v', tag + 'tick fix: '); }
@@ -357,10 +374,8 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
         p.next_attack = t + 1; L.on && L(`t${rjust(t, 4)} ${tag}lines up with her attack -> +1t`); return;
       }
       if (crabOk) {
-        const [c, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL);
-        const full = _exp_capped(pyround(c, 3), [mx, floordiv(mx, 2)], 10 ** 6);
-        const spare = ch - collisions_ahead(r) * full;
-        if (spare > 0 && _exp_capped(pyround(c, 3), [mx, floordiv(mx, 2)], Math.trunc(spare)) > verzik_scythe_exp(p)) return crabHit(t, `crab ${ch}`, tag);
+        const full = crabExp(r, 10 ** 6), spare = ch - collisions_ahead(r) * full;   // keep what the collision-tick swings will take
+        if (spare > 0 && crabExp(r, Math.trunc(spare)) > verzExp()) return crabHit(t, `crab ${ch}`, tag);
       }
       scythe(t, tag);
     }

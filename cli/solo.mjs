@@ -10,7 +10,7 @@ Object.assign(g.mage, { head: 'Ancestral hat', body: 'Ancestral robe top', legs:
 Object.assign(g.melee, { head: 'Torva full helm', body: 'Torva platebody', legs: 'Torva platelegs' });
 g.weapons.push('Toxic blowpipe', "Tumeken's shadow", 'Eye of ayak', 'Elder maul');
 const base = applyToCfg({ name: 'Solo' }, g);
-const cfg = { ...base, shadow: base.hasShadow, deepProc: base.hasShadow, deepThr: Number(arg('deep', 42)), shadow31: arg('s31', '0') === '1', shadowCamp: arg('camp', '0') === '1', ayakP2: arg('ayak', '0') === '1', ayakAmount: Number(arg('amt', 70)), godbook: arg('gb', '0') === '1',
+const cfg = { ...base, shadow: base.hasShadow, deepProc: base.hasShadow, deepThr: Number(arg('deep', 42)), shadow31: arg('s31', '0') === '1', shadowCamp: arg('camp', '0') === '1', ayakP2: arg('ayak', '0') === '1', ayakAmount: Number(arg('amt', 70)), redsMode: arg('reds', 'scythe'), godbook: arg('gb', '0') === '1',
   commit: { c100: Number(arg('c100', 0)), c80: Number(arg('c80', 0)), c50: Number(arg('c50', 0)), c0: Number(arg('c0', 0)) } };
 if (process.argv.includes('--log')) { const log = []; const r = run_solo(cfg, new Rng(arg('seed', 'x#1')), log); console.log(log.join('\n')); console.log(r.end, r.st); }
 else {

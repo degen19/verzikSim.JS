@@ -18,7 +18,7 @@ const loadKey = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || 
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 export const DEATHS_NOTE = '*This does not yet take into account deaths and assumes you live every raid. Death tracking will come at a later date*';
 const blankSet = () => ({ gearSet: 'A', godbook: false, ringSwitch: '', shadowCamp: false, shadowLB: false, shadow31: false, deepProc: false, deepThr: 42,
-  ayakP2: false, ayakAmount: 70, commit: { c100: 0, c80: 0, c50: 0, c0: 0 } });
+  ayakP2: false, ayakAmount: 70, redsMode: 'scythe', commit: { c100: 0, c80: 0, c50: 0, c0: 0 } });
 const fsec = (t) => { const s = t * 0.6, m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(1)}`; };
 const COMMIT_LABEL = { c100: '100% spec', c80: '80%+ spec', c50: '50%+ spec', c0: 'under 50%' };
 
@@ -36,7 +36,7 @@ export function createSolo(host) {
     const sh = base.hasShadow;
     return { ...base, name: base.name || 'Solo', godbook: !!st.godbook, ringSwitch: st.ringSwitch ?? '', shadow: sh,
       shadowCamp: sh && !!st.shadowCamp, shadowLB: sh && !!st.shadowLB, shadow31: sh && !!st.shadow31, deepProc: sh,                                                         // solos always deep proc with a shadow deepThr: Number(st.deepThr) || 42,
-      ayakP2: (g.weapons || []).includes('Eye of ayak') && !!st.ayakP2, ayakAmount: Number(st.ayakAmount) || 0, commit: { ...st.commit }, hasAyak: (g.weapons || []).includes('Eye of ayak') };
+      ayakP2: (g.weapons || []).includes('Eye of ayak') && !!st.ayakP2, ayakAmount: Number(st.ayakAmount) || 0, redsMode: sh ? st.redsMode || 'scythe' : 'scythe', commit: { ...st.commit }, hasAyak: (g.weapons || []).includes('Eye of ayak') };
   };
 
   host.innerHTML = `<div class="card"><div data-cfg></div></div>
@@ -103,6 +103,7 @@ export function createSolo(host) {
         ${chk('shadowCamp', 'Shadow camp', st.shadowCamp, 'Shadow every P2 attack until reds', !sh)}
         ${chk('shadowLB', 'Shadow while LB', st.shadowLB, 'Shadow while wearing Lightbearer in P2', !sh)}
         ${chk('shadow31', '3:1', st.shadow31, 'Scythe, but the attack that would collide with Verzik becomes a shadow (P2 and reds)', !sh)}
+        <label title="What they attack with in reds (until a commit): scythes, the shadow on the crab and Verzik, or the shadow on the crab and scythes on Verzik">Reds<select data-s="redsMode" ${sh ? '' : 'disabled'}>${[['scythe', 'Scythe'], ['shadow', 'Shadow (crab + Verzik)'], ['shadowCrab', 'Shadow crab, scythe Verzik']].map(([v, l]) => `<option value="${v}" ${v === (st.redsMode || 'scythe') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label title="Solos always deep proc with a shadow: below this % of P2 HP every attack is a shadow from max distance">Deep proc HP %<input data-s="deepThr" type="number" min="35" max="100" value="${esc(st.deepThr)}" style="width:70px" ${sh ? '' : 'disabled'}></label>
         ${chk('ayakP2', 'Ayak P2', st.ayakP2, 'Eye of ayak in P2: ayak autos until one misses (Confliction gauntlets then roll accuracy twice), then Soul Rend (50%: 2x accuracy, +30% max), which lowers her magic defence (70) by the damage - until it is down by the Ayak Amount', !ay)}
         <label title="Stop Soul Rending once her magic defence is down by this much (0-70)">Ayak Amount<input data-s="ayakAmount" type="number" min="0" max="70" value="${esc(st.ayakAmount)}" style="width:70px" ${ay ? '' : 'disabled'}></label>
@@ -152,7 +153,7 @@ export function createSolo(host) {
     const k = t.dataset.s; if (!k) return;
     if (t.type === 'checkbox') st[k] = t.checked;
     else if (k === 'ringSwitch') st[k] = t.value === '' ? '' : Math.max(0, Math.min(100, Number(t.value) || 0));
-    else if (k === 'gearSet') st[k] = t.value;
+    else if (k === 'gearSet' || k === 'redsMode') st[k] = t.value;
     else st[k] = Number(t.value) || 0;
     if (k === 'shadowCamp' && t.checked) { st.shadow31 = false; st.shadowLB = false; }       // camp covers 3:1 / while LB
     if ((k === 'shadow31' || k === 'shadowLB') && t.checked) st.shadowCamp = false;

@@ -533,6 +533,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       (truthy(dget(st, 'post_col_seen', null)) || spec_at(tank, t, t + 1) < 50);   // the claw only ever catches up on that 4th swing
     for (const p of pid) {
       if (p.dead) continue;
+      if (p.heart && p.mag < p.heart) p.mag = p.heart;   // solo: heart boost the whole room
       for (const item of p.pending.filter((x) => x[0] === t)) {
         if (item[1] === 'tornado') {
           const lost = floordiv(p.hp, 2);
