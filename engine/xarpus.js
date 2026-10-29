@@ -98,7 +98,7 @@ const ringOn = (set, p) => (p.lb ? { ...set, ring: 'Lightbearer' } : set);
 /** Melee with a weapon: [chance, max]. idx 1 slash, 2 crush (his melee defence is 0 for each). */
 function melee(p, weapon, idx, defLvl, accMult = 1) {
   const b = bonuses(ringOn(worn(p.gear, 'melee', weapon), p));
-  const [pa, ps] = PRAY[p.gear.prayer || 'Piety'] || PRAY.Piety;
+  const [pa, ps] = PRAY[p.gear.prayer || 'Zeal'] || PRAY.Zeal;
   const ea = Math.floor(118 * pa) + 8, es = Math.floor(118 * ps) + 3 + 8;
   return [hit_chance(Math.floor(ea * (b.atk[idx] + 64) * accMult), defRoll(defLvl, 'melee')), Math.floor((es * (b.str + 64) + 320) / 640)];
 }
