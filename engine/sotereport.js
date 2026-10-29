@@ -22,7 +22,7 @@ export function addSoteRaids(res, players, team, from, to, { seed = 'sote', entr
     const dead = r.players.filter((p) => p.dead).length;
     res.deaths += dead; if (dead) res.raidsWithDeath++;
     for (const x of r.runs || []) { res.mazeRuns++; res.runLost += x.lost; }
-    for (const x of new Set((r.specMissed || []).map((m) => `${players[m.i]?.name || `Player ${m.i + 1}`}: P${m.ph + 1} ${{ maul: 'maul', claws: 'claws', zcb: 'ZCB', horn: 'horn' }[m.kind] || m.kind}`))) res.missed[x] = (res.missed[x] || 0) + 1;
+    for (const x of new Set((r.specMissed || []).map((m) => `${players[m.i]?.name || `Player ${m.i + 1}`}: P${m.ph + 1} ${{ maul: 'maul', bgs: 'BGS', claws: 'claws', zcb: 'ZCB', horn: 'horn' }[m.kind] || m.kind}`))) res.missed[x] = (res.missed[x] || 0) + 1;
     if (r.end == null || !r.split) { res.wipes++; continue; }
     res.total.push(r.end);
     for (const k of Object.keys(res.split)) res.split[k].push(r.split[k]);

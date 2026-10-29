@@ -75,6 +75,7 @@ export const ITEMS = {
   'Scythe of vitur':      item('weapon', [70, 125, 30, -6, 0], undefined, { str: 75, speed: 5, two_handed: true }),   // attack stats as the sim uses them
   'Dragon claws':         item('weapon', [41, 57, -4, 0, 0], undefined, { str: 56, speed: 4, spec: 50 }),
   'Elder maul':           item('weapon', [0, 0, 135, 0, 0], undefined, { str: 147, speed: 6, two_handed: true, spec: 50 }),   // Pulverize: +25% accuracy, -35% Defence on a hit
+  'Bandos godsword':      item('weapon', [0, 132, 80, 0, 0], undefined, { str: 132, speed: 6, two_handed: true, spec: 50 }),   // Warstrike: 2x accuracy (vs slash), max x1.1 x1.1, drains Defence (then other stats) by the damage
   'Sulphur blades':       item('weapon', [11, 72, 0, 0, 0], undefined, { str: 64, speed: 4 }),
   'Obligator':            item('weapon', [0, 0, 120, 0, 0], undefined, { str: 40, speed: 3 }),   // formerly "Breaker"
   'Swift blade':          item('weapon', undefined, undefined, { speed: 3 }),

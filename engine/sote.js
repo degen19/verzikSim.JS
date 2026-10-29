@@ -128,16 +128,17 @@ function clawSpec(p, defLvl, rng) {
   }
   return rng.random() < 2 / 3 ? [1, 1, 0, 0] : [0, 0, 0, 0];
 }
-// ---- specs: what each player specs in each phase (P1, P2, P3) - {spec: 'none' | 'maul' | 'claws' | 'zcb', backup,
-// horn}. Planned (not backup) specs go off as early as possible: mauls on their first attack of the phase, ZCB specs
+// ---- specs: what each player specs in each phase (P1, P2, P3) - {spec: 'none' | 'maul' | 'bgs' | 'claws' | 'zcb', backup,
+// horn}. BGS (Bandos godsword) works as a maul (a Defence spec); a player set to Maul with a BGS but no maul uses the BGS.
+// Planned (not backup) specs go off as early as possible: mauls on their first attack of the phase, ZCB specs
 // once the phase's mauls have gone off (they land after), claws once the mauls have landed. A spec they can't afford
 // yet waits for a regen. Backup: scythe first; once the phase's mauls (and any earlier player's backup) have landed:
 // maul if her Defence isn't at the floor, otherwise their spec (a ZCB may wait for a regen; maul / none: nothing).
 // Horn (Soulflame horn, 25%, no attack delay): the caster and the first other player with a planned maul that phase
 // can't miss their next melee hit (10 ticks). Phase 1: on t8 (after the prefire, running in). Phases 2-3: after their
 // first scythe off the maze (not in the stall) - the caster and that player then maul.
-export const SPECS = [['none', 'None'], ['maul', 'Maul'], ['claws', 'Claws'], ['zcb', 'ZCB']];
-export const SPEC_COST = { maul: 50, claws: 50, zcb: 75, horn: 25 };
+export const SPECS = [['none', 'None'], ['maul', 'Maul'], ['bgs', 'BGS'], ['claws', 'Claws'], ['zcb', 'ZCB']];
+export const SPEC_COST = { maul: 50, bgs: 50, claws: 50, zcb: 75, horn: 25 };
 const S_ = (spec, o = {}) => ({ spec, backup: false, horn: false, ...o });
 /** The default specs (players 1-5), by scale: 5s - P1 horns and mauls P1, mauls P2; P2 mauls P1 and P3; P3 / P4 ZCB
  *  in P1 and back up in P3 (ZCB, or a maul if needed); P5 mauls P2 and P3. 4s: the same without P4. 3s: P1 mauls P1
@@ -274,7 +275,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
   const back = [];                              // the tick she's interactable again after each maze
   const mazes = [];
-  const st = { specLog: [], specMissed: [], dmg: { prefire: 0, scythe: 0, maul: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, balls: 0, ballSplit: 0, ballEat: 0, ballHeal: 0, sharks: 0, rests: 0, restores: 0, locator: 0, lateOrb: 0, runs: [], stalls: [], sharkSkips: [] };
+  const st = { specLog: [], specMissed: [], dmg: { prefire: 0, scythe: 0, maul: 0, bgs: 0, claw: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, bgs: 0, bgsHit: 0, claw: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, balls: 0, ballSplit: 0, ballEat: 0, ballHeal: 0, sharks: 0, rests: 0, restores: 0, locator: 0, lateOrb: 0, runs: [], stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: c.prefire || '', pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? 100),
     surgePlan: !!c.surge, regen: 0, specs: [0, 1, 2].map((k) => ({ ...S_('none'), ...((c.specs || specsDefault[i] || [])[k] || {}) })), hornDone: [false, false, false],
@@ -434,7 +435,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   // ---- specs (see SPECS): what a player does on their attack tick
   const specHitPending = (q) => hits.some((h) => h[1] === q && (h[4] === 'maul' || h[4] === 'zcb' || h[4] === 'claw'));
   const anyMaulPending = () => hits.some((h) => h[4] === 'maul');
-  const plannedMaul = (q, ph) => q.specs[ph].spec === 'maul' && !q.specs[ph].backup;
+  const isDef = (x) => x === 'maul' || x === 'bgs';                  // a Defence spec (Elder maul / Bandos godsword)
+  const plannedMaul = (q, ph) => isDef(q.specs[ph].spec) && !q.specs[ph].backup;
+  /** The Defence spec they'd use: the one picked if they have it, else the other one. */
+  const defAct = (q, want) => { const own = (w) => (q.gear.weapons || []).includes(w); return want === 'bgs' ? (own('Bandos godsword') ? 'bgs' : own('Elder maul') ? 'maul' : null) : (own('Elder maul') ? 'maul' : own('Bandos godsword') ? 'bgs' : null); };
   const hornRecipient = (c, ph) => alive().find((q) => q !== c && plannedMaul(q, ph));
   const castHorn = (c, t, ph) => {
     const rec = hornRecipient(c, ph);
@@ -449,17 +453,17 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (ph === 2 && sp.spec === 'zcb' && hp < clawBelow && has('Dragon claws')) sp = { ...sp, spec: 'claws' };   // late P3: claws over a ZCB
     // a phase 2 / 3 horn: after their first scythe off the maze, free (then the maul)
     if (ph > 0 && sp.horn && !p.hornDone[ph] && p.swings[ph] >= 1 && p.spec >= HORN_COST) castHorn(p, t, ph);
-    const mauls = (q) => plannedMaul(q, ph) && !q.mauled[ph] && q.spec >= 50 && (q.gear.weapons || []).includes('Elder maul');
+    const mauls = (q) => plannedMaul(q, ph) && !q.mauled[ph] && q.spec >= 50 && !!defAct(q, q.specs[ph].spec);
     // P1 / P2: a ZCB's ruby (22% of her HP, max 110) would be cut short by the maze - wasted. They keep it for the start of
     // the next phase instead (after its mauls).
     const zcbWasted = ph < 2 && hp - stopAt < Math.min(110, Math.floor(hp * 0.22)) + ZCB_MARGIN;
     if (p.zcbCarry === ph && !alive().some(mauls) && p.spec >= ZCB_SPEC && has('Zaryte crossbow') && !zcbWasted) { p.zcbCarry = -1; return 'zcbCarry'; }
     if (!sp.backup) {
-      if (sp.spec === 'maul' && !p.mauled[ph] && has('Elder maul')) return p.spec >= 50 && !hornWait(p, ph) ? 'maul' : 'scythe';
+      if (isDef(sp.spec) && !p.mauled[ph] && defAct(p, sp.spec)) return p.spec >= 50 && !hornWait(p, ph) ? defAct(p, sp.spec) : 'scythe';
       // until one lands (solos): another maul once the last has landed and missed
-      if (sp.untilHit && sp.spec === 'maul' && p.mauled[ph] >= 1 && !maulHits[ph] && !anyMaulPending() && p.spec >= 50 && has('Elder maul')) return 'maul';
+      if (sp.untilHit && isDef(sp.spec) && p.mauled[ph] >= 1 && !maulHits[ph] && !anyMaulPending() && p.spec >= 50 && defAct(p, sp.spec)) return defAct(p, sp.spec);
       // duos: both P1 mauls missed - one backup maul once they've landed
-      if (sp.duoBackup && p.mauled[ph] === 1 && !alive().some(mauls) && !anyMaulPending() && !maulHits[ph] && p.spec >= 50 && has('Elder maul')) { p.duoBackingUp = true; return 'maul'; }
+      if (sp.duoBackup && p.mauled[ph] === 1 && !alive().some(mauls) && !anyMaulPending() && !maulHits[ph] && p.spec >= 50 && defAct(p, sp.spec)) { p.duoBackingUp = true; return defAct(p, sp.spec); }
       if (p.specDone[ph] || sp.spec === 'none') return 'scythe';
       if (sp.spec === 'zcb') {
         if (alive().some(mauls) || p.spec < ZCB_SPEC || !has('Zaryte crossbow')) return 'scythe';
@@ -472,7 +476,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // backup: scythe first; once the mauls (and earlier backups, if she still isn't at the floor) have landed
     if (p.specDone[ph] || !p.swings[ph] || alive().some(mauls) || anyMaulPending()) return 'scythe';
     if (!floorNow && alive().some((q) => q.i < p.i && q.specs[ph].backup && (!q.specDone[ph] || specHitPending(q)))) return 'scythe';
-    if (!floorNow) { if (p.spec >= 50 && has('Elder maul')) return 'maul'; p.specDone[ph]++; return 'scythe'; }
+    if (!floorNow) { const a = defAct(p, sp.spec === 'bgs' ? 'bgs' : 'maul'); if (p.spec >= 50 && a) return a; p.specDone[ph]++; return 'scythe'; }
     if (sp.spec === 'zcb' && has('Zaryte crossbow')) { if (zcbWasted) { p.specDone[ph]++; return 'scythe'; } return p.spec >= ZCB_SPEC ? 'zcb' : 'scythe'; }   // a ZCB may wait for a regen
     if (sp.spec === 'claws' && has('Dragon claws')) return p.spec >= 50 ? 'claw' : 'scythe';
     p.specDone[ph]++; return 'scythe';                               // at the floor, nothing else planned
@@ -657,7 +661,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         } else L.on && L(`t${t} ${p.name} ZCB spec misses`);
       } else if (kind === 'maul') {
         if (h[5]) maulHits[phase]++;
-        if (h[5] && defLvl > SOTE.defFloor) { defLvl = Math.max(SOTE.defFloor, defLvl - Math.floor(defLvl * 0.35)); L.on && L(`t${t} Elder maul lowers her Defence -> ${defLvl}`); }
+        if (h[5] && defLvl > SOTE.defFloor) {                         // maul: -35%; BGS: -the damage (floor 100)
+          defLvl = Math.max(SOTE.defFloor, h[6] === 'bgs' ? defLvl - h[2] : defLvl - Math.floor(defLvl * 0.35));
+          L.on && L(`t${t} ${h[6] === 'bgs' ? 'BGS' : 'Elder maul'} lowers her Defence -> ${defLvl}`);
+        }
         if (p.duoBackingUp && phase === 0) {                          // duos: the backup landed
           p.duoBackingUp = false;
           if (!maulHits[0]) {                                          // missed again: B mauls P2, A camps Lightbearer for P3
@@ -669,7 +676,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
             L.on && L(`t${t} ${p.name}'s backup missed too: ${b ? b.name : '-'} mauls P2, ${p.name} camps Lightbearer (${need} regens) to maul P3`);
           }
         }
-        damage(t, h[2], `${p.name} ${label}`, 'maul');
+        damage(t, h[2], `${p.name} ${label}`, h[6] === 'bgs' ? 'bgs' : 'maul');
       } else damage(t, h[2], `${p.name} ${label}`, kind || 'scythe');
     }
     if (mazes.length >= upTo) continue;
@@ -826,6 +833,15 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         if (hit) st.specs.maulHit++;
         hits.push([t + 1, p, d, `Elder maul spec ${hit ? d : 'misses'}`, 'maul', hit]);
         L.on && L(`t${t} ${p.name} Elder maul spec${horned ? ' (horned)' : ''} (${p.spec}% left)`);
+        p.lastMelee = t; p.next = nextAfter(t, 6, p);
+      } else if (act === 'bgs') {                                      // Warstrike: 2x accuracy vs slash, max x1.1 x1.1
+        spend(p, 50, t); p.mauled[ph]++; p.specDone[ph]++; st.specs.bgs++;
+        const [ch, mx0] = melee(p, 'Bandos godsword', 1, defLvl, 2), mx = Math.floor(Math.floor(mx0 * 1.1) * 1.1);
+        const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;
+        const hit = horned || rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
+        if (hit) st.specs.bgsHit++;
+        hits.push([t + 1, p, d, `BGS spec ${hit ? d : 'misses'}`, 'maul', hit, 'bgs']);
+        L.on && L(`t${t} ${p.name} BGS spec${horned ? ' (horned)' : ''} (${p.spec}% left)`);
         p.lastMelee = t; p.next = nextAfter(t, 6, p);
       } else if (act === 'claw') {
         spend(p, 50, t); p.specDone[ph]++; st.specs.claw++;

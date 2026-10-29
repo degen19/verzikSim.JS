@@ -113,7 +113,7 @@ export function createSote(host, { getTeam }) {
     // spec planner: the projection on typical phase times for the scale, or the last report's medians
     const times = st.lastTimes || TYPICAL_TIMES[team()] || TYPICAL_TIMES[5];
     const ft = (t) => { const x = t * 0.6; return `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}`; };
-    const KIND = { maul: 'Maul', claws: 'Claws', zcb: 'ZCB', horn: 'Horn' };
+    const KIND = { maul: 'Maul', bgs: 'BGS', claws: 'Claws', zcb: 'ZCB', horn: 'Horn' };
     const planRow = (p, k) => {
       const pr = projectPlayer({ startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, lbCycles: Number(p.lbCycles || 0),
         specs: specsOf(p, k).map((x) => ({ ...x, horn: !!x.horn && hasHorn(k) })) }, times);
