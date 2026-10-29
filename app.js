@@ -2,7 +2,7 @@
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart } from './engine/sim.js';
 import { mergeResults, reportHtml, reportPage, REPORT_CSS } from './engine/report.js';
-import { parseBreakpoints } from './engine/optimize.js';
+import { parseBreakpoints, dawnShortfalls } from './engine/optimize.js';
 import { VERSION, CHANGES } from './engine/version.js';
 import { createBuilder } from './builder-ui.js';
 import { createOptimizer } from './optimizer-ui.js';
@@ -246,6 +246,9 @@ $('go').addEventListener('click', async () => {
       try { const c = await parse_chart(wb, t, null, block, { deferBP: true }); if (filled(c)) sets.push([block, withGear(c, t, block)]); } catch (e) { if (block === 'A') throw e; }
     }
     if (!sets.length) throw new Error(`The ${t}-man chart has no filled P1 chart.`);
+    // a P1 chart a player can't afford (a Dawn spec without 35%): don't run - the chart wouldn't play as charted
+    const short = sets.flatMap(([b, c]) => dawnShortfalls(c).map((x) => `Set ${b} - ${x}`));
+    if (short.length) throw new Error(`Not enough spec for the P1 chart (they'd have under 35% for the Dawn spec): ${short.join('; ')}. Check their start spec, Lightbearer and surge timing (the spec planner shows the spec), or move the Dawn spec.`);
     const notes = sets.flatMap(([b, c]) => (c.notes || []).map((n) => `Set ${b} - ${n}`));
     const scope = $('scope').value;
     for (const s of sets) s[1] = s[1].map((c) => ({ ...c, scope }));                // phases to simulate (see simulate.js)

@@ -1,5 +1,6 @@
 // Optimizer: sweeps chart inputs (ring %, death charges, deep proc, gear, toggles) and finds the setups that
 // most often beat the user's breakpoints. Used by the web page's Optimizer tab (via worker.js).
+import { plan } from './planner.js';
 import { Rng } from './rng.js';
 import { ITEMS } from './gear.js';
 import { multiPicks, multiText } from './chartform.js';
@@ -299,6 +300,26 @@ export function applyCombo(cfgs, team, combo) {
   const cf = structuredClone(cfgs);
   for (const o of catalog(cfgs, team)) if (o.id in combo) o.apply(cf, combo[o.id]);
   return cf;
+}
+
+/** Charted Dawn specs a setup can't afford, per player (its start spec, Lightbearer and surge timing on the P1 chart -
+ *  the spec planner's timeline). The sim skips them, so the chart doesn't play as charted. */
+export function dawnsShort(cfgs) {
+  const players = cfgs.map((c) => ({ name: c.name, start: Number(c.startSpec ?? 100) || 100, lb: !!c.lightbearerOn, surge: c.customSurgeTick ?? null, acts: c.actions || {}, purple1: false, purple2: false, west: false, east: false }));
+  const maxTick = Math.max(1, ...players.flatMap((p) => Object.keys(p.acts).map(Number)));
+  return plan({ team: cfgs.length, players, nPurples: null, deathTick: null, maxTick }).map((x) => x.dawnShort);
+}
+/** The charted Dawn specs a setup can't afford, as text (empty if none): "P2: t41 (Dawn spec needs 35%)". */
+export function dawnShortfalls(cfgs) {
+  const players = cfgs.map((c) => ({ name: c.name, start: Number(c.startSpec ?? 100) || 100, lb: !!c.lightbearerOn, surge: c.customSurgeTick ?? null, acts: c.actions || {}, purple1: false, purple2: false, west: false, east: false }));
+  const maxTick = Math.max(1, ...players.flatMap((p) => Object.keys(p.acts).map(Number)));
+  return plan({ team: cfgs.length, players, nPurples: null, deathTick: null, maxTick })
+    .map((x, i) => (x.dawnShortTicks.length ? `${cfgs[i].name || `P${i + 1}`}: Dawn spec on ${x.dawnShortTicks.map((t) => `tick ${t}`).join(', ')}` : '')).filter(Boolean);
+}
+/** False when the setup can't afford a charted Dawn spec that the base setup (as charted) can. */
+export function dawnsOk(cfgs, base) {
+  const a = dawnsShort(cfgs), b = dawnsShort(base);
+  return a.every((n, i) => n <= (b[i] || 0));
 }
 
 /** False when a setup breaks the shadow rules (Shadow camp together with 3:1 or Shadow while LB). */

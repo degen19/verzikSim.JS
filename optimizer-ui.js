@@ -1,7 +1,7 @@
 // Optimizer tab: choose inputs to vary, set breakpoints, see the estimated run time, run a staged search.
 import { parse_chart } from './engine/sim.js';
 import { threadCount, workersAvailable } from './pool.js';
-import { catalog, applyCombo, validCfgs, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts, cfgsToFields } from './engine/optimize.js';
+import { catalog, applyCombo, validCfgs, dawnsOk, dawnShortfalls, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts, cfgsToFields } from './engine/optimize.js';
 import { withGear } from './engine/gearstore.js';
 import { describe, readValues, withSetC } from './engine/chartform.js';
 
@@ -81,7 +81,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
   const nCombos = () => {
     const n = sweep().reduce((m, s) => m * s.values.length, 1);
     if (n > 20000 || !cfgs) return n;                             // count only valid setups (shadow rules) when cheap to
-    return enumerate(sweep()).filter((c) => validCfgs(applyCombo(cfgs, team, c))).length;
+    return enumerate(sweep()).filter((c) => { const cf = applyCombo(cfgs, team, c); return validCfgs(cf) && dawnsOk(cf, cfgs); }).length;
   };
 
   function renderOpts() {
@@ -168,6 +168,8 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     $('o-err').textContent = ''; $('o-out').innerHTML = ''; $('o-report').innerHTML = '';
     if (!workersAvailable()) { $('o-err').textContent = "This browser doesn't support Web Workers, which the Optimizer needs. Try a current Chrome, Edge, Firefox or Safari."; return; }
     const b = bps(); if (!b) return;
+    const short = sets.flatMap((st) => dawnShortfalls(st.cfgs).map((x) => `${getLabel(st.block)} - ${x}`));
+    if (short.length) { $('o-err').textContent = `Not enough spec for the P1 chart (under 35% for the Dawn spec): ${short.join('; ')}. Fix the chart first (start spec, Lightbearer, surge timing - see the spec planner).`; return; }
     if (calibrating) {
       $('o-status').textContent = 'Finishing the speed test first...';
       try { await calibrating; } catch { /* the search measures its own speed anyway */ }
@@ -209,6 +211,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
           const key = JSON.stringify(own); if (seen.has(key)) continue; seen.add(key);
           const cf = applyCombo(scopedOf(st.cfgs), team, own);
           if (!validCfgs(cf)) continue;                            // e.g. Shadow camp + 3:1
+          if (!dawnsOk(cf, scopedOf(st.cfgs))) continue;            // e.g. Lightbearer moved off a player whose charted Dawn specs need it
           out.push({ combo: own, set: st, cfgs: cf, counts: null });
         }
         return out;

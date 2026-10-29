@@ -75,7 +75,7 @@ export function plan({ team, players, nPurples, deathTick, maxTick }) {
   const death = deathTick ?? lastCharted;
   const p2Start = death + (deathTick == null ? 19 : 21);
   const n = players.length;
-  const spec = players.map((p) => [p.start]), timer = players.map(() => [0]), last = players.map(() => 0);
+  const spec = players.map((p) => [p.start]), timer = players.map(() => [0]), last = players.map(() => 0), short = players.map(() => []);
   const surge = players.map((p) => (p.surge != null && !Object.values(p.acts).includes('P') ? p.surge : null));
   const period = players.map((p) => (p.lb ? 25 : 50));
   // 95% start with a Dawn spec and no R: regen held until their first spec, then a forced regen (R) the tick after it
@@ -95,6 +95,7 @@ export function plan({ team, players, nPurples, deathTick, maxTick }) {
       if (a === 'R') s = Math.min(100, s1[i] + 10);
       else if (a === 'P') s = Math.min(100, s1[i] + 25);
       else if (a === 'D' && s1[i] >= 35 && alive) s = s1[i] - 35;
+      else if (a === 'D' && alive) { short[i].push(t); s = s1[i]; }   // a charted Dawn spec they can't afford (the sim skips it)
       else if (a.startsWith('ST>') && s1[i] >= 100 && alive) s = 0;
       else if (receives) s = 100;
       else s = s1[i];
@@ -112,7 +113,7 @@ export function plan({ team, players, nPurples, deathTick, maxTick }) {
     const purpleLabel = team === 2
       ? (purple + dc === 0 ? '-' : (purple ? `+${purple}` : '') + (purple && dc ? ', ' : '') + (dc ? `+${dc} DC` : ''))
       : (p.purple1 ? '+15' : '-');
-    const out = { name: p.name, endSpec: C, purple: purpleLabel, dc: dc ? `+${dc}` : '-', specUsed: p.target ?? 0 };
+    const out = { name: p.name, endSpec: C, purple: purpleLabel, dc: dc ? `+${dc}` : '-', specUsed: p.target ?? 0, dawnShort: short[i].length, dawnShortTicks: short[i] };
     if (team === 2) {
       // duo: follow the spec from P1's end through P2 (purples + DCs land at P2 start) until the ring target
       const ringT = p.ring ?? p.target ?? 101;
