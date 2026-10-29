@@ -2,7 +2,7 @@
 import { readXlsx } from './engine/xlsx.js';
 import { describe, readValues, overlaySheet, checkRow, withSetC, shadowBlock, SHADOW_MODES, BLOCKS, CODES, CODE_HELP, isAutoTick, multiInput, multiFromBox, migrateKeys } from './engine/chartform.js';
 import { readPlanInputs, plan } from './engine/planner.js';
-import { loadGear, linkOf, setLink, gearOfSet, GEAR_SETS, gearSet, gearSetLabel } from './engine/gearstore.js';
+import { loadGear, linkOf, setLink, gearOfSet, GEAR_SETS, gearSet, gearSetLabel, absorbValues } from './engine/gearstore.js';
 
 const STORE = 'verzikSim.builder.v1';
 const LIB = 'verzikSim.library.v1';          // saved charts: {team: [{id, name, saved, sets}]}
@@ -368,7 +368,7 @@ export function createBuilder(root, { onChange }) {
         g.forEach((c, k) => Object.assign(vals0, { [`setup|meleePrayer|${k}`]: c.meleePrayer, [`gear|helm|${k}`]: c.helm, [`gear|body|${k}`]: c.body, [`gear|legs|${k}`]: c.legs,
           [`gear|amulet|${k}`]: c.amulet, [`gear|Has BP|${k}`]: !!c.hasBP, [`gear|has3Tick|${k}`]: c.has3Tick || 'No' }));
       }
-      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', team, sets }, null, 1)], { type: 'application/json' }));
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', team, gear: 1, links: Object.fromEntries(Object.keys(sets).map((b) => [b, linkOf(loadGear(), team, b)])), sets }, null, 1)], { type: 'application/json' }));
       const nm = cur[team] && cur[team].name ? `_${cur[team].name.replace(/[^\w.-]+/g, '_')}` : '';
       a.download = `verzik_${team}man${nm}_chart.json`; a.click();
     }
@@ -383,7 +383,20 @@ export function createBuilder(root, { onChange }) {
       if (j.team !== team) throw new Error(`That file is a ${j.team}-man chart - switch Scale to ${j.team}-man first`);
       state[team] = withDefaults(migrateKeys(j.sets));
       delete cur[team]; saveKey(LIBCUR, cur);
-      render(); persist();
+      // files saved with each player's gear (gear: 1): it goes into the Gear sets the blocks use, so the run plays
+      // with the file's prayer / armour / blowpipe / 3-tick weapon rather than whatever this browser had
+      const into = [];
+      if (j.gear) {
+        const done = new Set();
+        for (const b of Object.keys(j.sets).filter((x) => BLOCKS.includes(x))) {
+          const g = GEAR_SETS.includes((j.links || {})[b]) ? j.links[b] : b;   // the Gear set this block used when it was saved
+          setLink(team, b, g);
+          if (!done.has(g)) { done.add(g); absorbValues(team, b, state[team][b]); }
+          into.push(`Set ${b} -> Gear set ${g}`);
+        }
+      }
+      render(); persist(); onChange && onChange();
+      if (into.length) alertMsg(`Its gear (prayer, helm, body, legs, amulet, blowpipe, 3-tick weapon) was copied into the Gear tab: ${into.join(', ')}.`);
     } catch (err) { alertMsg(err.message); }
     e.target.value = '';
   });
