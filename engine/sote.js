@@ -295,6 +295,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   /** A redemption skip still to come (they want 1 HP anyway: no Heal Other to them). */
   const redeemAhead = (p) => p.how.slice(mazes.length).includes('redemption');                    // under 100 at the start: first regen the tick after their first spec
   const alive = () => ps.filter((p) => !p.dead);
+  // PID: the order players act in each tick (random each raid) - a maul / BGS that hits lowers her Defence as the attack
+  // is made, so anyone after them that tick rolls against it, anyone before them doesn't
+  const pid = rng.shuffle(ps.slice());
   const spend = (p, n, t) => {
     p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; }
     if (p.surgePlan && !p.surged) {                                  // surge straight after their first spec
@@ -466,7 +469,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       if (sp.duoBackup && p.mauled[ph] === 1 && !alive().some(mauls) && !anyMaulPending() && !maulHits[ph] && p.spec >= 50 && defAct(p, sp.spec)) { p.duoBackingUp = true; return defAct(p, sp.spec); }
       if (p.specDone[ph] || sp.spec === 'none') return 'scythe';
       if (sp.spec === 'zcb') {
-        if (alive().some(mauls) || p.spec < ZCB_SPEC || !has('Zaryte crossbow')) return 'scythe';
+        if (alive().some((q) => mauls(q) && q.next !== t) || p.spec < ZCB_SPEC || !has('Zaryte crossbow')) return 'scythe';   // a maul going off this tick lands first anyway
         if (zcbWasted) { p.specDone[ph]++; p.zcbCarry = ph + 1; L.on && L(`t${t} ${p.name} keeps their ZCB spec for the start of P${ph + 2} (P${ph + 1} too close to the maze)`); return 'scythe'; }
         return 'zcb';
       }
@@ -484,6 +487,12 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   /** Could she melee them this tick or the next (they attack the tick before one of her attacks), or is a melee hit on
    *  its way? Nobody drops to low HP then. */
   const meleeable = (p, t) => p.pending.length > 0 || (p.lastMelee === t - 1 && isHerTick(t)) || (p.next === t && isHerTick(t + 1));   // incl. a melee on its way
+  /** A maul / BGS hit lowers her Defence (floor 100). */
+  const lowerDef = (t, what, by) => {
+    if (defLvl <= SOTE.defFloor) return;
+    defLvl = Math.max(SOTE.defFloor, defLvl - by);
+    L.on && L(`t${t} ${what} lowers her Defence -> ${defLvl}`);
+  };
   /** A phase ends: planned specs (and horns) that never went off. */
   const closePhase = (ph) => {
     for (const q of alive()) {
@@ -661,10 +670,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         } else L.on && L(`t${t} ${p.name} ZCB spec misses`);
       } else if (kind === 'maul') {
         if (h[5]) maulHits[phase]++;
-        if (h[5] && defLvl > SOTE.defFloor) {                         // maul: -35%; BGS: -the damage (floor 100)
-          defLvl = Math.max(SOTE.defFloor, h[6] === 'bgs' ? defLvl - h[2] : defLvl - Math.floor(defLvl * 0.35));
-          L.on && L(`t${t} ${h[6] === 'bgs' ? 'BGS' : 'Elder maul'} lowers her Defence -> ${defLvl}`);
-        }
+
         if (p.duoBackingUp && phase === 0) {                          // duos: the backup landed
           p.duoBackingUp = false;
           if (!maulHits[0]) {                                          // missed again: B mauls P2, A camps Lightbearer for P3
@@ -810,7 +816,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     // ---- melee hits on players, then player attacks
     const floored = () => defLvl <= SOTE.defFloor;
-    for (const p of alive()) {
+    for (const p of pid.filter((q) => !q.dead)) {                    // in PID order (random each raid)
       for (const [, d] of p.pending.filter((x) => x[0] === t)) { if (d > 0) { hurt(t, p, d); vengHit(t, p, d, 'melee'); } }
       p.pending = p.pending.filter((x) => x[0] !== t);
       if (p.dead || t !== p.next) continue;
@@ -831,6 +837,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;   // Soulflame horn: this hit can't miss
         const hit = horned || rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
         if (hit) st.specs.maulHit++;
+        if (hit) lowerDef(t, 'Elder maul', Math.floor(defLvl * 0.35));   // as the attack is made (PID)
         hits.push([t + 1, p, d, `Elder maul spec ${hit ? d : 'misses'}`, 'maul', hit]);
         L.on && L(`t${t} ${p.name} Elder maul spec${horned ? ' (horned)' : ''} (${p.spec}% left)`);
         p.lastMelee = t; p.next = nextAfter(t, 6, p);
@@ -840,6 +847,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;
         const hit = horned || rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
         if (hit) st.specs.bgsHit++;
+        if (hit) lowerDef(t, 'BGS', d);
         hits.push([t + 1, p, d, `BGS spec ${hit ? d : 'misses'}`, 'maul', hit, 'bgs']);
         L.on && L(`t${t} ${p.name} BGS spec${horned ? ' (horned)' : ''} (${p.spec}% left)`);
         p.lastMelee = t; p.next = nextAfter(t, 6, p);
