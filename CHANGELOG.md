@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.23.0 - 2026-10-28
+- Sotetseg (1-5 man): `engine/sote.js` (room sim: her attacks, orbs / prayer / veng, death ball, Heal Other, specs per player and phase, PID, mazes - pneck stall / shark / redemption skips / run), `engine/sotemaze.js` (maze generation + best route, ported from devqhp's trainer), `engine/soteplan.js` (spec planner), `engine/sotereport.js` (report), `engine/sotemech.js` (mechanics). Sotetseg tab (`sote-ui.js`): player settings, first / second maze, specs + spec planner, Report, entry-instance Optimizer. Gear tab: Locator orb, Soulflame horn, Bandos godsword. View mechanics & behavior: boss picker. CLI `cli/sote.mjs`.
+
 ## v1.22.0 - 2026-10-28
 - Gear / Verzik top-level tabs (Sotetseg, Xarpus, Full raid placeholders), Solo scale (Gear only). Gear tab: per-player melee / ranged / magic slots (none / take off fallbacks), weapons, 3-tick weapon (Obligator > Eye of ayak > tome), Gear sets A/B/C linked per Verzik set (`engine/gearstore.js`, `withGear` after every `parse_chart`), saved teams; gear columns removed from the builder / Solver form; imports seed Gear sets. New items (Twisted bow, Zorya's tome, smoke sceptre / barrage, seeking arrows, Masori, void, Zaryte, ward, book of the dead...). Breaker -> Obligator. bloodFuryHp -> bloodFuryThreshold + 'Blood fury in' (P2 crabs / P2 Verzik / P3; never P1), Blood fury heal in P2 / reds / P3. Shadow settings ignored without a shadow in the Gear set. P3 Verzik ranged / magic max hit from her levels (33 / 32, +5% after a tornado). Page renamed Theater Of Blood Simulator.
 

@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.22.0';
+export const VERSION = '1.23.0';
 export const CHANGES = [
+  { version: '1.23.0', date: '2026-10-28', items: [
+    'Added Sotetseg for 1-5 man. See the View mechanics & behavior section for details.',
+  ] },
   { version: '1.22.0', date: '2026-10-28', items: [
     'Getting ready for more rooms: the page is now the Theater Of Blood Simulator, with Gear and Verzik tabs (Sotetseg, Xarpus and Full raid coming). Gear (armour, weapons, prayer, mage gear) moved from the chart to the Gear tab, with Gear sets A/B/C and saved teams; importing a chart copies its gear there.',
   ] },
