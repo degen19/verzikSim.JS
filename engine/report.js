@@ -73,7 +73,7 @@ function bpRows(res, bps) {
   ]);
 }
 
-function oddsRows(res, team, bps = []) {
+function oddsRows(res, team, bps = [], opts = {}) {
   const scope = scopeOfRes(res);
   const fastestRows = [
     ['Fastest completed run', res.map((r) => (r.total.length ? fmt(fastest(r.total)) : '-'))],
@@ -105,8 +105,7 @@ function oddsRows(res, team, bps = []) {
     return [
       ['Success (all runs)', res.map((r) => pct(r.total.length, r.runs))],
       ['Reds sets (average)', avg('sets')],
-      ['Reds sets: 1-3', share('sets', (x) => x <= 3)], ['Reds sets: 4-5', share('sets', (x) => x >= 4 && x <= 5)],
-      ['Reds sets: 6-7', share('sets', (x) => x >= 6 && x <= 7)], ['Reds sets: 8+', share('sets', (x) => x >= 8)],
+      ...(opts.markSets || []).map((n) => [`Killed in ${n} reds set${n === 1 ? '' : 's'} (of kills)`, share('sets', (x) => x === n)]),
       ['Purples before reds (average)', avg('purples')],
       ['Purples before reds: 0 / 1 / 2 / 3+', res.map((r) => { const v = so(r, 'purples'), n = v.length || 1; return [0, 1, 2].map((x) => `${(v.filter((y) => y === x).length / n * 100).toFixed(0)}%`).concat(`${(v.filter((y) => y >= 3).length / n * 100).toFixed(0)}%`).join(' / '); })],
       ['Committed to the kill (of kills)', share('commit', (x) => x > 0)],
@@ -118,7 +117,7 @@ function oddsRows(res, team, bps = []) {
       ['Locator orb + Redemption on lightning (average)', avg('redemptions', 1)],
       ['Avg reds proc depth (Verzik HP %)', res.map((r) => (r.depth.length ? `${mean(r.depth).toFixed(1)}%` : '-'))],
       ...(scope === 'full' ? [['Avg P3 20% tick', res.map((r) => (r.p20.length ? mean(r.p20).toFixed(1) : '-'))]] : []),
-      ...fastestRows, ...bpRows(res, bps),
+      ...fastestRows, ...bps.map((b) => [`${fmtSec(b)} or faster (of kills)`, res.map((r) => pct(under(r, b), r.total.length))]),
     ];
   }
   return [
@@ -354,7 +353,7 @@ export function reportHtml(res, labels, team, runs, opts = {}) {
   const cell = (v, bold) => `<td${bold ? ' style="font-weight:700;color:var(--ink)"' : ''}>${v}</td>`;
   const splits = `<table><tr><th>Split (successful runs only)</th><th>Set</th><th>Median</th><th>Top 10%</th><th>Top 25%</th><th>Bottom 25%</th></tr>${
     sr.map((r, i) => `<tr><td>${r[0]}</td><td style="color:${COL[r[6]]};font-weight:600">${esc(r[1])}</td>${[2, 3, 4, 5].map((c) => cell(r[c], boldS.has(`${i},${c}`))).join('')}</tr>`).join('')}</table>`;
-  const od = oddsRows(res, team, bps);
+  const od = oddsRows(res, team, bps, opts);
   const odds = `<table><tr><th></th>${labels.map((l, k) => `<th style="color:${COL[k]}">${esc(l)}</th>`).join('')}</tr>${
     od.map(([nm, vals]) => { const dir = oddsDir(nm), b = n > 1 && dir ? bestOf(vals, dir) : new Set();
       return `<tr><td>${nm}</td>${vals.map((v, k) => cell(v, b.has(k))).join('')}</tr>`; }).join('')}</table>`;
@@ -369,11 +368,12 @@ export function reportHtml(res, labels, team, runs, opts = {}) {
 ${team === 1 ? '<div class="sub"><b>*This does not yet take into account deaths and assumes you live every raid. Death tracking will come at a later date*</b></div>' : ''}
 <div class="sub">${runs.toLocaleString()} raids per set · ${timesAre} · charts use each set's successful runs · ${what} · sim v${VERSION}</div>
 <div class="kpis">${kpis}</div>
-<h3>Splits</h3><div class="sub">Median / Top 10% / Top 25% / Bottom 25% are of each set's <b>successful runs only</b> (${res.map((r, k) => `${esc(labels[k])}: ${r.total.length.toLocaleString()} kills of ${r.runs.toLocaleString()} attempts`).join(' · ')}). Failed raids have no room time, so they aren't in these columns - see "% of all attempts" below for odds per attempt.</div>${splits}${team === 2 ? '<div class="sub" style="margin-top:6px">Depth = Verzik HP % when the shield goes up (lower = deeper), averaged over the runs in each room-time bucket (Median = runs around the median room time).</div>' : ''}
+<h3>Splits</h3><div class="sub">Median / Top 10% / Top 25% / Bottom 25% are of each set's <b>successful runs only</b> (${res.map((r, k) => `${esc(labels[k])}: ${r.total.length.toLocaleString()} kills of ${r.runs.toLocaleString()} attempts`).join(' · ')}). ${team === 1 ? '' : 'Failed raids have no room time, so they aren\'t in these columns - see "% of all attempts" below for odds per attempt.'}</div>${splits}${team === 2 ? '<div class="sub" style="margin-top:6px">Depth = Verzik HP % when the shield goes up (lower = deeper), averaged over the runs in each room-time bucket (Median = runs around the median room time).</div>' : ''}
 <h3>Odds</h3>${odds}
 <h3>How often each room time happens (per second, % of successful runs)</h3>${legend}<div class="scroll">${histogramSvg(res, labels)}</div>
-<h3>Finished by this time or faster - % of successful runs</h3>${legend}<div class="scroll">${cumulativeSvg(res, labels)}</div>
-<h3>Finished by this time or faster - % of all attempts</h3><div class="sub">Failed raids count as attempts, so each line levels off at that set's success rate (dashed). ${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints on the Run tab to mark your target times.'}</div>${legend}<div class="scroll">${attemptsSvg(res, labels, bps)}</div>
+${team === 1 ? `<h3>Finished by this time or faster - % of kills</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div>${legend}<div class="scroll">${cumulativeSvg(res, labels, bps)}</div>`
+    : `<h3>Finished by this time or faster - % of successful runs</h3>${legend}<div class="scroll">${cumulativeSvg(res, labels)}</div>
+<h3>Finished by this time or faster - % of all attempts</h3><div class="sub">Failed raids count as attempts, so each line levels off at that set's success rate (dashed). ${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints on the Run tab to mark your target times.'}</div>${legend}<div class="scroll">${attemptsSvg(res, labels, bps)}</div>`}
 </div>`;
 }
 

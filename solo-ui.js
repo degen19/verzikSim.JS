@@ -47,6 +47,7 @@ export function createSolo(host) {
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
         <div data-rsets></div>
         <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
+        <label title="Numbers of reds sets to mark off: the report shows the % of kills done in each (e.g. 4, 5, 6, 7)">Mark reds sets<input data-r="marks" placeholder="e.g. 4, 5, 6, 7" style="width:120px"></label>
         <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-act="dl" class="ghost" disabled>Download report</button>
       </div>
       <div data-rstatus class="muted" style="margin-top:8px"></div><div class="bar"><div data-prog></div></div>
@@ -160,11 +161,11 @@ export function createSolo(host) {
   });
 
   // ---------------------------------------------------------------- report
-  const repState = () => { const r = root(); r.report ||= { raids: 5000, seed: '', bps: '', scope: 'full' }; r.report.sets ||= ['A']; r.report.labels ||= {}; return r.report; };
+  const repState = () => { const r = root(); r.report ||= { raids: 5000, seed: '', bps: '', scope: 'full' }; r.report.marks ??= '4, 5, 6, 7'; r.report.sets ||= ['A']; r.report.labels ||= {}; return r.report; };
   const $r = (k) => rep.querySelector(`[data-r="${k}"]`);
   const showRep = () => {
     const r = repState(), rs = root();
-    for (const k of ['raids', 'seed', 'bps', 'scope']) $r(k).value = r[k];
+    for (const k of ['raids', 'seed', 'bps', 'scope', 'marks']) $r(k).value = r[k];
     rep.querySelector('[data-rsets]').innerHTML = `<div class="muted small">Sets to run (compared on the same raids)</div><div class="row" style="gap:8px">${SETS.map((k) => `<label class="pick" style="flex-direction:row;gap:4px;align-items:center"><input type="checkbox" data-rset-run="${k}" ${rs.sets[k] ? '' : 'disabled'} ${rs.sets[k] && r.sets.includes(k) ? 'checked' : ''}>${k}</label><input data-rlabel="${k}" placeholder="Set ${k} label" value="${esc(r.labels[k] || '')}" style="width:110px" ${rs.sets[k] ? '' : 'disabled'}>`).join('')}</div>`;
   };
   rep.addEventListener('change', (e) => {
@@ -185,6 +186,9 @@ export function createSolo(host) {
     const r = repState(); err.textContent = '';
     let bps = []; try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
     const keys = r.sets.filter((k) => setOf(k)); if (!keys.length) { err.textContent = 'Tick at least one set to run.'; return; }
+    const marks = [...new Set(String(r.marks || '').split(/[\s,]+/).filter(Boolean).map(Number))];
+    if (marks.some((n) => !Number.isInteger(n) || n < 1 || n > 60)) { err.textContent = 'Mark reds sets: whole numbers of sets, e.g. 4, 5, 6, 7'; return; }
+    marks.sort((a, b) => a - b);
     const runs = Math.max(100, Number(r.raids) || 5000), seed = String(r.seed || '').trim() || Math.floor(Math.random() * 1e9);
     const labels = keys.map((k) => (r.labels[k] || '').trim() || `Set ${k}`);
     running = true; btn('run').disabled = true; btn('stop').disabled = false;
@@ -196,7 +200,8 @@ export function createSolo(host) {
         res.push(await pool.run(cfgs, 1, runs, seed, { onProgress: (f) => { prog.style.width = `${((i + f) / keys.length * 100).toFixed(1)}%`; } }));
       }
       prog.style.width = '100%';
-      out.innerHTML = reportHtml(res, labels, 1, runs, { breakpoints: bps }); lastPage = reportPage(res, labels, 1, runs, { breakpoints: bps }); btn('dl').disabled = false;
+      const ropts = { breakpoints: bps, markSets: marks };
+      out.innerHTML = reportHtml(res, labels, 1, runs, ropts); lastPage = reportPage(res, labels, 1, runs, ropts); btn('dl').disabled = false;
       const secs = (performance.now() - t0) / 1000;
       status.textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * keys.length / secs).toLocaleString()} raids/s (seed ${seed}).`;
     } catch (x) { err.textContent = x.message; status.textContent = ''; }
