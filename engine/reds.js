@@ -120,7 +120,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     + `her attacks r12-r36, crab heal r40, fail r44 (t${P + FAIL_R}). Crabs ${crab_hp0} HP each`);
   players.forEach((p, i) => {
     p.red_crab = dget(cfgs[i], 'redCrab') || dget(DEFAULT_CRABS, team, Array(team).fill('West'))[i];
-    p.bzcb = dget(cfgs[i], 'bouncedZCB', true);
+    p.bzcb = dget(cfgs[i], 'bouncedZCB', true) && p.has_zcb !== false;   // no ZCB: bounced -> +4t, as with bounced ZCB off
     p.crab_done = p.red_crab === 'None' || truthy(p.purple);     // the purple DC never swings at a red crab
     p.reds_n = 0;
     p.zcb_due = false;

@@ -58,7 +58,7 @@ export function blankPlayer(i) {
       hands: 'Ferocious gloves', feet: 'Avernic treads (max)', ring: 'Ultor ring', shield: '' },
     range: slots('range', () => 'none'),
     mage: slots('mage', () => 'none'),
-    weapons: ['Scythe of vitur', 'Dragon claws', 'Crystal halberd', 'Toxic blowpipe'], halbSet: true,
+    weapons: ['Scythe of vitur', 'Dragon claws', 'Crystal halberd', 'Toxic blowpipe', 'Zaryte crossbow'], halbSet: true, zcbSet: true,
     arrows: 'Dragon arrow', bolts: 'Ruby dragon bolts (e)',
   };
 }
@@ -138,6 +138,7 @@ export function fromChartCfg(cfg, i) {
   if (mg.cape) pl.mage.cape = mg.cape === 'Infernal cape' ? 'none' : mg.cape;
   const w = ['Scythe of vitur', 'Dragon claws'];
   if (cfg.hasHalb !== false) w.push('Crystal halberd');
+  if (cfg.hasZcb !== false) w.push('Zaryte crossbow');
   if (cfg.hasBP !== false) w.push('Toxic blowpipe');
   if (THREE_OF[cfg.has3Tick]) w.push(THREE_OF[cfg.has3Tick]);
   if (cfg.shadow) w.push("Tumeken's shadow");
@@ -163,6 +164,7 @@ export function applyToCfg(cfg, pl) {
   out.meleePrayer = pl.prayer || 'Zeal';
   out.hasBP = (pl.weapons || []).includes('Toxic blowpipe');
   out.hasHalb = (pl.weapons || []).includes('Crystal halberd');
+  out.hasZcb = (pl.weapons || []).includes('Zaryte crossbow');
   const t = threeTick(pl) || ((pl.weapons || []).includes('Swift blade') ? 'Swift blade' : null);
   out.has3Tick = THREE_TO[t] || false;                      // Zorya's tome as a 3-tick weapon: not simulated yet
   out.mageGear = mageList(pl);

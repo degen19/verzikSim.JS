@@ -15,6 +15,7 @@ export function loadGear() {
   for (const t of Object.keys(s)) if (s[t] && s[t].players && !s[t].sets) s[t] = { sets: { A: { players: s[t].players } }, link: {} };   // first preview
   for (const t of Object.values(s)) for (const set of Object.values((t && t.sets) || {})) for (const p of set.players || []) {   // renamed items
     if (Array.isArray(p.weapons)) p.weapons = p.weapons.map((w) => (w === 'Smoke ancient sceptre' ? 'Shadow ancient sceptre' : w));
+    if (!p.zcbSet) { p.weapons = [...new Set([...(p.weapons || []), 'Zaryte crossbow'])]; p.zcbSet = true; }   // the ZCB now matters in Verzik (bounced): everyone counted as having one before
     if (!p.halbSet) { p.weapons = [...new Set([...(p.weapons || []), 'Crystal halberd'])]; p.halbSet = true; }   // the halberd became a Gear tab item: everyone had one before
   }
   return s;
@@ -53,6 +54,21 @@ export function withGearSet(cfgs, team, letter) {
   out.notes = [...(cfgs.notes || [])];
   cfgs.forEach((c, k) => { if (c.shadow && !out[k].shadow) out.notes.push(`${c.name || `P${k + 1}`}: Shadow is ticked but Gear set ${letter} has no Tumeken's shadow for them - their shadow settings are ignored.`); });
   const nm = (k) => cfgs[k].name || `P${k + 1}`;
+  // tradeable items charted for a player who doesn't have one: they run, with a note to trade it over
+  const owns = (k, w) => (ps[k].weapons || []).includes(w);
+  const THREE = { Obligator: 'Obligator', Ayak: 'Eye of ayak', 'Swift blade': 'Swift blade' };
+  out.forEach((c, k) => {
+    const acts = Object.values(c.actions || {});
+    if (acts.includes('SB') && !owns(k, 'Sulphur blades')) {
+      const from = ps.findIndex((q, j) => j !== k && (q.weapons || []).includes('Sulphur blades'));
+      out.notes.push(from >= 0 ? `Will need to trade Sulphur blades to ${nm(k)} (from ${nm(from)}).` : `${nm(k)} has Sulphur blades charted but nobody has them in Gear set ${letter} - will need to trade Sulphur blades to ${nm(k)}.`);
+    }
+    if (acts.includes('H') && !c.has3Tick) {
+      const from = out.findIndex((q, j) => j !== k && q.has3Tick);
+      if (from >= 0) { c.has3Tick = out[from].has3Tick; out.notes.push(`Will need to trade ${THREE[c.has3Tick] || c.has3Tick} to ${nm(k)} (from ${nm(from)}) for their charted 3-tick hit.`); }
+      else out.notes.push(`${nm(k)} has a 3-tick hit (H) charted but nobody has a 3-tick weapon in Gear set ${letter} - it's skipped.`);
+    }
+  });
   out.forEach((c, k) => {
     if ((c.PurpleDC || c.Purple2DC) && !c.hasBP) {
       throw new Error(`A blowpipe is required to pop the purple crab. Either change the player who DC's purple, or give ${nm(k)} a blowpipe (Gear tab, Gear set ${letter})`);

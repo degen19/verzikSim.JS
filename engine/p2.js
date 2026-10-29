@@ -513,7 +513,10 @@ export function run_p2(p1, team, rng, log = null) {
             vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
           });
           p.next_attack = t + 5;
-          if (p.ebt_bounced) {                           // East bounce tech: bounced on this swing
+          if (p.ebt_bounced && p.has_zcb === false) {    // East bounce tech, no ZCB: they take the delay
+            p.next_attack += 4;
+            L.on && L(`t${rjust(t, 4)} ${p.name}: bounced, no ZCB - +4t, back on t${p.next_attack}`);
+          } else if (p.ebt_bounced) {                    // East bounce tech: bounced on this swing
             p.ebt_zcb = true;
             L.on && L(`t${rjust(t, 4)} ${p.name}: bounced - ZCB next (t${p.next_attack})`);
           }
