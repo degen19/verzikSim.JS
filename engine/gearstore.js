@@ -78,6 +78,13 @@ export function withGearSet(cfgs, team, letter) {
   return out;
 }
 
+/** A saved Sotetseg / solo set file's gear (its Gear set's players, prayer and all) put into Gear set `letter`. */
+export function putGearSet(team, letter, players, name) {
+  const s = loadGear(), t = teamOf(s, team);
+  t.sets[letter] = { ...(t.sets[letter] || {}), players: structuredClone(players), ...(name ? { name } : {}) };
+  saveGear(s);
+}
+
 /** An imported chart's gear (parsed configs per set) copied into the Gear sets of the same letters. Returns the letters. */
 export function importGear(team, bySet) {
   const s = loadGear(), t = teamOf(s, team), done = [];

@@ -1,7 +1,7 @@
 // Verzik for solos: no chart - the room settings below (P1 plays itself: Dawn spec off cooldown, Dawn autos, Lightbearer).
 // Sets A / B / C (switch, copy, save in this browser or to a file), a Report comparing the ticked sets, and the Solver
 // (Commit % for each spec level, and optionally the shadow mode, Ayak P2, godbook and Lightbearer cycles). Gear: the Gear tab.
-import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
+import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS, putGearSet } from './engine/gearstore.js';
 import { applyToCfg, blankPlayer, BOTH_AMULETS } from './engine/loadout.js';
 import { reportHtml, reportPage } from './engine/report.js';
 import { parseBreakpoints } from './engine/optimize.js';
@@ -166,7 +166,7 @@ export function createSolo(host) {
       saved = saved.filter((y) => y !== x); savedPick = ''; saveKey(SAVED, saved); setMsg = `Deleted "${x.name}".`;
     } else if (act === 'file') {
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'soloVerzikSet', set: cur() }, null, 1)], { type: 'application/json' }));
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'soloVerzikSet', set: cur(), ...(() => { const gs = gearSet(loadGear(), 1, cur().gearSet); return gs ? { gear: playersOf(gs, 1), gearName: gs.name || '' } : {}; })() }, null, 1)], { type: 'application/json' }));
       a.download = 'verzik_solo_set.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); return;
     }
     render();
@@ -178,7 +178,9 @@ export function createSolo(host) {
       try {
         const j = JSON.parse(await t.files[0].text());
         if (j.kind !== 'soloVerzikSet' || !j.set) throw new Error('not a saved solo Verzik set');
-        root().sets[root().cur] = j.set; persist(); setMsg = `Opened ${t.files[0].name} into set ${root().cur}.`; refreshAll();
+        root().sets[root().cur] = j.set; persist(); setMsg = `Opened ${t.files[0].name} into set ${root().cur}.`;
+        if (Array.isArray(j.gear)) { putGearSet(1, j.set.gearSet || 'A', j.gear, j.gearName); setMsg += ` Its gear (prayer, armour, weapons) went into Gear set ${j.set.gearSet || 'A'}.`; }
+        refreshAll();
       } catch (x) { setMsg = `Couldn't open that file: ${x.message}`; render(); }
       return;
     }

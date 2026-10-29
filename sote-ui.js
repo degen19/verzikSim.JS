@@ -8,7 +8,7 @@
 //    swap to Ultor (the regen timer restarts). The solver will pick Surge / Lightbearer cycles too.
 //  - Prefires with the Twisted bow / ZCB are made in their best ranged gear, Shadow / Shadow Barrage in their best magic
 //    gear (each slot: their ranged, magic or melee item, or nothing - loadout.js bestWorn).
-import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
+import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS, putGearSet } from './engine/gearstore.js';
 import { bestWorn, bonuses, blankPlayer } from './engine/loadout.js';
 import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './engine/sotereport.js';
 import { parseBreakpoints } from './engine/optimize.js';
@@ -298,7 +298,7 @@ export function createSote(host, { getTeam }) {
       saved[team()] = list.filter((y) => y !== x); savedPick = ''; store(); setMsg = `Deleted "${x.name}".`;
     } else if (act === 'file') {
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'soteSet', team: team(), set: tstate() }, null, 1)], { type: 'application/json' }));
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'soteSet', team: team(), set: tstate(), ...(() => { const gs = gearSet(loadGear(), team(), tstate().gearSet); return gs ? { gear: playersOf(gs, team()), gearName: gs.name || '' } : {}; })() }, null, 1)], { type: 'application/json' }));
       a.download = `sotetseg_${team()}man_set.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); return;
     }
     render();
@@ -310,7 +310,9 @@ export function createSote(host, { getTeam }) {
         const j = JSON.parse(await e.target.files[0].text());
         if (j.kind !== 'soteSet' || !j.set) throw new Error('not a saved Sotetseg set');
         if (Number(j.team) !== team()) throw new Error(`it's a ${j.team}-man set - pick that scale first`);
-        const r = rootState(); r.sets[r.cur] = j.set; persist(); setMsg = `Opened ${e.target.files[0].name} into set ${r.cur}.`; refreshAll();
+        const r = rootState(); r.sets[r.cur] = j.set; persist(); setMsg = `Opened ${e.target.files[0].name} into set ${r.cur}.`;
+        if (Array.isArray(j.gear)) { putGearSet(team(), j.set.gearSet || 'A', j.gear, j.gearName); setMsg += ` Its gear (prayer, armour, weapons) went into Gear set ${j.set.gearSet || 'A'}.`; }
+        refreshAll();
       } catch (x) { setMsg = `Couldn't open that file: ${x.message}`; render(); }
     }
   });
