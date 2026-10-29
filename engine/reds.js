@@ -24,6 +24,10 @@ export function r40_halberd_ok(hp, team, cfgs) {
   return hp >= P2_HP[team] * thr / 100;
 }
 export const BOUNCE_R = 16;
+// No Dragon claws (not bounced), decided on their r26 swing from the spec they'll have:
+//   60%+ by r38: halberd r26 -> scythe r33 -> halberd r38;  30%+ by r36: scythes, halberd from range on the r36
+//   collision;  else scythes 11/16/21/26/31/36->37.  Bounced: the delay, scythes 25/30/35 and the usual r40 rule.
+//   The last-swing halberds (r36 / r38) follow the r40 halberd's last-hit threshold.
 export const DEFAULT_CRABS = {
   5: ['West', 'West', 'East', 'East', 'West'], 4: ['West', 'West', 'East', 'East'],
   3: ['West', 'West', 'East'],
@@ -68,6 +72,27 @@ export function zcb_auto(p) {
   const eff = p.rng + 8;                              // rapid, no ranged prayer (on melee prayer)
   const mx = Math.floor(0.5 + eff * (rs + 64) / 640);
   return [hit_chance(eff * (atk_b + 64), P2_DEF[4]), mx];
+}
+
+/** No claws, on their r26 swing: 'double' (60%+ by r38), 'collision' (30%+ by r36) or 'scythe'. */
+function no_claw_plan(p, t, P, L, r) {
+  const h = p.has_halb !== false;
+  p.nc_plan = h && p.spec >= 30 && spec_by(p, t, P + 38) >= 60 ? 'double' : h && spec_by(p, t, P + 36) >= 30 ? 'collision' : 'scythe';
+  L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws on ${fx(p.spec)}% -> ` + { double: 'halberd r26, scythe r33, halberd r38', collision: 'scythes, halberd from range on r36', scythe: 'scythes (11/16/21/26/31/36->37)' }[p.nc_plan]);
+  return p.nc_plan;
+}
+
+/** Spec they'll have by tick `by` on their current ring (regen only; a popped purple's +15 counts). */
+function spec_by(p, now, by) {
+  if (p.spec >= 100) return 100;
+  const owed = ga(p, 'purple_owed', false) ? 15 : 0;
+  return Math.min(100, p.spec + owed + 10 * floordiv(p.regen_timer + Math.max(0, by - now), p.regen_period()));
+}
+
+/** Halberd spec on Verzik P2: two hits. */
+function halb_hits(p, rng) {
+  const [ch1, m] = p3.melee(p, p3.HALB, P2_DEF[1]); const [ch2] = p3.melee(p, p3.HALB, P2_DEF[1], 0.75);
+  return [ch1, ch2].map((c) => (rng.random() < c ? Math.max(1, rng.randint(0, m)) + p3.halb_bonus(m) : 0));
 }
 
 /** Spec projection: would this player get 2 claw specs in reds attacks 3-6? */
@@ -123,7 +148,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     p.bzcb = dget(cfgs[i], 'bouncedZCB', true) && p.has_zcb !== false;   // no ZCB: bounced -> +4t, as with bounced ZCB off
     p.crab_done = p.red_crab === 'None' || truthy(p.purple);     // the purple DC never swings at a red crab
     p.reds_n = 0;
-    p.zcb_due = false;
+    p.zcb_due = false; p.reds_bounced = false; p.nc_plan = null;
     p.skip16 = false;
     p.dist16 = false;
     p.horn_buff = null;
@@ -243,7 +268,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       if (r === BOUNCE_R) {
         const alive = players.filter((p) => !p.dead);
         for (const p of alive) {
-          if (p.reds_n === 1 && p.next_attack <= t && !ga(p, 'shadow', false)
+          if (p.reds_n === 1 && p.next_attack <= t && !ga(p, 'shadow', false) && p.has_dc !== false
               && project_two_claws(p, r, r + 5)) {     // a shadow player is never the two-claw skipper
             p.skip16 = true;
           }
@@ -269,7 +294,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       if (bounced) {
         st['bounce'] = true;
         st['bounced'] = bounced.name;
-        bounced.was_bounced = true;
+        bounced.was_bounced = true; bounced.reds_bounced = true;
       } else {
         if (rng.random() < 0.75) {
           const rr = rng.randint(0, 47);
@@ -361,7 +386,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       if (r === 11) {
         p.next_attack = p === pdc ? Math.max(t, p.next_attack) : t;                           // everyone hits Verzik on the first tick
         if (ga(p, 'shadow', false) && p.spec < 100) {
-          p.sh_plan = p.spec >= 50 ? 'claw_first' : 'shadow16';
+          p.sh_plan = p.spec >= 50 && p.has_dc !== false ? 'claw_first' : 'shadow16';
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: shadow player on ${fx(p.spec)}% -> `
             + (p.sh_plan === 'claw_first' ? 'claw > scythe > shadow > scythes' : 'scythe > shadow (r16) > scythes, one claw by r31'));
         }
@@ -375,6 +400,8 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       }
       if (t < p.next_attack) {
         // pass
+      } else if (r > 40) {
+        // the last swing is on r40 (its damage goes off on r41)
       } else {
         const n = p.reds_n + 1;
         if (r === BOUNCE_R && n === 2 && p.dist16) {
@@ -396,6 +423,14 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
+          continue;
+        } else if (verz && r === 36 && p.nc_plan === 'collision' && !p.reds_bounced && p.spec >= 30 && p.has_halb !== false
+            && !p.zcb_due && r40_halberd_ok(hp, team, cfgs)) {
+          const old = p.spec; p.spec -= 30;                // no claws: halberd from range on the r36 collision (no push)
+          const hits = halb_hits(p, rng);
+          hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
+          p.next_attack = t + 7; p.reds_n = n; st['halb'] = dget(st, 'halb', 0) + 1;
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC from range on the r36 collision (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
           continue;
         } else if (verz && !p.zcb_due) {
           p.next_attack = t + 1;
@@ -427,7 +462,15 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced, acc ${fx(ch * 100, 1)}%) -> ${d}`);
           }
           p.next_attack = t + 5;
-        } else if (p.spec >= 50 && (
+        } else if (p.has_dc === false && !p.reds_bounced && p.sh_plan == null && (
+          (r === 26 && p.nc_plan == null && no_claw_plan(p, t, P, L, r) === 'double')
+          || (r === 38 && p.nc_plan === 'double' && p.spec >= 30 && p.has_halb !== false && r40_halberd_ok(hp, team, cfgs)))) {
+          const old = p.spec; p.spec -= 30;
+          const hits = halb_hits(p, rng);
+          hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
+          p.next_attack = t + 7; st['halb'] = dget(st, 'halb', 0) + 1;
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
+        } else if (p.spec >= 50 && p.has_dc !== false && (
           (p.sh_plan == null && n >= 3)
           || (p.sh_plan === 'claw_first' && n === 1 && p.reds_claws === 0)
           || (p.sh_plan === 'shadow16' && n >= 3 && p.reds_claws === 0 && r <= 31))) {   // last claw r31 -> scythe r35 -> last hit r40
@@ -451,7 +494,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           });
           p.next_attack = t + 7;
           st['halb'] = dget(st, 'halb', 0) + 1;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r40 (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
         } else {
           const [ch, mx] = scythe_roll(p);
           const splats = [];
@@ -473,7 +516,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           if (ga(p, 'shadow', false)) {
             p.zcb_due = true;
             L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - shadow next (t${p.next_attack})`);
-          } else if (p.bzcb) {
+          } else if (p.bzcb && p.has_dc !== false) {   // no claws: never ZCBs, takes the delay (25/30/35/40 is clean)
             p.zcb_due = true;
             L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - ZCB auto next (t${p.next_attack})`);
           } else {

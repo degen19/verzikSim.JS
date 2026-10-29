@@ -47,13 +47,13 @@ export const AYAK_DELAY = 2;                                  // queues as [2, d
 
 
 /** Eye of ayak: +30 magic atk, 3t, max floor(magic/3)-6; swaps staff + confliction gauntlets only, no magic prayer. */
-export function ayak(p) {
+export function ayak(p, def_roll = P3_MAGIC) {
   const gear = p.pieces('T');                                 // melee armour + confliction instead of ferocious
   const atk_b = 30 + sum(gear.map((g) => g['atk'][3]));
   const mdmg = sum(gear.map((g) => dget(g, 'mdmg', 0)));
   const eff = p.mag + 9;
   const mx = floordiv((floordiv(p.mag, 3) - 6) * (100 + mdmg), 100);
-  return [hit_chance(eff * (atk_b + 64), P3_MAGIC), mx];
+  return [hit_chance(eff * (atk_b + 64), def_roll), mx];
 }
 
 
@@ -180,9 +180,9 @@ export function plan_first(p, t, end, blocked, pl, allow_claw, chally_ok) {
     }
     let best = null;
     const opts = [['S', pl.S, 5, 0]];
-    if (allow_claw && avail(a, spent) >= 50) opts.push(['C', pl.C, 4, 50]);
+    if (allow_claw && p.has_dc !== false && avail(a, spent) >= 50) opts.push(['C', pl.C, 4, 50]);   // no Dragon claws: no claw spec / scratch
     if (truthy(p.has3)) opts.push(['3', pl.T3, 3, 0]);
-    opts.push(['X', pl.scratch * SCRATCH_W, 4, 0]);   // claw scratch: last resort (claw > scythe > halberd > scratch)
+    if (p.has_dc !== false) opts.push(['X', pl.scratch * SCRATCH_W, 4, 0]);   // claw scratch: last resort (claw > scythe > halberd > scratch)
     if (p.has_halb !== false && avail(a, spent) >= 30 && (a + 7 > end || chally_ok)) opts.push(['H', pl.H, 7, 30]);   // no Crystal halberd: no chally
     opts.push(['W', 0.0, 1, 0]);                      // waiting only wins when it's strictly better
     for (const [code, val, ln, cost] of opts) {
@@ -532,7 +532,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
     // before 20%: the non-tank drops a tick to stay on the tank's tick when the tank collides, unless the tank
     // will claw on its very next swing (the claw wins the tick back right away)
     const nt_sync = duo && tank_on && st['below20'] === null &&
-      (truthy(dget(st, 'post_col_seen', null)) || spec_at(tank, t, t + 1) < 50);   // the claw only ever catches up on that 4th swing
+      (truthy(dget(st, 'post_col_seen', null)) || spec_at(tank, t, t + 1) < 50 || tank.has_dc === false);   // the claw only ever catches up on that 4th swing
     for (const p of pid) {
       if (p.dead) continue;
       if (p.heart && p.mag < p.heart) p.mag = p.heart;   // solo: heart boost the whole room
@@ -752,7 +752,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       } else if (in_window) {
         // ---- up to yellows: plan the swings so the last one lands on the tick before invulnerability
         const chally_ok = hp <= chally_hp;
-        if (!duo && chally_ok && p.spec >= 50) {
+        if (!duo && chally_ok && p.spec >= 50 && p.has_dc !== false) {
           use = 'C';
         } else {
           const blocked = new Set(V['blocked']);
@@ -783,6 +783,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       }
       // ---- do it
       if (use === 'H' && p.has_halb === false) use = 'S';             // no Crystal halberd (safety net)
+      if ((use === 'C' || use === 'X') && p.has_dc === false) use = '3';   // no Dragon claws (safety net): the 3-tick hit
       if (use === 'F') {
         const old = p.hp; supplies.eat_shark(p); st['eats'] += 1;
         p.next_attack = t + 3;
@@ -921,10 +922,11 @@ export function window_choice(p, t, y5, blocked, duo, webs_last, chally_ok, is_t
   if (!swings.length || swings[0] !== t) return 'S';
   const last = swings.length === 1;
   const gap = y5 - swings[swings.length - 1];
-  if (duo && is_tank && p.spec >= 50 && !last && behind && !procced && first_col) {
+  const dc = p.has_dc !== false;
+  if (duo && dc && is_tank && p.spec >= 50 && !last && behind && !procced && first_col) {
     return 'C';                                       // duo tank knocked a tick behind: claw straight away to catch up
   }
-  if (duo && p.spec >= 50 && swings.length === 2) {
+  if (duo && dc && p.spec >= 50 && swings.length === 2) {
     // 2nd-to-last swing before yellows with a claw they didn't use earlier: claw + last swing if that beats
     // scythe + last swing (last swing = halberd with 30% left, else scythe)
     const keep = p.pl.S + (canH(p) ? p.pl.H : p.pl.S);
@@ -936,10 +938,10 @@ export function window_choice(p, t, y5, blocked, duo, webs_last, chally_ok, is_t
       // duo never scratches before yellows: a 4-tick gap is a claw + one more scythe if that beats the
       // halberd (or scythe) they'd otherwise finish with, else they just finish
       const fin = canH(p) ? p.pl.H : p.pl.S;
-      if (p.spec >= 50 && p.pl.C + p.pl.S > fin) return 'C';
+      if (dc && p.spec >= 50 && p.pl.C + p.pl.S > fin) return 'C';
       return canH(p) ? 'H' : 'S';
     }
-    if (gap === 4) return 'X';
+    if (gap === 4) return dc ? 'X' : '3';              // no claws: the 3-tick hit (last swing a tick early, still before yellows)
     if (gap === 3 && truthy(p.has3)) return '3';
     return canH(p) ? 'H' : 'S';
   }
@@ -950,7 +952,7 @@ export function window_choice(p, t, y5, blocked, duo, webs_last, chally_ok, is_t
 
 /** Duo sync rule: will the tank have a claw spec for its correction near the end (last ~15 ticks before yellows)? */
 export function tank_claw_soon(tank, t, y5) {
-  return y5 != null && spec_at(tank, t, Math.max(t, y5 - 5)) >= 50;
+  return y5 != null && tank.has_dc !== false && spec_at(tank, t, Math.max(t, y5 - 5)) >= 50;
 }
 
 

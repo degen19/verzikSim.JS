@@ -115,7 +115,7 @@ export function createGear(root, { getTeam }) {
       </table></div>
       <h4>Weapons</h4>
       <div class="row wrap" style="gap:18px;align-items:flex-start">
-        ${STYLES.map(([st, l]) => `<div><div class="muted small">${l}</div>${WEAPONS_OWNED[st].map((w) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-w="${esc(w)}" ${(pl.weapons || []).includes(w) ? 'checked' : ''}>${esc(w)}</label>`).join('')}</div>`).join('')}
+        ${STYLES.map(([st, l]) => `<div><div class="muted small">${l}</div>${WEAPONS_OWNED[st].map((w) => { const fixed = w === 'Dragon claws' && team() <= 2; return `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"${fixed ? ' title="Duo and solo players always have Dragon claws"' : ''}><input type="checkbox" data-w="${esc(w)}" ${fixed || (pl.weapons || []).includes(w) ? 'checked' : ''}${fixed ? ' disabled' : ''}>${esc(w)}</label>`; }).join('')}</div>`).join('')}
         <div><div class="muted small">Other</div><label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Needed to redemption skip at Sotetseg (orb down to 1 HP)"><input type="checkbox" data-g="locator" ${pl.locator ? 'checked' : ''}>Locator orb</label><label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Soulflame horn - needed to horn at Sotetseg"><input type="checkbox" data-g="horn" ${pl.horn ? 'checked' : ''}>Soulflame horn</label></div>
         <div>
           <label>Arrows<select data-g="arrows">${ARROWS.map((a) => `<option ${a === pl.arrows ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
@@ -123,6 +123,7 @@ export function createGear(root, { getTeam }) {
           <p class="small" style="margin:8px 0 0">3-tick weapon: <b>${esc(three || ((pl.weapons || []).includes('Swift blade') ? 'Swift blade' : 'none'))}</b><br><span class="muted">first of Obligator, Eye of ayak, Zorya's tome they have${three === "Zorya's tome" ? ' - the tome as a 3-tick weapon isn\'t simulated yet' : ''}</span></p>
         </div>
       </div>
+      ${team() >= 3 && !(pl.weapons || []).includes('Dragon claws') ? `<p class="small warn" style="margin:8px 0 0"><b>No Dragon claws:</b> this changes how they play reds and P3 - see <b>No Dragon claws</b> in Mechanics &amp; behavior (Reds - 3, 4 and 5-man, and P3 - players). It may noticeably reduce success rates.</p>` : ''}
       <h4>Bonuses with each weapon</h4>
       <div class="scroll"><table class="bt">
         <tr><th>Weapon</th><th>Style</th><th>Accuracy</th><th>Damage</th><th>Prayer</th><th>Notes</th></tr>

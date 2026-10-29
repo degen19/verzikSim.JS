@@ -361,8 +361,9 @@ export class Player {
     this.default_swap = this.lb && this.target_spec == null;   // neither % set: default Ultor swap (default_transition)
     this.default_wait = false;
     this.purple = dget(cfg, 'PurpleDC', false);
-    this.has_halb = dget(cfg, 'hasHalb', true) !== false;
-    this.has_zcb = dget(cfg, 'hasZcb', true) !== false;     // no Zaryte crossbow (Gear tab): bounced -> the delay, no ZCB   // no Crystal halberd (Gear tab): no chally
+    this.has_halb = dget(cfg, 'hasHalb', true) !== false;   // no Crystal halberd (Gear tab): no chally
+    this.has_zcb = dget(cfg, 'hasZcb', true) !== false;     // no Zaryte crossbow (Gear tab): bounced -> the delay, no ZCB
+    this.has_dc = dget(cfg, 'hasDc', true) !== false;       // no Dragon claws (Gear tab): a 3-tick hit / halberd fixes the reds cycle instead
     this.has_bp = dget(cfg, 'hasBP', true) !== false;   // no blowpipe: no B in P1, no blowpipe fills, can't pop the purple
     this.purple2nd = dget(cfg, 'Purple2DC', false);
     this.has3 = dget(cfg, 'has3Tick') || false;
@@ -717,6 +718,7 @@ export function trio_shadow_alert(cfgs) {
 export function run_p1(cfgs, team, rng, log = null) {
   const L = log != null ? ((s) => log.push(s)) : ((s) => null); L.on = log != null;   // log text is only built when a log is kept
   const players = cfgs.map((c, i) => new Player(i + 1, c));
+  if (team <= 2) for (const p of players) p.has_dc = true;   // duo / solo: always have claws
   const brew_below = team === 2 ? DUO_P1_BREW_BELOW : BREW_BELOW;     // P1 brew threshold (duo: 75)
   const pool = new supplies.Pool(cfgs, team);
   for (let i = 0; i < Math.min(players.length, cfgs.length); i++) {

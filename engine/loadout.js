@@ -136,7 +136,8 @@ export function fromChartCfg(cfg, i) {
   if (mg.body) pl.mage.body = mg.body;
   if (mg.legs) pl.mage.legs = mg.legs;
   if (mg.cape) pl.mage.cape = mg.cape === 'Infernal cape' ? 'none' : mg.cape;
-  const w = ['Scythe of vitur', 'Dragon claws'];
+  const w = ['Scythe of vitur'];
+  if (cfg.hasDc !== false) w.push('Dragon claws');
   if (cfg.hasHalb !== false) w.push('Crystal halberd');
   if (cfg.hasZcb !== false) w.push('Zaryte crossbow');
   if (cfg.hasBP !== false) w.push('Toxic blowpipe');
@@ -164,6 +165,7 @@ export function applyToCfg(cfg, pl) {
   out.meleePrayer = pl.prayer || 'Zeal';
   out.hasBP = (pl.weapons || []).includes('Toxic blowpipe');
   out.hasHalb = (pl.weapons || []).includes('Crystal halberd');
+  out.hasDc = (pl.weapons || []).includes('Dragon claws');
   out.hasZcb = (pl.weapons || []).includes('Zaryte crossbow');
   const t = threeTick(pl) || ((pl.weapons || []).includes('Swift blade') ? 'Swift blade' : null);
   out.has3Tick = THREE_TO[t] || false;                      // Zorya's tome as a 3-tick weapon: not simulated yet
