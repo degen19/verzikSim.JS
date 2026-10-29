@@ -163,6 +163,7 @@ export function createSote(host, { getTeam }) {
         <label title="Surge potions the team can use in this room (the solver won't use more - keep some back for another room)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label title="P3: anyone planned to ZCB claws instead once Sotetseg is below this HP (needs claws and 50% spec)">P3 ZCB → claws below (HP)<input type="number" min="0" step="50" style="width:80px" data-rnum="clawBelow" value="${esc(st.clawBelow ?? CLAW_BELOW)}"></label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Death ball: when everyone can take an even share, they all share it. Off (or someone too low): the target tick-eats it alone - a Guthix rest if they have one, else a shark - after Heal Othering their HP to a teammate"><input type="checkbox" data-rchk="splitBall" ${st.splitBall === false ? '' : 'checked'}>Split DD if healthy</label>
+        <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Death ball taken alone with no Guthix rest: tick-heal it (a 3-tick stall while the lowest-HP teammate Heal Others them) before using a shark - the shark may be worth more for a maze"><input type="checkbox" data-rchk="stallTick" ${st.stallTick ? 'checked' : ''}>Stall tick-eat</label>
         <label title="Lightbearer rings in the raid: no more players than this can wear one">Lightbearers<select data-rset="lbRings">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === lbRings ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
 </div>
       ${notes.map((x) => `<div class="warn small" style="margin-bottom:4px">${esc(x)}</div>`).join('')}
@@ -254,7 +255,7 @@ export function createSote(host, { getTeam }) {
         return;
       }
       const to = Math.min(n, i + 50);
-      try { addSoteRaids(res, players, t, i, to, { seed, entry: Number(r.entry) || 0, clawBelow: tstate().clawBelow ?? CLAW_BELOW, splitBall: tstate().splitBall !== false }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
+      try { addSoteRaids(res, players, t, i, to, { seed, entry: Number(r.entry) || 0, clawBelow: tstate().clawBelow ?? CLAW_BELOW, splitBall: tstate().splitBall !== false, stallTick: !!tstate().stallTick }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids`;
       setTimeout(step, 0);
     };
@@ -306,7 +307,7 @@ export function createSote(host, { getTeam }) {
     const step = () => {
       if (me.stop || entry > 3) { finish(); return; }
       const to = Math.min(n, i + 50);
-      try { addSoteRaids(res[entry], players, t, i, to, { seed, entry, clawBelow: tstate().clawBelow ?? CLAW_BELOW, splitBall: tstate().splitBall !== false }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
+      try { addSoteRaids(res[entry], players, t, i, to, { seed, entry, clawBelow: tstate().clawBelow ?? CLAW_BELOW, splitBall: tstate().splitBall !== false, stallTick: !!tstate().stallTick }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       i = to; if (i >= n) { entry++; i = 0; }
       status.textContent = `Running... i${Math.min(entry, 3)}: ${(entry > 3 ? n : i).toLocaleString()} / ${n.toLocaleString()} raids`;
       setTimeout(step, 0);

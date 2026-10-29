@@ -15,9 +15,9 @@ const q = (v, f) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * f
 export const newSoteResult = () => ({ missed: {}, runs: 0, total: [], split: { p1: [], maze1: [], p2: [], maze2: [], p3: [] }, deaths: 0, raidsWithDeath: 0, wipes: 0, mazeRuns: 0, runLost: 0 });
 
 /** Play raids [from, to) into `res` (seeds '<seed>#i'). */
-export function addSoteRaids(res, players, team, from, to, { seed = 'sote', entry = 0, clawBelow, splitBall = true } = {}) {
+export function addSoteRaids(res, players, team, from, to, { seed = 'sote', entry = 0, clawBelow, splitBall = true, stallTick = false } = {}) {
   for (let i = from; i < to; i++) {
-    const r = runSote(players, team, new Rng(`${seed}#${i}`), null, { entry, splitBall, ...(clawBelow != null ? { clawBelow } : {}) });
+    const r = runSote(players, team, new Rng(`${seed}#${i}`), null, { entry, splitBall, stallTick, ...(clawBelow != null ? { clawBelow } : {}) });
     res.runs++;
     const dead = r.players.filter((p) => p.dead).length;
     res.deaths += dead; if (dead) res.raidsWithDeath++;
