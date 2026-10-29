@@ -176,7 +176,7 @@ export function createSote(host, { getTeam }) {
         ${st.players.map(row).join('')}
       </table></div>
       <details class="video" data-specs ${st.specsOpen === false ? '' : 'open'} style="margin-top:14px"><summary>Specs</summary>
-        <p class="muted small" style="margin-top:8px">What each player specs in each phase. Planned specs go off as early as possible (P1 mauls on their first hit after the prefire, a ZCB once the phase's mauls have gone off, claws once they've landed); a spec they can't afford yet waits for a regen. Horn needs a Soulflame horn in the Gear tab.</p>
+        <p class="muted small" style="margin-top:8px">What each player specs in each phase. Planned specs go off as early as possible (P1 mauls on their first hit after the prefire; a ZCB or claws on their next attack after the phase's mauls land - nobody can see PID); a spec they can't afford yet waits for a regen. Horn needs a Soulflame horn in the Gear tab.</p>
         <div class="scroll"><table class="bt"><tr><th></th><th>P1</th><th>P2</th><th>P3</th></tr>
           ${st.players.map((p, k) => `<tr><td class="rl">${esc(pname(k))}</td>${[0, 1, 2].map((ph) => `<td style="white-space:nowrap">${specCell(p, k, ph)}</td>`).join('')}</tr>`).join('')}
         </table></div>

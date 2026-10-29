@@ -21,8 +21,8 @@ export function phaseWindows(tm) {
 
 /**
  * Project one player: {startSpec, surge, lbCycles, specs: [P1, P2, P3]} on phase times `tm`. Each planned spec goes off
- * at its earliest tick (phase 1 mauls / ZCB / claws on t11 and a horn on t8; phases 2-3 on their first attack - with a
- * horn in the phase, after one scythe; a backup after one scythe, only if needed) or as soon as they have the spec,
+ * at its earliest tick (phase 1 mauls on t11 and a horn on t8; phases 2-3 mauls on their first attack - with a horn in
+ * the phase, after one scythe; ZCB / claws and backups an attack later, after the mauls land; a backup only if needed) or as soon as they have the spec,
  * before the phase ends. Returns {items: [{ph, kind, backup, earliest, at (tick or null: not enough spec)}], endSpec,
  * regens: [ticks], cost, available}.
  */
@@ -34,7 +34,7 @@ export function projectPlayer(pl, tm) {
     const sp = specs[ph] || {}, [s] = win[ph];
     if (sp.horn) items.push({ ph, kind: 'horn', backup: false, earliest: ph === 0 ? HORN_TICK : s + 5 });
     if (sp.spec && sp.spec !== 'none') {
-      const late = sp.backup || (ph > 0 && sp.horn);
+      const late = sp.backup || (ph > 0 && sp.horn) || sp.spec === 'zcb' || sp.spec === 'claws';   // ZCB / claws: the attack after the mauls land
       items.push({ ph, kind: sp.backup && sp.spec === 'maul' ? 'maul' : sp.spec, backup: !!sp.backup, earliest: late ? s + 5 : s });
     }
   }

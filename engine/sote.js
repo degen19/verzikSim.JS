@@ -131,7 +131,7 @@ function clawSpec(p, defLvl, rng) {
 // ---- specs: what each player specs in each phase (P1, P2, P3) - {spec: 'none' | 'maul' | 'bgs' | 'claws' | 'zcb', backup,
 // horn}. BGS (Bandos godsword) works as a maul (a Defence spec); a player set to Maul with a BGS but no maul uses the BGS.
 // Planned (not backup) specs go off as early as possible: mauls on their first attack of the phase, ZCB specs
-// once the phase's mauls have gone off (they land after), claws once the mauls have landed. A spec they can't afford
+// and claws on their next attack after the phase's mauls have landed (players react to the hit, they can't see PID). A spec they can't afford
 // yet waits for a regen. Backup: scythe first; once the phase's mauls (and any earlier player's backup) have landed:
 // maul if her Defence isn't at the floor, otherwise their spec (a ZCB may wait for a regen; maul / none: nothing).
 // Horn (Soulflame horn, 25%, no attack delay): the caster and the first other player with a planned maul that phase
@@ -469,7 +469,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       if (sp.duoBackup && p.mauled[ph] === 1 && !alive().some(mauls) && !anyMaulPending() && !maulHits[ph] && p.spec >= 50 && defAct(p, sp.spec)) { p.duoBackingUp = true; return defAct(p, sp.spec); }
       if (p.specDone[ph] || sp.spec === 'none') return 'scythe';
       if (sp.spec === 'zcb') {
-        if (alive().some((q) => mauls(q) && q.next !== t) || p.spec < ZCB_SPEC || !has('Zaryte crossbow')) return 'scythe';   // a maul going off this tick lands first anyway
+        if (alive().some(mauls) || anyMaulPending() || p.spec < ZCB_SPEC || !has('Zaryte crossbow')) return 'scythe';   // their next attack after the mauls land (they react - nobody sees PID)
         if (zcbWasted) { p.specDone[ph]++; p.zcbCarry = ph + 1; L.on && L(`t${t} ${p.name} keeps their ZCB spec for the start of P${ph + 2} (P${ph + 1} too close to the maze)`); return 'scythe'; }
         return 'zcb';
       }
