@@ -145,6 +145,24 @@
     details.setres > summary b { color: var(--c); }
     label.pick[data-setcol] input[type=checkbox] { accent-color: var(--c); }
     [hidden] { display: none !important; }
+    #vz-plan { overflow-x: auto; }
+    /* phones: nothing wider than the screen (wide tables scroll sideways in their box), no zoom-in on focus, tighter spacing */
+    @media (max-width: 640px) {
+      header { padding: 14px 12px 6px; }
+      header h1 { font-size: 19px; flex-wrap: wrap; row-gap: 6px; }   /* title, version and Dark mode wrap instead of widening the page */
+      main { padding: 6px 10px 32px; }
+      .card { padding: 12px; }
+      .row { gap: 10px; }
+      .tabs { flex-wrap: wrap; }
+      .tabs button { padding: 8px 11px; }
+      input, select, textarea { font-size: 16px; }             /* iOS zooms into anything smaller when it's tapped */
+      select { max-width: 100%; min-width: 0; } label { min-width: 0; max-width: 100%; }   /* long option text: the select shrinks, not the page */
+      input.code { font-size: 14px; }
+      .orow label.vary { min-width: 0; }
+      table.mech td.what { min-width: 260px; }
+      table.mech td.inp { min-width: 120px; }
+      .settabs button { padding: 7px 12px; }
+    }
   </style>
 </head>
 <body>

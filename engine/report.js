@@ -341,7 +341,7 @@ export const REPORT_CSS = `
 .vz-report .grid{stroke:var(--grid)}.vz-report .ax{font-size:11px;fill:var(--ink2)}.vz-report .tag{font-size:12px;font-weight:600;paint-order:stroke;stroke:var(--surf);stroke-width:3px;stroke-linejoin:round}.vz-report .bp{stroke:var(--ink2);stroke-dasharray:3 4;opacity:.7}
 .vz-report table{border-collapse:collapse;font-size:13px;margin:4px 0 8px}.vz-report th,.vz-report td{border:1px solid var(--grid);padding:5px 10px;text-align:right}
 .vz-report th{color:var(--ink2);background:var(--th)}.vz-report td:first-child,.vz-report th:first-child{text-align:left}
-.vz-report .legend span{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:13px}.vz-report .legend i{width:12px;height:12px;border-radius:2px;display:inline-block}
+.vz-report .legend span{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:13px}.vz-report .legend i{width:12px;height:12px;border-radius:2px;display:inline-block}@media(max-width:640px){.vz-report{padding:10px}.vz-report>table{display:block;overflow-x:auto;max-width:100%}.vz-report .kpis{gap:14px 20px}.vz-report .kpi b{font-size:24px}.vz-report td+td,.vz-report th+th{white-space:nowrap}}
 `;
 
 /** Report body (a <div class="vz-report">), for embedding in a page. */
