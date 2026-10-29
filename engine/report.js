@@ -147,10 +147,22 @@ function oddsRows(res, team, bps = [], opts = {}) {
     .map((row) => (scope === 'p2' && row[0] === 'Success (all runs)' ? ['P2 down in reds (all runs)', row[1]] : row));
 }
 
-export function histogramSvg(res, labels) {
+/** Charts that can be cropped on the page: id -> render(range). The report HTML wraps each chart in a .chartbox with
+ *  its id; chartcrop.js redraws it for the dragged time range. (Saved report files can't crop.) */
+export const CHART_RENDER = new Map();
+let chartSeq = 0;
+export function chartBox(render) {
+  const id = ++chartSeq;
+  CHART_RENDER.set(id, render);
+  if (CHART_RENDER.size > 60) CHART_RENDER.delete(CHART_RENDER.keys().next().value);   // old reports
+  return `<div class="chartbox" data-chart="${id}">${render(null)}</div>`;
+}
+
+export function histogramSvg(res, labels, range = null) {   // range: {lo, hi} seconds - a cropped view
   const all = res.flatMap((r) => r.total.map((t) => Math.round(t * 0.6))).sort((a, b) => a - b);
   if (!all.length) return '<p>No successful runs to chart.</p>';
-  const lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];
+  let lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];
+  if (range) { lo = Math.max(all[0], Math.floor(range.lo)); hi = Math.max(lo + 1, Math.min(all[all.length - 1], Math.ceil(range.hi))); }   // cropped
   const xs = []; for (let s = lo; s <= hi; s++) xs.push(s);
   const series = res.map((r) => {
     const n = r.total.length || 1; const c = new Map();
@@ -177,7 +189,7 @@ export function histogramSvg(res, labels) {
     g += `<text x="${x}" y="${H - B + 16}" class="ax" text-anchor="middle">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</text>`;
   });
   g += `<text x="14" y="${T + ph / 2}" class="ax" transform="rotate(-90 14 ${T + ph / 2})" text-anchor="middle">% of successful runs</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" data-lo="${lo}" data-hi="${hi + 1}" data-x0="${L}" data-x1="${W - R}">${g}</svg>`;
 }
 
 /**
@@ -225,10 +237,11 @@ function placeLabels(items, { curves = [], dots = [], box }) {
   return out;
 }
 
-export function cumulativeSvg(res, labels, bps = []) {   // bps: breakpoint lines (Sotetseg's report; Verzik's has its own chart)
+export function cumulativeSvg(res, labels, bps = [], range = null) {   // bps: breakpoint lines (Sotetseg's report; Verzik's has its own chart)
   const all = res.flatMap((r) => r.total.map((t) => Math.round(t * 0.6))).sort((a, b) => a - b);
   if (!all.length) return '';
-  const lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];
+  let lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];
+  if (range) { lo = Math.max(all[0], Math.floor(range.lo)); hi = Math.max(lo + 1, Math.min(all[all.length - 1], Math.ceil(range.hi))); }   // cropped
   const xs = []; for (let s = lo; s <= hi; s++) xs.push(s);
   const W = Math.max(900, xs.length * 14), H = 320, L = 50, B = 40, T = 16, R = 16;
   const pw = W - L - R, ph = H - T - B;
@@ -265,15 +278,16 @@ export function cumulativeSvg(res, labels, bps = []) {   // bps: breakpoint line
   const step = Math.max(1, Math.ceil(xs.length / 25));
   xs.forEach((s, i) => { if (!(i % step)) g += `<text x="${X(i)}" y="${H - B + 16}" class="ax" text-anchor="middle">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</text>`; });
   g += `<text x="14" y="${T + ph / 2}" class="ax" transform="rotate(-90 14 ${T + ph / 2})" text-anchor="middle">% of successful runs finished by this time</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" data-lo="${lo}" data-hi="${hi}" data-x0="${L}" data-x1="${W - R}">${g}</svg>`;
 }
 
 /** Same curve as cumulativeSvg, but as a share of ALL attempts (failed raids included), so it levels off at the
  *  success rate instead of 100%. Dashed line = each set's success rate; vertical lines = the breakpoints. */
-export function attemptsSvg(res, labels, bps) {
+export function attemptsSvg(res, labels, bps, range = null) {
   const all = res.flatMap((r) => r.total.map((t) => Math.round(t * 0.6))).sort((a, b) => a - b);
   if (!all.length) return '';
-  const lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];
+  let lo = all[Math.floor(all.length * 0.003)], hi = all[Math.min(all.length - 1, Math.floor(all.length * 0.997))];
+  if (range) { lo = Math.max(all[0], Math.floor(range.lo)); hi = Math.max(lo + 1, Math.min(all[all.length - 1], Math.ceil(range.hi))); }   // cropped
   const xs = []; for (let s = lo; s <= hi; s++) xs.push(s);
   const W = Math.max(900, xs.length * 14), H = 320, L = 50, B = 40, T = 16, R = 16;
   const pw = W - L - R, ph = H - T - B;
@@ -315,7 +329,7 @@ export function attemptsSvg(res, labels, bps) {
   const step = Math.max(1, Math.ceil(xs.length / 25));
   xs.forEach((s, i) => { if (!(i % step)) g += `<text x="${X(i)}" y="${H - B + 16}" class="ax" text-anchor="middle">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</text>`; });
   g += `<text x="14" y="${T + ph / 2}" class="ax" transform="rotate(-90 14 ${T + ph / 2})" text-anchor="middle">% of all attempts finished by this time</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" data-lo="${lo}" data-hi="${hi}" data-x0="${L}" data-x1="${W - R}">${g}</svg>`;
 }
 
 export const REPORT_CSS = `
@@ -383,10 +397,10 @@ ${team === 1 ? '<div class="sub"><b>*This does not yet take into account deaths 
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3><div class="sub">Median / Top 10% / Top 25% / Bottom 25% are of each set's <b>successful runs only</b> (${res.map((r, k) => `${esc(labels[k])}: ${r.total.length.toLocaleString()} kills of ${r.runs.toLocaleString()} attempts`).join(' · ')}). ${team === 1 ? '' : 'Failed raids have no room time, so they aren\'t in these columns - see "% of all attempts" below for odds per attempt.'}</div>${splits}${team === 2 ? '<div class="sub" style="margin-top:6px">Depth = Verzik HP % when the shield goes up (lower = deeper), averaged over the runs in each room-time bucket (Median = runs around the median room time).</div>' : ''}
 <h3>Odds</h3>${odds}${team === 1 && scope !== 'p1' ? redsSetsHtml(res, labels, opts.markSets) : ''}
-<h3>How often each room time happens (per second, % of successful runs)</h3>${legend}<div class="scroll">${histogramSvg(res, labels)}</div>
-${team === 1 ? `<h3>Finished by this time or faster - % of kills</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div>${legend}<div class="scroll">${cumulativeSvg(res, labels, bps)}</div>`
-    : `<h3>Finished by this time or faster - % of successful runs</h3>${legend}<div class="scroll">${cumulativeSvg(res, labels)}</div>
-<h3>Finished by this time or faster - % of all attempts</h3><div class="sub">Failed raids count as attempts, so each line levels off at that set's success rate (dashed). ${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints on the Run tab to mark your target times.'}</div>${legend}<div class="scroll">${attemptsSvg(res, labels, bps)}</div>`}
+<h3>How often each room time happens (per second, % of successful runs)</h3>${legend}<div class="scroll">${chartBox((rg) => histogramSvg(res, labels, rg))}</div>
+${team === 1 ? `<h3>Finished by this time or faster - % of kills</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div>${legend}<div class="scroll">${chartBox((rg) => cumulativeSvg(res, labels, bps, rg))}</div>`
+    : `<h3>Finished by this time or faster - % of successful runs</h3>${legend}<div class="scroll">${chartBox((rg) => cumulativeSvg(res, labels, [], rg))}</div>
+<h3>Finished by this time or faster - % of all attempts</h3><div class="sub">Failed raids count as attempts, so each line levels off at that set's success rate (dashed). ${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints on the Run tab to mark your target times.'}</div>${legend}<div class="scroll">${chartBox((rg) => attemptsSvg(res, labels, bps, rg))}</div>`}
 </div>`;
 }
 

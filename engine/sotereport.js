@@ -2,7 +2,7 @@
 // (median / top 10% / top 25% / bottom 25% / fastest) - with the Verzik report's charts and breakpoints.
 import { runSote } from './sote.js';
 import { Rng } from './rng.js';
-import { histogramSvg, cumulativeSvg, REPORT_CSS, MAGNIFY_SCRIPT } from './report.js';
+import { histogramSvg, cumulativeSvg, chartBox, REPORT_CSS, MAGNIFY_SCRIPT } from './report.js';
 import { VERSION } from './version.js';
 
 const fmt = (t) => { const s = t * 0.6; return s >= 60 ? `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}` : `${s.toFixed(1)}s`; };
@@ -77,8 +77,8 @@ export function soteReportHtml(resIn, team, opts = {}) {
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3>${splits}
 <h3>Odds</h3>${oddsT}${missT}
-<h3>How often each room time happens (per second, % of raids)</h3><div class="scroll">${histogramSvg(series, labs).replace('% of successful runs', '% of raids')}</div>
-<h3>Finished by this time or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${cumulativeSvg(series, labs, bps).replace('% of successful runs finished by this time', '% of raids finished by this time')}</div>
+<h3>How often each room time happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, labs, rg).replace('% of successful runs', '% of raids'))}</div>
+<h3>Finished by this time or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (room finished at that time or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, labs, bps, rg).replace('% of successful runs finished by this time', '% of raids finished by this time'))}</div>
 </div>`;
 }
 

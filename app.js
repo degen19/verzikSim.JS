@@ -14,11 +14,13 @@ import { createSolo } from './solo-ui.js';
 import { withGear, importGear, absorbValues } from './engine/gearstore.js';
 import { SimPool } from './pool.js';
 import { installMagnifier } from './engine/magnify.js';
+import { installChartCrop } from './chartcrop.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const style = document.createElement('style'); style.textContent = REPORT_CSS; document.head.appendChild(style);
 installMagnifier(document);                                              // Magnify button on every report chart
+installChartCrop(document);                                              // drag across a report chart to crop it
 $('ver').textContent = `v${VERSION}`;
 // light / dark switch (saved in this browser)
 const themeLabel = () => { $('theme').textContent = document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode'; };

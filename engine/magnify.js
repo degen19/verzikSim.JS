@@ -15,12 +15,15 @@ export function installMagnifier(doc) {
   const add = (svg) => {
     if (svg.dataset.mag || svg.closest('.mag-lens')) return;
     svg.dataset.mag = '1';
+    const prev = svg.previousElementSibling;                          // a chart redrawn (cropped): keep its button / state
+    if (prev && prev.classList.contains('mag-btn')) { if (prev.classList.contains('on')) svg.classList.add('mag-active'); cur = null; return; }
     const b = doc.createElement('button');
     b.type = 'button'; b.className = 'mag-btn'; b.textContent = '\u{1F50D} Magnify';
     b.title = 'Hover the chart to zoom in; mouse wheel over it changes the zoom';
     svg.parentNode.insertBefore(b, svg);
     b.addEventListener('click', () => {
-      const on = svg.classList.toggle('mag-active');
+      const s = b.nextElementSibling; if (!s) return;
+      const on = s.classList.toggle('mag-active');
       b.classList.toggle('on', on); b.textContent = on ? '\u{1F50D} Magnifying - click to stop' : '\u{1F50D} Magnify';
       if (!on && lens) lens.style.display = 'none';
     });
