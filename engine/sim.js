@@ -352,7 +352,7 @@ export class Player {
     // Blood fury below the threshold and Rancour above it; never in P1
     const bfIn = dget(cfg, 'bfIn', null);
     this.bf_in = new Set(Array.isArray(bfIn) ? bfIn : ['P2 crabs', 'P2 Verzik', 'P3']);
-    this.prayer = dget(cfg, 'meleePrayer', 'Piety');
+    this.prayer = dget(cfg, 'meleePrayer', 'Zeal') || 'Zeal';
     this.lb = dget(cfg, 'lightbearerOn', false);
     this.ring = this.lb ? 'Lightbearer' : 'Ultor';
     const rs = dget(cfg, 'ringSwitch');
@@ -561,7 +561,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
       lightbearerOn: yes(get('lightbearerOn')),
       targetSpec: get('targetSpec (%)') != null ? get('targetSpec (%)') : get('Target spec'),
       p3Target: get('P3 target spec'), ringSwitch: get('Ring switch %'),
-      meleePrayer: get('meleePrayer') || 'Piety',
+      meleePrayer: get('meleePrayer') || 'Zeal',
       PurpleDC: yes(get('PurpleDC') || get('1st Purple DC')), WestDC: yes(get('WestDC')), EastDC: yes(get('EastDC')),
       Purple2DC: yes(get('2nd Purple DC')), customSurgeTick: surge_tick(get('Custom Surge Timing')),
       nPurples: get('Number of Purples') != null ? get('Number of Purples') : get_n1(),

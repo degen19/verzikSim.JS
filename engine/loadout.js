@@ -53,7 +53,7 @@ export const isTwoHanded = (w) => !!(ITEMS[w] && ITEMS[w].two_handed);
 export function blankPlayer(i) {
   const slots = (style, f) => Object.fromEntries(SLOTS.map(([s]) => [s, f(style, s)]));
   return {
-    name: `Player ${i + 1}`, prayer: 'Piety',
+    name: `Player ${i + 1}`, prayer: 'Zeal',
     melee: { head: 'Torva full helm', cape: 'Infernal cape', neck: 'Amulet of rancour', body: 'Oathplate chest', legs: 'Oathplate legs',
       hands: 'Ferocious gloves', feet: 'Avernic treads (max)', ring: 'Ultor ring', shield: '' },
     range: slots('range', () => 'none'),
@@ -127,7 +127,7 @@ const MAGE_DEFAULT = { head: 'Ancestral hat', body: 'Ancestral robe top', legs: 
 export function fromChartCfg(cfg, i) {
   const pl = blankPlayer(i);
   pl.name = cfg.name || pl.name;
-  pl.prayer = cfg.meleePrayer || 'Piety';
+  pl.prayer = cfg.meleePrayer || 'Zeal';
   for (const [k, s] of [['helm', 'head'], ['body', 'body'], ['legs', 'legs']]) if (cfg[k]) pl.melee[s] = cfg[k];
   pl.melee.neck = AMULET_OF[cfg.amulet] || 'Amulet of rancour';
   const mg = cfg.mage || {};
@@ -159,7 +159,7 @@ export function applyToCfg(cfg, pl) {
   const out = { ...cfg };
   out.helm = pl.melee.head || 'Torva full helm'; out.body = pl.melee.body || 'Oathplate chest'; out.legs = pl.melee.legs || 'Oathplate legs';
   out.amulet = AMULET_TO[pl.melee.neck] || 'Rancour';
-  out.meleePrayer = pl.prayer || 'Piety';
+  out.meleePrayer = pl.prayer || 'Zeal';
   out.hasBP = (pl.weapons || []).includes('Toxic blowpipe');
   const t = threeTick(pl) || ((pl.weapons || []).includes('Swift blade') ? 'Swift blade' : null);
   out.has3Tick = THREE_TO[t] || false;                      // Zorya's tome as a 3-tick weapon: not simulated yet

@@ -107,7 +107,7 @@ export function createGear(root, { getTeam }) {
       </div>
       <div class="row" style="gap:14px">
         <label>Name<input data-g="name" value="${esc(pl.name)}" style="width:160px"></label>
-        <label>Melee prayer<select data-g="prayer">${['Piety', 'Zeal'].map((x) => `<option ${x === (pl.prayer || 'Piety') ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+        <label>Melee prayer<select data-g="prayer">${['Piety', 'Zeal'].map((x) => `<option ${x === (pl.prayer || 'Zeal') ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
       </div>
       <div class="scroll"><table class="bt gear">
         <tr><th>Slot</th>${STYLES.map(([, l]) => `<th>${l}</th>`).join('')}</tr>
