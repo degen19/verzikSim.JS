@@ -118,7 +118,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
       p.next_attack = t + 4;
       L.on && L(`t${rjust(t, 4)} Dawn spec (${fx(o)}% -> ${fx(p.spec)}%)`);
     } else {
-      vq.push([t + 2, 0, rng.randint(0, dmax), null, 'Dawn auto']);
+      vq.push([t + 2, 0, Math.max(1, rng.randint(0, dmax)), null, 'Dawn auto']);   // always hits: a 0 is brought up to 1
       p.next_attack = t + 4;
     }
     if (p.thrall_next == null) p.thrall_next = t + rng.randint(1, 2);

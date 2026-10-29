@@ -445,7 +445,7 @@ export function dawn_auto_max(p, magic = p.mag) {
 export function roll_attack(p, code, rng) {
   const w = WEAPONS[code];
   if (code === 'D') return [[rng.randint(75, 150), null]];
-  if (code === 'A') return [[rng.randint(0, dawn_auto_max(p)), null]];
+  if (code === 'A') return [[Math.max(1, rng.randint(0, dawn_auto_max(p))), null]];   // Dawn always hits: a 0 is brought up to 1
   const gear = p.pieces(code);
   const idx = w.idx;
   const atk_bonus = w.atk[idx] + sum(gear.map((g) => g.atk[idx]));
