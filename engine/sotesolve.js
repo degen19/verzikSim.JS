@@ -14,6 +14,8 @@ export const SOLVE_PREFIRES = [['', null], ['Twisted bow', 'Twisted bow'], ['ZCB
   ['Shadow Barrage', 'Shadow ancient sceptre'], ["Tumeken's shadow", "Tumeken's shadow"]];
 const SPEC_OPTS = ['none', 'maul', 'bgs', 'claws', 'zcb'];
 const SPEC_NEEDS = { maul: ['Elder maul', 'Bandos godsword'], bgs: ['Bandos godsword'], claws: ['Dragon claws'], zcb: ['Zaryte crossbow'] };
+/** What a P1 maul becomes if a Shadow Barrage prefire landed (see sote.js ifBarrage). */
+export const IF_BARRAGE = ['zcb', 'claws', 'none'];
 
 /** The players for a run: the fixed parts (gear, supplies, mazes) from `base`, the searched parts from `cfg`. */
 export function playersOf(base, cfg) {
@@ -23,14 +25,15 @@ export function playersOf(base, cfg) {
 /** Play `configs` on raids [from, to) (seeds `<seed>#i`) entered on `entry`. Returns per config {totals, split}. */
 export function evalConfigs(configs, base, team, from, to, seed, entry, opts = {}) {
   return configs.map((cfg) => {
-    const players = playersOf(base, cfg), totals = [], split = { p1: [], maze1: [], p2: [], maze2: [], p3: [] };
+    const players = playersOf(base, cfg), totals = [], split = { p1: [], maze1: [], p2: [], maze2: [], p3: [] }, events = {};
     for (let i = from; i < to; i++) {
       const r = runSote(players, team, new Rng(`${seed}#${i}`), null, { ...opts, entry });
+      for (const e of r.events || []) events[e] = (events[e] || 0) + 1;   // raids it happened in (the Adjustments counts)
       if (r.end == null || !r.split) { totals.push(9999); continue; }       // a wipe counts as very slow
       totals.push(r.end);
       for (const k of Object.keys(split)) split[k].push(r.split[k]);
     }
-    return { totals, split };
+    return { totals, split, events };
   });
 }
 
@@ -61,6 +64,9 @@ export function neighbours(cfg, ctx) {
   const push = (k, patch, what) => many({ [k]: patch }, what);
   const withSpec = (p, ph, o) => p.specs.map((x, j) => (j === ph ? { ...x, ...o } : x));
   const surges = P.filter((p) => p.surge).length, lbs = P.filter((p) => p.lbCycles > 0).length;
+  const barrager = (k) => own(k, 'Shadow ancient sceptre') && ctx.allow.prefire;
+  const barragePossible = P.some((q, k) => q.prefire === 'Shadow Barrage' || barrager(k));
+  const altOk = (k, alt) => alt === 'none' || own(k, alt === 'zcb' ? 'Zaryte crossbow' : 'Dragon claws');
   P.forEach((p, k) => {
     if (ctx.allow.prefire) for (const [v, need] of SOLVE_PREFIRES) if (v !== p.prefire && (!need || own(k, need))) push(k, { prefire: v }, `P${k + 1} prefire ${v || 'none'}`);
     if (ctx.allow.start) push(k, { startSpec: p.startSpec === 95 ? 100 : 95 }, `P${k + 1} start ${p.startSpec === 95 ? 100 : 95}%`);
@@ -72,11 +78,25 @@ export function neighbours(cfg, ctx) {
         if (!specOk(k, s)) continue;
         if (s === 'none' && backup && !SPEC_NEEDS.maul.some((w) => own(k, w))) continue;
         if (s === cur.spec && backup === !!cur.backup) continue;
-        const specs = p.specs.map((x, j) => (j === ph ? { ...x, spec: s, backup } : x));
+        const specs = p.specs.map((x, j) => (j === ph ? { ...x, spec: s, backup, ifBarrage: undefined } : x));
         push(k, { specs }, `P${k + 1} P${ph + 1} ${backup ? 'backup ' : ''}${s}`);
+      }
+      // P1 maul -> 'maul, or a damage spec if the Barrage landed' (only with a Shadow Barrage in the team, or one possible)
+      if (ph === 0 && barragePossible && (cur.spec === 'maul' || cur.spec === 'bgs') && !cur.backup) {
+        for (const alt of IF_BARRAGE) if (alt !== cur.ifBarrage && altOk(k, alt)) push(k, { specs: withSpec(p, 0, { ifBarrage: alt }) }, `P${k + 1} P1 ${cur.spec}, ${alt === 'none' ? 'no spec' : alt} if the Barrage lands`);
+        if (cur.ifBarrage) push(k, { specs: withSpec(p, 0, { ifBarrage: undefined }) }, `P${k + 1} P1 ${cur.spec} always`);
       }
       if (ctx.gear[k].horn) { const specs = p.specs.map((x, j) => (j === ph ? { ...x, horn: !x.horn } : x)); push(k, { specs }, `P${k + 1} P${ph + 1} ${cur.horn ? 'no horn' : 'horn'}`); }
     }
+  });
+  // a Shadow Barrage prefire and another player's P1 maul turning conditional, together (neither pays off alone)
+  if (ctx.allow.prefire && ctx.allow.specs) P.forEach((a, k) => {
+    if (!barrager(k) || a.prefire === 'Shadow Barrage') return;
+    P.forEach((b, j) => {
+      const x = b.specs[0];
+      if (j === k || !(x.spec === 'maul' || x.spec === 'bgs') || x.backup || x.ifBarrage) return;
+      for (const alt of IF_BARRAGE) if (altOk(j, alt)) many({ [k]: { prefire: 'Shadow Barrage' }, [j]: { specs: withSpec(b, 0, { ifBarrage: alt }) } }, `P${k + 1} prefire Shadow Barrage + P${j + 1} P1 ${x.spec}, ${alt === 'none' ? 'no spec' : alt} if it lands`);
+    });
   });
   if (ctx.swaps) {
     P.forEach((a, i) => P.forEach((b, j) => {
@@ -87,7 +107,7 @@ export function neighbours(cfg, ctx) {
         const x = a.specs[ph], y = b.specs[ph];
         if (x.spec === y.spec && !!x.backup === !!y.backup) continue;
         if (!specOk(j, x.spec) || !specOk(i, y.spec)) continue;
-        many({ [i]: { specs: withSpec(a, ph, { spec: y.spec, backup: !!y.backup }) }, [j]: { specs: withSpec(b, ph, { spec: x.spec, backup: !!x.backup }) } }, `P${ph + 1} specs P${i + 1} <-> P${j + 1}`);
+        many({ [i]: { specs: withSpec(a, ph, { spec: y.spec, backup: !!y.backup, ifBarrage: y.ifBarrage }) }, [j]: { specs: withSpec(b, ph, { spec: x.spec, backup: !!x.backup, ifBarrage: x.ifBarrage }) } }, `P${ph + 1} specs P${i + 1} <-> P${j + 1}`);
       }
     }));
   }
@@ -156,9 +176,9 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     if (stopped()) break;
     progress(`Checking the top setups at ${entries.length > 1 ? 'every entry instance' : 'the entry instance'}: ${i + 1} / ${ranked.length}`, 1);
     const rs = await Promise.all(entries.map((e) => run([x.cfg], 0, finalRaids, 'final', e)));
-    const byEntry = entries.map((e, j) => ({ entry: e, score: scoreOf(rs[j][0].totals, bps), totals: rs[j][0].totals, split: rs[j][0].split }));
+    const byEntry = entries.map((e, j) => ({ entry: e, score: scoreOf(rs[j][0].totals, bps), totals: rs[j][0].totals, split: rs[j][0].split, events: rs[j][0].events || {} }));
     const b = byEntry.reduce((m, y) => (better(y.score, m.score) ? y : m));
-    out.push({ cfg: x.cfg, entry: b.entry, score: b.score, totals: b.totals, split: b.split, byEntry: byEntry.map((y) => ({ entry: y.entry, median: med(sorted(y.totals)) })) });
+    out.push({ cfg: x.cfg, entry: b.entry, score: b.score, totals: b.totals, split: b.split, events: b.events, byEntry: byEntry.map((y) => ({ entry: y.entry, median: med(sorted(y.totals)) })) });
   }
   return out.sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));
 }

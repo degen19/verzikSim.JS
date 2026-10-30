@@ -47,8 +47,11 @@ export class SotePool {
     for (let a = from; a < to; a += per) parts.push(this.task({ ...common, configs, from: a, to: Math.min(to, a + per) }));
     const res = await Promise.all(parts);
     return configs.map((_, i) => {
-      const out = { totals: [], split: { p1: [], maze1: [], p2: [], maze2: [], p3: [] } };
-      for (const r of res) { out.totals.push(...r[i].totals); for (const k of Object.keys(out.split)) out.split[k].push(...r[i].split[k]); }
+      const out = { totals: [], split: { p1: [], maze1: [], p2: [], maze2: [], p3: [] }, events: {} };
+      for (const r of res) {
+        out.totals.push(...r[i].totals); for (const k of Object.keys(out.split)) out.split[k].push(...r[i].split[k]);
+        for (const [k, v] of Object.entries(r[i].events || {})) out.events[k] = (out.events[k] || 0) + v;
+      }
       return out;
     });
   }

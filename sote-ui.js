@@ -192,7 +192,8 @@ export function createSote(host, { getTeam }) {
       return `<select data-sp="${k}|${ph}|spec">${SPECS.map(([v, lab]) => `<option value="${v}" ${v === (sp.spec || 'none') ? 'selected' : ''}>${lab}</option>`).join('')}</select>
         <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Backup: scythe first; once the phase's mauls have landed, maul if her Defence isn't at the floor - otherwise their spec"><input type="checkbox" data-sp="${k}|${ph}|backup" ${sp.backup ? 'checked' : ''}>Backup</label>
         <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="${hasHorn(k) ? 'Soulflame horn: they and the first other player mauling this phase can\'t miss their next hit. P1: on t8; P2-P3: after their first scythe off the maze' : 'No Soulflame horn (Gear tab)'}"><input type="checkbox" data-sp="${k}|${ph}|horn" ${sp.horn && hasHorn(k) ? 'checked' : ''} ${hasHorn(k) ? '' : 'disabled'}>Horn</label>${team() === 2 && ph === 0 ? `
-        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Duos: if both P1 mauls miss, maul again; if that misses too, the other player mauls P2 and this one camps Lightbearer to maul P3"><input type="checkbox" data-sp="${k}|${ph}|duoBackup" ${sp.duoBackup ? 'checked' : ''}>Backup if both miss</label>` : ''}`;
+        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Duos: if both P1 mauls miss, maul again; if that misses too, the other player mauls P2 and this one camps Lightbearer to maul P3"><input type="checkbox" data-sp="${k}|${ph}|duoBackup" ${sp.duoBackup ? 'checked' : ''}>Backup if both miss</label>` : ''}${ph === 0 && team() >= 3 && (sp.spec === 'maul' || sp.spec === 'bgs') && !sp.backup ? `
+        <label class="small" style="margin-top:4px" title="If a Shadow Barrage prefire landed: scythe first and wait on the P1 mauls - none hit: ${sp.spec === 'bgs' ? 'BGS' : 'maul'} (ahead of the backups); one hit: this spec instead. Barrage missed (or none): ${sp.spec === 'bgs' ? 'BGS' : 'maul'} on their first hit.">If a Barrage lands<select data-sp="${k}|${ph}|ifBarrage">${[['', `${sp.spec === 'bgs' ? 'BGS' : 'Maul'} anyway`], ['zcb', 'ZCB if a maul landed'], ['claws', 'Claws if a maul landed'], ['none', 'No spec if a maul landed']].map(([v, l]) => `<option value="${v}" ${v === (sp.ifBarrage || '') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}`;
     };
     // spec planner: the projection on typical phase times for the scale, or the last report's medians
     const times = st.lastTimes || TYPICAL_TIMES[team()] || TYPICAL_TIMES[5];
@@ -326,7 +327,9 @@ export function createSote(host, { getTeam }) {
     if (t.dataset.sp) {
       const [k, ph, f] = t.dataset.sp.split('|'), p = st.players[Number(k)];
       p.specs = (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[Number(k)] || [{}, {}, {}])).map((x) => ({ spec: 'none', backup: false, horn: false, ...x }));
-      p.specs[Number(ph)][f] = f === 'spec' ? t.value : t.checked;
+      if (f === 'ifBarrage') { if (t.value) p.specs[Number(ph)].ifBarrage = t.value; else delete p.specs[Number(ph)].ifBarrage; }
+      else p.specs[Number(ph)][f] = f === 'spec' ? t.value : t.checked;
+      if (f !== 'ifBarrage' && (Number(ph) !== 0 || p.specs[0].backup || !['maul', 'bgs'].includes(p.specs[0].spec))) delete p.specs[Number(ph)].ifBarrage;
       persist(); render(); return;
     }
     if (t.dataset.maze != null) {
@@ -512,7 +515,29 @@ export function createSote(host, { getTeam }) {
   const vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
   const fsec = (t) => { const x = t * 0.6; return x >= 60 ? `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}` : `${x.toFixed(1)}s`; };
   const KINDS = { none: 'nothing', maul: 'Maul', claws: 'Claws', zcb: 'ZCB', bgs: 'BGS' };
-  const specTxt = (x) => `${x.horn ? 'Horn + ' : ''}${x.backup ? `backup (${x.spec === 'none' ? 'maul if needed' : `maul if needed, else ${KINDS[x.spec]}`})` : KINDS[x.spec] || x.spec}`;
+  const specTxt = (x) => `${x.horn ? 'Horn + ' : ''}${x.backup ? `backup (${x.spec === 'none' ? 'maul if needed' : `maul if needed, else ${KINDS[x.spec]}`})` : KINDS[x.spec] || x.spec}${x.ifBarrage ? ` (Barrage landed: ${x.ifBarrage === 'none' ? 'first backup' : `first backup, else ${KINDS[x.ifBarrage]}`})` : ''}`;
+  /** "If this happens, do this": the setup's contingencies, with the share of raids each came up in. */
+  const adjustments = (r) => {
+    const n = r.totals.length, ev = r.events || {}, P = r.cfg.players, nm = (k) => esc(pnameOf(r.set, k));
+    const pc = (k) => `<b>${((ev[k] || 0) / n * 100).toFixed(0)}%</b>`, out = [];
+    const barr = P.map((p, k) => (p.prefire === 'Shadow Barrage' ? k : -1)).filter((k) => k >= 0);
+    if (barr.length) out.push(`${barr.map(nm).join(' / ')}'s Shadow Barrage lands in ${pc('barrage:landed')} of raids (misses ${pc('barrage:missed')}).`);
+    P.forEach((p, k) => {
+      const x = p.specs[0];
+      if (x.ifBarrage && (x.spec === 'maul' || x.spec === 'bgs') && !x.backup) {
+        const s = KINDS[x.spec];
+        out.push(barr.length
+          ? `<b>${nm(k)}</b>, P1: Barrage <i>missed</i> - ${s} on their first hit (${pc(`cond:${k}:maul1`)}). Barrage <i>landed</i> - scythe first and watch the P1 mauls: none hit - ${s} ahead of the backups (${pc(`cond:${k}:maul2`)}); one hit - ${x.ifBarrage === 'none' ? 'no spec, keep scything' : KINDS[x.ifBarrage]} (${pc(`cond:${k}:${x.ifBarrage}`)}).`
+          : `<b>${nm(k)}</b>, P1: ${s} (set to change if a Barrage lands, but nobody prefires one).`);
+      }
+      p.specs.forEach((y, ph) => {
+        if (y.backup) out.push(`<b>${nm(k)}</b>, P${ph + 1} backup: once the mauls have landed, maul if her Defence isn't low enough (${pc(`backup:${k}:${ph}:maul`)})${y.spec !== 'none' && y.spec !== 'maul' && y.spec !== 'bgs' ? `, otherwise ${KINDS[y.spec]} (${pc(`backup:${k}:${ph}:spec`)})` : ''}.`);
+      });
+      [0, 1].forEach((ph) => { if (ev[`zcbCarry:${k}:${ph}`]) out.push(`<b>${nm(k)}</b>: P${ph + 1} too close to the maze for the ZCB's ruby - keep it for the start of P${ph + 2} (${pc(`zcbCarry:${k}:${ph}`)}).`); });
+      if (ev[`clawsForZcb:${k}`]) out.push(`<b>${nm(k)}</b>: late in P3 (her HP under the claws threshold) - claws instead of the ZCB (${pc(`clawsForZcb:${k}`)}).`);
+    });
+    return out.length ? `<div class="small" style="margin-top:8px"><b>Adjustments</b> - if this happens, do this (share of the ${n.toLocaleString()} raids it came up in):<ul style="margin:4px 0 0 18px;padding:0">${out.map((x) => `<li>${x}</li>`).join('')}</ul></div>` : '';
+  };
   let vflat = [];                                                    // every result shown, for the buttons
   const showResults = () => {
     const out = sol.querySelector('[data-vout]');
@@ -530,7 +555,7 @@ export function createSote(host, { getTeam }) {
         <tr class="sub-row" data-vproc="${idx}" hidden><td colspan="${12 + asc.length + (withSet ? 1 : 0)}" style="text-align:left">
           <div class="small">Entry instance i${r.entry} (median by entry: ${r.byEntry.map((y) => `i${y.entry} ${ft(y.median)}`).join(', ')})</div>
           <table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
-          ${r.cfg.players.map((p, k) => `<tr><td>${esc(pnameOf(r.set, k))}</td><td>${esc(p.prefire || 'none')}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td>${p.specs.map((x) => `<td>${esc(specTxt(x))}</td>`).join('')}</tr>`).join('')}</table></td></tr>`; }).join('')}
+          ${r.cfg.players.map((p, k) => `<tr><td>${esc(pnameOf(r.set, k))}</td><td>${esc(p.prefire || 'none')}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td>${p.specs.map((x) => `<td>${esc(specTxt(x))}</td>`).join('')}</tr>`).join('')}</table>${adjustments(r)}</td></tr>`; }).join('')}
       </table></div>`;
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: solver</h3>
       <div class="sub">Each played on the same ${all[0].totals.length.toLocaleString()} raids at its best entry instance${groups.length > 1 ? ' (every set on the same raids, so sets compare fairly)' : ''}. Times: median.</div>
