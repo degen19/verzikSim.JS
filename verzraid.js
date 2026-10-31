@@ -44,7 +44,11 @@ export function verzTrace(log, names, cfgs = null) {
     const sec = line.match(/=== (PHASE 2|RED CRABS|PHASE 3) ===/);
     if (sec) {
       if (sec[1] === 'PHASE 2') { const k = line.match(/K = t(\d+)/); phase = 'P2'; if (k) trace.push({ t: +k[1], mark: 'P2' }); }
-      if (sec[1] === 'RED CRABS') { const k = line.match(/proc t(\d+)/); phase = 'Reds'; if (k) trace.push({ t: +k[1], mark: 'Reds' }); }
+      if (sec[1] === 'RED CRABS') {
+        const k = line.match(/proc t(\d+)/), sh = line.match(/Shield r0-r(\d+)/); phase = 'Reds';
+        if (k) trace.push({ t: +k[1], mark: 'Reds' });
+        if (k && sh) { trace.push({ t: +k[1], mark: 'Healing Shield' }); for (let x = +k[1]; x <= +k[1] + +sh[1]; x++) trace.push({ t: x, shade: 'shield' }); }   // her healing shield: those ticks tinted
+      }
       if (sec[1] === 'PHASE 3') { const k = line.match(/P3 tick 1 = t(\d+)/); phase = 'P3'; if (k) trace.push({ t: +k[1], mark: 'P3' }); }
       const h = line.match(/Verzik (\d+)/); if (h) hp = +h[1];
       continue;
@@ -128,7 +132,7 @@ export function verzTrace(log, names, cfgs = null) {
   return out;
 }
 
-const LEGEND = 'R forced regen · F tick fill · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (BH blood heal, M magic, R ranged, GB green ball), purple PC a purple crab sent out, green + the purple heals her, orange PX its explosion, gold L lightning and LR its rebound - hover any cell for details';
+const LEGEND = 'pink-tinted ticks: her healing shield (reds) · R forced regen · F tick fill · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (BH blood heal, M magic, R ranged, GB green ball), purple PC a purple crab sent out, green + the purple heals her, orange PX its explosion, gold L lightning and LR its rebound - hover any cell for details';
 const store = new Map();
 /** The Show raid buttons for a setup (key: unique on the page). */
 export function verzRaidBar(key, cfgs, team, bps = []) {

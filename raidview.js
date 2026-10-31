@@ -82,6 +82,9 @@ const CSS = `<style>
 .rv .c.b{background:#7a2433;color:#fff}
 .rv .mk{font-size:10px;text-align:center;align-self:end;white-space:nowrap}
 .rv .mk span{display:inline-block;border:1px solid #6b74ff;color:#c8ccff;border-radius:4px;padding:2px 5px;background:#1f2140}
+/* her healing shield (Verzik reds): every cell in those ticks tinted pink */
+.rv .sh{box-shadow:inset 0 0 0 30px rgba(255,105,180,.16)}
+.rv .tk.sh{border-radius:3px}
 .rv .legend{color:#9aa0b0;font-size:11px;margin-top:4px}
 </style>`;
 
@@ -120,9 +123,10 @@ export function supplyText(lines) {
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
 export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '' }) {
-  const at = new Map(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map();
+  const at = new Map(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
   for (const x of trace) {
-    if (x.mark) marks.set(x.t, [...(marks.get(x.t) || []), x.mark]);
+    if (x.shade) shade.add(x.t);
+    else if (x.mark) marks.set(x.t, [...(marks.get(x.t) || []), x.mark]);
     else if (x.boss) boss.set(x.t, [...(boss.get(x.t) || []), { kind: 'attack', ...x }]);
     else if (x.hp != null) hpAt.set(x.t, x);
     else if (x.veng != null) veng.set(`${x.i}:${x.t}`, x.veng);
@@ -131,7 +135,8 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   }
   // hover: the tick - her phase and HP at the end of it, and what she did; an attack - what it did when it landed
   const evTip = (e) => e.tip || e.boss;
-  const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
+  const S = (t) => (shade.has(t) ? ' sh' : '');                      // a tinted (healing shield) tick
+  const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', shade.has(t) ? 'Healing shield up' : '', ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
   const hitTip = (nm, x) => [`${nm} - tick ${x.t}: ${x.what || CODE_NAME[x.code] || x.code}${x.code === 'H' || x.code === 'R' ? '' : x.landed == null ? ' - never landed (a maze or the kill came first)' : x.dmg ? ` - ${x.dmg} damage${x.crab ? ' to a crab' : ''} (lands tick ${x.landed})` : ` - missed / 0 (tick ${x.landed})`}`,
     x.target ? `Target: ${x.target}` : '',
     x.gear ? `Gear: ${x.gear}` : '',
@@ -146,12 +151,12 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     const cols = `grid-template-columns:auto repeat(${ticks.length},24px)`;
     const mk = ticks.some((t) => marks.has(t)) ? `<div></div>${ticks.map((t) => `<div class="mk">${marks.has(t) ? marks.get(t).map((m) => `<span>${esc(m)}</span>`).join('<br>') : ''}</div>`).join('')}` : '';
     const attacks = (t) => (boss.get(t) || []).some((e) => BOSS_ATTACK.has(e.kind));
-    const head = `<div></div>${ticks.map((t) => `<div class="tk${attacks(t) ? ' her' : ''}" title="${esc(tickTip(t))}">${t}</div>`).join('')}`;
+    const head = `<div></div>${ticks.map((t) => `<div class="tk${attacks(t) ? ' her' : ''}${S(t)}" title="${esc(tickTip(t))}">${t}</div>`).join('')}`;
     const bossCell = (t) => {
-      const ev = boss.get(t); if (!ev) return `<div class="c" title="${esc(tickTip(t))}"></div>`;
+      const ev = boss.get(t); if (!ev) return `<div class="c${S(t)}" title="${esc(tickTip(t))}"></div>`;
       const top = ev.find((e) => e.kind !== 'attack') || ev[0];            // the most telling one colours the cell
       const short = top.short ?? (top.boss === 'Attack' ? '' : top.boss.split(' ').map((w) => w[0].toUpperCase()).join(''));
-      return `<div class="c b" style="background:${BOSS_BG[top.kind] || BOSS_BG.attack}" title="${esc(tickTip(t))}">${esc(short)}</div>`;
+      return `<div class="c b${S(t)}" style="background:${BOSS_BG[top.kind] || BOSS_BG.attack}" title="${esc(tickTip(t))}">${esc(short)}</div>`;
     };
     const bossRow = `<div class="lab boss">${esc(bossName)}</div>${ticks.map(bossCell).join('')}`;
     const rows = names.map((nm, i) => `<div class="lab">${esc(nm)}</div>${ticks.map((t) => {
@@ -165,10 +170,10 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       const sharkImg = shark ? icon('Shark') : '', vengImg = v != null ? (CODE_ICON.V ? icon('V') : '<span class="vt">V</span>') : '';
       const n = (x ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0), dots = DOTS.some((q) => kinds.has(q));
       const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}`;   // hd: icons nudged right of the potion dots
-      if (x) return `<div class="c a${fit}" style="color:${CODE_COL[x.code] || '#fff'}" title="${esc([hitTip(nm, x), vt, st].filter(Boolean).join('\n'))}">${icon(x.code)}${vengImg}${sharkImg}${marks}</div>`;
-      if (v != null) return `<div class="c v${fit}" title="${esc([`${nm} - tick ${t}: ${vt}`, st].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}</div>`;
-      if (su) return `<div class="c" title="${esc(`${nm} - tick ${t}: ${st}`)}">${sharkImg}${marks}</div>`;
-      return '<div class="c"></div>';
+      if (x) return `<div class="c a${fit}${S(t)}" style="color:${CODE_COL[x.code] || '#fff'}" title="${esc([hitTip(nm, x), vt, st].filter(Boolean).join('\n'))}">${icon(x.code)}${vengImg}${sharkImg}${marks}</div>`;
+      if (v != null) return `<div class="c v${fit}${S(t)}" title="${esc([`${nm} - tick ${t}: ${vt}`, st].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}</div>`;
+      if (su) return `<div class="c${S(t)}" title="${esc(`${nm} - tick ${t}: ${st}`)}">${sharkImg}${marks}</div>`;
+      return `<div class="c${S(t)}"></div>`;
     }).join('')}`).join('');
     blocks.push(`<div class="blk" style="${cols}">${mk}${head}${bossRow}${rows}</div>`);
   }
