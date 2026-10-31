@@ -811,6 +811,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           if (n.ruby && (PREFIRE[kind].spec || rng.random() < 0.066)) {      // ruby bolt (e) through the ZCB: 22% of her HP, max 110
             const r = Math.min(110, Math.floor(hp * 0.22)); p.hp -= Math.floor(p.hp / 10);
             damage(t, r, `${p.name} ${label} ruby`, 'ruby'); d = PREFIRE[kind].spec ? 0 : d;
+            if (curTr && !PREFIRE[kind].spec) curTr.ruby = true;              // Show raid: a ZCB auto's ruby proc (red border)
           }
           if (n.drain && phase === 0) mark('barrage:landed');
           if (n.drain && !drained) { drained = true; defLvl = Math.max(SOTE.defFloor, defLvl - Math.floor(defLvl * 0.15)); L.on && L(`t${t} Shadow Barrage drains her Defence -> ${defLvl}`); }
@@ -974,7 +975,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           }
         }
       } else p.regen = 0;
-      if (!blocked && p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); p.thrallNext = t + 4; }
+      if (!blocked && p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); hits[hits.length - 1].tr = TR({ t, i: p.i, thrall: true, dmg: 0 }); p.thrallNext = t + 4; }
     }
     // ---- melee hits on players, then player attacks
     const floored = () => defLvl <= SOTE.defFloor;

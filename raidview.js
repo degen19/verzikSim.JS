@@ -10,6 +10,16 @@ const fitRv = (rv) => {
   rv.style.zoom = String(Math.min(1, (window.innerWidth - 40) / wide));
 };
 const closeRv = (rv) => { rv.classList.remove('max'); rv.style.zoom = ''; const b = rv.querySelector('.rvfs'); if (b) b.textContent = 'Full screen'; document.body.style.overflow = ''; };
+/** Timeline toggles (thralls / vengs / supplies / regens): show or hide markers already drawn; remembered in this browser. */
+const RV_TOGS = [['th', 'Thralls'], ['vg', 'Vengs'], ['sp', 'Supplies'], ['rg', 'Regens']];
+const rvHidden = () => { try { return JSON.parse(localStorage.getItem('verzikSim.rvHide') || '["th"]'); } catch { return ['th']; } };   // thralls hidden until ticked
+if (typeof window !== 'undefined' && !window.rvTog) {
+  window.rvTog = (box) => {
+    const k = box.dataset.rvtog, root = box.closest('.rv');
+    root.classList.toggle(`hide-${k}`, !box.checked);
+    try { const h = new Set(rvHidden()); if (box.checked) h.delete(k); else h.add(k); localStorage.setItem('verzikSim.rvHide', JSON.stringify([...h])); } catch { /* storage off */ }
+  };
+}
 if (typeof window !== 'undefined' && !window.rvFull) {
   window.rvFull = (btn) => {
     const rv = btn.closest('.rv'); if (!rv) return;
@@ -130,6 +140,7 @@ const CSS = `<style>
 .rv .c .vt{color:#ff6b9a;font-size:9px;font-weight:800}
 .rv .c.duo .vt,.rv .c.trio .vt{font-size:8px}
 .rv .c.a{background:#2f3242;border:1px solid #474b60}
+.rv .c.a.rb{border-color:#e5333f}
 .rv .c.b{background:#7a2433;color:#fff}
 .rv .mk{font-size:10px;text-align:center;align-self:end;white-space:nowrap}
 .rv .mk span{display:inline-block;border:1px solid #6b74ff;color:#c8ccff;border-radius:4px;padding:2px 5px;background:#1f2140}
@@ -138,6 +149,12 @@ const CSS = `<style>
 .rv .c.ch{box-shadow:inset 0 0 0 30px rgba(150,110,255,.45)}
 .rv .c.mz{box-shadow:inset 0 0 0 30px rgba(150,110,255,.16)}
 .rv .tk.sh{border-radius:3px}
+.rv .c .th{position:absolute;left:3px;right:9px;bottom:1px;height:2px;border-radius:1px;background:#b48cff}
+.rv .togs{display:flex;gap:10px;align-items:center;margin-left:auto;font-size:11px;color:#b9bdcc}
+.rv .togs label{display:flex;flex-direction:row;gap:3px;align-items:center;cursor:pointer;white-space:nowrap;margin:0;font-size:11px;color:#b9bdcc}
+.rv .togs input{margin:0}
+.rv.hide-th .th,.rv.hide-vg .vg,.rv.hide-sp .sk,.rv.hide-sp .dots,.rv.hide-sp .rd,.rv.hide-rg .rg{display:none}
+.rv.hide-vg .c.v{background:#22242f;border:0}
 .rv .c .rg{position:absolute;right:2px;bottom:0;font-size:9px;font-weight:700;color:#9fd8ff;line-height:1}
 .rv .legend{color:#9aa0b0;font-size:11px;margin-top:4px}
 </style>`;
@@ -181,17 +198,18 @@ export function supplyText(lines) {
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
 export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '' }) {
-  const regen = new Map(), at = new Map(), horn = new Map(), chosen = new Set(), onMaze = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
+  const regen = new Map(), at = new Map(), horn = new Map(), thr = new Map(), slotN = new Map(), chosen = new Set(), onMaze = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
   for (const x of trace) {
     if (x.shade) shade.add(x.t);
     else if (x.chosen) chosen.add(`${x.i}:${x.t}`);
+    else if (x.thrall) thr.set(`${x.i}:${x.t}`, x);
     else if (x.onMaze) onMaze.add(`${x.i}:${x.t}`);
     else if (x.mark) marks.set(x.t, [...(marks.get(x.t) || []), x.mark]);
     else if (x.boss) boss.set(x.t, [...(boss.get(x.t) || []), { kind: 'attack', ...x }]);
     else if (x.hp != null) hpAt.set(x.t, x);
     else if (x.regen) regen.set(`${x.i}:${x.t}`, x.regen);
     else if (x.veng != null) veng.set(`${x.i}:${x.t}`, x.veng);
-    else if (x.supply) sup.set(`${x.i}:${x.t}`, [...(sup.get(`${x.i}:${x.t}`) || []), x.supply]);
+    else if (x.supply) { sup.set(`${x.i}:${x.t}`, [...(sup.get(`${x.i}:${x.t}`) || []), x.supply]); if (x.slot) slotN.set(`${x.i}:${x.t}`, x.slot); }
     else if (x.i != null && x.code === 'H') horn.set(`${x.i}:${x.t}`, x);   // a horn: its own icon, sharing the cell with an attack
     else if (x.i != null) at.set(`${x.i}:${x.t}`, x);
   }
@@ -224,24 +242,27 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     const CH = (i, t) => (chosen.has(`${i}:${t}`) ? ' ch' : onMaze.has(`${i}:${t}`) ? ' mz' : '');   // the chosen player (under the maze); the others on it
     const rows = names.map((nm, i) => `<div class="lab">${esc(nm)}</div>${ticks.map((t) => {
       const x = at.get(`${i}:${t}`), h = horn.get(`${i}:${t}`), v = veng.get(`${i}:${t}`), su = sup.get(`${i}:${t}`), rg = regen.get(`${i}:${t}`);
-      const vt = v != null ? `Vengeance - ${v} damage to ${bossName}` : '', st = su ? `Supplies: ${supplyText(su)}` : '';
+      const tr = thr.get(`${i}:${t}`), trt = tr ? `Thrall hit ${tr.dmg ?? 0}${tr.landed ? ` (lands t${tr.landed})` : ''}` : '', thrMark = tr ? '<span class="th"></span>' : '';
+      const vt = v != null ? `Vengeance - ${v} damage to ${bossName}` : '', st = su ? `Supplies: ${supplyText(su)}${slotN.has(`${i}:${t}`) ? ` - ${slotN.get(`${i}:${t}`)}` : ''}` : '';
       const rt = rg ? rg.charAt(0).toUpperCase() + rg.slice(1) : '', rgMark = rg ? '<span class="rg">r</span>' : '';
       // supplies: a shark is its icon (sharing the cell with an attack, both smaller); brews / super combats / anything
       // else are small yellow / green / grey dots, a redemption proc a blue heart
       const kinds = su ? supplyKinds(su) : new Set(), shark = kinds.has('shark');
       const marks = `${kinds.has('redemption') ? `<span class="rd">${icon('Redemption')}</span>` : ''}${DOTS.some((q) => kinds.has(q)) ? `<span class="dots">${DOTS.filter((q) => kinds.has(q)).map((q) => `<i class="${q}"></i>`).join('')}</span>` : ''}`;
       // the shark and a vengeance proc share the cell with an attack (all smaller): veng is its icon (V until the icon's in)
-      const sharkImg = shark ? icon('Shark') : '', vengImg = v != null ? (CODE_ICON.V ? icon('V') : '<span class="vt">V</span>') : '';
+      const sharkImg = shark ? `<span class="sk">${icon('Shark')}</span>` : '', vengImg = v != null ? `<span class="vg">${CODE_ICON.V ? icon('V') : '<span class="vt">V</span>'}</span>` : '';
       const hornImg = h ? icon('H') : '', ht = h ? hitTip(nm, h) : '';
       const n = (x ? 1 : 0) + (h ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0), dots = DOTS.some((q) => kinds.has(q));
       const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}`;   // hd: icons nudged right of the potion dots
-      if (x) return `<div class="c a${fit}${S(t)}${CH(i, t)}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), ht, vt, st, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${hornImg}${vengImg}${sharkImg}${marks}${rgMark}</div>`;
-      if (h) return `<div class="c a${fit}${S(t)}${CH(i, t)}" style="color:${CODE_COL.H}" data-tip="${esc([ht, vt, st, rt].filter(Boolean).join('\n'))}">${hornImg}${vengImg}${sharkImg}${marks}${rgMark}</div>`;
-      if (v != null) return `<div class="c v${fit}${S(t)}${CH(i, t)}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, st, rt].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}${rgMark}</div>`;
-      if (su || rg) return `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${[st, rt].filter(Boolean).join('\n')}`)}">${sharkImg}${marks}${rgMark}</div>`;
+      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${fit}${S(t)}${CH(i, t)}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${hornImg}${vengImg}${sharkImg}${marks}${thrMark}${rgMark}</div>`;
+      if (h) return `<div class="c a${fit}${S(t)}${CH(i, t)}" style="color:${CODE_COL.H}" data-tip="${esc([ht, vt, st, trt, rt].filter(Boolean).join('\n'))}">${hornImg}${vengImg}${sharkImg}${marks}${thrMark}${rgMark}</div>`;
+      if (v != null) return `<div class="c v${fit}${S(t)}${CH(i, t)}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, st, trt, rt].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}${thrMark}${rgMark}</div>`;
+      if (su || rg || tr) return `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${[st, trt, rt].filter(Boolean).join('\n')}`)}">${sharkImg}${marks}${thrMark}${rgMark}</div>`;
       return CH(i, t) ? `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${chosen.has(`${i}:${t}`) ? 'chosen - under the maze' : 'on the maze'}`)}"></div>` : `<div class="c${S(t)}"></div>`;
     }).join('')}`).join('');
     blocks.push(`<div class="blk" style="${cols}">${mk}${head}${bossRow}${rows}</div>`);
   }
-  return `${CSS}<div class="rv"><div class="rvh">${title ? `<h4>${esc(title)}</h4>` : '<span></span>'}<button type="button" class="rvfs" onclick="rvFull(this)">Full screen</button></div>${blocks.join('')}${legend ? `<div class="legend">${legend}</div>` : ''}</div>`;
+  const hid = typeof window !== 'undefined' ? rvHidden() : [];
+  const togs = `<span class="togs">${RV_TOGS.map(([k, l]) => `<label><input type="checkbox" data-rvtog="${k}" onchange="rvTog(this)" ${hid.includes(k) ? '' : 'checked'}>${l}</label>`).join('')}</span>`;
+  return `${CSS}<div class="rv${hid.map((k) => ` hide-${k}`).join('')}"><div class="rvh">${title ? `<h4>${esc(title)}</h4>` : '<span></span>'}${togs}<button type="button" class="rvfs" onclick="rvFull(this)">Full screen</button></div>${blocks.join('')}${legend ? `<div class="legend">${legend}</div>` : ''}</div>`;
 }

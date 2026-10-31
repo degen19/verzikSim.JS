@@ -570,7 +570,7 @@ export function createSote(host, { getTeam }) {
     const trace = [], res = runSote(players, team(), new Rng(`${seed}#${pk.i}`), null, { entry, ...opts, trace });
     box.innerHTML = timelineHtml({ trace, names: players.map((p, k) => pnameOf(r.set, k)), bossName: 'Sotetseg', end: res.end,
       title: `${raidTitle(which, 'Sotetseg')} - ${tm(pk.total)} (entry i${entry}; ${pk.typical} of the ${pk.n} raids that ended at ${tm(pk.total)} went this way)`,
-      legend: 'ZCB bolt and ZCB spec share the crossbow icon (hover to tell) · purple tint: the chosen player, under the maze; lighter: the others on the maze · r: a spec regen · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (DB death ball) - hover any cell for details' });
+      legend: 'ZCB bolt and ZCB spec share the crossbow icon (hover to tell) · lilac bar: a thrall hit · purple tint: the chosen player, under the maze; lighter: the others on the maze · r: a spec regen · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (DB death ball) - hover any cell for details' });
   };
   /** A setup's procedure: per player prefire, start spec, surge, Lightbearer and each phase's spec. r: {cfg, set}. */
   const procTable = (r) => `<table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>

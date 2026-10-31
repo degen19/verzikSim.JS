@@ -86,12 +86,19 @@ export function verzTrace(log, names, cfgs = null) {
     if (lr) { trace.push({ t, boss: 'Lightning rebound', kind: 'rebound', short: 'LR', tip: `lightning rebound - ${lr[1]} damage to her` }); continue; }
     const ps = rest.match(/-> (.+?)(?: DC)? spec (\d+(?:\.\d+)?)% -> (\d+(?:\.\d+)?)%/);
     if (ps && byName.has(ps[1])) spec[byName.get(ps[1])] = +ps[3];
-    const pm = rest.replace(/^P\d->P\d\s+/, '').match(/^(.+?): (.*)$/); if (!pm || !byName.has(pm[1])) continue;
+    const pm = rest.replace(/^(?:P\d->P\d|shield)\s+/, '').match(/^(.+?): (.*)$/); if (!pm || !byName.has(pm[1])) continue;   // (P1->P2 / reds shield sip windows)
     const i = byName.get(pm[1]), what = pm[2];
     if (/swaps to Ultor/.test(what)) ring[i] = 'Ultor ring';
     const sm = what.match(/Atk (\d+) Str (\d+)(?: Def (\d+))?/); if (sm) { stats[i].atk = +sm[1]; stats[i].str = +sm[2]; if (sm[3]) stats[i].def = +sm[3]; }
     const mb = what.match(/Magic boosted to (\d+)/); if (mb) stats[i].mag = +mb[1];
-    if (SUPPLY.test(what) && !/held for|would be|kept at|window over/.test(what)) trace.push({ t, i, supply: what.replace(/\s*\(?Atk \d+ Str \d+(?: Def \d+)?\)?/, '').replace(/^P\d->P\d /, '') });
+    if (SUPPLY.test(what) && !/held for|would be|kept at|window over/.test(what)) {
+      // a sip window (P1->P2, reds shield, P2->P3) logs its slots on one line, " | " between them: drawn 3 ticks apart (visual)
+      const slots = what.replace(/\s*,?\s*\(?Atk \d+ Str \d+(?: Def \d+)?\)?/, '').replace(/^P\d->P\d /, '').split(' | ');
+      slots.forEach((x, k) => trace.push({ t: t + 3 * k, i, supply: x, ...(slots.length > 1 ? { slot: `sip ${k + 1} of ${slots.length} (window from tick ${t})` } : {}) }));
+    }
+    // a thrall hit (lands the tick after it attacks)
+    const th = what.match(/^Thrall (\d+) -> /);
+    if (th) { trace.push({ t: t - 1, i, thrall: true, dmg: +th[1], landed: t }); continue; }
     const sc = what.match(/(\d+(?:\.\d+)?)% -> (\d+(?:\.\d+)?)%/);
     const before = spec[i];
     if (sc) spec[i] = +sc[2];
@@ -125,6 +132,7 @@ export function verzTrace(log, names, cfgs = null) {
     a.stats = statText(i);
     const crab = what.match(/on (?:their )?(\w+) crab/), purple = /purple crab/i.test(what);
     a.target = purple ? 'the purple crab' : crab ? `the ${crab[1]} red crab` : 'Verzik';
+    if (/RUBY PROC/.test(what)) a.ruby = true;                             // a ZCB auto's ruby proc (red border)
     trace.push(a); last.set(i, a);
     if (/PASSES|-> \[/.test(what) && /blowpipe at purple/.test(what)) a.landed = t;
   }
@@ -137,7 +145,7 @@ export function verzTrace(log, names, cfgs = null) {
   return out;
 }
 
-const LEGEND = 'pink-tinted ticks: her healing shield (reds) · r: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (BH blood heal, M magic, R ranged, GB green ball), purple PC a purple crab sent out, green + the purple heals her, orange PX its explosion, gold L lightning and LR its rebound - hover any cell for details';
+const LEGEND = 'lilac bar: a thrall hit · pink-tinted ticks: her healing shield (reds) · r: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (BH blood heal, M magic, R ranged, GB green ball), purple PC a purple crab sent out, green + the purple heals her, orange PX its explosion, gold L lightning and LR its rebound - hover any cell for details';
 const store = new Map();
 /** The Show raid buttons for a setup (key: unique on the page). */
 export function verzRaidBar(key, cfgs, team, bps = []) {
