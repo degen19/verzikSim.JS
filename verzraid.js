@@ -82,9 +82,9 @@ export function verzTrace(log, names, cfgs = null) {
     if (/^VERZIK GREEN BALL/.test(rest)) { trace.push({ t, boss: 'Green ball', short: 'GB', tip: 'green ball' }); continue; }
     // the purple crab healing her / its explosion and lightning rebounds hitting her
     const ph = rest.match(/^purple crab heals Verzik (\d+) ->/i);
-    if (ph) { trace.push({ t, boss: 'Purple heal', kind: 'heal', short: '+', icon: 'Nylocas_athanatos', ring: '#e5333f', prio: 1, tip: `the purple crab heals her +${ph[1]}` }); continue; }
+    if (ph) { trace.push({ t, boss: 'Purple heal', kind: 'heal', short: '+', icon: 'Nylocas_athanatos', ring: '#3fbf6f', prio: 1, tip: `the purple crab heals her +${ph[1]}` }); continue; }
     const px = rest.match(/^purple crab explosion (\d+) ->/i);
-    if (px) { trace.push({ t, boss: 'Purple explosion', kind: 'boom', short: 'PX', tip: `purple crab explosion - ${px[1]} damage to her` }); continue; }
+    if (px) { trace.push({ t, boss: 'Purple explosion', kind: 'boom', short: 'PX', icon: 'Nylocas_athanatos', ring: '#e5333f', prio: 2, tip: `purple crab explosion - ${px[1]} damage to her` }); continue; }
     const lr = rest.match(/^Lightning rebound (\d+) ->/i);
     if (lr) { trace.push({ t, boss: 'Lightning rebound', kind: 'rebound', short: 'LR', icon: 'Lightning', ring: '#e5333f', prio: 2, tip: `lightning rebound - ${lr[1]} damage to her` }); continue; }
     const ps = rest.match(/-> (.+?)(?: DC)? spec (\d+(?:\.\d+)?)% -> (\d+(?:\.\d+)?)%/);
@@ -148,7 +148,7 @@ export function verzTrace(log, names, cfgs = null) {
   return out;
 }
 
-const LEGEND = 'her row: her phase icon, purple crab when she sends one (pink border: blood heal; P3 green border: ranged, blue: magic) · thrall icon (bottom right): a thrall hit · pink-tinted ticks: her healing shield (reds) · white outline: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · potion icons: brew, restore, super combat, surge; grey dot: anything else · heart redemption proc · lightning icon: she throws lightning (red border: it bounces back and hits her) · purple crab icon: she sends one out (red border: it heals her) · without an icon: orange PX its explosion, GB green ball - hover any cell for details';
+const LEGEND = 'her row: her phase icon, purple crab when she sends one (pink border: blood heal; P3 green border: ranged, blue: magic) · thrall icon (bottom right): a thrall hit · pink-tinted ticks: her healing shield (reds) · white outline: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · potion icons: brew, restore, super combat, surge; grey dot: anything else · heart redemption proc · lightning icon: she throws lightning (red border: it bounces back and hits her) · purple crab icon: she sends one out (green border: it heals her; red border: its explosion hits her) · GB green ball - hover any cell for details';
 const store = new Map();
 /** The Show raid buttons for a setup (key: unique on the page): successful raids, failed raids, and an example raid
  *  for each Dawn count P1 died in (the decision tree's branches). */
