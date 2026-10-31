@@ -154,6 +154,10 @@ const CODE_ICON = { S: 'Scythe_of_vitur', TB: 'Twisted_bow', Z: 'Zaryte_crossbow
   EM: 'Elder_maul', BGS: 'Bandos_godsword', C: 'Dragon_claws', Cs: 'Dragon_claws', Ch: 'Crystal_halberd', BP: 'Toxic_blowpipe',
   D: 'Dawnbringer', SuB: 'Sulphur_blades', T: 'Sanguinesti_staff', Sh: 'Tumekens_shadow', Shark: 'Shark', Redemption: 'Redemption',
   H: 'Soulflame_horn', E: 'Eye_of_ayak', SB: 'Shadow_Barrage', V: 'Vengeance' };
+/** An icon by file name (nothing if the file isn't there). */
+const img = (name) => `<img src="${ICONS}${name}.png" alt="" onerror="this.remove()">`;
+// potions: their icons (sharing the cell like the shark); anything else stays a grey dot
+const POTS = [['brew', 'Saradomin_brew'], ['restore', 'Super_restore'], ['scb', 'Super_combat_potion'], ['surge', 'Spec_surge'], ['healother', 'Heal_other']];
 const icon = (code) => (CODE_ICON[code]
   ? `<img src="${ICONS}${CODE_ICON[code]}.png" alt="${esc(code)}" onerror="this.replaceWith(document.createTextNode(this.alt))">`
   : esc(code));
@@ -172,7 +176,7 @@ const CSS = `<style>
 .rv .lab.boss{background:#5b2a3c;color:#fff}
 .rv .tk{color:#8c90a0;text-align:center;font-size:10px;align-self:end}
 .rv .tk.her{color:#fff;background:#b8323f;border-radius:3px}
-.rv .c{width:24px;height:24px;border-radius:4px;background:#22242f;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;position:relative}
+.rv .c{width:24px;height:24px;border-radius:4px;background:#22242f;display:flex;flex-wrap:wrap;align-content:center;align-items:center;justify-content:center;font-size:9px;font-weight:700;position:relative}
 .rv .c img{max-width:20px;max-height:20px;image-rendering:pixelated}
 .rv .c.v{background:#3a1830;border:1px solid #c2185b;color:#ff8fc0}
 .rv .c .dots{position:absolute;left:2px;top:3px;bottom:3px;display:flex;flex-direction:column;justify-content:center;gap:1px}
@@ -183,7 +187,7 @@ const CSS = `<style>
 .rv .c.hd{padding-left:6px;box-sizing:border-box}
 .rv .c.hd img{max-width:16px;max-height:16px}
 .rv .c.duo img{max-width:12px;max-height:12px}
-.rv .c.trio img{max-width:9px;max-height:9px}
+.rv .c.trio img{max-width:10px;max-height:10px}
 .rv .c .vt{color:#ff6b9a;font-size:9px;font-weight:800}
 .rv .c.duo .vt,.rv .c.trio .vt{font-size:8px}
 .rv .c.a{background:#2f3242;border:1px solid #474b60}
@@ -196,11 +200,14 @@ const CSS = `<style>
 .rv .c.ch{box-shadow:inset 0 0 0 30px rgba(150,110,255,.45)}
 .rv .c.mz{box-shadow:inset 0 0 0 30px rgba(150,110,255,.16)}
 .rv .tk.sh{border-radius:3px}
-.rv .c .th{position:absolute;left:3px;right:9px;bottom:1px;height:2px;border-radius:1px;background:#b48cff}
+.rv .c .th{position:absolute;right:0;bottom:0;line-height:0}
+.rv .c .th img{max-width:11px;max-height:11px}
+.rv .c.rgo{outline:1px solid #fff;outline-offset:-1px}
 .rv .togs{display:flex;gap:10px;align-items:center;margin-left:auto;font-size:11px;color:#b9bdcc}
 .rv .togs label{display:flex;flex-direction:row;gap:3px;align-items:center;cursor:pointer;white-space:nowrap;margin:0;font-size:11px;color:#b9bdcc}
 .rv .togs input{margin:0}
-.rv.hide-th .th,.rv.hide-vg .vg,.rv.hide-sp .sk,.rv.hide-sp .dots,.rv.hide-sp .rd,.rv.hide-rg .rg{display:none}
+.rv.hide-th .th,.rv.hide-vg .vg,.rv.hide-sp .sk,.rv.hide-sp .pt,.rv.hide-sp .dots,.rv.hide-sp .rd{display:none}
+.rv.hide-rg .c.rgo{outline:none}
 .rv.hide-vg .c.v{background:#22242f;border:0}
 .rv .c .rg{position:absolute;right:2px;bottom:0;font-size:9px;font-weight:700;color:#9fd8ff;line-height:1}
 .rv .legend{color:#9aa0b0;font-size:11px;margin-top:4px}
@@ -213,10 +220,21 @@ const SUPPLY_ITEMS = [[/shark/i, 'shark'], [/guthix rest|\brest\b/i, 'Guthix res
   [/heals? other|HEAL OTHER/i, 'heal other'], [/ranging/i, 'ranging potion'], [/divine/i, 'divine potion']];
 /** Which marker a supply line gets: shark (its icon), brew (yellow), restore (pink), surge (white), scb (green: super
  *  combat / divine), redemption (blue heart), other (grey: phoenix necklaces, rests, heart, heal other). */
+const HEAL_OTHER = /heals? other|HEAL OTHER/i;
+/** A Heal Other in a supply line: {to, amt} and the line without it (Sotetseg 'heals other X (+N): ...', to the end;
+ *  Verzik 'HEAL OTHER N -> X (H HP)'). Its '+' isn't a separator between items. */
+const healOther = (line) => {
+  let m = line.match(/heals? other ([^(:]+?) \(\+(\d+)\)/i);
+  if (m) return { to: m[1], amt: +m[2], rest: line.replace(/,?\s*heals? other [^(:]+? \(\+\d+\)[^|;]*/i, '') };
+  m = line.match(/HEAL OTHER (\d+) -> ([^(]+?) \(/);
+  if (m) return { to: m[2], amt: +m[1], rest: line.replace(/HEAL OTHER \d+ -> [^(]+? \([^)]*\)/, '') };
+  return null;
+};
 const RD_PROC = /\(Redemption\)|-> Redemption\b/i;              // a redemption proc (not 'down to 1 HP for the redemption skip')
 export function supplyKinds(lines) {
   const k = new Set();
-  for (const line of lines) for (const part of line.split(/[|+;]/)) {
+  for (const line0 of lines) { const ho = healOther(line0), line = ho ? ho.rest : line0; if (ho) k.add('healother');   // Heal Other: on the caster's row (the tooltip names who)
+  for (const part of line.split(/[|+;]/)) {
     if (RD_PROC.test(part)) k.add('redemption');                // can share a line with a restore sip
     if (/shark/i.test(part)) k.add('shark');
     else if (/brew/i.test(part)) k.add('brew');
@@ -224,14 +242,16 @@ export function supplyKinds(lines) {
     else if (/restore/i.test(part)) k.add('restore');
     else if (/surge/i.test(part)) k.add('surge');
     else if (part.trim() && !RD_PROC.test(part)) k.add('other');
-  }
+  } }
   return k;
 }
 const DOTS = ['brew', 'restore', 'surge', 'scb', 'other'];       // the potion dots, top to bottom
 export function supplyText(lines) {
   const n = new Map(), out = [];
-  for (const line of lines) {
-    const sg = line.match(/surge (\d+)% -> (\d+)%/i); if (sg) { out.push(`surge (${sg[1]}% -> ${sg[2]}% spec)`); continue; }
+  for (const line0 of lines) {
+    const sg = line0.match(/surge (\d+)% -> (\d+)%/i); if (sg) { out.push(`surge (${sg[1]}% -> ${sg[2]}% spec)`); continue; }
+    const ho = healOther(line0), line = ho ? ho.rest : line0;
+    if (ho) out.push(`Heal Other -> ${ho.to} (+${ho.amt})`);
     for (const part of line.split(/[|+;]/)) {
       if (RD_PROC.test(part)) n.set('redemption proc', (n.get('redemption proc') || 0) + 1);   // alongside the restore sip
       for (const [re, name] of SUPPLY_ITEMS) if (name !== 'redemption proc' && re.test(part.replace(/redemption skip/i, ''))) { n.set(name, (n.get(name) || 0) + 1); break; }
@@ -283,29 +303,38 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       const ev = boss.get(t); if (!ev) return `<div class="c${S(t)}" data-tip="${esc(tickTip(t))}"></div>`;
       const top = ev.find((e) => e.kind !== 'attack') || ev[0];            // the most telling one colours the cell
       const short = top.short ?? (top.boss === 'Attack' ? '' : top.boss.split(' ').map((w) => w[0].toUpperCase()).join(''));
-      return `<div class="c b${S(t)}" style="background:${BOSS_BG[top.kind] || BOSS_BG.attack}" data-tip="${esc(tickTip(t))}">${esc(short)}</div>`;
+      // her attack's icon (the room sets it: phase / boss, purple crab, death ball) and a border for its style; a heal or
+      // other event the same tick keeps its colour behind it
+      // the icon shown: the most telling (lightning / purple crab, then a rebound on her, then her attack); its own border
+      const ic = ev.filter((e) => e.icon).sort((a, b) => (b.prio || 0) - (a.prio || 0))[0], ring = ic ? ic.ring : null;
+      // with her icon, an attack needs no red fill (other events keep their colour behind it)
+      const bg = ic ? '#2f3242' : BOSS_BG[top.kind] || BOSS_BG.attack;   // an icon: no fill (the tooltip lists everything that tick)
+      return `<div class="c b${S(t)}" style="background:${bg}${ring ? `;outline:2px solid ${ring};outline-offset:-2px` : ''}" data-tip="${esc(tickTip(t))}">${ic ? img(ic.icon) : esc(short)}</div>`;
     };
     const bossRow = `<div class="lab boss">${esc(bossName)}</div>${ticks.map(bossCell).join('')}`;
     const CH = (i, t) => (chosen.has(`${i}:${t}`) ? ' ch' : onMaze.has(`${i}:${t}`) ? ' mz' : '');   // the chosen player (under the maze); the others on it
     const rows = names.map((nm, i) => `<div class="lab">${esc(nm)}</div>${ticks.map((t) => {
-      const x = at.get(`${i}:${t}`), h = horn.get(`${i}:${t}`), v = veng.get(`${i}:${t}`), su = sup.get(`${i}:${t}`), rg = regen.get(`${i}:${t}`);
-      const tr = thr.get(`${i}:${t}`), trt = tr ? `Thrall hit ${tr.dmg ?? 0}${tr.landed ? ` (lands t${tr.landed})` : ''}` : '', thrMark = tr ? '<span class="th"></span>' : '';
-      const vt = v != null ? `Vengeance - ${v} damage to ${bossName}` : '', st = su ? `Supplies: ${supplyText(su)}${slotN.has(`${i}:${t}`) ? ` - ${slotN.get(`${i}:${t}`)}` : ''}` : '';
-      const rt = rg ? rg.charAt(0).toUpperCase() + rg.slice(1) : '', rgMark = rg ? '<span class="rg">r</span>' : '';
-      // supplies: a shark is its icon (sharing the cell with an attack, both smaller); brews / super combats / anything
-      // else are small yellow / green / grey dots, a redemption proc a blue heart
-      const kinds = su ? supplyKinds(su) : new Set(), shark = kinds.has('shark');
-      const marks = `${kinds.has('redemption') ? `<span class="rd">${icon('Redemption')}</span>` : ''}${DOTS.some((q) => kinds.has(q)) ? `<span class="dots">${DOTS.filter((q) => kinds.has(q)).map((q) => `<i class="${q}"></i>`).join('')}</span>` : ''}`;
-      // the shark and a vengeance proc share the cell with an attack (all smaller): veng is its icon (V until the icon's in)
-      const sharkImg = shark ? `<span class="sk">${icon('Shark')}</span>` : '', vengImg = v != null ? `<span class="vg">${CODE_ICON.V ? icon('V') : '<span class="vt">V</span>'}</span>` : '';
+      const key = `${i}:${t}`, x = at.get(key), h = horn.get(key), v = veng.get(key), su = sup.get(key), rg = regen.get(key), tr = thr.get(key);
+      // a thrall hit: its icon in the bottom-right corner (melee thrall in Verzik P1, mage thrall elsewhere)
+      const trt = tr ? `${tr.icon === 'Greater_zombie' ? 'Melee' : 'Mage'} thrall hit ${tr.dmg ?? 0}${tr.landed ? ` (lands t${tr.landed})` : ''}` : '';
+      const thrMark = tr ? `<span class="th">${img(tr.icon || 'Greater_ghost')}</span>` : '';
+      const vt = v != null ? `Vengeance - ${v} damage to ${bossName}` : '', st = su ? `Supplies: ${supplyText(su)}${slotN.has(key) ? ` - ${slotN.get(key)}` : ''}` : '';
+      const rt = rg ? rg.charAt(0).toUpperCase() + rg.slice(1) : '';
+      // supplies: the shark and potions are icons (sharing the cell with an attack, all smaller); anything else a grey dot,
+      // a redemption proc a blue heart; a spec regen: a thin white outline
+      const kinds = su ? supplyKinds(su) : new Set(), shark = kinds.has('shark'), pots = POTS.filter(([k]) => kinds.has(k));
+      const marks = `${kinds.has('redemption') ? `<span class="rd">${icon('Redemption')}</span>` : ''}${kinds.has('other') ? '<span class="dots"><i class="other"></i></span>' : ''}`;
+      const sharkImg = shark ? `<span class="sk">${icon('Shark')}</span>` : '', potImg = pots.map(([, f]) => `<span class="pt">${img(f)}</span>`).join('');
+      const vengImg = v != null ? `<span class="vg">${CODE_ICON.V ? icon('V') : '<span class="vt">V</span>'}</span>` : '';
       const hornImg = h ? icon('H') : '', ht = h ? hitTip(nm, h) : '';
-      const n = (x ? 1 : 0) + (h ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0), dots = DOTS.some((q) => kinds.has(q));
-      const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}`;   // hd: icons nudged right of the potion dots
-      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${fit}${S(t)}${CH(i, t)}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${hornImg}${vengImg}${sharkImg}${marks}${thrMark}${rgMark}</div>`;
-      if (h) return `<div class="c a${fit}${S(t)}${CH(i, t)}" style="color:${CODE_COL.H}" data-tip="${esc([ht, vt, st, trt, rt].filter(Boolean).join('\n'))}">${hornImg}${vengImg}${sharkImg}${marks}${thrMark}${rgMark}</div>`;
-      if (v != null) return `<div class="c v${fit}${S(t)}${CH(i, t)}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, st, trt, rt].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}${thrMark}${rgMark}</div>`;
-      if (su || rg || tr) return `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${[st, trt, rt].filter(Boolean).join('\n')}`)}">${sharkImg}${marks}${thrMark}${rgMark}</div>`;
-      return CH(i, t) ? `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${chosen.has(`${i}:${t}`) ? 'chosen - under the maze' : 'on the maze'}`)}"></div>` : `<div class="c${S(t)}"></div>`;
+      const n = (x ? 1 : 0) + (h ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0) + pots.length, dots = kinds.has('other');
+      const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}${rg ? ' rgo' : ''}${S(t)}${CH(i, t)}`;   // hd: icons nudged right of the dot
+      const body = `${hornImg}${vengImg}${sharkImg}${potImg}${marks}${thrMark}`;
+      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${fit}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${body}</div>`;
+      if (h) return `<div class="c a${fit}" style="color:${CODE_COL.H}" data-tip="${esc([ht, vt, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
+      if (v != null) return `<div class="c v${fit}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
+      if (su || rg || tr) return `<div class="c${fit}" data-tip="${esc(`${nm} - tick ${t}: ${[st, trt, rt].filter(Boolean).join('\n')}`)}">${body}</div>`;
+      return CH(i, t) ? `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${chosen.has(key) ? 'chosen - under the maze' : 'on the maze'}`)}"></div>` : `<div class="c${S(t)}"></div>`;
     }).join('')}`).join('');
     blocks.push(`<div class="blk" style="${cols}">${mk}${head}${bossRow}${rows}</div>`);
   }

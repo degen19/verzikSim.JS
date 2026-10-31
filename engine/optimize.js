@@ -35,12 +35,12 @@ export function runOneLogged(cfgs, team, rng) {
   const scope = cfgs[0] && cfgs[0].scope;
   if (r1.players.every((p) => p.dead) || (team === 2 && wiped(r1.players, ['P1']))) return fail;
   if (scope === 'p1') return { end: r1.end ?? null, log, p1end: r1.end };
-  const r2 = run_p2(r1, team, rng, log);
+  const r2 = run_p2(r1, team, rng.fork('p2'), log);
   if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return fail;
-  const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng, log) : run_reds(r2, cfgs, team, rng, log);
+  const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng.fork('reds'), log) : run_reds(r2, cfgs, team, rng.fork('reds'), log);
   if (!r3.success || (team === 2 && r3.players.every((p) => p.dead))) return fail;
   if (scope === 'p2') return { end: r3.kill, log, p1end: r1.end };
-  const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng, log);
+  const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng.fork('p3'), log);
   if (team === 2 && wiped(r4.players || r3.players, ['P1', 'P3'])) return fail;
   return { end: r4.kill == null ? null : r4.end, log, p1end: r1.end };
 }
@@ -50,14 +50,14 @@ function runAfterP1(r1, cfgs, team, rng, out = null) {
   if (r1.players.every((p) => p.dead)) return null;
   if (team === 2 && wiped(r1.players, ['P1'])) return null;
   if (scope === 'p1') return r1.end ?? null;
-  const r2 = run_p2(r1, team, rng);
+  const r2 = run_p2(r1, team, rng.fork('p2'));
   if (out) out.r2 = r2;
   if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return null;
-  const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng) : run_reds(r2, cfgs, team, rng);
+  const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng.fork('reds')) : run_reds(r2, cfgs, team, rng.fork('reds'));
   if (out) out.r3 = r3;
   if (!r3.success || (team === 2 && r3.players.every((p) => p.dead))) return null;
   if (scope === 'p2') return r3.kill;
-  const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng);
+  const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng.fork('p3'));
   if (team === 2 && wiped(r4.players || r3.players, ['P1', 'P3'])) return null;
   return r4.kill == null ? null : r4.end;
 }

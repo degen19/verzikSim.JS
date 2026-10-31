@@ -68,22 +68,25 @@ export function verzTrace(log, names, cfgs = null) {
     const va = rest.match(/^VERZIK (auto|attack) #\d+(?: \([^)]*\))?:? ?(.*)$/);
     if (va) {
       if (/bounce chance/.test(rest)) continue;
-      if (/PURPLE CRAB/.test(rest)) { trace.push({ t, boss: 'Purple crab', kind: 'purple', short: 'PC', tip: 'sends out a purple crab' }); continue; }
+      if (/PURPLE CRAB/.test(rest)) { trace.push({ t, boss: 'Purple crab', kind: 'purple', short: 'PC', icon: 'Nylocas_athanatos', prio: 3, tip: 'sends out a purple crab' }); continue; }
       const lt = rest.match(/LIGHTNING -> (.+?) \(.*?rebound (\d+) on Verzik t(\d+)/) || rest.match(/LIGHTNING \(rebound (\d+) lands t(\d+)\)/);
-      if (/LIGHTNING/.test(rest)) { trace.push({ t, boss: 'Lightning', kind: 'lightning', short: 'L', tip: `lightning${lt && lt.length === 4 ? ` -> ${lt[1]} (rebound ${lt[2]} on her t${lt[3]})` : lt ? ` (rebound ${lt[1]} on her t${lt[2]})` : ''}` }); continue; }
+      if (/LIGHTNING/.test(rest)) { trace.push({ t, boss: 'Lightning', kind: 'lightning', short: 'L', icon: 'Lightning', prio: 3, tip: `lightning${lt && lt.length === 4 ? ` -> ${lt[1]} (rebound ${lt[2]} on her t${lt[3]})` : lt ? ` (rebound ${lt[1]} on her t${lt[2]})` : ''}` }); continue; }
       const bh = rest.match(/blood heal \+(\d+)/);
-      if (bh) { trace.push({ t, boss: 'Blood heal', short: 'BH', tip: `blood heal +${bh[1]}` }); continue; }
+      if (bh) { trace.push({ t, boss: 'Blood heal', short: 'BH', icon: 'Verzik_P2', ring: '#ff69b4', tip: `blood heal +${bh[1]}` }); continue; }
       const style = /magic/.test(rest) ? 'Magic' : /ranged/.test(rest) ? 'Ranged' : 'Attack';
-      trace.push({ t, boss: style, tip: style === 'Attack' ? 'attack' : `${style.toLowerCase()} auto` }); continue;
+      // her phase's icon; P3: a green border for a ranged auto, blue for magic
+      const icon = phase === 'P1' ? 'Verzik_P1' : phase === 'P3' ? 'Verzik_P3' : 'Verzik_P2';
+      const ring = phase === 'P3' ? (style === 'Ranged' ? '#3fbf6f' : style === 'Magic' ? '#4a8cff' : null) : null;
+      trace.push({ t, boss: style, icon, ...(ring ? { ring } : {}), tip: style === 'Attack' ? 'attack' : `${style.toLowerCase()} auto` }); continue;
     }
     if (/^VERZIK GREEN BALL/.test(rest)) { trace.push({ t, boss: 'Green ball', short: 'GB', tip: 'green ball' }); continue; }
     // the purple crab healing her / its explosion and lightning rebounds hitting her
     const ph = rest.match(/^purple crab heals Verzik (\d+) ->/i);
-    if (ph) { trace.push({ t, boss: 'Purple heal', kind: 'heal', short: '+', tip: `the purple crab heals her +${ph[1]}` }); continue; }
+    if (ph) { trace.push({ t, boss: 'Purple heal', kind: 'heal', short: '+', icon: 'Nylocas_athanatos', ring: '#e5333f', prio: 1, tip: `the purple crab heals her +${ph[1]}` }); continue; }
     const px = rest.match(/^purple crab explosion (\d+) ->/i);
     if (px) { trace.push({ t, boss: 'Purple explosion', kind: 'boom', short: 'PX', tip: `purple crab explosion - ${px[1]} damage to her` }); continue; }
     const lr = rest.match(/^Lightning rebound (\d+) ->/i);
-    if (lr) { trace.push({ t, boss: 'Lightning rebound', kind: 'rebound', short: 'LR', tip: `lightning rebound - ${lr[1]} damage to her` }); continue; }
+    if (lr) { trace.push({ t, boss: 'Lightning rebound', kind: 'rebound', short: 'LR', icon: 'Lightning', ring: '#e5333f', prio: 2, tip: `lightning rebound - ${lr[1]} damage to her` }); continue; }
     const ps = rest.match(/-> (.+?)(?: DC)? spec (\d+(?:\.\d+)?)% -> (\d+(?:\.\d+)?)%/);
     if (ps && byName.has(ps[1])) spec[byName.get(ps[1])] = +ps[3];
     const pm = rest.replace(/^(?:P\d->P\d|shield)\s+/, '').match(/^(.+?): (.*)$/); if (!pm || !byName.has(pm[1])) continue;   // (P1->P2 / reds shield sip windows)
@@ -97,8 +100,8 @@ export function verzTrace(log, names, cfgs = null) {
       slots.forEach((x, k) => trace.push({ t: t + 3 * k, i, supply: x, ...(slots.length > 1 ? { slot: `sip ${k + 1} of ${slots.length} (window from tick ${t})` } : {}) }));
     }
     // a thrall hit (lands the tick after it attacks)
-    const th = what.match(/^Thrall (\d+) -> /);
-    if (th) { trace.push({ t: t - 1, i, thrall: true, dmg: +th[1], landed: t }); continue; }
+    const th = what.match(/^Thrall (?:lands )?(\d+)\b/);                          // P1: 'Thrall lands N', later 'Thrall N'
+    if (th) { trace.push({ t: t - 1, i, thrall: true, dmg: +th[1], landed: t, icon: phase === 'P1' ? 'Greater_zombie' : 'Greater_ghost' }); continue; }   // melee thrall in P1, mage after
     const sc = what.match(/(\d+(?:\.\d+)?)% -> (\d+(?:\.\d+)?)%/);
     const before = spec[i];
     if (sc) spec[i] = +sc[2];
@@ -145,7 +148,7 @@ export function verzTrace(log, names, cfgs = null) {
   return out;
 }
 
-const LEGEND = 'lilac bar: a thrall hit · pink-tinted ticks: her healing shield (reds) · r: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (BH blood heal, M magic, R ranged, GB green ball), purple PC a purple crab sent out, green + the purple heals her, orange PX its explosion, gold L lightning and LR its rebound - hover any cell for details';
+const LEGEND = 'her row: her phase icon, purple crab when she sends one (pink border: blood heal; P3 green border: ranged, blue: magic) · thrall icon (bottom right): a thrall hit · pink-tinted ticks: her healing shield (reds) · white outline: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · potion icons: brew, restore, super combat, surge; grey dot: anything else · heart redemption proc · lightning icon: she throws lightning (red border: it bounces back and hits her) · purple crab icon: she sends one out (red border: it heals her) · without an icon: orange PX its explosion, GB green ball - hover any cell for details';
 const store = new Map();
 /** The Show raid buttons for a setup (key: unique on the page): successful raids, failed raids, and an example raid
  *  for each Dawn count P1 died in (the decision tree's branches). */

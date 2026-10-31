@@ -60,9 +60,9 @@ function toRedsEnd(cfgs, team, rng) {
   const r1 = run_p1(cfgs, team, rng);
   if (r1.end == null || r1.players.every((p) => p.dead)) return { fail: FAIL };
   if (team === 2 && wiped(r1.players, ['P1'])) return { fail: { ...FAIL, wipe: true } };
-  const r2 = run_p2(r1, team, rng);
+  const r2 = run_p2(r1, team, rng.fork('p2'));
   if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return { fail: FAIL };
-  const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng) : run_reds(r2, cfgs, team, rng);
+  const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng.fork('reds')) : run_reds(r2, cfgs, team, rng.fork('reds'));
   return { r1, r2, r3 };
 }
 
@@ -86,7 +86,7 @@ export function raidFull(cfgs, team, i, seed) {
   const { r2, r3 } = x;
   const all50 = allClawed(team, r3.players);
   if (!r3.success || (team === 2 && r3.players.every((p) => p.dead))) return { ...FAIL, all50 };
-  const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng);
+  const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng.fork('p3'));
   if (team === 2 && wiped(r4.players || r3.players, ['P1', 'P3'])) return { ...FAIL, all50, wipe: true };
   return { end: r4.kill == null ? null : r4.end, all50, n100: 0, camp: false, wipe: false };
 }
@@ -357,7 +357,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const gaps = [];
   for (let i = 0; i < 60; i++) {
     const rng = new Rng(`gap#${i}`); const r1 = run_p1(base, team, rng);
-    if (r1.end == null) continue; const r2 = run_p2(r1, team, rng);
+    if (r1.end == null) continue; const r2 = run_p2(r1, team, rng.fork('p2'));
     if (r2.reds_tick != null) gaps.push(r2.reds_tick - r1.end);
   }
   gaps.sort((a, b) => a - b);

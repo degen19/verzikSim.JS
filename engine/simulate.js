@@ -35,10 +35,10 @@ export function simulate_duo(cfgs, runs, seed, onProgress = null) {
     if (r1.players.some((p) => p.dead)) c.die_p1 += 1;
     if (r1.players.every((p) => p.dead)) continue;
     if (scope === 'p1') { if (r1.end != null) { tot.push(r1.end); s1.push(r1.end); sp1.push(r1.end); } continue; }
-    const r2 = run_p2(r1, 2, rng);
+    const r2 = run_p2(r1, 2, rng.fork('p2'));
     if (r2.players.every((p) => p.dead) || r2.reds_tick == null) continue;
     depth.push(r2.hp / r2.max_hp * 100); reds.push(r2.reds_tick);
-    const r3 = run_duo_reds(r2, cfgs, rng);
+    const r3 = run_duo_reds(r2, cfgs, rng.fork('reds'));
     if (!r3.success || r3.players.every((p) => p.dead)) continue;
     n2d += 1;
     if (scope === 'p2') {
@@ -47,7 +47,7 @@ export function simulate_duo(cfgs, runs, seed, onProgress = null) {
       dep1.push(r2.hp / r2.max_hp * 100); const h2p = dget(r3.st, 'hp_after1', null); dep2.push(h2p != null ? h2p / r2.max_hp * 100 : null);
       continue;
     }
-    const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, 2, rng);
+    const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, 2, rng.fork('p3'));
     if (r4.kill == null) continue;
     if (r4.yellow_skip) c.kill_ny += 1;
     if (!r4.green) c.kill_ng += 1;
@@ -78,17 +78,17 @@ export function simulate_team(cfgs, team, runs, seed, onProgress = null) {
     if (r1.players.some((p) => p.dead)) die_p1 += 1;
     if (r1.players.every((p) => p.dead)) continue;
     if (scope === 'p1') { if (r1.end != null) { tot.push(r1.end); s1.push(r1.end); sp1.push(r1.end); } continue; }
-    const r2 = run_p2(r1, team, rng);
+    const r2 = run_p2(r1, team, rng.fork('p2'));
     if (r2.reds_tick == null) continue;
     depth.push(r2.hp / r2.max_hp * 100); reds.push(r2.reds_tick);
-    const r3 = run_reds(r2, cfgs, team, rng);
+    const r3 = run_reds(r2, cfgs, team, rng.fork('reds'));
     if (!r3.success) continue;
     if (scope === 'p2') {
       tot.push(r3.kill); s1.push(r1.end); s2.push(r3.kill - r1.end);
       sp1.push(r1.end); sproc.push(r2.proc_tick); sp2.push(r3.kill);
       continue;
     }
-    const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng);
+    const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng.fork('p3'));
     if (r4.kill == null) continue;
     tot.push(r4.end); s1.push(r1.end); s2.push(r3.kill - r1.end); s3.push(r4.end - r3.kill);
     sp1.push(r1.end); sproc.push(r2.proc_tick); sp2.push(r3.kill); sp3.push(r4.end);

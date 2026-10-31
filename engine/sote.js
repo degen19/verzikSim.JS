@@ -369,7 +369,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     let m = t + 5; while (instanceOf(m, entry) !== 0) m++;           // runners: click on the first i3 from T+4, move on the i0 after
     if (team === 1) m += SOLO_UNDER;                                 // solos: under first, then skip the maze as the runner
     attackable = m + 9; nextAttack = m + 10; back.push(attackable);
-    TR({ t, mark: `Maze ${mazes.length}` }); TR({ t: attackable, mark: `P${mazes.length + 1}` });
+    TR({ t, mark: mazes.length === 1 ? '66%' : '33%' });            // the maze procs, by her HP TR({ t: attackable, mark: `P${mazes.length + 1}` });
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
     if (live.some((p) => p.how[mazes.length - 1] === 'run')) { runMaze(t, m, live, under); return; }   // anyone runs: all run
     const runners = live.filter((p) => p !== under);
@@ -940,13 +940,14 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // ---- her attack
     if (!blocked && t === nextAttack && alive().length && t === skipAt) { nextAttack += ATTACK_EVERY; L.on && L(`t${t} SOTETSEG skips her attack (death ball)`); }
     else if (!blocked && t === nextAttack && alive().length) {
-      nextAttack += ATTACK_EVERY; TR(magicCount >= BALL_EVERY ? { t, boss: 'Death ball', short: 'DB', tip: 'death ball' } : { t, boss: 'Attack', tip: 'attack' });
+      nextAttack += ATTACK_EVERY; const btr = TR(magicCount >= BALL_EVERY ? { t, boss: 'Death ball', short: 'DB', icon: 'Death_ball', tip: 'death ball' } : { t, boss: 'Attack', icon: 'Sotetseg', tip: 'attack' });
       const tgt = rng.choice(alive());
+      if (btr) btr.tip = `${btr.boss === 'Death ball' ? 'death ball' : 'magic orb'} -> ${tgt.name}`;
       if (magicCount >= BALL_EVERY) {                                  // the death ball
         magicCount = 0; st.balls++; ball = { at: t + BALL_LANDS, tgt }; skipAt = t + ATTACK_EVERY;
         L.on && L(`t${t} SOTETSEG death ball -> ${tgt.name}, lands t${t + BALL_LANDS}`);
       } else if (tgt.lastMelee === t - 1 && rng.random() < 0.5) {
-        st.melees++;
+        st.melees++; if (btr) { btr.ring = '#000'; btr.tip = `melee -> ${tgt.name}`; }   // Show raid: a black border
         const ch = hit_chance((SOTE.atk + 9) * (SOTE.accMelee + 64), playerDef(tgt, 'crush'));
         const d = rng.random() < ch ? rng.randint(0, Math.floor(MELEE_MAX * 0.6)) : 0;   // prayed: max -40%
         tgt.pending.push([t + 1, d]);
@@ -975,7 +976,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           }
         }
       } else p.regen = 0;
-      if (!blocked && p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); hits[hits.length - 1].tr = TR({ t, i: p.i, thrall: true, dmg: 0 }); p.thrallNext = t + 4; }
+      if (!blocked && p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); hits[hits.length - 1].tr = TR({ t, i: p.i, thrall: true, dmg: 0, icon: 'Greater_ghost' }); p.thrallNext = t + 4; }
     }
     // ---- melee hits on players, then player attacks
     const floored = () => defLvl <= SOTE.defFloor;

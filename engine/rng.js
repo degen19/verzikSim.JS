@@ -5,6 +5,7 @@ export class Rng {
   constructor(seed) {
     if (seed === undefined || seed === null) seed = (Math.random() * 2 ** 32) >>> 0;
     // xmur3-style hash of the seed into a 128-bit state for sfc32
+    this.seed = String(seed);                                       // fork() derives streams from it
     let h = 1779033703 ^ String(seed).length;
     const s = String(seed);
     for (let i = 0; i < s.length; i++) {
@@ -19,6 +20,12 @@ export class Rng {
     this.a = next(); this.b = next(); this.c = next(); this.d = next();
     for (let i = 0; i < 15; i++) this.random();
   }
+
+  /** An independent stream for one part of the raid (e.g. 'p2', 'reds', 'p3'): seeded by this raid's seed and the
+   *  name, not by how many numbers were drawn before - so two setups that play an earlier phase differently still face
+   *  the same rolls in the later ones (sharper comparisons, same odds). */
+  // (a generator shared by many raids - the single-stream path - gets a new stream each time: the count is part of it)
+  fork(name) { this.forks ||= {}; const n = this.forks[name] = (this.forks[name] || 0) + 1; return new Rng(`${this.seed}|${name}|${n}`); }
 
   /** float in [0, 1) */
   random() {

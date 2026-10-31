@@ -316,6 +316,8 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
     `Tank: ${tank.name}${ducktank ? ' (Ducktank)' : ' (standard tank)'}. P3 tick 1 = t${Kp + 5}; first attacks t${Kp + 6}, ` +
     `autos from t${Kp + 10} every 7`);
   const tick = (t) => t - Kp - 4;                      // chart tick
+  // 3-5 man: no brews during webs - she doesn't attack then, so it's safe even when low (duos / solos may still brew)
+  const websQuiet = (t) => team > 2 && V['webs'] != null && t >= V['webs'][0] && t <= V['webs'][1];
   // ---- Verzik's schedule
   const V = {
     cd: 7, ev: 'auto', at: Kp + 10, n: 0, block: 9, cycle: 1, a9: null, proc: null, drag3: false,
@@ -638,7 +640,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       if (ga(p, 'last_atk_t', null) === t - 1 && !inv && !truthy(p.need_restore)) {
         if (truthy(supplies.heal_other(p, players, t, L, (q) => { q.pending.length = 0; }))) {
           st['heal_others'] = dget(st, 'heal_others', 0) + 1;
-        } else if (p.hp <= brew_at(p) && t >= p.sip_ready && truthy(supplies.scb_ok(p, players, brew_at)) && truthy(p.pool.take('brew'))) {
+        } else if (p.hp <= brew_at(p) && t >= p.sip_ready && !websQuiet(t) && truthy(supplies.scb_ok(p, players, brew_at)) && truthy(p.pool.take('brew'))) {
           p.pool.scb_res += 1;
           const old = p.hp;
           const ate = p.next_attack - t >= 3 && p.hp + supplies.SHARK_HEAL <= supplies.MAX_HP && truthy(p.pool.take('shark'));
@@ -658,7 +660,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
       }
       // last resort: no super combat to follow a normal brew, but brews left - brew only as much as it takes to
       // survive the next Verzik auto (her max hit of either style, halved on prayer); restoring prayer after redemption first
-      if (!truthy(p.need_restore) && t >= p.sip_ready && p.sc_at == null && p.pool.left['brew'] > 0 &&
+      if (!truthy(p.need_restore) && t >= p.sip_ready && p.sc_at == null && p.pool.left['brew'] > 0 && !websQuiet(t) &&
           !truthy(supplies.scb_ok(p, players, brew_at))) {
         const top = Math.max(verz_max('ranged', atk_lvl), verz_max('magic', atk_lvl)), mxh_ = truthy(p.prayer_down) ? top : floordiv(top, 2);
         if (0 < p.hp && p.hp <= mxh_ && truthy(p.pool.take('brew'))) {
