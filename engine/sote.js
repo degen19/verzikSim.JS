@@ -931,7 +931,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       if (wantLb !== p.lb) { p.lb = wantLb; if (p.lbLeft > 0 && p.lbStarted) L.on && L(`t${t} ${p.name} ${wantLb ? `back on Lightbearer (${p.lbLeft} cycles left)` : `at 100% - Ultor until they spec (${p.lbLeft} Lightbearer cycles left)`}`); if (wantLb) p.lbStarted = true; }
       if (p.regenHold) { /* waiting for their first spec */ } else if (p.spec < 100) {
         if (++p.regen >= (p.lb ? 25 : 50)) {                             // Lightbearer: a regen every 25 ticks
-          p.regen = 0; p.spec = Math.min(100, p.spec + 10);
+          const o0 = p.spec; p.regen = 0; p.spec = Math.min(100, p.spec + 10);
+          TR({ t, i: p.i, regen: `${p.lb ? 'Lightbearer ' : ''}spec regen ${o0}% -> ${p.spec}%` });
           if (p.lb && p.lbLeft > 0 && --p.lbLeft <= 0) {
             if (frozen) { mark(`lbStall:${p.i}`); L.on && L(`t${t} ${p.name} Lightbearer cycles done (${p.spec}%) in the stall - stays on it until they're out`); }
             else { p.lb = false; p.lbOffAt = t; L.on && L(`t${t} ${p.name} Lightbearer cycles done (${p.spec}%) - swaps to Ultor`); }

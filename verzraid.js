@@ -94,6 +94,11 @@ export function verzTrace(log, names, cfgs = null) {
     const sc = what.match(/(\d+(?:\.\d+)?)% -> (\d+(?:\.\d+)?)%/);
     const before = spec[i];
     if (sc) spec[i] = +sc[2];
+    // a spec regen (natural, Lightbearer, or a charted forced regen): the small r in the cell's corner
+    if (sc && /regen/i.test(what) && !/keeps Lightbearer|away/.test(what)) {
+      trace.push({ t, i, regen: `${/R forced/.test(what) ? 'forced spec regen' : 'spec regen'} ${sc[1]}% -> ${sc[2]}%` });
+      if (/^R forced regen/.test(what)) continue;
+    }
     const vg = what.match(/VENG (\d+) -> Verzik/);
     if (vg) { trace.push({ t, i, veng: +vg[1] }); continue; }
     if (/^SOULFLAME HORN/.test(what)) { const fr = what.match(/guaranteed first hit for (.*)$/); trace.push({ t, i, code: 'H', what: `Soulflame horn${fr ? ` - guaranteed first hit for ${fr[1]}` : ''}` }); continue; }
@@ -106,7 +111,6 @@ export function verzTrace(log, names, cfgs = null) {
       if (a) { a.dmg = (a.dmg || 0) + Math.max(0, +dmg[1]); a.landed = t; if (dmg[2] === 'crab') a.crab = true; }
       continue;
     }
-    if (/^R forced regen/.test(what)) { trace.push({ t, i, code: 'R' }); continue; }
     // an attack queued this tick
     const q = what.match(/^(.*?) queued/) || what.match(/^last swing before the shield - (\w+)/);
     const txt = q ? q[1] : what;
@@ -132,7 +136,7 @@ export function verzTrace(log, names, cfgs = null) {
   return out;
 }
 
-const LEGEND = 'pink-tinted ticks: her healing shield (reds) · R forced regen · F tick fill · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (BH blood heal, M magic, R ranged, GB green ball), purple PC a purple crab sent out, green + the purple heals her, orange PX its explosion, gold L lightning and LR its rebound - hover any cell for details';
+const LEGEND = 'pink-tinted ticks: her healing shield (reds) · r: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (BH blood heal, M magic, R ranged, GB green ball), purple PC a purple crab sent out, green + the purple heals her, orange PX its explosion, gold L lightning and LR its rebound - hover any cell for details';
 const store = new Map();
 /** The Show raid buttons for a setup (key: unique on the page). */
 export function verzRaidBar(key, cfgs, team, bps = []) {

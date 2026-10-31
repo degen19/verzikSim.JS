@@ -85,6 +85,7 @@ const CSS = `<style>
 /* her healing shield (Verzik reds): every cell in those ticks tinted pink */
 .rv .sh{box-shadow:inset 0 0 0 30px rgba(255,105,180,.16)}
 .rv .tk.sh{border-radius:3px}
+.rv .c .rg{position:absolute;right:2px;bottom:0;font-size:9px;font-weight:700;color:#9fd8ff;line-height:1}
 .rv .legend{color:#9aa0b0;font-size:11px;margin-top:4px}
 </style>`;
 
@@ -123,12 +124,13 @@ export function supplyText(lines) {
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
 export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '' }) {
-  const at = new Map(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
+  const regen = new Map(), at = new Map(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
   for (const x of trace) {
     if (x.shade) shade.add(x.t);
     else if (x.mark) marks.set(x.t, [...(marks.get(x.t) || []), x.mark]);
     else if (x.boss) boss.set(x.t, [...(boss.get(x.t) || []), { kind: 'attack', ...x }]);
     else if (x.hp != null) hpAt.set(x.t, x);
+    else if (x.regen) regen.set(`${x.i}:${x.t}`, x.regen);
     else if (x.veng != null) veng.set(`${x.i}:${x.t}`, x.veng);
     else if (x.supply) sup.set(`${x.i}:${x.t}`, [...(sup.get(`${x.i}:${x.t}`) || []), x.supply]);
     else if (x.i != null) at.set(`${x.i}:${x.t}`, x);
@@ -160,8 +162,9 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     };
     const bossRow = `<div class="lab boss">${esc(bossName)}</div>${ticks.map(bossCell).join('')}`;
     const rows = names.map((nm, i) => `<div class="lab">${esc(nm)}</div>${ticks.map((t) => {
-      const x = at.get(`${i}:${t}`), v = veng.get(`${i}:${t}`), su = sup.get(`${i}:${t}`);
+      const x = at.get(`${i}:${t}`), v = veng.get(`${i}:${t}`), su = sup.get(`${i}:${t}`), rg = regen.get(`${i}:${t}`);
       const vt = v != null ? `Vengeance - ${v} damage to ${bossName}` : '', st = su ? `Supplies: ${supplyText(su)}` : '';
+      const rt = rg ? rg.charAt(0).toUpperCase() + rg.slice(1) : '', rgMark = rg ? '<span class="rg">r</span>' : '';
       // supplies: a shark is its icon (sharing the cell with an attack, both smaller); brews / super combats / anything
       // else are small yellow / green / grey dots, a redemption proc a blue heart
       const kinds = su ? supplyKinds(su) : new Set(), shark = kinds.has('shark');
@@ -170,9 +173,9 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       const sharkImg = shark ? icon('Shark') : '', vengImg = v != null ? (CODE_ICON.V ? icon('V') : '<span class="vt">V</span>') : '';
       const n = (x ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0), dots = DOTS.some((q) => kinds.has(q));
       const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}`;   // hd: icons nudged right of the potion dots
-      if (x) return `<div class="c a${fit}${S(t)}" style="color:${CODE_COL[x.code] || '#fff'}" title="${esc([hitTip(nm, x), vt, st].filter(Boolean).join('\n'))}">${icon(x.code)}${vengImg}${sharkImg}${marks}</div>`;
-      if (v != null) return `<div class="c v${fit}${S(t)}" title="${esc([`${nm} - tick ${t}: ${vt}`, st].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}</div>`;
-      if (su) return `<div class="c${S(t)}" title="${esc(`${nm} - tick ${t}: ${st}`)}">${sharkImg}${marks}</div>`;
+      if (x) return `<div class="c a${fit}${S(t)}" style="color:${CODE_COL[x.code] || '#fff'}" title="${esc([hitTip(nm, x), vt, st, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${vengImg}${sharkImg}${marks}${rgMark}</div>`;
+      if (v != null) return `<div class="c v${fit}${S(t)}" title="${esc([`${nm} - tick ${t}: ${vt}`, st, rt].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}${rgMark}</div>`;
+      if (su || rg) return `<div class="c${S(t)}" title="${esc(`${nm} - tick ${t}: ${[st, rt].filter(Boolean).join('\n')}`)}">${sharkImg}${marks}${rgMark}</div>`;
       return `<div class="c${S(t)}"></div>`;
     }).join('')}`).join('');
     blocks.push(`<div class="blk" style="${cols}">${mk}${head}${bossRow}${rows}</div>`);
