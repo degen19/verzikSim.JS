@@ -83,7 +83,7 @@ export function neighbours(cfg, ctx) {
         if (!specOk(k, s)) continue;
         if (s === 'none' && backup && !SPEC_NEEDS.maul.some((w) => own(k, w))) continue;
         if (s === cur.spec && backup === !!cur.backup) continue;
-        const specs = p.specs.map((x, j) => (j === ph ? { ...x, spec: s, backup, ifBarrage: undefined } : x));
+        const specs = p.specs.map((x, j) => (j === ph ? { ...x, spec: s, backup, ifBarrage: undefined, ...(backup ? {} : { backups: undefined }) } : x));
         push(k, { specs }, `P${k + 1} P${ph + 1} ${backup ? 'backup ' : ''}${s}`);
       }
       // P1 maul -> 'maul, or a damage spec if the Barrage landed' (only with a Shadow Barrage in the team, or one possible)
@@ -91,6 +91,7 @@ export function neighbours(cfg, ctx) {
         for (const alt of IF_BARRAGE) if (alt !== cur.ifBarrage && altOk(k, alt)) push(k, { specs: withSpec(p, 0, { ifBarrage: alt }) }, `P${k + 1} P1 ${cur.spec}, ${alt === 'none' ? 'no spec' : alt} if the Barrage lands`);
         if (cur.ifBarrage) push(k, { specs: withSpec(p, 0, { ifBarrage: undefined }) }, `P${k + 1} P1 ${cur.spec} always`);
       }
+      if (cur.backup) push(k, { specs: withSpec(p, ph, { backups: Number(cur.backups) === 2 ? undefined : 2 }) }, `P${k + 1} P${ph + 1} backup ${Number(cur.backups) === 2 ? '1 try' : 'up to 2 tries'}`);
       if (ctx.gear[k].horn) for (const n of [0, 1, 2]) if (n !== hornN(cur)) push(k, { specs: withSpec(p, ph, { horn: n === 2 ? 2 : n === 1 }) }, `P${k + 1} P${ph + 1} ${n ? `horn ${n} maul${n > 1 ? 's' : ''}` : 'no horn'}`);
     }
   });
@@ -134,7 +135,7 @@ export function neighbours(cfg, ctx) {
         const x = a.specs[ph], y = b.specs[ph];
         if (x.spec === y.spec && !!x.backup === !!y.backup) continue;
         if (!specOk(j, x.spec) || !specOk(i, y.spec)) continue;
-        many({ [i]: { specs: withSpec(a, ph, { spec: y.spec, backup: !!y.backup, ifBarrage: y.ifBarrage }) }, [j]: { specs: withSpec(b, ph, { spec: x.spec, backup: !!x.backup, ifBarrage: x.ifBarrage }) } }, `P${ph + 1} specs P${i + 1} <-> P${j + 1}`);
+        many({ [i]: { specs: withSpec(a, ph, { spec: y.spec, backup: !!y.backup, ifBarrage: y.ifBarrage, backups: y.backups }) }, [j]: { specs: withSpec(b, ph, { spec: x.spec, backup: !!x.backup, ifBarrage: x.ifBarrage, backups: x.backups }) } }, `P${ph + 1} specs P${i + 1} <-> P${j + 1}`);
       }
     }));
   }
@@ -157,7 +158,8 @@ export function pruneUnfired(cfg, events, raids = 0) {
   const players = cfg.players.map((p, i) => ({ ...p, specs: p.specs.map((x, ph) => {
     let y = x;
     if (y.horn && !fired(i, ph, 'horn')) { y = { ...y, horn: false }; changed = true; }
-    if ((y.spec !== 'none' || y.backup) && !fired(i, ph)) { y = { ...y, spec: 'none', backup: false, ifBarrage: undefined }; changed = true; }   // nothing went off (a backup too)
+    if (Number(y.backups) === 2 && !(events[`backup2:${i}:${ph}`] >= min)) { y = { ...y, backups: undefined }; changed = true; }   // a second backup try that (almost) never happens
+    if ((y.spec !== 'none' || y.backup) && !fired(i, ph)) { y = { ...y, spec: 'none', backup: false, ifBarrage: undefined, backups: undefined }; changed = true; }   // nothing went off (a backup too)
     else if (y.backup && (y.spec === 'zcb' || y.spec === 'claws') && !fired(i, ph, 'zcb') && !fired(i, ph, 'claws')) { y = { ...y, spec: 'none' }; changed = true; }   // a backup whose damage spec never went off
     return y;
   }) }));

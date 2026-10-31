@@ -186,17 +186,20 @@ export function createSote(host, { getTeam }) {
       if (n === 1 && m.includes('shark') && !(m[0] === 'shark' && m[1] === 'pneck')) tips.push(`${pname(k)} has 1 phoenix necklace: shark skip the first maze, then the necklace on the second.`);
       if (n === 1 && m.includes('redemption') && !(m[0] === 'pneck' && m[1] === 'redemption')) tips.push(`${pname(k)} has 1 phoenix necklace: the necklace on the first maze, then a redemption skip on the second (they can veng the first phase more freely).`);
     }
+    st.players.forEach((p, k) => { if (p.prefire === 'Shadow Barrage' && !(gp && (gp[k].weapons || []).includes('Shadow ancient sceptre'))) notes.push(`Please add a Shadow ancient sceptre to ${pname(k)}'s configs`); });
     const sharkers = all.filter(({ m }) => m.includes('shark')).map(({ k }) => pname(k));
     if (sharkers.length > 1) notes.push(`Only one player can shark skip (${sharkers.join(', ')}).`);
     const runs = [0, 1].filter((i) => all.some(({ m }) => m[i] === 'run'));
     const hasHorn = (k) => !!(gp && gp[k] && gp[k].horn);
     const specsOf = (p, k) => (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[k] || [{}, {}, {}]));
+    const barrageOk = st.players.some((q, j) => q.prefire === 'Shadow Barrage' && !!(gp && (gp[j].weapons || []).includes('Shadow ancient sceptre')));
     const specCell = (p, k, ph) => {
       const sp = specsOf(p, k)[ph] || {};
       return `<select data-sp="${k}|${ph}|spec">${SPECS.map(([v, lab]) => `<option value="${v}" ${v === (sp.spec || 'none') ? 'selected' : ''}>${lab}</option>`).join('')}</select>
-        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Backup: scythe first; once the phase's mauls have landed, maul if her Defence isn't at the floor - otherwise their spec"><input type="checkbox" data-sp="${k}|${ph}|backup" ${sp.backup ? 'checked' : ''}>Backup</label>
+        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Backup: scythe first; once the phase's mauls have landed, maul if her Defence isn't at the floor - otherwise their spec"><input type="checkbox" data-sp="${k}|${ph}|backup" ${sp.backup ? 'checked' : ''}>Backup</label>${sp.backup ? `
+        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Backup tries this phase. 2: if their backup misses and her Defence still isn't at the floor, they back up again (after every other backup's first try)">Tries<select data-sp="${k}|${ph}|backups">${[1, 2].map((n) => `<option value="${n}" ${n === (Number(sp.backups) === 2 ? 2 : 1) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
         <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="${hasHorn(k) ? 'Soulflame horn (25% per other player): one or two other players (those mauling this phase first, then others\' scythes) and the caster get a buff on their next melee hit - a maul / BGS can\'t miss, a scythe\'s first hitsplat can\'t miss, claws\' second accuracy roll can\'t miss (a ZCB gets nothing). P1: on t8; P2-P3: after their first scythe off the maze' : 'No Soulflame horn (Gear tab)'}">Horn<select data-sp="${k}|${ph}|horn" ${hasHorn(k) ? '' : 'disabled'}>${[['', 'None'], ['1', '1 player (25%)'], ['2', '2 players (50%)']].map(([v, l]) => `<option value="${v}" ${v === (hasHorn(k) && sp.horn ? (Number(sp.horn) === 2 ? '2' : '1') : '') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>${team() === 2 && ph === 0 ? `
-        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Duos: if both P1 mauls miss, maul again; if that misses too, the other player mauls P2 and this one camps Lightbearer to maul P3"><input type="checkbox" data-sp="${k}|${ph}|duoBackup" ${sp.duoBackup ? 'checked' : ''}>Backup if both miss</label>` : ''}${ph === 0 && team() >= 3 && (sp.spec === 'maul' || sp.spec === 'bgs') && !sp.backup ? `
+        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Duos: if both P1 mauls miss, maul again; if that misses too, the other player mauls P2 and this one camps Lightbearer to maul P3"><input type="checkbox" data-sp="${k}|${ph}|duoBackup" ${sp.duoBackup ? 'checked' : ''}>Backup if both miss</label>` : ''}${ph === 0 && team() >= 3 && barrageOk && (sp.spec === 'maul' || sp.spec === 'bgs') && !sp.backup ? `
         <label class="small" style="margin-top:4px" title="If a Shadow Barrage prefire landed: scythe first and wait on the P1 mauls - none hit: ${sp.spec === 'bgs' ? 'BGS' : 'maul'} (ahead of the backups); one hit: this spec instead. Barrage missed (or none): ${sp.spec === 'bgs' ? 'BGS' : 'maul'} on their first hit.">If a Barrage lands<select data-sp="${k}|${ph}|ifBarrage">${[['', `${sp.spec === 'bgs' ? 'BGS' : 'Maul'} anyway`], ['zcb', 'ZCB if a maul landed'], ['claws', 'Claws if a maul landed'], ['none', 'No spec if a maul landed']].map(([v, l]) => `<option value="${v}" ${v === (sp.ifBarrage || '') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}`;
     };
     // spec planner: the projection on typical phase times for the scale, or the last report's medians
@@ -332,7 +335,9 @@ export function createSote(host, { getTeam }) {
       const [k, ph, f] = t.dataset.sp.split('|'), p = st.players[Number(k)];
       p.specs = (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[Number(k)] || [{}, {}, {}])).map((x) => ({ spec: 'none', backup: false, horn: false, ...x }));
       if (f === 'ifBarrage') { if (t.value) p.specs[Number(ph)].ifBarrage = t.value; else delete p.specs[Number(ph)].ifBarrage; }
+      else if (f === 'backups') { if (t.value === '2') p.specs[Number(ph)].backups = 2; else delete p.specs[Number(ph)].backups; }
       else p.specs[Number(ph)][f] = f === 'spec' ? t.value : f === 'horn' ? (t.value === '2' ? 2 : t.value === '1') : t.checked;
+      if (!p.specs[Number(ph)].backup) delete p.specs[Number(ph)].backups;
       if (f !== 'ifBarrage' && (Number(ph) !== 0 || p.specs[0].backup || !['maul', 'bgs'].includes(p.specs[0].spec))) delete p.specs[Number(ph)].ifBarrage;
       persist(); render(); return;
     }
@@ -365,12 +370,13 @@ export function createSote(host, { getTeam }) {
   const btn = (a) => rep.querySelector(`[data-act="${a}"]`);
   const playersNow = (st = tstate()) => {
     const g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null;
+    const barrageOk = st.players.some((q, j) => q.prefire === 'Shadow Barrage' && !!(gp && (gp[j].weapons || []).includes('Shadow ancient sceptre')));
     return st.players.map((p, k) => {
       const gear = gp ? gp[k] : blankPlayer(k), orb = !!gear.locator;
       return { name: gear.name || `Player ${k + 1}`, gear, own: true, prefire: p.prefire || '', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge,
         lbCycles: Number(p.lbCycles || 0), pnecks: Number(p.pnecks || 0), sharks: Number(p.sharks || 0), rests: Number(p.rests || 0), restores: Number(p.restores ?? 3),
         mazes: Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), orb, team()),
-        specs: (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[k] || [])).map((x) => ({ ...x, horn: gear.horn ? (x.horn ? (Number(x.horn) === 2 ? 2 : true) : false) : false })) };
+        specs: (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[k] || [])).map((x) => { const y = { ...x, horn: gear.horn ? (x.horn ? (Number(x.horn) === 2 ? 2 : true) : false) : false }; if (!barrageOk) delete y.ifBarrage; return y; }) };
     });
   };
   rep.addEventListener('click', (e) => {
@@ -551,7 +557,7 @@ export function createSote(host, { getTeam }) {
     const recs = [...others.filter(isM), ...others.filter((j) => !isM(j)).sort((a, b) => zcbNow(a) - zcbNow(b))].slice(0, Number(x.horn) === 2 ? 2 : 1);
     return `Horn ${recs.map((j) => `${pnameOf(set, j)}'s ${isM(j) ? (P[j].specs[ph].spec === 'bgs' ? 'BGS' : 'maul') : 'next hit'}`).join(' + ')}${x.spec === 'none' && !x.backup ? '' : ' + '}`;
   };
-  const specTxt = (x, k, ph, P, set) => `${x.horn ? (P ? hornTxt(x, k, ph, P, set) : 'Horn + ') : ''}${x.horn && P && x.spec === 'none' && !x.backup ? '' : x.backup ? `backup (${x.spec === 'none' || x.spec === 'maul' ? 'maul if needed' : x.spec === 'bgs' ? 'BGS if needed' : `maul if needed, else ${KINDS[x.spec]}`})` : KINDS[x.spec] || x.spec}${x.ifBarrage ? ` (Barrage landed: ${x.ifBarrage === 'none' ? 'first backup' : `first backup, else ${KINDS[x.ifBarrage]}`})` : ''}`;
+  const specTxt = (x, k, ph, P, set) => `${x.horn ? (P ? hornTxt(x, k, ph, P, set) : 'Horn + ') : ''}${x.horn && P && x.spec === 'none' && !x.backup ? '' : x.backup ? `backup (${x.spec === 'none' || x.spec === 'maul' ? 'maul if needed' : x.spec === 'bgs' ? 'BGS if needed' : `maul if needed, else ${KINDS[x.spec]}`}${Number(x.backups) === 2 ? ', up to 2 tries' : ''})` : KINDS[x.spec] || x.spec}${x.ifBarrage ? ` (Barrage landed: ${x.ifBarrage === 'none' ? 'first backup' : `first backup, else ${KINDS[x.ifBarrage]}`})` : ''}`;
   /** "If this happens, do this": the setup's contingencies, with the share of raids each came up in. */
   /** The decision tree: each player's planned route, then what they do if things go another way (share of raids). */
   /** Show raid: the buttons (kind: 'o' Optimizer / 'v' Solver row) and the timeline of the picked raid. */
@@ -564,7 +570,7 @@ export function createSote(host, { getTeam }) {
     const trace = [], res = runSote(players, team(), new Rng(`${seed}#${pk.i}`), null, { entry, ...opts, trace });
     box.innerHTML = timelineHtml({ trace, names: players.map((p, k) => pnameOf(r.set, k)), bossName: 'Sotetseg', end: res.end,
       title: `${raidTitle(which, 'Sotetseg')} - ${tm(pk.total)} (entry i${entry}; ${pk.typical} of the ${pk.n} raids that ended at ${tm(pk.total)} went this way)`,
-      legend: 'ZCB bolt and ZCB spec share the crossbow icon (hover to tell) · r: a spec regen · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (DB death ball) - hover any cell for details' });
+      legend: 'ZCB bolt and ZCB spec share the crossbow icon (hover to tell) · purple tint: the chosen player, under the maze; lighter: the others on the maze · r: a spec regen · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (DB death ball) - hover any cell for details' });
   };
   /** A setup's procedure: per player prefire, start spec, surge, Lightbearer and each phase's spec. r: {cfg, set}. */
   const procTable = (r) => `<table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
@@ -589,7 +595,7 @@ export function createSote(host, { getTeam }) {
         } else if (x.backup) {
           const m = c(`backup:${k}:${ph}:maul`), sp = c(`backup:${k}:${ph}:spec`), cl = ph === 2 && x.spec === 'zcb' ? Math.min(sp, c(`clawsForZcb:${k}`)) : 0, rest = n - m - sp;
           const dmg = x.spec === 'none' || isDef(x.spec) ? [] : cl >= sp && sp ? [`claws (her HP already under ${cb}) (${pc(sp)})`] : [sp - cl ? `${K(x.spec)} (${pc(sp - cl)})` : null, cl ? `claws instead if her HP is already under ${cb} (${pc(cl)})` : null].filter(Boolean);
-          const parts = [m >= n * 0.01 ? `${K(x.spec === 'bgs' ? 'bgs' : 'maul')} once ${whose(maulers(ph, k))} ${maulers(ph, k).length === 1 ? 'has' : 'have'} landed, if her Defence isn't at the floor yet (${pc(m)})` : null, dmg.length && sp >= n * 0.01 ? `otherwise ${dmg.join(', ')}` : null, (m >= n * 0.01 || sp >= n * 0.01) && rest >= n * 0.01 ? `no spec (${pc(rest)})` : null].filter(Boolean);
+          const parts = [m >= n * 0.01 ? `${K(x.spec === 'bgs' ? 'bgs' : 'maul')} once ${whose(maulers(ph, k))} ${maulers(ph, k).length === 1 ? 'has' : 'have'} landed, if her Defence isn't at the floor yet (${pc(m)})` : null, dmg.length && sp >= n * 0.01 ? `otherwise ${dmg.join(', ')}` : null, (m >= n * 0.01 || sp >= n * 0.01) && rest >= n * 0.01 ? `no spec (${pc(rest)})` : null, c(`backup2:${k}:${ph}`) >= n * 0.01 ? `the maul missed and she still isn't at the floor: ${K(x.spec === 'bgs' ? 'bgs' : 'maul')} again (${pc(c(`backup2:${k}:${ph}`))})` : null].filter(Boolean);
           lines.push(parts.length ? `${at}: ${parts.join('; ')}.` : `${at}: the backup is almost never needed (under 1% of raids).`);   // under 1% of raids: left out
         } else if (x.spec !== 'none') {
           const f = x.spec === 'zcb' && ph === 2 ? fired('zcb') + fired('claws') : fired(x.spec === 'bgs' ? 'bgs' : x.spec === 'maul' ? 'maul' : x.spec);
@@ -604,6 +610,7 @@ export function createSote(host, { getTeam }) {
             lines.push(`${at}: ${K(x.spec)} ${parts.join('; ')}.`);
           } else if (f < n * 0.99) lines.push(`${at}: ${K(x.spec)} goes off in ${pc(f)} - ${bk >= 0 ? `not if they backed up in P${bk + 1} (no spec left)` : 'otherwise no spec in time'}.`);
         }
+        if (c(`extra:${k}:${ph}`) >= n * 0.01) lines.push(`${at}: claws with the spec they have left, once their P3 plan is done (${pc(c(`extra:${k}:${ph}`))}).`);
         // who the horn went to, when that changes (a conditional maul that waits on a Barrage isn't buffed)
         const hr = Object.entries(ev).filter(([e, v]) => e.startsWith(`horn:${k}:${ph}:`) && v >= n * 0.01);
         if (x.horn && hr.length > 1) lines.push(`${at} horn: ${hr.sort((u, w) => w[1] - u[1]).map(([e, v]) => { const js = e.split(':')[3].split('+').filter(Boolean).map(Number); return `${js.length ? js.map(nm).join(' + ') : 'nobody else'} (${js.length * 25 || 25}%) ${pc(v)}`; }).join(' · ')}.`);

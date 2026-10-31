@@ -135,6 +135,8 @@ const CSS = `<style>
 .rv .mk span{display:inline-block;border:1px solid #6b74ff;color:#c8ccff;border-radius:4px;padding:2px 5px;background:#1f2140}
 /* her healing shield (Verzik reds): every cell in those ticks tinted pink */
 .rv .sh{box-shadow:inset 0 0 0 30px rgba(255,105,180,.16)}
+.rv .c.ch{box-shadow:inset 0 0 0 30px rgba(150,110,255,.45)}
+.rv .c.mz{box-shadow:inset 0 0 0 30px rgba(150,110,255,.16)}
 .rv .tk.sh{border-radius:3px}
 .rv .c .rg{position:absolute;right:2px;bottom:0;font-size:9px;font-weight:700;color:#9fd8ff;line-height:1}
 .rv .legend{color:#9aa0b0;font-size:11px;margin-top:4px}
@@ -175,15 +177,18 @@ export function supplyText(lines) {
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
 export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '' }) {
-  const regen = new Map(), at = new Map(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
+  const regen = new Map(), at = new Map(), horn = new Map(), chosen = new Set(), onMaze = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
   for (const x of trace) {
     if (x.shade) shade.add(x.t);
+    else if (x.chosen) chosen.add(`${x.i}:${x.t}`);
+    else if (x.onMaze) onMaze.add(`${x.i}:${x.t}`);
     else if (x.mark) marks.set(x.t, [...(marks.get(x.t) || []), x.mark]);
     else if (x.boss) boss.set(x.t, [...(boss.get(x.t) || []), { kind: 'attack', ...x }]);
     else if (x.hp != null) hpAt.set(x.t, x);
     else if (x.regen) regen.set(`${x.i}:${x.t}`, x.regen);
     else if (x.veng != null) veng.set(`${x.i}:${x.t}`, x.veng);
     else if (x.supply) sup.set(`${x.i}:${x.t}`, [...(sup.get(`${x.i}:${x.t}`) || []), x.supply]);
+    else if (x.i != null && x.code === 'H') horn.set(`${x.i}:${x.t}`, x);   // a horn: its own icon, sharing the cell with an attack
     else if (x.i != null) at.set(`${x.i}:${x.t}`, x);
   }
   // hover: the tick - her phase and HP at the end of it, and what she did; an attack - what it did when it landed
@@ -212,8 +217,9 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       return `<div class="c b${S(t)}" style="background:${BOSS_BG[top.kind] || BOSS_BG.attack}" data-tip="${esc(tickTip(t))}">${esc(short)}</div>`;
     };
     const bossRow = `<div class="lab boss">${esc(bossName)}</div>${ticks.map(bossCell).join('')}`;
+    const CH = (i, t) => (chosen.has(`${i}:${t}`) ? ' ch' : onMaze.has(`${i}:${t}`) ? ' mz' : '');   // the chosen player (under the maze); the others on it
     const rows = names.map((nm, i) => `<div class="lab">${esc(nm)}</div>${ticks.map((t) => {
-      const x = at.get(`${i}:${t}`), v = veng.get(`${i}:${t}`), su = sup.get(`${i}:${t}`), rg = regen.get(`${i}:${t}`);
+      const x = at.get(`${i}:${t}`), h = horn.get(`${i}:${t}`), v = veng.get(`${i}:${t}`), su = sup.get(`${i}:${t}`), rg = regen.get(`${i}:${t}`);
       const vt = v != null ? `Vengeance - ${v} damage to ${bossName}` : '', st = su ? `Supplies: ${supplyText(su)}` : '';
       const rt = rg ? rg.charAt(0).toUpperCase() + rg.slice(1) : '', rgMark = rg ? '<span class="rg">r</span>' : '';
       // supplies: a shark is its icon (sharing the cell with an attack, both smaller); brews / super combats / anything
@@ -222,12 +228,14 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       const marks = `${kinds.has('redemption') ? `<span class="rd">${icon('Redemption')}</span>` : ''}${DOTS.some((q) => kinds.has(q)) ? `<span class="dots">${DOTS.filter((q) => kinds.has(q)).map((q) => `<i class="${q}"></i>`).join('')}</span>` : ''}`;
       // the shark and a vengeance proc share the cell with an attack (all smaller): veng is its icon (V until the icon's in)
       const sharkImg = shark ? icon('Shark') : '', vengImg = v != null ? (CODE_ICON.V ? icon('V') : '<span class="vt">V</span>') : '';
-      const n = (x ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0), dots = DOTS.some((q) => kinds.has(q));
+      const hornImg = h ? icon('H') : '', ht = h ? hitTip(nm, h) : '';
+      const n = (x ? 1 : 0) + (h ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0), dots = DOTS.some((q) => kinds.has(q));
       const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}`;   // hd: icons nudged right of the potion dots
-      if (x) return `<div class="c a${fit}${S(t)}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), vt, st, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${vengImg}${sharkImg}${marks}${rgMark}</div>`;
-      if (v != null) return `<div class="c v${fit}${S(t)}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, st, rt].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}${rgMark}</div>`;
-      if (su || rg) return `<div class="c${S(t)}" data-tip="${esc(`${nm} - tick ${t}: ${[st, rt].filter(Boolean).join('\n')}`)}">${sharkImg}${marks}${rgMark}</div>`;
-      return `<div class="c${S(t)}"></div>`;
+      if (x) return `<div class="c a${fit}${S(t)}${CH(i, t)}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), ht, vt, st, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${hornImg}${vengImg}${sharkImg}${marks}${rgMark}</div>`;
+      if (h) return `<div class="c a${fit}${S(t)}${CH(i, t)}" style="color:${CODE_COL.H}" data-tip="${esc([ht, vt, st, rt].filter(Boolean).join('\n'))}">${hornImg}${vengImg}${sharkImg}${marks}${rgMark}</div>`;
+      if (v != null) return `<div class="c v${fit}${S(t)}${CH(i, t)}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, st, rt].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}${rgMark}</div>`;
+      if (su || rg) return `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${[st, rt].filter(Boolean).join('\n')}`)}">${sharkImg}${marks}${rgMark}</div>`;
+      return CH(i, t) ? `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${chosen.has(`${i}:${t}`) ? 'chosen - under the maze' : 'on the maze'}`)}"></div>` : `<div class="c${S(t)}"></div>`;
     }).join('')}`).join('');
     blocks.push(`<div class="blk" style="${cols}">${mk}${head}${bossRow}${rows}</div>`);
   }
