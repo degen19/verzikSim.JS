@@ -155,7 +155,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     p.thrall_next = null;
     p.reds_dmg = 0;
     p.sh_plan = null;          // shadow player under 100% on r11: 'claw_first' (50%+) or 'shadow16' (under 50%)
-    p.reds_claws = 0;
+    p.reds_claws = 0; p.reds_line = {};   // what they hit Verzik with in reds (the Optimizer / Solver branch summaries)
     p.sh_col_done = false;
     p.purple_pending = false;             // no purple to come once the reds start
     p.reds_bp = false;
@@ -341,7 +341,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       }
       if (pc && p === pdc && ga(p, 'reds_bp', false)) {
         if (t >= p.next_attack) {
-          const [ch] = blowpipe_chance(p);
+          const [ch] = blowpipe_chance(p); p.reds_line.BP = (p.reds_line.BP || 0) + 1;
           const ok = rng.random() < ch;
           p.next_attack = t + 2;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: blowpipe at purple crab (acc ${fx(ch * 100, 1)}%) -> `
@@ -417,7 +417,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const [ch, mx] = shadow_numbers(p);
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
-          st['shadow'] += 1; st['shadow_dmg'] += d;
+          st['shadow'] += 1; st['shadow_dmg'] += d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
           p.next_attack = t + 5; p.reds_n = n;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow) -> ${d}`);
           if (p.thrall_next == null) {
@@ -429,7 +429,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const old = p.spec; p.spec -= 30;                // no claws: halberd from range on the r36 collision (no push)
           const hits = halb_hits(p, rng);
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
-          p.next_attack = t + 7; p.reds_n = n; st['halb'] = dget(st, 'halb', 0) + 1;
+          p.next_attack = t + 7; p.reds_n = n; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC from range on the r36 collision (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
           continue;
         } else if (verz && !p.zcb_due) {
@@ -443,13 +443,13 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const [ch, mx] = shadow_numbers(p);
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
-          st['shadow'] += 1; st['shadow_dmg'] += d;
+          st['shadow'] += 1; st['shadow_dmg'] += d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
           p.next_attack = t + 5;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (${why}, acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
         } else if (p.zcb_due) {
           const [ch, mx] = zcb_auto(p);
           p.zcb_due = false;
-          st['zcb'] += 1;
+          st['zcb'] += 1; p.reds_line.Z = (p.reds_line.Z || 0) + 1;
           if (rng.random() < 0.066) {
             st['ruby'] += 1;
             p.hp -= floordiv(p.hp, 10);
@@ -468,7 +468,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const old = p.spec; p.spec -= 30;
           const hits = halb_hits(p, rng);
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
-          p.next_attack = t + 7; st['halb'] = dget(st, 'halb', 0) + 1;
+          p.next_attack = t + 7; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
         } else if (p.spec >= 50 && p.has_dc !== false && (
           (p.sh_plan == null && n >= 3)
@@ -478,7 +478,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const old = p.spec;
           p.spec -= 50;
           const [hits, ch, mx] = claw_spec(p, rng);
-          st['claws'] += 1;
+          st['claws'] += 1; p.reds_line.C = (p.reds_line.C || 0) + 1;
           hits.forEach((d, k) => {
             vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
           });
@@ -493,7 +493,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']);
           });
           p.next_attack = t + 7;
-          st['halb'] = dget(st, 'halb', 0) + 1;
+          st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
         } else {
           const [ch, mx] = scythe_roll(p);
@@ -504,7 +504,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             splats.push(d);
             vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p, 'dmg']);
           });
-          p.next_attack = t + 5;
+          p.next_attack = t + 5; p.reds_line.S = (p.reds_line.S || 0) + 1;
           if (buffed) {
             st['horn_hits'] += 1; p.horn_buff = null;
           }

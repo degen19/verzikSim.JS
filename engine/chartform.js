@@ -21,7 +21,7 @@ const SELECTS = {
   'mage cape': ['Imbued sara', 'Infernal'],
 };
 const FIXED = new Set(['necklace', 'boots', 'gloves']);           // mage gear the sim always assumes
-const TEXT = new Set(['Name', 'Custom Surge Timing']);
+const TEXT = new Set(['Name', 'Custom Surge Timing', 'Ring % by Dawns']);
 // several choices in one cell ("P2 crabs / P3"; 'None' = none of them; blank = all)
 export const MULTI = { 'Blood fury in': ['P2 crabs', 'P2 Verzik', 'P3'] };
 /** A multi-choice cell's picks (blank = all of them). */

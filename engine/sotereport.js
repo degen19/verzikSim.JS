@@ -19,12 +19,16 @@ export function addSoteRaids(res, players, team, from, to, { seed = 'sote', entr
   for (let i = from; i < to; i++) {
     const r = runSote(players, team, new Rng(`${seed}#${i}`), null, { entry, splitBall, stallTick, ...(clawBelow != null ? { clawBelow } : {}) });
     res.runs++;
+    // what happened (the decision tree counts): the engine's events, the specs that went off, carried ZCBs / claws
+    const ev = new Set(r.events || []);
+    for (const x of r.specLog || []) { ev.add(`fired:${x.i}:${x.carried ? x.ph - 1 : x.ph}:${x.kind}`); if (x.carried) ev.add(`carried:${x.i}:${x.ph - 1}`); }
+    res.events ||= {}; for (const e of ev) res.events[e] = (res.events[e] || 0) + 1;
     const dead = r.players.filter((p) => p.dead).length;
     res.deaths += dead; if (dead) res.raidsWithDeath++;
     for (const x of r.runs || []) { res.mazeRuns++; res.runLost += x.lost; }
     for (const x of new Set((r.specMissed || []).map((m) => `${players[m.i]?.name || `Player ${m.i + 1}`}: P${m.ph + 1} ${{ maul: 'maul', bgs: 'BGS', claws: 'claws', zcb: 'ZCB', horn: 'horn' }[m.kind] || m.kind}`))) res.missed[x] = (res.missed[x] || 0) + 1;
     if (r.end == null || !r.split) { res.wipes++; continue; }
-    res.total.push(r.end);
+    res.total.push(r.end); (res.idx ||= []).push(i);                   // idx: the raid's index (Show raid replays it)
     for (const k of Object.keys(res.split)) res.split[k].push(r.split[k]);
   }
   return res;

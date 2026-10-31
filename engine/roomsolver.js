@@ -267,7 +267,7 @@ export const localEvaluator = {
 
 // ------------------------------------------------------------------ the search
 /** The settings that make a setup (everything the search chooses but the reds DCs). */
-const coreKey = (cfg) => JSON.stringify(cfg.map((c) => [c.lightbearerOn, c.PurpleDC, c.ringSwitch ?? null, c.startSpec, c.actions,
+const coreKey = (cfg) => JSON.stringify(cfg.map((c) => [c.lightbearerOn, c.PurpleDC, c.ringSwitch ?? null, c.ringByDawns ?? null, c.startSpec, c.actions,
   !!c.horn, !!c.hornP2, !!c.hornP3, !!c.Purple2DC, !!c.shadowCamp, !!c.shadow31, !!c.shadowLB, c.dawnThr ?? null, c.lastHitThr ?? null, c.eastBounce || 0,
   !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null, c.hasBP !== false, !!c.shadow, !!c.deepProc, c.shadowSrc ?? null]));
 /** Every k-player subset of 0..n-1 (sorted). */
@@ -534,13 +534,21 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
       const r = await optionPass(s0, opts);
       if (r.changed) { stats.shadowChanged = (stats.shadowChanged || 0) + 1; s0 = await ringPass(r.s); }
     }
+    // Boak sides (West / East for the purple) as a bitmask of East players: every split with someone on each side
+    const sideSplit = (m) => (cf) => cf.map((c, k) => {
+      const e = !!(m >> k & 1);
+      return { ...c, eastBoak: e, westBoak: !e, ...(e && !c.eastPattern ? { eastPattern: '0-T' } : {}) };
+    });
+    const withEbt = (f, v) => (cf) => f(cf).map((c) => ({ ...c, eastBounce: v }));
     if (team !== 2 && o.sideSearch) {
-      // who goes West / East for the purple (Boak sides), when asked for: every split with at least one player on each side
+      // who goes West / East, when asked for: every split - with East bounce tech searched too, every split with every
+      // tech value (0-3) together: the tech pays off per East player (more of them dodge the bounce), so the best
+      // sides depend on it
       const opts = [];
-      for (let m = 1; m < (1 << team) - 1; m++) opts.push((cf) => cf.map((c, k) => {
-        const e = !!(m >> k & 1);
-        return { ...c, eastBoak: e, westBoak: !e, ...(e && !c.eastPattern ? { eastPattern: '0-T' } : {}) };
-      }));
+      for (let m = 1; m < (1 << team) - 1; m++) {
+        if (o.ebtSearch) for (const v of [0, 1, 2, 3]) opts.push(withEbt(sideSplit(m), v));
+        else opts.push(sideSplit(m));
+      }
       const r = await optionPass(s0, opts);
       if (r.changed) { stats.sideChanged = (stats.sideChanged || 0) + 1; s0 = await ringPass(r.s); }
     }
@@ -549,8 +557,12 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
       if (r.changed) stats.dawnChanged = (stats.dawnChanged || 0) + 1;
       let s = r.s, any = r.changed;
       // East bounce tech (0-3), when asked for (Advanced): it trades some success for speed, so it is opt-in
-      if (o.ebtSearch) {
-        const e = await optionPass(s, [0, 1, 2, 3].map((v) => (cf) => cf.map((c) => ({ ...c, eastBounce: v }))));
+      if (o.ebtSearch && !o.sideSearch) {                              // (with the side search: tried with the sides above)
+        // each value on the charted sides, and 1-3 also with each "1 West, the rest East" split (most players gain
+        // from the tech)
+        const oneWest = Array.from({ length: team }, (_, w) => ((1 << team) - 1) & ~(1 << w));
+        const e = await optionPass(s, [0, 1, 2, 3].flatMap((v) => [(cf) => cf.map((c) => ({ ...c, eastBounce: v })),
+          ...(v ? oneWest.map((m) => withEbt(sideSplit(m), v)) : [])]));
         if (e.changed) stats.ebtChanged = (stats.ebtChanged || 0) + 1;
         s = e.s; any = any || e.changed;
       }
@@ -656,6 +668,32 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
       if (!okSucc(c)) return;
       s3.push({ ...from[i], cfg: list[i], c });
     });
+    s3.sort((a, b) => rank(b.c, true) - rank(a.c, true));
+  }
+  // Dawn branches: P1 can die in fewer Dawn specs than charted, and the best ring swap can differ by branch (Ring % by
+  // Dawns). For the best few setups, each Lightbearer player's swap for each branch (every Dawn count P1 died in on 1%+
+  // of 500 P1s - the same cutoff as the decision tree) is moved +-10 / +-20 on its own, on the same full raids; a
+  // better one is kept and the next tried from it
+  if (team > 2 && (o.dawnRingTop ?? 4) > 0) {
+    const tops = [], seenC = new Set();
+    for (const x of s3) { const k = coreKey(x.cfg); if (seenC.has(k)) continue; seenC.add(k); tops.push(x); if (tops.length >= (o.dawnRingTop ?? 4)) break; }
+    for (const x0 of tops) {
+      let x = x0;
+      const seen = {}; for (let i = 0; i < 500; i++) { const d = run_p1(x.cfg, team, new Rng(`dawns#${i}`)).dawns; seen[d] = (seen[d] || 0) + 1; }
+      const branches = Object.keys(seen).map(Number).filter((d) => d > 0 && seen[d] >= 5).sort((a, b) => b - a);
+      for (let k = 0; k < x.cfg.length; k++) {
+        if (!x.cfg[k].lightbearerOn) continue;
+        for (const d of branches) {
+          const c = x.cfg[k], cur = c.ringByDawns && typeof c.ringByDawns[d] === 'number' ? c.ringByDawns[d] : c.ringSwitch;
+          const vals = (cur == null ? [70, 80, 90, 100] : [cur - 20, cur - 10, cur + 10, cur + 20]).filter((v) => v >= 10 && v <= 100);
+          const list = vals.map((v) => x.cfg.map((cc, j) => (j === k ? { ...cc, ringByDawns: { ...(cc.ringByDawns || {}), [d]: v } } : cc)));
+          const res = await run('full', list, o.n3, 'full');
+          stats.dawnRingTried = (stats.dawnRingTried || 0) + list.length;
+          let best = -1; res.forEach((r, i) => { if (okSucc(r) && rank(r, true) > rank(best < 0 ? x.c : res[best], true) + 1e-12) best = i; });
+          if (best >= 0) { x = { ...x, cfg: list[best], c: res[best] }; stats.dawnRingKept = (stats.dawnRingKept || 0) + 1; s3.push(x); }
+        }
+      }
+    }
     s3.sort((a, b) => rank(b.c, true) - rank(a.c, true));
   }
   T('dc', t0);

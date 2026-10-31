@@ -146,19 +146,20 @@ export function lb_swap_ok(p) {
 
 
 // Mutable module globals other modules / scripts read or set: read through FLAGS.X.
-//  PURPLE_EARLY_SWAP: purple popper still owed their +15: swap at (ring switch % - 15), no regen finish
+//  PURPLE_EARLY_SWAP: purple popper still owed their +15: swap at (ring switch % - 15), no regen finish (3-5 man: the
+//    purple DC; duos: the 1st purple DC until their first +15 - see p2.js purple_early)
 //  LB_CAMP: duo test mode: camp Lightbearer until 100% (two claws) on set-2 r11 is assured
 //  LB_RULE: 'ticks' (current) | 'old' (finish the regen after a surge/purple/DC gain)
 //  LB_KEEP_TICKS: at the swap %: keep Lightbearer only if the next regen is this close
 export const FLAGS = {
-  PURPLE_EARLY_SWAP: false,
+  PURPLE_EARLY_SWAP: true,
   LB_CAMP: false,
   LB_RULE: 'ticks',
   LB_KEEP_TICKS: 10,
   DEFAULT_SWAP_P1: false,   // no Ring switch % / Target spec: true = if the LB regen in progress won't land by P2 start, swap at P1's end
 };
 // initial values, exported individually for convenience (read FLAGS.X for the live value)
-export const PURPLE_EARLY_SWAP = false;
+export const PURPLE_EARLY_SWAP = true;
 export const LB_CAMP = false;
 export const LB_RULE = 'ticks';
 export const LB_KEEP_TICKS = 10;
@@ -256,7 +257,7 @@ export function swap_due(p) {
     return p.gain_src === 'regen' && p.regen_timer === 0 && ultor_claw_ok(p, CAMP.now, CAMP.claw_by);
   }
   const tgt = Number(p.target_spec);
-  if (FLAGS.PURPLE_EARLY_SWAP && ga(p, 'purple_pending', false)) return p.spec >= tgt - 15;
+  if (FLAGS.PURPLE_EARLY_SWAP && ga(p, 'purple_pending', false) && ga(p, 'purple_early', false)) return p.spec >= tgt - 15;
   return p.spec >= tgt && (FLAGS.LB_RULE === 'ticks' ? lb_keep_ok(p) : lb_swap_ok(p));
 }
 
@@ -359,6 +360,8 @@ export class Player {
     this.target_spec = !(rs == null || rs === '') ? rs : dget(cfg, 'targetSpec');
     if (this.target_spec === '') this.target_spec = null;
     this.default_swap = this.lb && this.target_spec == null;   // neither % set: default Ultor swap (default_transition)
+    const rbd = dget(cfg, 'ringByDawns', null);
+    this.ring_by_dawns = rbd && typeof rbd === 'object' && Object.keys(rbd).length ? rbd : null;   // Ring switch % by the Dawns P1 died in
     this.default_wait = false;
     this.purple = dget(cfg, 'PurpleDC', false);
     this.has_halb = dget(cfg, 'hasHalb', true) !== false;   // no Crystal halberd (Gear tab): no chally
@@ -489,6 +492,19 @@ export function roll_attack(p, code, rng) {
 
 
 /** 'Custom Surge Timing' (m:ss.s, or seconds) -> room tick, rounded down to a whole tick (0.6s). */
+/** 'Ring % by Dawns' on the chart: '11:80, 12:default' -> {11: 80, 12: 'default'} (Dawn specs the team used when P1
+ *  died -> that player's Ring switch %, or 'default' for the default swap). Blank -> null. */
+export function parseRingByDawns(v) {
+  const out = {};
+  for (const part of String(v ?? '').split(/[,;]/)) {
+    const m = part.trim().match(/^(\d+)\s*[:=]\s*(\d+|default)\s*%?$/i);
+    if (m) out[Number(m[1])] = /default/i.test(m[2]) ? 'default' : Number(m[2]);
+  }
+  return Object.keys(out).length ? out : null;
+}
+/** {11: 80, 12: 'default'} -> '11:80, 12:default'. */
+export const ringByDawnsText = (o) => (o ? Object.keys(o).map(Number).sort((a, b) => a - b).map((d) => `${d}:${o[d]}`).join(', ') : '');
+
 export function surge_tick(v) {
   if (v == null || (isStr(v) && !v.trim())) return null;
   let sec;
@@ -563,7 +579,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
       startSpec: get('startSpec (%)') != null ? get('startSpec (%)') : 100,
       lightbearerOn: yes(get('lightbearerOn')),
       targetSpec: get('targetSpec (%)') != null ? get('targetSpec (%)') : get('Target spec'),
-      p3Target: get('P3 target spec'), ringSwitch: get('Ring switch %'),
+      p3Target: get('P3 target spec'), ringSwitch: get('Ring switch %'), ringByDawns: parseRingByDawns(get('Ring % by Dawns')),
       meleePrayer: get('meleePrayer') || 'Zeal',
       PurpleDC: yes(get('PurpleDC') || get('1st Purple DC')), WestDC: yes(get('WestDC')), EastDC: yes(get('EastDC')),
       Purple2DC: yes(get('2nd Purple DC')), customSurgeTick: surge_tick(get('Custom Surge Timing')),
@@ -1046,6 +1062,14 @@ export function run_p1(cfgs, team, rng, log = null) {
     spec_end = players.map((p) => p.spec);
     // 14-tick gap supplies
     if (team === 3 && dget(cfgs[0], 'clawPriority4', true) !== false) claw_priority_setup(players, L, kill_tick);
+    // Ring % by Dawns: the Dawn specs the team used decide each Lightbearer player's ring swap from here (over 4 Claw Priority)
+    const dawns = sum(players.map((p) => p.dawns_used));
+    for (const p of players) {
+      if (!p.lb || !p.ring_by_dawns || p.ring_by_dawns[dawns] == null) continue;
+      const v = p.ring_by_dawns[dawns];
+      p.target_spec = v === 'default' ? null : Number(v); p.default_swap = p.target_spec == null; p.claw_goal = null;
+      L.on && L(`t${rjust(kill_tick, 4)} ${p.name}: P1 died in ${dawns} Dawn specs -> ring swap ${v === 'default' ? 'default' : `at ${v}%`}`);
+    }
     for (const p of players) if (p.auto_r != null) p.auto_r = null;   // never specced (or R due after the kill): regen as normal from here
     for (const p of supplies.by_hp(players)) {
       if (p.dead) continue;
@@ -1066,7 +1090,7 @@ export function run_p1(cfgs, team, rng, log = null) {
   }
   if (kill_tick == null) spec_end = players.map((p) => p.spec);
   return {
-    pid, spec_end, spec_p2: players.map((p) => p.spec), kill_tick, end, anim, flags, snaps, players,
+    pid, spec_end, spec_p2: players.map((p) => p.spec), kill_tick, end, anim, flags, snaps, players, dawns: sum(players.map((p) => p.dawns_used)),
     deaths: players.filter((p) => p.dead).length,
   };
 }

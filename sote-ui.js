@@ -18,7 +18,10 @@ import { defaultMazes, MAZE_HOW, defaultSpecs, defaultSetup, SPECS, SPEC_COST, C
 import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresults.js';
-import { better as scoreBetter, scoreOf as soteScore } from './engine/sotesolve.js';
+import { better as scoreBetter, scoreOf as soteScore, playersOf as soteBuild } from './engine/sotesolve.js';
+import { runSote } from './engine/sote.js';
+import { Rng } from './engine/rng.js';
+import { raidChoices, raidTitle, pickRaid, timelineHtml } from './raidview.js';
 
 const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -191,7 +194,7 @@ export function createSote(host, { getTeam }) {
       const sp = specsOf(p, k)[ph] || {};
       return `<select data-sp="${k}|${ph}|spec">${SPECS.map(([v, lab]) => `<option value="${v}" ${v === (sp.spec || 'none') ? 'selected' : ''}>${lab}</option>`).join('')}</select>
         <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Backup: scythe first; once the phase's mauls have landed, maul if her Defence isn't at the floor - otherwise their spec"><input type="checkbox" data-sp="${k}|${ph}|backup" ${sp.backup ? 'checked' : ''}>Backup</label>
-        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="${hasHorn(k) ? 'Soulflame horn: they and the first other player mauling this phase can\'t miss their next hit. P1: on t8; P2-P3: after their first scythe off the maze' : 'No Soulflame horn (Gear tab)'}"><input type="checkbox" data-sp="${k}|${ph}|horn" ${sp.horn && hasHorn(k) ? 'checked' : ''} ${hasHorn(k) ? '' : 'disabled'}>Horn</label>${team() === 2 && ph === 0 ? `
+        <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="${hasHorn(k) ? 'Soulflame horn (25% per other player): one or two other players (those mauling this phase first, then others\' scythes) and the caster get a buff on their next melee hit - a maul / BGS can\'t miss, a scythe\'s first hitsplat can\'t miss, claws\' second accuracy roll can\'t miss (a ZCB gets nothing). P1: on t8; P2-P3: after their first scythe off the maze' : 'No Soulflame horn (Gear tab)'}">Horn<select data-sp="${k}|${ph}|horn" ${hasHorn(k) ? '' : 'disabled'}>${[['', 'None'], ['1', '1 player (25%)'], ['2', '2 players (50%)']].map(([v, l]) => `<option value="${v}" ${v === (hasHorn(k) && sp.horn ? (Number(sp.horn) === 2 ? '2' : '1') : '') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>${team() === 2 && ph === 0 ? `
         <label class="pick" style="flex-direction:row;gap:4px;align-items:center;font-size:12px" title="Duos: if both P1 mauls miss, maul again; if that misses too, the other player mauls P2 and this one camps Lightbearer to maul P3"><input type="checkbox" data-sp="${k}|${ph}|duoBackup" ${sp.duoBackup ? 'checked' : ''}>Backup if both miss</label>` : ''}${ph === 0 && team() >= 3 && (sp.spec === 'maul' || sp.spec === 'bgs') && !sp.backup ? `
         <label class="small" style="margin-top:4px" title="If a Shadow Barrage prefire landed: scythe first and wait on the P1 mauls - none hit: ${sp.spec === 'bgs' ? 'BGS' : 'maul'} (ahead of the backups); one hit: this spec instead. Barrage missed (or none): ${sp.spec === 'bgs' ? 'BGS' : 'maul'} on their first hit.">If a Barrage lands<select data-sp="${k}|${ph}|ifBarrage">${[['', `${sp.spec === 'bgs' ? 'BGS' : 'Maul'} anyway`], ['zcb', 'ZCB if a maul landed'], ['claws', 'Claws if a maul landed'], ['none', 'No spec if a maul landed']].map(([v, l]) => `<option value="${v}" ${v === (sp.ifBarrage || '') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}`;
     };
@@ -201,7 +204,7 @@ export function createSote(host, { getTeam }) {
     const KIND = { maul: 'Maul', bgs: 'BGS', claws: 'Claws', zcb: 'ZCB', horn: 'Horn' };
     const planRow = (p, k) => {
       const pr = projectPlayer({ startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, lbCycles: Number(p.lbCycles || 0),
-        specs: specsOf(p, k).map((x) => ({ ...x, horn: !!x.horn && hasHorn(k) })) }, times);
+        specs: specsOf(p, k).map((x) => ({ ...x, horn: hasHorn(k) ? (x.horn ? (Number(x.horn) === 2 ? 2 : true) : false) : false })) }, times);
       const cells = [0, 1, 2].map((ph) => pr.items.filter((it) => it.ph === ph).map((it) => {
         const name = `${KIND[it.kind]}${it.backup ? ' (backup, if needed)' : ''}`;
         if (it.at == null) return `<div class="warn small">${name}: not enough spec</div>`;
@@ -328,7 +331,7 @@ export function createSote(host, { getTeam }) {
       const [k, ph, f] = t.dataset.sp.split('|'), p = st.players[Number(k)];
       p.specs = (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[Number(k)] || [{}, {}, {}])).map((x) => ({ spec: 'none', backup: false, horn: false, ...x }));
       if (f === 'ifBarrage') { if (t.value) p.specs[Number(ph)].ifBarrage = t.value; else delete p.specs[Number(ph)].ifBarrage; }
-      else p.specs[Number(ph)][f] = f === 'spec' ? t.value : t.checked;
+      else p.specs[Number(ph)][f] = f === 'spec' ? t.value : f === 'horn' ? (t.value === '2' ? 2 : t.value === '1') : t.checked;
       if (f !== 'ifBarrage' && (Number(ph) !== 0 || p.specs[0].backup || !['maul', 'bgs'].includes(p.specs[0].spec))) delete p.specs[Number(ph)].ifBarrage;
       persist(); render(); return;
     }
@@ -366,10 +369,11 @@ export function createSote(host, { getTeam }) {
       return { name: gear.name || `Player ${k + 1}`, gear, own: true, prefire: p.prefire || '', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge,
         lbCycles: Number(p.lbCycles || 0), pnecks: Number(p.pnecks || 0), sharks: Number(p.sharks || 0), rests: Number(p.rests || 0), restores: Number(p.restores ?? 3),
         mazes: Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), orb, team()),
-        specs: (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[k] || [])).map((x) => ({ ...x, horn: !!x.horn && !!gear.horn })) };
+        specs: (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[k] || [])).map((x) => ({ ...x, horn: gear.horn ? (x.horn ? (Number(x.horn) === 2 ? 2 : true) : false) : false })) };
     });
   };
   rep.addEventListener('click', (e) => {
+    if (e.target.dataset && e.target.dataset.sraid) { showRaid(e.target); return; }
     const a = e.target.dataset.act; if (!a) return;
     if (a === 'stop') { if (job) job.stop = true; return; }
     if (a === 'dl' && lastPage) {
@@ -399,6 +403,11 @@ export function createSote(host, { getTeam }) {
         const med = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
         for (const x of runs) if (x.res.total.length) x.st.lastTimes = Object.fromEntries(Object.entries(x.res.split).map(([k2, v]) => [k2, med(v)]));
         persist(); render();
+        // Show raid, per set: the raids just played (replayed from their seed)
+        const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];
+        rflat = runs.map((x) => ({ set: x.k, replay: { players: x.players, seed, entry: x.opts.entry, opts: x.opts,
+          raids: (x.res.idx || []).map((i2, j) => ({ i: i2, total: x.res.total[j], key: SPL.map((q) => x.res.split[q][j]).join(',') })), allN: x.res.runs } }));
+        out.insertAdjacentHTML('beforeend', `<div class="vz-report" style="margin-top:10px">${rflat.map((x, j) => `<div style="margin-bottom:6px">${runs.length > 1 ? `<b>${esc(labels[j])}</b>` : ''}${raidBar('r', j, bps)}</div>`).join('')}</div>`);
         status.textContent = `${me.stop ? 'Stopped at' : 'Done:'} ${runs[0].res.runs.toLocaleString()} raids${runs.length > 1 ? ' per set' : ''}.`;
         return;
       }
@@ -426,12 +435,15 @@ export function createSote(host, { getTeam }) {
   });
   const tm = (t) => { const x = t * 0.6; return `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}`; };
   const fsB = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floor(b / 60)}:${r < 10 ? '0' : ''}${r}`; };
+  let oflat = [], rflat = [];                                        // Optimizer rows / Report sets shown (Show raid)                                                    // every Optimizer row shown, for the Decision tree buttons
   const showOptResults = () => {
     const out = opt.querySelector('[data-oout]');
     if (!oresults) { out.innerHTML = ''; return; }
     const { groups, bps, t } = oresults, asc = [...bps].sort((x, y) => x - y);
-    const table = (rows, withSet) => `<table class="sortlist"><tr><th>Rank</th>${withSet ? '<th>Set</th>' : ''}<th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${bps.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>Mazes</th><th>P1</th><th></th></tr>
-      ${rows.map((r, j) => `<tr${j === 0 ? ' style="font-weight:700"' : ''}><td>${j + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>i${r.k}</td><td>${tm(r.med)}</td><td>${tm(r.q10)}</td><td>${tm(r.fast)}</td>${r.at.map((x) => `<td>${(x * 100).toFixed(1)}%</td>`).join('')}<td>${(r.maze * 0.6).toFixed(1)}s</td><td>${(r.p1 * 0.6).toFixed(1)}s</td><td><button class="ghost sm" data-use-entry="${r.k}" data-for-set="${r.set}" data-to="${r.set}">Use for set ${r.set}</button></td></tr>`).join('')}
+    oflat = [];
+    const table = (rows, withSet) => `<table class="sortlist"><tr><th>Rank</th>${withSet ? '<th>Set</th>' : ''}<th>Entry</th><th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${bps.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>P1</th><th>Mazes</th><th>P2</th><th>P3</th><th></th></tr>
+      ${rows.map((r, j) => `<tr${j === 0 ? ' style="font-weight:700"' : ''}><td>${j + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>i${r.k}</td><td>${tm(r.med)}</td><td>${tm(r.q25)}</td><td>${tm(r.q10)}</td><td>${tm(r.fast)}</td>${r.at.map((x) => `<td>${(x * 100).toFixed(1)}%</td>`).join('')}<td>${(r.p1 * 0.6).toFixed(1)}s</td><td>${(r.maze * 0.6).toFixed(1)}s</td><td>${(r.p2 * 0.6).toFixed(1)}s</td><td>${(r.p3 * 0.6).toFixed(1)}s</td><td style="white-space:nowrap"><button class="ghost sm" data-otree="${oflat.push(r) - 1}">Procedure</button> <button class="ghost sm" data-use-entry="${r.k}" data-for-set="${r.set}" data-to="${r.set}">Use for set ${r.set}</button></td></tr>
+        <tr class="sub-row" data-otreerow="${oflat.length - 1}" hidden><td colspan="${11 + bps.length + (withSet ? 1 : 0)}" style="text-align:left"><div class="small">Entry instance i${r.k} (median by entry: ${r.byEntry})</div>${procTable(r)}${adjustments(r)}${raidBar('o', oflat.length - 1, bps)}</td></tr>`).join('')}
       </table>`;
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: entry instance</h3>
       <div class="sub">${groups[0].items[0].n.toLocaleString()} raids per instance${groups.length > 1 ? ' and set' : ''}, the same raids at each${bps.length ? ` · ranked by most finished by ${fsB(asc[0])}` : ' · ranked by the lowest median'} · maze = both mazes, proc to interactable (medians)</div>
@@ -440,6 +452,8 @@ export function createSote(host, { getTeam }) {
   wireSetResults(opt.querySelector('[data-oout]'), oopen, (c) => { ocombine = c; showOptResults(); });
   opt.addEventListener('click', (e) => {
     const a = e.target.dataset.oact;
+    if (e.target.dataset.sraid) { showRaid(e.target); return; }
+    if (e.target.dataset.otree != null) { const row = opt.querySelector(`[data-otreerow="${e.target.dataset.otree}"]`); if (row) row.hidden = !row.hidden; return; }
     if (e.target.dataset.useEntry != null) {
       const k = e.target.dataset.forSet, st = setOf(k); if (!st) return;
       st.entry = Number(e.target.dataset.useEntry); persist(); render(); opt.querySelector('[data-ostatus]').textContent = `Set ${k} now enters on i${st.entry}.`; return;
@@ -463,12 +477,16 @@ export function createSote(host, { getTeam }) {
       ojob = null; obtn('run').disabled = false; obtn('stop').disabled = true;
       const groups = runs.map((x) => {
         const rows = x.res.map((r, k) => {
-          const v = r.total.slice().sort((p, q) => p - q), med = v[Math.floor(v.length / 2)], q10 = v[Math.max(0, Math.floor(v.length * 0.1) - 1)];
+          const v = r.total.slice().sort((p, q) => p - q), med = v[Math.floor(v.length / 2)], q10 = v[Math.max(0, Math.floor(v.length * 0.1) - 1)]; const q25 = v[Math.max(0, Math.floor(v.length * 0.25) - 1)];
           const sp = (key) => { const w = r.split[key].slice().sort((p, q) => p - q); return w[Math.floor(w.length / 2)]; };
           const at = bps.map((b) => (v.length ? v.filter((y) => y * 0.6 <= b + 1e-9).length / v.length : 0));
-          return { set: x.k, k, n: v.length, med, q10, fast: v[0], at, score: v.length ? soteScore(r.total, bps) : null, maze: v.length ? sp('maze1') + sp('maze2') : null, p1: v.length ? sp('p1') : null };
+          const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];
+          const raids = (r.idx || []).map((i, j) => ({ i, total: r.total[j], key: SPL.map((q) => r.split[q][j]).join(',') }));
+          return { set: x.k, k, replay: { players: x.players, seed, entry: k, opts: x.opts, raids, allN: r.runs }, cfg: { players: x.players }, totals: [...r.total, ...Array(r.wipes).fill(9999)], events: r.events || {}, n: v.length, med, q25, q10, fast: v[0], at, score: v.length ? soteScore(r.total, bps) : null, maze: v.length ? sp('maze1') + sp('maze2') : null, p1: v.length ? sp('p1') : null, p2: v.length ? sp('p2') : null, p3: v.length ? sp('p3') : null };
         }).filter((r) => r.n);
         rows.sort((p, q) => (scoreBetter(p.score, q.score) ? -1 : scoreBetter(q.score, p.score) ? 1 : 0));
+        const byEntry = rows.map((r) => `i${r.k} ${tm(r.med)}`).sort().join(', ');   // as the Solver shows it
+        rows.forEach((r) => { r.byEntry = byEntry; });
         return { k: x.k, label: setLabel(x.k), items: rows };
       });
       if (!groups.some((g) => g.items.length)) { status.textContent = 'Stopped.'; return; }
@@ -490,7 +508,7 @@ export function createSote(host, { getTeam }) {
   let vjob = null, vresults = null, vcombine = false;
   const vopen = {};
   const ALLOW = ['prefire', 'start', 'surge', 'lb', 'specs', 'entry'];
-  const SEARCH_DEFAULT = { swaps: true, pairs: false, restarts: false };
+  const SEARCH_DEFAULT = { swaps: true, pairs: false, restarts: true };
   const solState = () => { const st = rootState(); st.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])) }; st.solve.sets ||= [st.cur]; return st.solve; };
   const showSol = () => {
     const v = solState(), rs = rootState();
@@ -515,28 +533,80 @@ export function createSote(host, { getTeam }) {
   const vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
   const fsec = (t) => { const x = t * 0.6; return x >= 60 ? `${Math.floor(x / 60)}:${(x % 60).toFixed(1).padStart(4, '0')}` : `${x.toFixed(1)}s`; };
   const KINDS = { none: 'nothing', maul: 'Maul', claws: 'Claws', zcb: 'ZCB', bgs: 'BGS' };
-  const specTxt = (x) => `${x.horn ? 'Horn + ' : ''}${x.backup ? `backup (${x.spec === 'none' ? 'maul if needed' : `maul if needed, else ${KINDS[x.spec]}`})` : KINDS[x.spec] || x.spec}${x.ifBarrage ? ` (Barrage landed: ${x.ifBarrage === 'none' ? 'first backup' : `first backup, else ${KINDS[x.ifBarrage]}`})` : ''}`;
+  /** Who a horn buffs (as the engine picks): other players' planned (not backup) mauls / BGS that phase first, then
+   *  their scythes (the buff is on the next melee hit - a scythe's first hitsplat), a planned ZCB player last. */
+  const hornTxt = (x, k, ph, P, set) => {
+    const others = P.map((q, j) => j).filter((j) => j !== k);
+    const isM = (j) => ['maul', 'bgs'].includes(P[j].specs[ph].spec) && !P[j].specs[ph].backup && !(ph === 0 && P[j].specs[0].ifBarrage);
+    const zcbNow = (j) => (P[j].specs[ph].spec === 'zcb' && !P[j].specs[ph].backup ? 1 : 0);
+    const recs = [...others.filter(isM), ...others.filter((j) => !isM(j)).sort((a, b) => zcbNow(a) - zcbNow(b))].slice(0, Number(x.horn) === 2 ? 2 : 1);
+    return `Horn ${recs.map((j) => `${pnameOf(set, j)}'s ${isM(j) ? (P[j].specs[ph].spec === 'bgs' ? 'BGS' : 'maul') : 'next hit'}`).join(' + ')}${x.spec === 'none' && !x.backup ? '' : ' + '}`;
+  };
+  const specTxt = (x, k, ph, P, set) => `${x.horn ? (P ? hornTxt(x, k, ph, P, set) : 'Horn + ') : ''}${x.horn && P && x.spec === 'none' && !x.backup ? '' : x.backup ? `backup (${x.spec === 'none' || x.spec === 'maul' ? 'maul if needed' : x.spec === 'bgs' ? 'BGS if needed' : `maul if needed, else ${KINDS[x.spec]}`})` : KINDS[x.spec] || x.spec}${x.ifBarrage ? ` (Barrage landed: ${x.ifBarrage === 'none' ? 'first backup' : `first backup, else ${KINDS[x.ifBarrage]}`})` : ''}`;
   /** "If this happens, do this": the setup's contingencies, with the share of raids each came up in. */
+  /** The decision tree: each player's planned route, then what they do if things go another way (share of raids). */
+  /** Show raid: the buttons (kind: 'o' Optimizer / 'v' Solver row) and the timeline of the picked raid. */
+  const raidBar = (kind, idx, bps = []) => `<div class="row wrap" style="gap:6px;margin-top:8px;align-items:center"><b class="small">Show raid</b>${raidChoices(bps).map(([k, l]) => `<button class="ghost sm" data-sraid="${kind}|${idx}|${k}">${l}</button>`).join('')}</div><div data-sraidout="${kind}|${idx}"></div>`;
+  const showRaid = (b) => {
+    const [kind, idx, which] = b.dataset.sraid.split('|'), r = ({ o: oflat, v: vflat, r: rflat })[kind][Number(idx)], box = host.querySelector(`[data-sraidout="${kind}|${idx}"]`);
+    if (!r || !r.replay || !box) return;
+    const { players, seed, entry, opts, raids, allN } = r.replay, pk = pickRaid(raids, allN, which);
+    if (!pk) { box.innerHTML = '<p class="muted small">No raid finished at that point.</p>'; return; }
+    const trace = [], res = runSote(players, team(), new Rng(`${seed}#${pk.i}`), null, { entry, ...opts, trace });
+    box.innerHTML = timelineHtml({ trace, names: players.map((p, k) => pnameOf(r.set, k)), bossName: 'Sotetseg', end: res.end,
+      title: `${raidTitle(which, 'Sotetseg')} - ${tm(pk.total)} (entry i${entry}; ${pk.typical} of the ${pk.n} raids that ended at ${tm(pk.total)} went this way)`,
+      legend: 'ZCB bolt and ZCB spec share the crossbow icon (hover to tell) · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (DB death ball) - hover any cell for details' });
+  };
+  /** A setup's procedure: per player prefire, start spec, surge, Lightbearer and each phase's spec. r: {cfg, set}. */
+  const procTable = (r) => `<table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
+          ${r.cfg.players.map((p, k) => `<tr><td>${esc(pnameOf(r.set, k))}</td><td>${esc(p.prefire || 'none')}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td>${p.specs.map((x, ph) => `<td>${esc(specTxt(x, k, ph, r.cfg.players, r.set))}</td>`).join('')}</tr>`).join('')}</table>`;
   const adjustments = (r) => {
     const n = r.totals.length, ev = r.events || {}, P = r.cfg.players, nm = (k) => esc(pnameOf(r.set, k));
-    const pc = (k) => `<b>${((ev[k] || 0) / n * 100).toFixed(0)}%</b>`, out = [];
-    const barr = P.map((p, k) => (p.prefire === 'Shadow Barrage' ? k : -1)).filter((k) => k >= 0);
-    if (barr.length) out.push(`${barr.map(nm).join(' / ')}'s Shadow Barrage lands in ${pc('barrage:landed')} of raids (misses ${pc('barrage:missed')}).`);
+    const c = (k) => ev[k] || 0, pc = (x) => `<b>${Math.round(x / n * 100)}%</b>`;
+    const cb = `${(setOf(r.set) || {}).clawBelow ?? CLAW_BELOW} HP`;   // the set's P3 ZCB -> claws threshold
+    const isDef = (s) => s === 'maul' || s === 'bgs', K = (s) => (s === 'none' ? 'no spec' : KINDS[s]);
+    const maulers = (ph, not) => P.map((q, j) => j).filter((j) => j !== not && isDef(P[j].specs[ph].spec) && !P[j].specs[ph].backup);
+    const whose = (js) => (js.length ? `${js.map(nm).join(' / ')}'s maul${js.length > 1 ? 's' : ''}` : 'the mauls');
+    const barr = P.findIndex((p) => p.prefire === 'Shadow Barrage'), out = [];
+    if (barr >= 0) out.push(`${nm(barr)}'s Shadow Barrage lands in ${pc(c('barrage:landed'))} of raids.`);
     P.forEach((p, k) => {
-      const x = p.specs[0];
-      if (x.ifBarrage && (x.spec === 'maul' || x.spec === 'bgs') && !x.backup) {
-        const s = KINDS[x.spec];
-        out.push(barr.length
-          ? `<b>${nm(k)}</b>, P1: Barrage <i>missed</i> - ${s} on their first hit (${pc(`cond:${k}:maul1`)}). Barrage <i>landed</i> - scythe first and watch the P1 mauls: none hit - ${s} ahead of the backups (${pc(`cond:${k}:maul2`)}); one hit - ${x.ifBarrage === 'none' ? 'no spec, keep scything' : KINDS[x.ifBarrage]} (${pc(`cond:${k}:${x.ifBarrage}`)}).`
-          : `<b>${nm(k)}</b>, P1: ${s} (set to change if a Barrage lands, but nobody prefires one).`);
-      }
-      p.specs.forEach((y, ph) => {
-        if (y.backup) out.push(`<b>${nm(k)}</b>, P${ph + 1} backup: once the mauls have landed, maul if her Defence isn't low enough (${pc(`backup:${k}:${ph}:maul`)})${y.spec !== 'none' && y.spec !== 'maul' && y.spec !== 'bgs' ? `, otherwise ${KINDS[y.spec]} (${pc(`backup:${k}:${ph}:spec`)})` : ''}.`);
+      const lines = [];
+      p.specs.forEach((x, ph) => {
+        const at = `P${ph + 1}`, fired = (kind) => c(`fired:${k}:${ph}:${kind}`);
+        if (x.ifBarrage && isDef(x.spec) && !x.backup && barr >= 0 && ph === 0) {
+          const alt = x.ifBarrage, a = c(`cond:${k}:${alt}`);
+          const m2 = c(`cond:${k}:maul2`), br = [m2 >= n * 0.01 ? `none hit: ${K(x.spec)} (${pc(m2)})` : null, `one hits: ${alt === 'none' ? 'keep scything' : K(alt)} (${pc(a)})`].filter(Boolean);
+          lines.push(`${at}: ${K(x.spec)} on their first hit if the Barrage misses (${pc(c(`cond:${k}:maul1`))}). If it lands: scythe and watch ${whose(maulers(0, k))} - ${br.join('; ')}.`);
+        } else if (x.backup) {
+          const m = c(`backup:${k}:${ph}:maul`), sp = c(`backup:${k}:${ph}:spec`), cl = ph === 2 && x.spec === 'zcb' ? Math.min(sp, c(`clawsForZcb:${k}`)) : 0, rest = n - m - sp;
+          const dmg = x.spec === 'none' || isDef(x.spec) ? [] : cl >= sp && sp ? [`claws (her HP already under ${cb}) (${pc(sp)})`] : [sp - cl ? `${K(x.spec)} (${pc(sp - cl)})` : null, cl ? `claws instead if her HP is already under ${cb} (${pc(cl)})` : null].filter(Boolean);
+          const parts = [m >= n * 0.01 ? `${K(x.spec === 'bgs' ? 'bgs' : 'maul')} once ${whose(maulers(ph, k))} ${maulers(ph, k).length === 1 ? 'has' : 'have'} landed, if her Defence isn't at the floor yet (${pc(m)})` : null, dmg.length && sp >= n * 0.01 ? `otherwise ${dmg.join(', ')}` : null, (m >= n * 0.01 || sp >= n * 0.01) && rest >= n * 0.01 ? `no spec (${pc(rest)})` : null].filter(Boolean);
+          lines.push(parts.length ? `${at}: ${parts.join('; ')}.` : `${at}: the backup is almost never needed (under 1% of raids).`);   // under 1% of raids: left out
+        } else if (x.spec !== 'none') {
+          const f = x.spec === 'zcb' && ph === 2 ? fired('zcb') + fired('claws') : fired(x.spec === 'bgs' ? 'bgs' : x.spec === 'maul' ? 'maul' : x.spec);
+          const cl = x.spec === 'zcb' && ph === 2 ? c(`clawsForZcb:${k}`) : 0;
+          if (cl) lines.push(`${at}: ZCB, or claws instead if her HP is already under ${cb} (${pc(cl)}).`);
+          const bk = p.specs.findIndex((y, j) => j < ph && y.backup && c(`backup:${k}:${j}:maul`));   // an earlier backup maul used the spec
+          // a P1 / P2 ZCB that didn't go off that phase moves to the start of the next (after its mauls, a backup first if needed)
+          const cr = (x.spec === 'zcb' || x.spec === 'claws') && ph < 2 ? c(`carried:${k}:${ph}`) : 0, inPh = f - cr, nx = p.specs[ph + 1];
+          if (cr >= n * 0.01) {
+            const bkN = nx && nx.backup ? c(`backup:${k}:${ph + 1}:maul`) : 0, none = n - f;
+            const parts = [inPh >= n * 0.01 ? `in P${ph + 1} (${pc(inPh)})` : null, `${inPh >= n * 0.01 ? `if P${ph + 1} was too fast (not enough spec yet, or too close to the maze)` : `never in time for P${ph + 1} - goes`} at the start of P${ph + 2}, once its mauls have landed${nx && nx.backup ? ' and no backup is needed' : ''} (${pc(cr)})`, bkN >= n * 0.01 ? `backup needed instead: ${K(nx.spec === 'bgs' ? 'bgs' : 'maul')}, no ${K(x.spec)} (${pc(Math.min(bkN, none))})` : null, none - Math.min(bkN, none) >= n * 0.01 ? `no ${K(x.spec)} (${pc(none - Math.min(bkN, none))})` : null].filter(Boolean);
+            lines.push(`${at}: ${K(x.spec)} ${parts.join('; ')}.`);
+          } else if (f < n * 0.99) lines.push(`${at}: ${K(x.spec)} goes off in ${pc(f)} - ${bk >= 0 ? `not if they backed up in P${bk + 1} (no spec left)` : 'otherwise no spec in time'}.`);
+        }
+        // who the horn went to, when that changes (a conditional maul that waits on a Barrage isn't buffed)
+        const hr = Object.entries(ev).filter(([e, v]) => e.startsWith(`horn:${k}:${ph}:`) && v >= n * 0.01);
+        if (x.horn && hr.length > 1) lines.push(`${at} horn: ${hr.sort((u, w) => w[1] - u[1]).map(([e, v]) => { const js = e.split(':')[3].split('+').filter(Boolean).map(Number); return `${js.length ? js.map(nm).join(' + ') : 'nobody else'} (${js.length * 25 || 25}%) ${pc(v)}`; }).join(' · ')}.`);
+        if (x.horn && c(`fired:${k}:${ph}:horn`) < n * 0.99) lines.push(`${at}: horn goes off in ${pc(c(`fired:${k}:${ph}:horn`))} - otherwise not enough spec.`);
+        if (ph < 2 && c(`zcbCarry:${k}:${ph}`) && !(x.spec === 'zcb' && c(`carried:${k}:${ph}`) >= n * 0.01)) lines.push(`${at}: too close to the maze for the ZCB's ruby - keep it for the start of P${ph + 2} (${pc(c(`zcbCarry:${k}:${ph}`))}).`);
       });
-      [0, 1].forEach((ph) => { if (ev[`zcbCarry:${k}:${ph}`]) out.push(`<b>${nm(k)}</b>: P${ph + 1} too close to the maze for the ZCB's ruby - keep it for the start of P${ph + 2} (${pc(`zcbCarry:${k}:${ph}`)}).`); });
-      if (ev[`clawsForZcb:${k}`]) out.push(`<b>${nm(k)}</b>: late in P3 (her HP under the claws threshold) - claws instead of the ZCB (${pc(`clawsForZcb:${k}`)}).`);
+      if (c(`halb:${k}`) >= n * 0.01) lines.push(`P3 last hit: Crystal halberd spec when they have 30%+ but can't claw and the team's next swings (this halberd included) kill her on average (${pc(c(`halb:${k}`))}).`);
+      if (c(`lbStall:${k}`) >= n * 0.01) lines.push(`Lightbearer: the cycles run out during a maze stall in ${pc(c(`lbStall:${k}`))} - stay on it until out of the stall (no ring swaps while stalling).`);
+      const plan = [`start ${p.startSpec}%`, p.prefire ? `${p.prefire} prefire` : null, p.surge ? 'surge with their first spec' : null, p.lbCycles ? `camp Lightbearer ${p.lbCycles} cycle${p.lbCycles > 1 ? 's' : ''}` : null, ...p.specs.map((x, ph) => (x.spec !== 'none' || x.horn || x.backup ? `P${ph + 1} ${specTxt(x, k, ph, P, r.set)}` : null))].filter(Boolean).map(esc).join(' · ');
+      out.push(`<b>${nm(k)}</b>: ${plan || 'no specs'}${lines.length ? `<ul style="margin:2px 0 4px 18px;padding:0">${lines.map((l) => `<li>${l}</li>`).join('')}</ul>` : ' <span class="muted">- always as planned</span>'}`);
     });
-    return out.length ? `<div class="small" style="margin-top:8px"><b>Adjustments</b> - if this happens, do this (share of the ${n.toLocaleString()} raids it came up in):<ul style="margin:4px 0 0 18px;padding:0">${out.map((x) => `<li>${x}</li>`).join('')}</ul></div>` : '';
+    return `<div class="small" style="margin-top:8px"><b>Decision tree</b><ul style="margin:4px 0 0 18px;padding:0">${out.map((x) => `<li>${x}</li>`).join('')}</ul></div>`;
   };
   let vflat = [];                                                    // every result shown, for the buttons
   const showResults = () => {
@@ -549,13 +619,12 @@ export function createSote(host, { getTeam }) {
     const wiped = (r) => r.totals.filter((x) => x >= 9999).length / r.totals.length;
     const all = groups.flatMap((g) => g.items), allWiped = all.every((r) => wiped(r) === 1), anyWiped = all.some((r) => wiped(r) > 0);
     vflat = [];
-    const table = (rows, withSet) => `<div class="scroll"><table class="sortlist"><tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Entry</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>P1</th><th>Mazes</th><th>P2</th><th>P3</th>${anyWiped ? '<th>Wiped</th>' : ''}<th></th></tr>
+    const table = (rows, withSet) => `<div class="scroll"><table class="sortlist"><tr><th>#</th>${withSet ? '<th>Set</th>' : ''}<th>Entry</th><th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>P1</th><th>Mazes</th><th>P2</th><th>P3</th>${anyWiped ? '<th>Wiped</th>' : ''}<th></th></tr>
       ${rows.map((r, i) => { const v = r.totals.slice().sort((a, b) => a - b), idx = vflat.push(r) - 1;
-        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>i${r.entry}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.maze1) + med(r.split.maze2))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td>${anyWiped ? `<td>${(wiped(r) * 100).toFixed(1)}%</td>` : ''}<td style="white-space:nowrap"><button class="ghost sm" data-vshow="${idx}">Procedure</button> ${SETS.map((k) => `<button class="ghost sm" data-vuse="${idx}" data-to="${k}" title="Put this setup (and its entry instance) into set ${k}${rootState().sets[k] ? '' : ` - a new set, from set ${r.set}`}">Copy to set ${k}</button>`).join(' ')}</td></tr>
-        <tr class="sub-row" data-vproc="${idx}" hidden><td colspan="${12 + asc.length + (withSet ? 1 : 0)}" style="text-align:left">
+        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>i${r.entry}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.25) - 1)])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.maze1) + med(r.split.maze2))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td>${anyWiped ? `<td>${(wiped(r) * 100).toFixed(1)}%</td>` : ''}<td style="white-space:nowrap"><button class="ghost sm" data-vshow="${idx}">Procedure</button> ${SETS.map((k) => `<button class="ghost sm" data-vuse="${idx}" data-to="${k}" title="Put this setup (and its entry instance) into set ${k}${rootState().sets[k] ? '' : ` - a new set, from set ${r.set}`}">Copy to set ${k}</button>`).join(' ')}</td></tr>
+        <tr class="sub-row" data-vproc="${idx}" hidden><td colspan="${13 + asc.length + (withSet ? 1 : 0)}" style="text-align:left">
           <div class="small">Entry instance i${r.entry} (median by entry: ${r.byEntry.map((y) => `i${y.entry} ${ft(y.median)}`).join(', ')})</div>
-          <table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
-          ${r.cfg.players.map((p, k) => `<tr><td>${esc(pnameOf(r.set, k))}</td><td>${esc(p.prefire || 'none')}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td>${p.specs.map((x) => `<td>${esc(specTxt(x))}</td>`).join('')}</tr>`).join('')}</table>${adjustments(r)}</td></tr>`; }).join('')}
+          ${procTable(r)}${adjustments(r)}${raidBar('v', idx, asc)}</td></tr>`; }).join('')}
       </table></div>`;
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: solver</h3>
       <div class="sub">Each played on the same ${all[0].totals.length.toLocaleString()} raids at its best entry instance${groups.length > 1 ? ' (every set on the same raids, so sets compare fairly)' : ''}. Times: median.</div>
@@ -576,7 +645,7 @@ export function createSote(host, { getTeam }) {
       const own = (w) => (all[j].gear.weapons || []).includes(w), okSpec = (x) => x.spec === 'none' || ({ maul: own('Elder maul') || own('Bandos godsword'), bgs: own('Bandos godsword'), claws: own('Dragon claws'), zcb: own('Zaryte crossbow') })[x.spec];
       const pre = { 'Twisted bow': 'Twisted bow', 'ZCB auto': 'Zaryte crossbow', 'ZCB spec': 'Zaryte crossbow', 'Shadow Barrage': 'Shadow ancient sceptre', "Tumeken's shadow": "Tumeken's shadow" }[p.prefire];
       const surge = p.surge && su < sLim; if (surge) su++; const lbc = p.lbCycles > 0 && lb < lbLim ? p.lbCycles : 0; if (lbc) lb++;
-      return { ...p, prefire: !pre || own(pre) ? p.prefire : '', surge, lbCycles: lbc, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x, ...(okSpec(x) ? {} : { spec: 'none' }), horn: !!x.horn && !!all[j].gear.horn })) };
+      return { ...p, prefire: !pre || own(pre) ? p.prefire : '', surge, lbCycles: lbc, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x, ...(okSpec(x) ? {} : { spec: 'none' }), horn: all[j].gear.horn ? (x.horn ? (Number(x.horn) === 2 ? 2 : true) : false) : false })) };
     }); };
     const ds = defaultSetup(t), dsp = defaultSpecs(t);
     const restarts = sr.restarts ? [
@@ -588,11 +657,18 @@ export function createSote(host, { getTeam }) {
       const res = await solveSote({ team: t, base, start, gear: all.map((p) => p.gear), allow: { ...Object.fromEntries(ALLOW.map((x) => [x, v.allow[x] !== false])) },
         surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[v.effort] || EFFORT.normal), top: 10, swaps: !!sr.swaps, pairs: !!sr.pairs, restarts },
       (...args) => pool.run(...args), say, () => me.stopped);
-      return res.map((r) => ({ ...r, set: k }));
+      // Show raid: the final results were played on raids 'final#0..' at their entry instance - replayed from there
+      const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];
+      return res.map((r) => {
+        const raids = []; let j = 0;
+        r.totals.forEach((tot, i) => { if (tot >= 9999) return; raids.push({ i, total: tot, key: SPL.map((q) => r.split[q][j]).join(',') }); j++; });
+        return { ...r, set: k, replay: { players: soteBuild(base, r.cfg), seed: 'final', entry: r.entry, opts, raids, allN: r.totals.length } };
+      });
     } finally { pool.stop(); }
   }
   sol.addEventListener('click', async (e) => {
     const t0 = e.target;
+    if (t0.dataset.sraid) { showRaid(t0); return; }
     if (t0.dataset.vshow != null) { const row = sol.querySelector(`[data-vproc="${t0.dataset.vshow}"]`); row.hidden = !row.hidden; return; }
     if (t0.dataset.vuse != null) {                                    // copy the setup (and its entry instance) into set A / B / C
       const r = vflat[Number(t0.dataset.vuse)], k = t0.dataset.to || rootState().cur, rs = rootState();

@@ -147,6 +147,9 @@ export function run_p2(p1, team, rng, log = null) {
     p.ring_swapped_at = null;
     p.fallback_on = false;
     p.purple_pending = Boolean(truthy(p.purple) || truthy(ga(p, 'purple2nd', false)));   // still owed a purple-pop +15
+    // ring swap 15 early for the +15 to come (sim.js swap_due): 3-5 man, the purple DC (a purple almost always spawns);
+    // duos, the 1st purple DC only - the 1st purple always spawns, a 2nd doesn't
+    p.purple_early = team > 2 ? p.purple_pending : Boolean(truthy(p.purple));
     p.boak_block = new Set();   // absolute ticks they can't attack while moving for the purple (3-5 man)
     p.bp_from = null;           // purple DC: first tick they may start blowpiping
     if (team !== 2) {

@@ -2,6 +2,7 @@
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart } from './engine/sim.js';
 import { mergeResults, reportHtml, reportPage, REPORT_CSS } from './engine/report.js';
+import { verzRaidBar, showVerzRaid } from './verzraid.js';
 import { parseBreakpoints, dawnShortfalls } from './engine/optimize.js';
 import { VERSION, CHANGES } from './engine/version.js';
 import { createBuilder } from './builder-ui.js';
@@ -269,7 +270,8 @@ $('go').addEventListener('click', async () => {
     const secs = (performance.now() - t0) / 1000;
     $('err').textContent = notes.length ? `Chart notes:\n${notes.join('\n')}` : '';
     $('runStatus').textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * sets.length / secs).toLocaleString()} raids/s · ${lastInfo ? lastInfo.mode : ''} (seed ${seed}).`;
-    $('out').innerHTML = reportHtml(res, labels, t, runs, { breakpoints });
+    $('out').innerHTML = reportHtml(res, labels, t, runs, { breakpoints })
+      + `<div class="vz-report" style="margin-top:10px">${sets.map(([b, c], k) => `<div style="margin-bottom:6px">${sets.length > 1 ? `<b>${labels[k].replace(/[&<>"]/g, '')}</b>` : ''}${verzRaidBar(`rep-${b}`, c, t, breakpoints)}</div>`).join('')}</div>`;
     lastPage = reportPage(res, labels, t, runs, { breakpoints });
     $('dl').disabled = false;
   } catch (err) {
@@ -288,3 +290,6 @@ $('dl').addEventListener('click', () => {
   a.download = `verzik_${team()}man_report.html`;
   a.click();
 });
+
+// Show raid (Report): the timeline of the picked raid, under the report
+$('out').addEventListener('click', (e) => { const b = e.target.closest('button[data-vraid]'); if (b) showVerzRaid(b, $('out')); });

@@ -22,6 +22,7 @@ const HELP = {
   'startSpec (%)': 'Spec % at the start of the room', lightbearerOn: 'Starts the room on Lightbearer',
   'Custom Surge Timing': 'Room time of a surge pot without a P in the chart (m:ss)', 'Target spec': 'Spec used in P2 (the ring-swap target if no Ring switch %)',
   'Ring switch %': 'Swap Lightbearer -> Ultor at this spec %. Both this and Target spec blank: swap when the regen in progress at P1\'s end lands, as long as they still reach 50% (one claw) by reds r36', 'P3 target spec': 'Spec wanted for P3 (default 30)',
+  'Ring % by Dawns': 'Lightbearer: a different Ring switch % depending on how many Dawn specs the team used before P1 died, e.g. 13:50, 12:70, 11:default (default = the default swap). Dawn counts not listed use the Ring switch %. The Optimizer and Solver can fill this in.',
   'Death tick': 'Tick P1 dies (blank = last charted tick)',
   'Shadow while LB': 'Shadow while wearing Lightbearer, then scythe (or 3:1) after the swap. Takes priority over 3:1: with both ticked they shadow on Lightbearer hits, then 3:1. Needs Shadow; not with Shadow camp.',
   '3:1': 'Scythe, but the attack that would collide with Verzik becomes a shadow. With Shadow while LB: 3:1 starts after the ring swap. Needs Shadow; not with Shadow camp.',

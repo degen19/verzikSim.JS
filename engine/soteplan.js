@@ -32,7 +32,7 @@ export function projectPlayer(pl, tm) {
   const items = [];
   for (let ph = 0; ph < 3; ph++) {
     const sp = specs[ph] || {}, [s] = win[ph];
-    if (sp.horn) items.push({ ph, kind: 'horn', backup: false, earliest: ph === 0 ? HORN_TICK : s + 5 });
+    if (sp.horn) items.push({ ph, kind: 'horn', backup: false, earliest: ph === 0 ? HORN_TICK : s + 5, cost: Number(sp.horn) === 2 ? 50 : 25 });
     if (sp.spec && sp.spec !== 'none') {
       const late = sp.backup || (ph > 0 && sp.horn) || sp.spec === 'zcb' || sp.spec === 'claws';   // ZCB / claws: the attack after the mauls land
       items.push({ ph, kind: sp.backup && sp.spec === 'maul' ? 'maul' : sp.spec, backup: !!sp.backup, earliest: late ? s + 5 : s });
@@ -44,7 +44,7 @@ export function projectPlayer(pl, tm) {
   for (let t = 1; t <= end; t++) {
     for (const it of items) {
       if (it.at !== undefined || t < it.earliest) continue;
-      const c = SPEC_COST[it.kind] || 50;
+      const c = it.cost || SPEC_COST[it.kind] || 50;
       if (t > win[it.ph][1]) { it.at = null; continue; }            // the phase is over: not enough spec
       if (spec < c) continue;
       spec -= c; cost += c; it.at = t;

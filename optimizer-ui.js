@@ -3,6 +3,9 @@ import { parse_chart } from './engine/sim.js';
 import { threadCount, workersAvailable } from './pool.js';
 import { catalog, applyCombo, validCfgs, dawnsOk, dawnShortfalls, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts, cfgsToFields } from './engine/optimize.js';
 import { withGear } from './engine/gearstore.js';
+import { verzikTreeHtml, profileChunks } from './engine/vtree.js';
+import { verzSetupHtml } from './verzsetup.js';
+import { verzRaidBar, showVerzRaid } from './verzraid.js';
 import { describe, readValues, withSetC } from './engine/chartform.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -301,9 +304,10 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
         <td class="setup">${x.base ? (multi ? '<b>As charted</b>' : '<b>Your chart</b> (as charted)') : describeCombo(x.combo, x.set.opts)}</td>
         <td>${pct(c.k, c.n)}</td>${c.under.map((u) => { const d = ofKR ? c.k : c.n; return `<td>${pct(u, d)}<div class="muted small">${oneIn(u, d)}</div></td>`; }).join('')}
         <td>${c.fastest != null ? `${fmtT(c.fastest)}<div class="muted small">${c.fastestN}× in ${c.n.toLocaleString()}</div>` : '-'}</td>
-        <td style="white-space:nowrap"><button class="ghost sm" data-rep="${idx}" title="Full report: this setup vs ${esc(getLabel(x.set.block))} as charted">Full report</button>
+        <td style="white-space:nowrap"><button class="ghost sm" data-tree="${idx}" title="The setup's settings, P1 chart and decision tree">See setup</button> <button class="ghost sm" data-rep="${idx}" title="Full report: this setup vs ${esc(getLabel(x.set.block))} as charted">Full report</button>
           ${toBuilder ? `<div class="row" style="gap:4px;margin-top:4px">${['A', 'B', 'C'].map((b) => `<button class="ghost sm" data-copy="${idx}" data-to="${b}" title="Put this setup into Set ${b} of Build chart on this page">→ ${b}</button>`).join('')}</div>` : ''}
-          <div class="muted small" id="o-msg-${idx}"></div></td></tr>`;
+          <div class="muted small" id="o-msg-${idx}"></div></td></tr>
+        <tr class="sub-row" data-treerow="${idx}" hidden><td colspan="${5 + curBps.length + (withSet ? 1 : 0)}" style="text-align:left;white-space:normal"></td></tr>`;
     };
     let body;
     if (multi && combineView) {
@@ -316,6 +320,22 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       <p class="muted small">Highlighted values differ from that set's chart. Ranked by ${metric === 'success' ? 'success rate' : `rooms at ${fmtS(curBps[metric])} or faster${ofKR ? ' (of successful runs)' : ' (of all attempts)'}`} in the final round${multi ? ' (every set\'s finalists ran on the same fresh raids, so sets compare fairly)' : ''}.
       Differences under ~${(100 / Math.sqrt(DEPTHS[$('o-depth').value].n[2])).toFixed(1)} points (and much less for rare breakpoints) can be noise - use Thorough to separate close setups.</p>`;
     $('o-out').onclick = async (e) => {
+      const vr = e.target.closest('button[data-vraid]'); if (vr) { showVerzRaid(vr, $('o-out')); return; }
+      const tb = e.target.closest('button[data-tree]');
+      if (tb) {                                                     // the setup's decision tree (played on 2,000 raids the first time)
+        const row = $('o-out').querySelector(`[data-treerow="${tb.dataset.tree}"]`), x = all[Number(tb.dataset.tree)], cell = row.firstElementChild;
+        row.hidden = !row.hidden; tb.textContent = row.hidden ? 'See setup' : 'Hide setup';
+        if (!row.hidden && !cell.dataset.done) {
+          cell.dataset.done = '1';
+          const setup = `<div style="width:0;min-width:100%;overflow-x:auto">${verzSetupHtml(x.cfgs, x.cfgs.map((c, k) => c.name || `Player ${k + 1}`), team)}${verzRaidBar(`opt-${tb.dataset.tree}-${Date.now()}`, x.cfgs, team, curBps)}</div>`;
+          cell.innerHTML = `<div class="tree-slot muted small">Playing 2,000 raids for the decision tree...</div>${setup}`;
+          try {
+            const by = await profileChunks(x.cfgs, team, 2000, 4242, (d, n) => { cell.querySelector('.tree-slot').textContent = `Playing raids for the decision tree... ${d.toLocaleString()} / ${n.toLocaleString()}`; });
+            cell.innerHTML = `${verzikTreeHtml(by, x.cfgs, team, esc)}${setup}`;
+          } catch (err) { cell.dataset.done = ''; cell.innerHTML = `<span class="err">${esc(err.message)}</span>`; }
+        }
+        return;
+      }
       const cb = e.target.closest('button[data-copy]');
       if (cb) {
         const x = all[Number(cb.dataset.copy)], msg = $(`o-msg-${cb.dataset.copy}`);

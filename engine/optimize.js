@@ -4,7 +4,7 @@ import { plan } from './planner.js';
 import { Rng } from './rng.js';
 import { ITEMS } from './gear.js';
 import { multiPicks, multiText } from './chartform.js';
-import { run_p1, Player } from './sim.js';
+import { run_p1, Player, ringByDawnsText } from './sim.js';
 import { run_p2 } from './p2.js';
 import { run_reds } from './reds.js';
 import { run_duo_reds } from './duo_reds.js';
@@ -18,8 +18,33 @@ const wiped = (players, phases) => players.every((p) => p.dead || (p.would_die &
 export function runOne(cfgs, team, rng) {
   return runAfterP1(run_p1(cfgs, team, rng), cfgs, team, rng);
 }
+/** One raid's end and phase ends (Show raid picks the typical raid by them): {end, key} - key 'P1 end/reds/P2 end'.
+ *  Same RNG use as runOne. */
+export function runOneSplit(cfgs, team, rng) {
+  const r1 = run_p1(cfgs, team, rng), out = {};
+  const end = runAfterP1(r1, cfgs, team, rng, out);
+  return { end, key: [r1.end, out.r3 ? out.r3.kill : ''].join('/') };
+}
+/** One raid with every phase's tick log (Show raid). Same RNG use as runOne, so raid i plays out the same.
+ *  -> {end, log} (end null if it failed). */
+export function runOneLogged(cfgs, team, rng) {
+  const log = [];
+  const r1 = run_p1(cfgs, team, rng, log);
+  const fail = { end: null, log, p1end: r1.end };
+  const scope = cfgs[0] && cfgs[0].scope;
+  if (r1.players.every((p) => p.dead) || (team === 2 && wiped(r1.players, ['P1']))) return fail;
+  if (scope === 'p1') return { end: r1.end ?? null, log, p1end: r1.end };
+  const r2 = run_p2(r1, team, rng, log);
+  if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return fail;
+  const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng, log) : run_reds(r2, cfgs, team, rng, log);
+  if (!r3.success || (team === 2 && r3.players.every((p) => p.dead))) return fail;
+  if (scope === 'p2') return { end: r3.kill, log, p1end: r1.end };
+  const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng, log);
+  if (team === 2 && wiped(r4.players || r3.players, ['P1', 'P3'])) return fail;
+  return { end: r4.kill == null ? null : r4.end, log, p1end: r1.end };
+}
 /** The rest of a raid after P1 (r1 = run_p1's result, rng right after it). */
-function runAfterP1(r1, cfgs, team, rng) {
+function runAfterP1(r1, cfgs, team, rng, out = null) {
   const scope = cfgs[0] && cfgs[0].scope;                    // 'p1' / 'p2' stop at that phase's end (see simulate.js)
   if (r1.players.every((p) => p.dead)) return null;
   if (team === 2 && wiped(r1.players, ['P1'])) return null;
@@ -27,11 +52,40 @@ function runAfterP1(r1, cfgs, team, rng) {
   const r2 = run_p2(r1, team, rng);
   if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return null;
   const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng) : run_reds(r2, cfgs, team, rng);
+  if (out) out.r3 = r3;
   if (!r3.success || (team === 2 && r3.players.every((p) => p.dead))) return null;
   if (scope === 'p2') return r3.kill;
   const r4 = run_p3({ ...r3, pid: r2.pid }, cfgs, team, rng);
   if (team === 2 && wiped(r4.players || r3.players, ['P1', 'P3'])) return null;
   return r4.kill == null ? null : r4.end;
+}
+
+/** Each player's reds line as text: '2 claws, 1 shadow, 5 scythes'. */
+export function redsLineText(l) {
+  const n = (k, one, many) => (l[k] ? `${l[k]} ${l[k] === 1 ? one : many}` : null);
+  return [n('C', 'claw', 'claws'), n('Sh', 'shadow', 'shadows'), n('Z', 'ZCB', 'ZCBs'), n('H', 'halberd', 'halberds'), n('BP', 'blowpipe', 'blowpipes'), n('S', 'scythe', 'scythes')].filter(Boolean).join(', ') || 'no attacks';
+}
+/**
+ * Branch profile: raids [from, to) grouped by the Dawn specs the team used before P1 died. Per Dawn count: raids,
+ * successes, room times, and per player how often each reds line came up - lines (not bounced) and blines (bounced).
+ */
+export function branchProfile(cfgs, team, from, to, seed, by = {}) {   // by: add to an earlier chunk's profile
+  for (let i = from; i < to; i++) {
+    const rng = raidRng(seed, i), r1 = run_p1(cfgs, team, rng), d = r1.dawns;
+    const b = by[d] ||= { n: 0, k: 0, totals: [], lines: cfgs.map(() => ({})), blines: cfgs.map(() => ({})), bounced: cfgs.map(() => 0), bp: cfgs.map(() => 0) };
+    b.n++;
+    const o = {}, end = runAfterP1(r1, cfgs, team, rng, o);
+    if (end != null) { b.k++; b.totals.push(end); }
+    if (o.r3 && team > 2) o.r3.players.forEach((p, k) => {
+      if (!p.reds_line) return;
+      // a blowpipe in reds is at the purple crab (the purple DC popping it), not at her: not part of their reds line
+      const { BP, ...atHer } = p.reds_line; if (BP) b.bp[k]++;
+      const key = redsLineText(atHer), into = p.reds_bounced ? b.blines[k] : b.lines[k];   // bounced lines apart
+      into[key] = (into[key] || 0) + 1;
+      if (p.reds_bounced) b.bounced[k]++;
+    });
+  }
+  return by;
 }
 
 // settings P1 never uses (it plays out the same with any value of them): the reds DCs, Boak sides / pattern, East bounce
@@ -144,6 +198,7 @@ export function cfgsToFields(cfgs, team) {
     put('setup', 'PurpleDC', k, !!c.PurpleDC); put('setup', '1st Purple DC', k, !!c.PurpleDC); put('setup', '2nd Purple DC', k, !!c.Purple2DC);
     put('setup', 'WestDC', k, !!c.WestDC); put('setup', 'EastDC', k, !!c.EastDC);
     put('setup', 'Ring switch %', k, c.ringSwitch ?? '');
+    put('setup', 'Ring % by Dawns', k, ringByDawnsText(c.ringByDawns));
     if (c.amulet_mode || c.amulet) put('gear', 'amulet', k, c.amulet);
     put('gear', 'Has BP', k, c.hasBP !== false);
     put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB);
@@ -250,11 +305,20 @@ export function catalog(cfgs, team) {
       apply: (cf, v) => { cf[sh].deepProc = v !== 'off'; if (v !== 'off') cf.forEach((x) => { x.deepThr = v; }); } });
   }
 
+  // the Dawn counts P1 can die in: the charted Dawn specs, and up to three fewer (P1 dies before the last ones)
+  const planned = cfgs.reduce((n, c) => n + Object.values(c.actions || {}).filter((a) => a === 'D').length, 0);
+  const dawnBranches = planned ? [planned, planned - 1, planned - 2, planned - 3].filter((d) => d > 0) : [];
   cfgs.forEach((c, i) => {
     const g = names[i];
     if (c.lightbearerOn) {
       opts.push({ id: `ring_${i}`, group: g, label: 'Ring swap %', kind: 'num', current: Number(c.ringSwitch ?? c.targetSpec ?? 100),
         apply: (cf, v) => { cf[i].ringSwitch = v; } });
+      // the same, for one branch: P1 died in d Dawn specs (the charted count, or 1-3 fewer when P1 dies early) - Ring % by Dawns
+      for (const d of dawnBranches) {
+        opts.push({ id: `ringD_${i}_${d}`, group: g, label: `Ring swap % if P1 dies in ${d} Dawns`, kind: 'num',
+          current: Number(c.ringByDawns && c.ringByDawns[d] != null && c.ringByDawns[d] !== 'default' ? c.ringByDawns[d] : c.ringSwitch ?? c.targetSpec ?? 100),
+          apply: (cf, v) => { cf[i].ringByDawns = { ...(cf[i].ringByDawns || {}), [d]: v }; } });
+      }
     }
     opts.push({ id: `amulet_${i}`, group: g, label: 'Amulet', kind: 'choice', choices: ['Rancour', 'Blood fury'], current: c.amulet || 'Rancour',
       apply: (cf, v) => { cf[i].amulet = v; } });

@@ -6,8 +6,8 @@
 // they compare fairly), and the best is kept if it beats the current setup on those raids. Repeat until nothing
 // improves (or the round limit). The best setups seen are then played at every entry instance and ranked.
 // Ranking: with breakpoints, the share of raids finished by the fastest breakpoint (then the next ...), then the
-// median; without, the median, then the top 10%.
-import { runSote } from './sote.js';
+// median; without, the median, then the top 25%, the top 10% and the mean.
+import { runSote, hornN } from './sote.js';
 import { Rng } from './rng.js';
 
 export const SOLVE_PREFIRES = [['', null], ['Twisted bow', 'Twisted bow'], ['ZCB auto', 'Zaryte crossbow'], ['ZCB spec', 'Zaryte crossbow'],
@@ -28,7 +28,9 @@ export function evalConfigs(configs, base, team, from, to, seed, entry, opts = {
     const players = playersOf(base, cfg), totals = [], split = { p1: [], maze1: [], p2: [], maze2: [], p3: [] }, events = {};
     for (let i = from; i < to; i++) {
       const r = runSote(players, team, new Rng(`${seed}#${i}`), null, { ...opts, entry });
-      for (const e of r.events || []) events[e] = (events[e] || 0) + 1;   // raids it happened in (the Adjustments counts)
+      const ev = new Set(r.events || []);
+      for (const x of r.specLog || []) { ev.add(`fired:${x.i}:${x.carried ? x.ph - 1 : x.ph}:${x.kind}`); if (x.carried) ev.add(`carried:${x.i}:${x.ph - 1}`); }   // the specs that went off (a carried ZCB: its planned phase, + carried)
+      for (const e of ev) events[e] = (events[e] || 0) + 1;   // raids it happened in (the Adjustments counts)
       if (r.end == null || !r.split) { totals.push(9999); continue; }       // a wipe counts as very slow
       totals.push(r.end);
       for (const k of Object.keys(split)) split[k].push(r.split[k]);
@@ -40,10 +42,13 @@ export function evalConfigs(configs, base, team, from, to, seed, entry, opts = {
 const sorted = (a) => a.slice().sort((x, y) => x - y);
 const med = (v) => v[Math.floor(v.length / 2)];
 const q10 = (v) => v[Math.max(0, Math.floor(v.length * 0.1) - 1)];
+const q25 = (v) => v[Math.max(0, Math.floor(v.length * 0.25) - 1)];
 /** Score (lower is better, compared item by item). bps: seconds. */
 export function scoreOf(totals, bps = []) {
   const v = sorted(totals), asc = [...bps].sort((a, b) => a - b);
-  return [...asc.map((b) => -v.filter((t) => t * 0.6 <= b + 1e-9).length / v.length), med(v), q10(v)];
+  // last: the mean (to 0.05 ticks), so a tie on median / top 25% / top 10% (0.6s steps) goes to the faster setup on average
+  const mean = v.reduce((s, t) => s + t, 0) / (v.length || 1);
+  return [...asc.map((b) => -v.filter((t) => t * 0.6 <= b + 1e-9).length / v.length), med(v), q25(v), q10(v), Math.round(mean * 20) / 20];
 }
 export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i] - 1e-12) return true; if (a[i] > b[i] + 1e-12) return false; } return false; };
 export const keyOf = (cfg) => JSON.stringify(cfg.players);
@@ -86,7 +91,7 @@ export function neighbours(cfg, ctx) {
         for (const alt of IF_BARRAGE) if (alt !== cur.ifBarrage && altOk(k, alt)) push(k, { specs: withSpec(p, 0, { ifBarrage: alt }) }, `P${k + 1} P1 ${cur.spec}, ${alt === 'none' ? 'no spec' : alt} if the Barrage lands`);
         if (cur.ifBarrage) push(k, { specs: withSpec(p, 0, { ifBarrage: undefined }) }, `P${k + 1} P1 ${cur.spec} always`);
       }
-      if (ctx.gear[k].horn) { const specs = p.specs.map((x, j) => (j === ph ? { ...x, horn: !x.horn } : x)); push(k, { specs }, `P${k + 1} P${ph + 1} ${cur.horn ? 'no horn' : 'horn'}`); }
+      if (ctx.gear[k].horn) for (const n of [0, 1, 2]) if (n !== hornN(cur)) push(k, { specs: withSpec(p, ph, { horn: n === 2 ? 2 : n === 1 }) }, `P${k + 1} P${ph + 1} ${n ? `horn ${n} maul${n > 1 ? 's' : ''}` : 'no horn'}`);
     }
   });
   // a Shadow Barrage prefire and another player's P1 maul turning conditional, together (neither pays off alone)
@@ -97,6 +102,28 @@ export function neighbours(cfg, ctx) {
       if (j === k || !(x.spec === 'maul' || x.spec === 'bgs') || x.backup || x.ifBarrage) return;
       for (const alt of IF_BARRAGE) if (altOk(j, alt)) many({ [k]: { prefire: 'Shadow Barrage' }, [j]: { specs: withSpec(b, 0, { ifBarrage: alt }) } }, `P${k + 1} prefire Shadow Barrage + P${j + 1} P1 ${x.spec}, ${alt === 'none' ? 'no spec' : alt} if it lands`);
     });
+  });
+  // the other way: drop the Barrage prefire and every maul waiting on it, together
+  if (ctx.allow.prefire && P.some((q) => q.specs[0].ifBarrage)) P.forEach((a, k) => {
+    if (a.prefire !== 'Shadow Barrage') return;
+    for (const [v, need] of SOLVE_PREFIRES) {
+      if (v === 'Shadow Barrage' || (need && !own(k, need))) continue;
+      const patches = {}; P.forEach((q, j) => { if (q.specs[0].ifBarrage) patches[j] = { specs: withSpec(q, 0, { ifBarrage: undefined }) }; });
+      patches[k] = { ...(patches[k] || {}), prefire: v };
+      many(patches, `P${k + 1} prefire ${v || 'none'} (no Barrage) + every P1 maul always`);
+    }
+  });
+  // a surge + a spec it pays for (+ Lightbearer cycles for more regen), together: none of them pays off alone
+  if (ctx.allow.surge && ctx.allow.specs && surges < ctx.surgeLimit) P.forEach((p, k) => {
+    if (p.surge) return;
+    const lbOpts = [p.lbCycles, ...(ctx.allow.lb && (p.lbCycles > 0 || lbs < ctx.lbRings) ? [2, 3] : [])].filter((c, i, a) => a.indexOf(c) === i);
+    for (let ph = 0; ph < 3; ph++) {
+      if (p.specs[ph].spec !== 'none' || p.specs[ph].backup) continue;
+      for (const s of SPEC_OPTS) {
+        if (s === 'none' || !specOk(k, s)) continue;
+        for (const c of lbOpts) push(k, { surge: true, lbCycles: c, specs: withSpec(p, ph, { spec: s, backup: false, ifBarrage: undefined }) }, `P${k + 1} surge + P${ph + 1} ${s}${c !== p.lbCycles ? ` + Lightbearer ${c}` : ''}`);
+      }
+    }
   });
   if (ctx.swaps) {
     P.forEach((a, i) => P.forEach((b, j) => {
@@ -120,6 +147,21 @@ export function neighbours(cfg, ctx) {
     }
   }
   return out;
+}
+
+/** A copy of cfg without the planned specs and horns that (almost) never went off in `events` (fired:i:ph:kind counts), or null. */
+export function pruneUnfired(cfg, events, raids = 0) {
+  const min = Math.max(1, raids * 0.01);   // went off in under 1% of raids: as good as never (kept only if it scores better)
+  const fired = (i, ph, kind) => Object.entries(events).reduce((n, [e, v]) => { const [f, a, b, c] = e.split(':'); return n + (f === 'fired' && +a === i && +b === ph && (kind ? c === kind : c !== 'horn' && c !== 'halberd') ? v : 0); }, 0) >= min;
+  let changed = false;
+  const players = cfg.players.map((p, i) => ({ ...p, specs: p.specs.map((x, ph) => {
+    let y = x;
+    if (y.horn && !fired(i, ph, 'horn')) { y = { ...y, horn: false }; changed = true; }
+    if ((y.spec !== 'none' || y.backup) && !fired(i, ph)) { y = { ...y, spec: 'none', backup: false, ifBarrage: undefined }; changed = true; }   // nothing went off (a backup too)
+    else if (y.backup && (y.spec === 'zcb' || y.spec === 'claws') && !fired(i, ph, 'zcb') && !fired(i, ph, 'claws')) { y = { ...y, spec: 'none' }; changed = true; }   // a backup whose damage spec never went off
+    return y;
+  }) }));
+  return changed ? { ...cfg, players } : null;
 }
 
 /**
@@ -177,8 +219,24 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     progress(`Checking the top setups at ${entries.length > 1 ? 'every entry instance' : 'the entry instance'}: ${i + 1} / ${ranked.length}`, 1);
     const rs = await Promise.all(entries.map((e) => run([x.cfg], 0, finalRaids, 'final', e)));
     const byEntry = entries.map((e, j) => ({ entry: e, score: scoreOf(rs[j][0].totals, bps), totals: rs[j][0].totals, split: rs[j][0].split, events: rs[j][0].events || {} }));
-    const b = byEntry.reduce((m, y) => (better(y.score, m.score) ? y : m));
-    out.push({ cfg: x.cfg, entry: b.entry, score: b.score, totals: b.totals, split: b.split, events: b.events, byEntry: byEntry.map((y) => ({ entry: y.entry, median: med(sorted(y.totals)) })) });
+    let b = byEntry.reduce((m, y) => (better(y.score, m.score) ? y : m)), cfg = x.cfg;
+    // planned specs / horns that never went off (no spec for them in time) come out - played again to be sure
+    const pruned = pruneUnfired(cfg, b.events, b.totals.length);
+    if (pruned) {
+      const [r2] = await run([pruned], 0, finalRaids, 'final', b.entry), s2 = scoreOf(r2.totals, bps);
+      if (!better(b.score, s2)) { cfg = pruned; b = { ...b, score: s2, totals: r2.totals, split: r2.split, events: r2.events || {} }; }
+    }
+    // the fewest Lightbearer cycles that do as well: one less at a time, kept while it scores no worse (a cycle more
+    // than needed only keeps them off Ultor - the search can land on one by noise)
+    for (let k = 0; k < cfg.players.length && !stopped(); k++) {
+      while (cfg.players[k].lbCycles > 0) {
+        const fewer = { ...cfg, players: cfg.players.map((p, j) => (j === k ? { ...p, lbCycles: p.lbCycles - 1 } : p)) };
+        const [r2] = await run([fewer], 0, finalRaids, 'final', b.entry), s2 = scoreOf(r2.totals, bps);
+        if (better(b.score, s2)) break;
+        cfg = fewer; b = { ...b, score: s2, totals: r2.totals, split: r2.split, events: r2.events || {} };
+      }
+    }
+    out.push({ cfg, entry: b.entry, score: b.score, totals: b.totals, split: b.split, events: b.events, byEntry: byEntry.map((y) => ({ entry: y.entry, median: med(sorted(y.totals)) })) });
   }
   return out.sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));
 }

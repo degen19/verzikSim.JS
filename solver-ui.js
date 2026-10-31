@@ -2,23 +2,23 @@
 // picks start specs, Lightbearers, ring swap %, the purple / reds DCs and the horns (engine/roomsolver.js).
 // The inputs come from the chart template's own fields (engine/chartform.js), so defaults match the chart.
 import { readXlsx } from './engine/xlsx.js';
-import { parse_chart } from './engine/sim.js';
+import { parse_chart, ringByDawnsText } from './engine/sim.js';
 import { withGear, withGearSet, GEAR_SETS, blowpipes, gearOfLetter } from './engine/gearstore.js';
 import { describe, readValues, overlaySheet, shadowBlock, SHADOW_MODES, multiInput, multiFromBox, migrateKeys } from './engine/chartform.js';
 import { parseBreakpoints } from './engine/optimize.js';
+import { verzikTreeHtml, profileChunks } from './engine/vtree.js';
 import { solveRoom, evalRange, ROOM_DEPTHS } from './engine/roomsolver.js';
 import { SolverPool } from './solver-pool.js';
+import { verzSetupHtml } from './verzsetup.js';
+import { verzRaidBar, showVerzRaid } from './verzraid.js';
 
 const STORE = 'verzikSim.solver.v1';
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtS = (s) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
-const fmtT = (t) => fmtS(t * 0.6);
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const tickTime = (sec) => Math.floor(sec / 0.6 + 1e-6) * 0.6;
 const load = () => { try { return migrateKeys(JSON.parse(localStorage.getItem(STORE))) || {}; } catch { return {}; } };
 const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off */ } };
-const CODE_BG = { S: '#8fd18f', D: '#c9b6e4', A: '#fff2a8', C: '#f8cbad', H: '#f4b183', E: '#b4c7e7', SB: '#ffd966', B: '#d9a6e0',
-  T: '#8eb4e3', P: '#ff66cc', R: '#ffffff', X: '#595959' };
 
 // which template fields go where (the rest are decided by the solver, or not used)
 const PLAYER_SETUP = ['Name', 'meleePrayer', 'Custom Surge Timing'];
@@ -290,7 +290,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   /** The form fields your chart's set has different values for (header names, once each) - only what the form shows,
    *  and not what the solver decides (or the form randomizes, horn priority). */
   function formDiff(mine, form) {
-    const solved = new Set(['startSpec (%)', 'lightbearerOn', 'PurpleDC', '1st Purple DC', '2nd Purple DC', 'WestDC', 'EastDC', 'Ring switch %',
+    const solved = new Set(['startSpec (%)', 'lightbearerOn', 'PurpleDC', '1st Purple DC', '2nd Purple DC', 'WestDC', 'EastDC', 'Ring switch %', 'Ring % by Dawns',
       'Target spec', 'Horn', 'P2 horn', 'P3 horn', 'hornPriority', 'Name', ...(team === 2 ? [...DUO_SOLVED, 'Shadow camp', '3:1', 'Shadow while LB'] : TEAM_SOLVED)]);
     const shown = new Set([...PLAYER_SETUP, ...PLAYER_GEAR, ...ADV_GEAR, 'redCrab', 'East Boak', 'West Boak', 'East Pattern',
       ...tpl[team].desc.tables.team.map((f) => f.header).filter((h) => h !== 'Death tick')]);
@@ -316,6 +316,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       put('setup', 'WestDC', k, !!c.WestDC);
       put('setup', 'EastDC', k, !!c.EastDC);
       put('setup', 'Ring switch %', k, c.ringSwitch ?? '');
+      put('setup', 'Ring % by Dawns', k, ringByDawnsText(c.ringByDawns));
       if (!x.seedLabel) put('setup', 'Target spec', k, '');           // your chart's rows keep their own
       put('gear', 'Horn', k, !!c.horn);
       put('gear', 'P2 horn', k, !!c.hornP2);
@@ -416,6 +417,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   }
   root.addEventListener('click', (e) => {
     const b = e.target.closest('button, th[data-sort]'); if (!b) return;
+    if (b.dataset.vraid) { showVerzRaid(b, root); return; }
     if (b.id === 'sv-go') { start(); return; }
     if (b.id === 'sv-stop') { if (pool) pool.stop(); return; }
     if (b.dataset.sort != null) {
@@ -445,6 +447,18 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       })();
       return;
     }
+    if (b.dataset.vtree != null) {                                  // the setup's decision tree, played on 2,000 raids
+      const i = Number(b.dataset.vtree), x = results.top[i], box = root.querySelector(`#sv-tree-${i}`), nm = results.names;
+      const cfgs = x.cfg.map((c, k) => ({ ...c, name: nm[k] ?? c.name }));
+      b.disabled = true;
+      (async () => {
+        try {
+          const by = await profileChunks(cfgs, results.team, 2000, 4242, (d, n) => { b.textContent = `Playing raids... ${d.toLocaleString()} / ${n.toLocaleString()}`; });
+          box.innerHTML = verzikTreeHtml(by, cfgs, results.team, esc);
+        } catch (e) { b.disabled = false; b.textContent = 'Decision tree'; box.insertAdjacentHTML('beforeend', ` <span class="err small">${esc(e.message)}</span>`); }
+      })();
+      return;
+    }
     if (b.dataset.setup != null) {
       const i = Number(b.dataset.setup), r = root.querySelector(`#sv-setup-${i}`);
       if (r) { r.hidden = !r.hidden; b.textContent = r.hidden ? 'See setup' : 'Hide setup'; if (r.hidden) shownSetups.delete(i); else shownSetups.add(i); }
@@ -453,43 +467,14 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
 
   // ---- results
   function setupHtml(x, nm) {
-    const cf = x.cfg;
-    const who = (key) => nm[cf.findIndex((c) => c[key])] ?? '-';
-    const horns = cf.map((c, k) => (c.horn && (c.hornP2 || c.hornP3) ? `${nm[k]} (${[c.hornP2 ? 'P2' : '', c.hornP3 ? 'P3' : ''].filter(Boolean).join(' + ')})` : null)).filter(Boolean);
-    const rows = [
-      ['Lightbearer', cf.map((c, k) => (c.lightbearerOn ? nm[k] : null)).filter(Boolean).join(', ') || 'none'],
-      ['Ring swap %', cf.map((c, k) => (c.lightbearerOn ? `${nm[k]} ${c.ringSwitch ?? 'default'}` : null)).filter(Boolean).join(', ') || '-'],
-      ['Purple DC', who('PurpleDC')],
-      ['Reds DCs', `West ${who('WestDC')}, East ${who('EastDC')}`],
-      ...(results.team === 2 ? [
-        ['2nd purple DC', cf.find((c) => c.Purple2DC) ? who('Purple2DC') : `${who('PurpleDC')} (both purples)`],
-        ['Shadow mode', (() => { const m = cf.find((c) => c.shadow); return m ? [m.shadowCamp && 'Shadow camp', m.shadowLB && 'Shadow while LB', m.shadow31 && '3:1'].filter(Boolean).join(' + ') || 'Shadow' : '-'; })()],
-        ['P2 last-hit threshold', `${cf[0].lastHitThr ?? '-'}%`],
-      ] : [['Horns', horns.join(', ') || 'none']]),
-      ['Dawn threshold', cf[0].dawnThr ? `${cf[0].dawnThr}%` : 'never'],
-      ...(results.team === 2 ? [] : [['Shadow', cf.map((c, k) => (c.shadow ? `${nm[k]}${[c.shadow31 && '3:1', c.shadowLB && 'while LB', c.deepProc && 'deep proc'].filter(Boolean).map((x) => ` (${x})`).join('')}` : null)).filter(Boolean).join(', ') || 'nobody']]),
-      ['Blowpipes', cf.map((c, k) => (c.hasBP !== false ? nm[k] : null)).filter(Boolean).join(', ') || 'nobody'],
-      ...(results.team === 2 ? [] : [['Boak sides', `West: ${cf.map((c, k) => (c.westBoak ? nm[k] : null)).filter(Boolean).join(', ') || '-'} | East: ${cf.map((c, k) => (c.eastBoak ? `${nm[k]} (${c.eastPattern || 'A'})` : null)).filter(Boolean).join(', ') || '-'}`]]),
-      ...(results.team === 2 ? [] : [['East bounce tech', cf[0].eastBounce ? `${cf[0].eastBounce} (East: ${cf.map((c, k) => (c.eastBoak ? nm[k] : null)).filter(Boolean).join(', ') || 'nobody'})` : 'off']]),
-      ['Start spec', cf.map((c, k) => `${nm[k]} ${c.startSpec}%`).join(', ')],
-      ['Average room time', x.c.k ? fmtT(x.c.sum / x.c.k) : '-'],
-    ];
-    const cap = results.team === 2 ? 150 : 70;
-    const end = Math.min(cap, Math.max(...cf.map((c) => Math.max(0, ...Object.keys(c.actions).map(Number)))), x.p1 ? x.p1.median + 2 : cap);
-    const grid = `<div class="scroll"><table class="bt grid"><tr><th></th><th>Start</th>${Array.from({ length: end }, (_, t) => `<th>${t + 1}</th>`).join('')}</tr>${
-      cf.map((c, k) => `<tr><td class="rl">${esc(nm[k])}</td><td>${c.startSpec}%</td>${Array.from({ length: end }, (_, t) => {
-        const a = c.actions[t + 1] || '';
-        const bg = a.startsWith('ST>') ? '#33cc33' : CODE_BG[a];
-        return `<td style="${bg ? `background:${bg};color:${a === 'X' ? '#fff' : '#000'};font-weight:700` : ''}">${esc(a)}</td>`;
-      }).join('')}</tr>`).join('')}</table></div>`;
     const i = results.top.indexOf(x);
     const actions = `<div class="row wrap" style="gap:8px;margin:4px 0 8px">
       ${['A', 'B', 'C'].map((b) => `<button class="ghost sm" data-copy="${i}" data-to="${b}" title="Put this setup into Set ${b} of Build chart on this page (gear, settings and the P1 chart), to run reports or optimize it">Copy to Set ${b}</button>`).join('')}
       <input data-savename="${i}" placeholder="Name, e.g. ${esc(results.team)}-man solver #${i + 1}" style="width:220px">
       <button class="sm" data-save="${i}" title="Save as a named chart (Set A) in this browser's chart library">Save as chart</button>
-      <span class="muted small" id="sv-msg-${i}"></span></div>`;
-    return `${actions}<table class="bt"><tbody>${rows.map(([a, b]) => `<tr><td class="rl">${esc(a)}</td><td style="text-align:left;white-space:normal">${esc(b)}</td></tr>`).join('')}</tbody></table>
-      <h4>P1 chart</h4>${grid}`;
+      <span class="muted small" id="sv-msg-${i}"></span></div>
+      <div id="sv-tree-${i}" style="margin-bottom:8px"><button class="ghost sm" data-vtree="${i}" title="Each player's plan by the Dawns P1 died in, and what they do if bounced (plays 2,000 raids)">Decision tree</button></div>`;
+    return `${actions}${verzSetupHtml(x.cfg, nm, results.team, { avg: x.c.k ? x.c.sum / x.c.k : null, p1Median: x.p1 ? x.p1.median : null })}${verzRaidBar(`sv-${i}-${Date.now()}`, x.cfg.map((c, k) => ({ ...c, name: nm[k] ?? c.name })), results.team, results.bps || [])}`;
   }
   function renderResults() {
     const out = root.querySelector('#sv-out'); if (!out) return;
