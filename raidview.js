@@ -20,6 +20,34 @@ if (typeof window !== 'undefined' && !window.rvFull) {
   window.addEventListener('resize', () => document.querySelectorAll('.rv.max').forEach(fitRv));
 }
 
+// The timeline's tooltip (cells carry their text in data-tip): instant on hover with a mouse, on tap on a touchscreen
+// (tap elsewhere to close) - the browser's own title tooltips are slow and never show on phones.
+if (typeof document !== 'undefined' && !window.rvTipOn) {
+  window.rvTipOn = true;
+  const tip = document.createElement('div');
+  tip.style.cssText = 'position:fixed;z-index:10000;display:none;max-width:380px;padding:7px 9px;border-radius:6px;background:#0d0e14;'
+    + 'color:#e6e8ef;border:1px solid #474b60;font:12px/1.35 system-ui,sans-serif;white-space:pre-line;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.5)';
+  const place = (x, y) => {
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = `${Math.max(4, x + 14 + w > window.innerWidth ? x - w - 14 : x + 14)}px`;
+    tip.style.top = `${Math.max(4, y + 16 + h > window.innerHeight ? y - h - 12 : y + 16)}px`;
+  };
+  const show = (el, x, y) => { if (!document.body.contains(tip)) document.body.appendChild(tip); tip.textContent = el.dataset.tip; tip.style.display = 'block'; place(x, y); };
+  const hide = () => { tip.style.display = 'none'; };
+  const cellOf = (e) => (e.target && e.target.closest ? e.target.closest('.rv [data-tip]') : null);
+  document.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') { const c = cellOf(e); if (c && c.dataset.tip) show(c, e.clientX, e.clientY); else hide(); } });
+  document.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && tip.style.display === 'block' && cellOf(e)) place(e.clientX, e.clientY); });
+  document.addEventListener('pointerout', (e) => { if (e.pointerType === 'mouse' && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.rv [data-tip]'))) hide(); });
+  document.addEventListener('click', (e) => {                    // touch: tap a cell for its details
+    const c = cellOf(e);
+    if (c && c.dataset.tip && (e.pointerType === 'touch' || matchMedia('(hover: none)').matches)) { show(c, e.clientX, e.clientY); return; }
+    if (!c) hide();
+  });
+  let touch = false;
+  document.addEventListener('pointerdown', (e) => { touch = e.pointerType !== 'mouse'; });
+  window.addEventListener('scroll', () => { if (touch) hide(); }, true);   // a tapped tip goes away when the page scrolls
+}
+
 // pickRaid: which raid to show for a breakpoint (median / top 25% / top 10% / fastest): the room time shown for it,
 // then among the raids that ended exactly then, the most common phase splits (the typical way to get that time).
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -83,7 +111,7 @@ const CSS = `<style>
 .rv .rvfs:hover{background:#353849}
 .rv.max{position:fixed;inset:0;z-index:9999;overflow:auto;border-radius:0;padding:14px 16px;margin:0}
 .rv .blk{display:grid;gap:3px;margin:0 0 14px;width:max-content}
-.rv .lab{background:#2a2c3b;border-radius:4px;padding:5px 8px;text-align:center;min-width:86px;white-space:nowrap;color:#e6e8ef}
+.rv .lab{background:#2a2c3b;border-radius:4px;padding:5px 8px;text-align:center;min-width:86px;white-space:nowrap;color:#e6e8ef;position:sticky;left:0;z-index:2;box-shadow:-12px 0 0 #16171f}
 .rv .lab.boss{background:#5b2a3c;color:#fff}
 .rv .tk{color:#8c90a0;text-align:center;font-size:10px;align-self:end}
 .rv .tk.her{color:#fff;background:#b8323f;border-radius:3px}
@@ -176,12 +204,12 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     const cols = `grid-template-columns:auto repeat(${ticks.length},24px)`;
     const mk = ticks.some((t) => marks.has(t)) ? `<div></div>${ticks.map((t) => `<div class="mk">${marks.has(t) ? marks.get(t).map((m) => `<span>${esc(m)}</span>`).join('<br>') : ''}</div>`).join('')}` : '';
     const attacks = (t) => (boss.get(t) || []).some((e) => BOSS_ATTACK.has(e.kind));
-    const head = `<div></div>${ticks.map((t) => `<div class="tk${attacks(t) ? ' her' : ''}${S(t)}" title="${esc(tickTip(t))}">${t}</div>`).join('')}`;
+    const head = `<div></div>${ticks.map((t) => `<div class="tk${attacks(t) ? ' her' : ''}${S(t)}" data-tip="${esc(tickTip(t))}">${t}</div>`).join('')}`;
     const bossCell = (t) => {
-      const ev = boss.get(t); if (!ev) return `<div class="c${S(t)}" title="${esc(tickTip(t))}"></div>`;
+      const ev = boss.get(t); if (!ev) return `<div class="c${S(t)}" data-tip="${esc(tickTip(t))}"></div>`;
       const top = ev.find((e) => e.kind !== 'attack') || ev[0];            // the most telling one colours the cell
       const short = top.short ?? (top.boss === 'Attack' ? '' : top.boss.split(' ').map((w) => w[0].toUpperCase()).join(''));
-      return `<div class="c b${S(t)}" style="background:${BOSS_BG[top.kind] || BOSS_BG.attack}" title="${esc(tickTip(t))}">${esc(short)}</div>`;
+      return `<div class="c b${S(t)}" style="background:${BOSS_BG[top.kind] || BOSS_BG.attack}" data-tip="${esc(tickTip(t))}">${esc(short)}</div>`;
     };
     const bossRow = `<div class="lab boss">${esc(bossName)}</div>${ticks.map(bossCell).join('')}`;
     const rows = names.map((nm, i) => `<div class="lab">${esc(nm)}</div>${ticks.map((t) => {
@@ -196,9 +224,9 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       const sharkImg = shark ? icon('Shark') : '', vengImg = v != null ? (CODE_ICON.V ? icon('V') : '<span class="vt">V</span>') : '';
       const n = (x ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0), dots = DOTS.some((q) => kinds.has(q));
       const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}`;   // hd: icons nudged right of the potion dots
-      if (x) return `<div class="c a${fit}${S(t)}" style="color:${CODE_COL[x.code] || '#fff'}" title="${esc([hitTip(nm, x), vt, st, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${vengImg}${sharkImg}${marks}${rgMark}</div>`;
-      if (v != null) return `<div class="c v${fit}${S(t)}" title="${esc([`${nm} - tick ${t}: ${vt}`, st, rt].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}${rgMark}</div>`;
-      if (su || rg) return `<div class="c${S(t)}" title="${esc(`${nm} - tick ${t}: ${[st, rt].filter(Boolean).join('\n')}`)}">${sharkImg}${marks}${rgMark}</div>`;
+      if (x) return `<div class="c a${fit}${S(t)}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), vt, st, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${vengImg}${sharkImg}${marks}${rgMark}</div>`;
+      if (v != null) return `<div class="c v${fit}${S(t)}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, st, rt].filter(Boolean).join('\n'))}">${vengImg}${sharkImg}${marks}${rgMark}</div>`;
+      if (su || rg) return `<div class="c${S(t)}" data-tip="${esc(`${nm} - tick ${t}: ${[st, rt].filter(Boolean).join('\n')}`)}">${sharkImg}${marks}${rgMark}</div>`;
       return `<div class="c${S(t)}"></div>`;
     }).join('')}`).join('');
     blocks.push(`<div class="blk" style="${cols}">${mk}${head}${bossRow}${rows}</div>`);
