@@ -121,7 +121,7 @@ const CSS = `<style>
 .rv .c .dots{position:absolute;left:2px;top:3px;bottom:3px;display:flex;flex-direction:column;justify-content:center;gap:1px}
 .rv .c .dots i{width:5px;height:5px;border-radius:50%;display:block}
 .rv .c .dots i.brew{background:#f2c94c}.rv .c .dots i.restore{background:#ff7ab8}.rv .c .dots i.surge{background:#fff}.rv .c .dots i.scb{background:#3fbf6f}.rv .c .dots i.other{background:#8c90a0}
-.rv .c .rd{position:absolute;left:-3px;top:-5px;line-height:0}
+.rv .c .rd{position:absolute;right:1px;top:1px;line-height:0}
 .rv .c .rd img{max-width:11px;max-height:10px}
 .rv .c.hd{padding-left:6px;box-sizing:border-box}
 .rv .c.hd img{max-width:16px;max-height:16px}
@@ -149,16 +149,17 @@ const SUPPLY_ITEMS = [[/shark/i, 'shark'], [/guthix rest|\brest\b/i, 'Guthix res
   [/heals? other|HEAL OTHER/i, 'heal other'], [/ranging/i, 'ranging potion'], [/divine/i, 'divine potion']];
 /** Which marker a supply line gets: shark (its icon), brew (yellow), restore (pink), surge (white), scb (green: super
  *  combat / divine), redemption (blue heart), other (grey: phoenix necklaces, rests, heart, heal other). */
+const RD_PROC = /\(Redemption\)|-> Redemption\b/i;              // a redemption proc (not 'down to 1 HP for the redemption skip')
 export function supplyKinds(lines) {
   const k = new Set();
   for (const line of lines) for (const part of line.split(/[|+;]/)) {
+    if (RD_PROC.test(part)) k.add('redemption');                // can share a line with a restore sip
     if (/shark/i.test(part)) k.add('shark');
     else if (/brew/i.test(part)) k.add('brew');
     else if (/super combat|divine/i.test(part)) k.add('scb');
     else if (/restore/i.test(part)) k.add('restore');
     else if (/surge/i.test(part)) k.add('surge');
-    else if (/redemption/i.test(part)) k.add('redemption');
-    else if (part.trim()) k.add('other');
+    else if (part.trim() && !RD_PROC.test(part)) k.add('other');
   }
   return k;
 }
@@ -167,7 +168,10 @@ export function supplyText(lines) {
   const n = new Map(), out = [];
   for (const line of lines) {
     const sg = line.match(/surge (\d+)% -> (\d+)%/i); if (sg) { out.push(`surge (${sg[1]}% -> ${sg[2]}% spec)`); continue; }
-    for (const part of line.split(/[|+;]/)) for (const [re, name] of SUPPLY_ITEMS) if (re.test(part)) { n.set(name, (n.get(name) || 0) + 1); break; }
+    for (const part of line.split(/[|+;]/)) {
+      if (RD_PROC.test(part)) n.set('redemption proc', (n.get('redemption proc') || 0) + 1);   // alongside the restore sip
+      for (const [re, name] of SUPPLY_ITEMS) if (name !== 'redemption proc' && re.test(part.replace(/redemption skip/i, ''))) { n.set(name, (n.get(name) || 0) + 1); break; }
+    }
   }
   for (const [name, k] of n) out.push(k > 1 ? `${name} ×${k}` : name);
   return out.join(', ');

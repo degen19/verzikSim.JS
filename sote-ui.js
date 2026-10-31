@@ -610,6 +610,7 @@ export function createSote(host, { getTeam }) {
             lines.push(`${at}: ${K(x.spec)} ${parts.join('; ')}.`);
           } else if (f < n * 0.99) lines.push(`${at}: ${K(x.spec)} goes off in ${pc(f)} - ${bk >= 0 ? `not if they backed up in P${bk + 1} (no spec left)` : 'otherwise no spec in time'}.`);
         }
+        if (c(`zcbAfter:${k}:${ph}`) >= n * 0.01) lines.push(`${at}: ZCB after their backup maul - they still have 75% (the surge) (${pc(c(`zcbAfter:${k}:${ph}`))}).`);
         if (c(`extra:${k}:${ph}`) >= n * 0.01) lines.push(`${at}: claws with the spec they have left, once their P3 plan is done (${pc(c(`extra:${k}:${ph}`))}).`);
         // who the horn went to, when that changes (a conditional maul that waits on a Barrage isn't buffed)
         const hr = Object.entries(ev).filter(([e, v]) => e.startsWith(`horn:${k}:${ph}:`) && v >= n * 0.01);

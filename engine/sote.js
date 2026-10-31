@@ -618,6 +618,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     // their damage spec once her Defence is at the floor, if they didn't back up; P3: after that (or after their
     // backups) any spec left goes on claws
+    // P3, a ZCB planned behind the backup: after their backup maul, the ZCB if they still have 75% (a surge drunk with
+    // that maul), once the mauls have landed - otherwise claws with what's left (spare)
+    if (ph === 2 && sp.spec === 'zcb' && (p.backups[ph] || !enough) && !p.dmgSpecs[ph] && p.spec >= ZCB_SPEC && has('Zaryte crossbow')) { p.pendingMark = `zcbAfter:${p.i}:${ph}`; return 'zcb'; }
     if (p.specDone[ph] || !enough) { if (!p.specDone[ph]) p.specDone[ph]++; return spare(); }
     if (sp.spec === 'zcb' || sp.spec === 'claws') p.pendingMark = `backup:${p.i}:${ph}:spec`;   // counted if it goes off
     if (sp.spec === 'zcb' && has('Zaryte crossbow')) { if (zcbWasted) { p.specDone[ph]++; return 'scythe'; } return p.spec >= ZCB_SPEC ? 'zcb' : 'scythe'; }   // a ZCB may wait for a regen
