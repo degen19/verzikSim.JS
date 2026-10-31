@@ -1,6 +1,25 @@
 // Show raid: a tick-by-tick Attack Timeline of one raid (laid out like Blert's): a row per player plus the boss, the
 // attack each player queued on each tick, the boss's attack ticks, and phase markers. Shared by every room.
 //
+// Full screen: the timeline over the whole page (an overlay, so it works on phones too), shrunk to fit the screen's
+// width so a whole row of ticks shows without scrolling; Esc or the button again closes it.
+const fitRv = (rv) => {
+  rv.style.zoom = '';
+  if (!rv.classList.contains('max')) return;
+  const wide = Math.max(...[...rv.querySelectorAll('.blk')].map((b) => b.scrollWidth), 1);
+  rv.style.zoom = String(Math.min(1, (window.innerWidth - 40) / wide));
+};
+const closeRv = (rv) => { rv.classList.remove('max'); rv.style.zoom = ''; const b = rv.querySelector('.rvfs'); if (b) b.textContent = 'Full screen'; document.body.style.overflow = ''; };
+if (typeof window !== 'undefined' && !window.rvFull) {
+  window.rvFull = (btn) => {
+    const rv = btn.closest('.rv'); if (!rv) return;
+    if (rv.classList.contains('max')) { closeRv(rv); return; }
+    rv.classList.add('max'); btn.textContent = 'Exit full screen (Esc)'; document.body.style.overflow = 'hidden'; fitRv(rv);
+  };
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.rv.max').forEach(closeRv); });
+  window.addEventListener('resize', () => document.querySelectorAll('.rv.max').forEach(fitRv));
+}
+
 // pickRaid: which raid to show for a breakpoint (median / top 25% / top 10% / fastest): the room time shown for it,
 // then among the raids that ended exactly then, the most common phase splits (the typical way to get that time).
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -58,7 +77,11 @@ const BOSS_BG = { attack: '#7a2433', purple: '#6b3fa0', heal: '#2f7a3f', boom: '
 const BOSS_ATTACK = new Set(['attack', 'purple', 'lightning']);   // red tick numbers: the ticks she attacks
 const CSS = `<style>
 .rv{background:#16171f;color:#d7d9e0;border-radius:8px;padding:10px 12px;font:12px/1.2 system-ui,sans-serif;overflow-x:auto}
-.rv h4{margin:0 0 8px;color:#fff;font-size:15px}
+.rv h4{margin:0;color:#fff;font-size:15px}
+.rv .rvh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 8px;position:sticky;left:0}
+.rv .rvfs{background:#2a2c3b;color:#e6e8ef;border:1px solid #474b60;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+.rv .rvfs:hover{background:#353849}
+.rv.max{position:fixed;inset:0;z-index:9999;overflow:auto;border-radius:0;padding:14px 16px;margin:0}
 .rv .blk{display:grid;gap:3px;margin:0 0 14px;width:max-content}
 .rv .lab{background:#2a2c3b;border-radius:4px;padding:5px 8px;text-align:center;min-width:86px;white-space:nowrap;color:#e6e8ef}
 .rv .lab.boss{background:#5b2a3c;color:#fff}
@@ -180,5 +203,5 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     }).join('')}`).join('');
     blocks.push(`<div class="blk" style="${cols}">${mk}${head}${bossRow}${rows}</div>`);
   }
-  return `${CSS}<div class="rv">${title ? `<h4>${esc(title)}</h4>` : ''}${blocks.join('')}${legend ? `<div class="legend">${legend}</div>` : ''}</div>`;
+  return `${CSS}<div class="rv"><div class="rvh">${title ? `<h4>${esc(title)}</h4>` : '<span></span>'}<button type="button" class="rvfs" onclick="rvFull(this)">Full screen</button></div>${blocks.join('')}${legend ? `<div class="legend">${legend}</div>` : ''}</div>`;
 }
