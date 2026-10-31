@@ -60,6 +60,14 @@ export class SolverPool {
     const res = await Promise.all(ranges.map(([from, to]) => this.task({ cmd: 'eval', kind, list, team, from, to, seed, bps })));
     return list.map((_, v) => mergeCounts(res.map((r) => r[v])));
   }
+  /** The same for a list of raid indices (the per-Dawn ring pass: only that branch's raids). */
+  async evalIdx(kind, list, team, idx, seed, bps) {
+    if (this.local) return localEvaluator.evalIdx(kind, list, team, idx, seed, bps);
+    const parts = Math.max(1, Math.min(this.n, Math.ceil(idx.length / 40)));
+    const chunks = Array.from({ length: parts }, (_, i) => idx.slice(Math.floor(idx.length * i / parts), Math.floor(idx.length * (i + 1) / parts)));
+    const res = await Promise.all(chunks.map((ix) => this.task({ cmd: 'eval', kind, list, team, from: 0, to: 0, seed, bps, idx: ix })));
+    return list.map((_, v) => mergeCounts(res.map((r) => r[v])));
+  }
   async p1(base, team, lb, opts) {
     if (this.local) return localEvaluator.p1(base, team, lb, opts);
     return this.task({ cmd: 'p1', base, team, lb, opts });

@@ -23,7 +23,8 @@ export function runOne(cfgs, team, rng) {
 export function runOneSplit(cfgs, team, rng) {
   const r1 = run_p1(cfgs, team, rng), out = {};
   const end = runAfterP1(r1, cfgs, team, rng, out);
-  return { end, key: [r1.end, out.r3 ? out.r3.kill : ''].join('/') };
+  // (Show raid: P1's Dawn count, and for a failed raid how far it got - the reds proc tick, else P1's end)
+  return { end, key: [r1.end, out.r3 ? out.r3.kill : ''].join('/'), dawns: r1.dawns, reds: out.r2 ? out.r2.reds_tick ?? null : null, p1end: r1.end ?? null };
 }
 /** One raid with every phase's tick log (Show raid). Same RNG use as runOne, so raid i plays out the same.
  *  -> {end, log} (end null if it failed). */
@@ -50,6 +51,7 @@ function runAfterP1(r1, cfgs, team, rng, out = null) {
   if (team === 2 && wiped(r1.players, ['P1'])) return null;
   if (scope === 'p1') return r1.end ?? null;
   const r2 = run_p2(r1, team, rng);
+  if (out) out.r2 = r2;
   if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return null;
   const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng) : run_reds(r2, cfgs, team, rng);
   if (out) out.r3 = r3;

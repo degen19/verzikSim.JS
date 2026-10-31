@@ -21,7 +21,7 @@ import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresult
 import { better as scoreBetter, scoreOf as soteScore, playersOf as soteBuild } from './engine/sotesolve.js';
 import { runSote } from './engine/sote.js';
 import { Rng } from './engine/rng.js';
-import { raidChoices, raidTitle, pickRaid, timelineHtml } from './raidview.js';
+import { pickRaid, timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
 
 const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}  · solve: {surgeLimit, ...}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -450,7 +450,7 @@ export function createSote(host, { getTeam }) {
     oflat = [];
     const table = (rows, withSet) => `<table class="sortlist"><tr><th>Rank</th>${withSet ? '<th>Set</th>' : ''}<th>Entry</th><th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${bps.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>P1</th><th>Mazes</th><th>P2</th><th>P3</th><th></th></tr>
       ${rows.map((r, j) => `<tr${j === 0 ? ' style="font-weight:700"' : ''}><td>${j + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>i${r.k}</td><td>${tm(r.med)}</td><td>${tm(r.q25)}</td><td>${tm(r.q10)}</td><td>${tm(r.fast)}</td>${r.at.map((x) => `<td>${(x * 100).toFixed(1)}%</td>`).join('')}<td>${(r.p1 * 0.6).toFixed(1)}s</td><td>${(r.maze * 0.6).toFixed(1)}s</td><td>${(r.p2 * 0.6).toFixed(1)}s</td><td>${(r.p3 * 0.6).toFixed(1)}s</td><td style="white-space:nowrap"><button class="ghost sm" data-otree="${oflat.push(r) - 1}">Procedure</button> <button class="ghost sm" data-use-entry="${r.k}" data-for-set="${r.set}" data-to="${r.set}">Use for set ${r.set}</button></td></tr>
-        <tr class="sub-row" data-otreerow="${oflat.length - 1}" hidden><td colspan="${11 + bps.length + (withSet ? 1 : 0)}" style="text-align:left"><div class="small">Entry instance i${r.k} (median by entry: ${r.byEntry})</div>${procTable(r)}${adjustments(r)}${raidBar('o', oflat.length - 1, bps)}</td></tr>`).join('')}
+        <tr class="sub-row" data-otreerow="${oflat.length - 1}" hidden><td colspan="${11 + bps.length + (withSet ? 1 : 0)}" style="text-align:left"><div class="small">Entry instance i${r.k} (median by entry: ${r.byEntry})</div>${procTable(r)}${adjustments(r)}${exampleBox('o', oflat.length - 1)}</td></tr>`).join('')}
       </table>`;
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: entry instance</h3>
       <div class="sub">${groups[0].items[0].n.toLocaleString()} raids per instance${groups.length > 1 ? ' and set' : ''}, the same raids at each${bps.length ? ` · ranked by most finished by ${fsB(asc[0])}` : ' · ranked by the lowest median'} · maze = both mazes, proc to interactable (medians)</div>
@@ -460,6 +460,7 @@ export function createSote(host, { getTeam }) {
   opt.addEventListener('click', (e) => {
     const a = e.target.dataset.oact;
     if (e.target.dataset.sraid) { showRaid(e.target); return; }
+    if (e.target.dataset.sraidex) { showRaidEx(e.target); return; }
     if (e.target.dataset.otree != null) { const row = opt.querySelector(`[data-otreerow="${e.target.dataset.otree}"]`); if (row) row.hidden = !row.hidden; return; }
     if (e.target.dataset.useEntry != null) {
       const k = e.target.dataset.forSet, st = setOf(k); if (!st) return;
@@ -561,16 +562,62 @@ export function createSote(host, { getTeam }) {
   /** "If this happens, do this": the setup's contingencies, with the share of raids each came up in. */
   /** The decision tree: each player's planned route, then what they do if things go another way (share of raids). */
   /** Show raid: the buttons (kind: 'o' Optimizer / 'v' Solver row) and the timeline of the picked raid. */
-  const raidBar = (kind, idx, bps = []) => `<div class="row wrap" style="gap:6px;margin-top:8px;align-items:center"><b class="small">Show raid</b>${raidChoices(bps).map(([k, l]) => `<button class="ghost sm" data-sraid="${kind}|${idx}|${k}">${l}</button>`).join('')}</div><div data-sraidout="${kind}|${idx}"></div>`;
-  const showRaid = (b) => {
-    const [kind, idx, which] = b.dataset.sraid.split('|'), r = ({ o: oflat, v: vflat, r: rflat })[kind][Number(idx)], box = host.querySelector(`[data-sraidout="${kind}|${idx}"]`);
+  const raidBar = (kind, idx, bps = []) => { const rr = rowOf(kind, idx), fails = rr && rr.replay ? rr.replay.allN - rr.replay.raids.length : 0;   // failed raids: only when some wiped
+    return `<div class="row wrap" style="gap:6px;margin-top:8px;align-items:center"><b class="small">Show raid</b><button class="ghost sm" data-sraid="${kind}|${idx}|succ" data-bps="${bps.join(',')}" title="Opens on the median raid; Previous / Next step through fastest, top 10%, top 25%, median, slowest and your breakpoints">View successful raids</button>${fails > 0 ? `<button class="ghost sm" data-sraid="${kind}|${idx}|fail" title="Opens on the fastest failed (wiped) raid; Previous / Next to the median and slowest">View failed raids</button>` : ''}<span class="muted small" data-sraidmsg="${kind}|${idx}"></span></div><div data-sraidout="${kind}|${idx}"></div>`; };
+  /** Optimizer / Solver rows: no buttons - only the box the decision tree's examples show in. */
+  const exampleBox = (kind, idx) => `<span class="muted small" data-sraidmsg="${kind}|${idx}"></span><div data-sraidout="${kind}|${idx}"></div>`;
+  const SOTE_LEGEND = 'ZCB bolt and ZCB spec share the crossbow icon (hover to tell) · lilac bar: a thrall hit · purple tint: the chosen player, under the maze; lighter: the others on the maze · r: a spec regen · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (DB death ball) - hover any cell for details';
+  /** A row's replay: draw raid i's timeline. */
+  const soteDraw = (r, i, title) => {
+    const { players, seed, entry, opts } = r.replay, trace = [], res = runSote(players, team(), new Rng(`${seed}#${i}`), null, { entry, ...opts, trace });
+    return timelineHtml({ trace, names: players.map((p, k) => pnameOf(r.set, k)), bossName: 'Sotetseg', end: res.end, title, legend: SOTE_LEGEND });
+  };
+  /** Every raid of a row replayed once (cached): its time (null: wiped), wipe tick, split key and events - for failed
+   *  raids and the decision tree's examples. */
+  const soteReplayAll = async (r, msg) => {
+    if (r.replay.all) return r.replay.all;
+    const { players, seed, entry, opts, allN } = r.replay, SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'], all = [];
+    for (let i = 0; i < allN; i++) {
+      const res = runSote(players, team(), new Rng(`${seed}#${i}`), null, { entry, ...opts });
+      const ev = new Set(res.events || []);
+      for (const x of res.specLog || []) { ev.add(`fired:${x.i}:${x.carried ? x.ph - 1 : x.ph}:${x.kind}`); if (x.carried) ev.add(`carried:${x.i}:${x.ph - 1}`); }
+      all.push({ i, total: res.end != null && res.split ? res.end : null, key: res.split ? SPL.map((q) => res.split[q]).join(',') : '', wipeAt: res.wipeAt, hp: res.hp, ev });
+      if (i % 100 === 99) { if (msg) msg.textContent = `Replaying ${allN.toLocaleString()} raids... ${(i + 1).toLocaleString()}`; await new Promise((z) => setTimeout(z, 0)); }
+    }
+    if (msg) msg.textContent = '';
+    return (r.replay.all = all);
+  };
+  /** A decision-tree key: 'a&!b' - raids with event a and without b. */
+  const evMatch = (key) => { const terms = key.split('&').map((x) => (x.startsWith('!') ? [false, x.slice(1)] : [true, x])); return (ev) => terms.every(([want, e]) => ev.has(e) === want); };
+  const rowOf = (kind, idx) => ({ o: oflat, v: vflat, r: rflat })[kind][Number(idx)];
+  const showRaid = async (b) => {
+    const [kind, idx, mode] = b.dataset.sraid.split('|'), r = rowOf(kind, idx);
+    const box = host.querySelector(`[data-sraidout="${kind}|${idx}"]`), msg = host.querySelector(`[data-sraidmsg="${kind}|${idx}"]`);
     if (!r || !r.replay || !box) return;
-    const { players, seed, entry, opts, raids, allN } = r.replay, pk = pickRaid(raids, allN, which);
-    if (!pk) { box.innerHTML = '<p class="muted small">No raid finished at that point.</p>'; return; }
-    const trace = [], res = runSote(players, team(), new Rng(`${seed}#${pk.i}`), null, { entry, ...opts, trace });
-    box.innerHTML = timelineHtml({ trace, names: players.map((p, k) => pnameOf(r.set, k)), bossName: 'Sotetseg', end: res.end,
-      title: `${raidTitle(which, 'Sotetseg')} - ${tm(pk.total)} (entry i${entry}; ${pk.typical} of the ${pk.n} raids that ended at ${tm(pk.total)} went this way)`,
-      legend: 'ZCB bolt and ZCB spec share the crossbow icon (hover to tell) · lilac bar: a thrall hit · purple tint: the chosen player, under the maze; lighter: the others on the maze · r: a spec regen · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (DB death ball) - hover any cell for details' });
+    const { raids, allN, entry } = r.replay, N = allN.toLocaleString();
+    if (mode === 'succ') {
+      const bps = (b.dataset.bps || '').split(',').filter(Boolean).map(Number);
+      const steps = successSteps(raids, allN, allN, bps);             // wiped raids count in the percentiles, as in the tables
+      raidNav(box, steps, steps.findIndex((x) => /Median/.test(x.label)), (st) => soteDraw(r, st.pick.i,
+        `${st.label} successful raid (Sotetseg) - ${tm(st.pick.total)} · entry i${entry} · ${st.freq} · ${st.pick.typical} of the ${st.pick.n} raids that ended at ${tm(st.pick.total)} went this way`));
+      return;
+    }
+    const all = await soteReplayAll(r, msg);
+    const fails = all.filter((x) => x.total == null).map((x) => ({ ...x, prog: x.wipeAt ?? 1e6 }));
+    if (!fails.length) { box.innerHTML = '<p class="muted small">No failed (wiped) raids.</p>'; return; }
+    raidNav(box, failSteps(fails), 0, (st) => soteDraw(r, st.f.i,
+      `${st.label} raid (Sotetseg) - wiped at ${st.f.wipeAt != null ? tm(st.f.wipeAt) : '?'} with her on ${st.f.hp} HP · entry i${entry} · ${fails.length.toLocaleString()} wiped of ${N} (${(fails.length / allN * 100).toFixed(1)}%)`));
+  };
+  /** A decision-tree line's example: the median-time raid of the ones where that branch happened. */
+  const showRaidEx = async (b) => {
+    const td = b.closest('td'), out = td && td.querySelector('[data-sraidout]'); if (!out) return;
+    const [kind, idx] = out.dataset.sraidout.split('|'), r = rowOf(kind, idx);
+    const msg = host.querySelector(`[data-sraidmsg="${kind}|${idx}"]`); if (!r || !r.replay) return;
+    const all = await soteReplayAll(r, msg), m = evMatch(b.dataset.sraidex), sub = all.filter((x) => m(x.ev)), ok = sub.filter((x) => x.total != null);
+    const pk = pickRaid(ok, ok.length, 'median'), label = b.dataset.exlabel || 'example';
+    if (!pk) { out.innerHTML = `<p class="muted small">No successful raid for "${esc(label)}".</p>`; out.scrollIntoView({ block: 'nearest' }); return; }
+    out.innerHTML = soteDraw(r, pk.i, `Example: ${label} (Sotetseg) - ${tm(pk.total)} · the median of the ${ok.length.toLocaleString()} successful raids where this happened (${(sub.length / all.length * 100).toFixed(1)}% of ${all.length.toLocaleString()} raids) · entry i${r.replay.entry}`);
+    out.scrollIntoView({ block: 'nearest' });
   };
   /** A setup's procedure: per player prefire, start spec, surge, Lightbearer and each phase's spec. r: {cfg, set}. */
   const procTable = (r) => `<table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
@@ -582,8 +629,10 @@ export function createSote(host, { getTeam }) {
     const isDef = (s) => s === 'maul' || s === 'bgs', K = (s) => (s === 'none' ? 'no spec' : KINDS[s]);
     const maulers = (ph, not) => P.map((q, j) => j).filter((j) => j !== not && isDef(P[j].specs[ph].spec) && !P[j].specs[ph].backup);
     const whose = (js) => (js.length ? `${js.map(nm).join(' / ')}'s maul${js.length > 1 ? 's' : ''}` : 'the mauls');
+    // "example": the median raid of that branch (replays the row's raids once); key 'a&!b' = event a and not b
+    const ex = (key, label) => ` <button class="ghost sm" style="padding:0 6px;font-size:11px" data-sraidex="${esc(key)}" data-exlabel="${esc(label)}" title="Show the median-time raid where this happened">${esc(label.split(': ').pop())}</button>`;
     const barr = P.findIndex((p) => p.prefire === 'Shadow Barrage'), out = [];
-    if (barr >= 0) out.push(`${nm(barr)}'s Shadow Barrage lands in ${pc(c('barrage:landed'))} of raids.`);
+    if (barr >= 0) out.push(`${nm(barr)}'s Shadow Barrage lands in ${pc(c('barrage:landed'))} of raids.${ex('barrage:landed', 'Barrage: lands')}${ex('barrage:missed', 'Barrage: misses')}`);
     P.forEach((p, k) => {
       const lines = [];
       p.specs.forEach((x, ph) => {
@@ -591,35 +640,36 @@ export function createSote(host, { getTeam }) {
         if (x.ifBarrage && isDef(x.spec) && !x.backup && barr >= 0 && ph === 0) {
           const alt = x.ifBarrage, a = c(`cond:${k}:${alt}`);
           const m2 = c(`cond:${k}:maul2`), br = [m2 >= n * 0.01 ? `none hit: ${K(x.spec)} (${pc(m2)})` : null, `one hits: ${alt === 'none' ? 'keep scything' : K(alt)} (${pc(a)})`].filter(Boolean);
-          lines.push(`${at}: ${K(x.spec)} on their first hit if the Barrage misses (${pc(c(`cond:${k}:maul1`))}). If it lands: scythe and watch ${whose(maulers(0, k))} - ${br.join('; ')}.`);
+          lines.push(`${at}: ${K(x.spec)} on their first hit if the Barrage misses (${pc(c(`cond:${k}:maul1`))}). If it lands: scythe and watch ${whose(maulers(0, k))} - ${br.join('; ')}.${ex(`cond:${k}:maul1`, `${pnameOf(r.set, k)} P1: Barrage misses`)}${ex(`cond:${k}:${alt}`, `${pnameOf(r.set, k)} P1: lands, one hits`)}${m2 >= n * 0.01 ? ex(`cond:${k}:maul2`, `${pnameOf(r.set, k)} P1: lands, none hit`) : ''}`);
         } else if (x.backup) {
           const m = c(`backup:${k}:${ph}:maul`), sp = c(`backup:${k}:${ph}:spec`), cl = ph === 2 && x.spec === 'zcb' ? Math.min(sp, c(`clawsForZcb:${k}`)) : 0, rest = n - m - sp;
           const dmg = x.spec === 'none' || isDef(x.spec) ? [] : cl >= sp && sp ? [`claws (her HP already under ${cb}) (${pc(sp)})`] : [sp - cl ? `${K(x.spec)} (${pc(sp - cl)})` : null, cl ? `claws instead if her HP is already under ${cb} (${pc(cl)})` : null].filter(Boolean);
           const parts = [m >= n * 0.01 ? `${K(x.spec === 'bgs' ? 'bgs' : 'maul')} once ${whose(maulers(ph, k))} ${maulers(ph, k).length === 1 ? 'has' : 'have'} landed, if her Defence isn't at the floor yet (${pc(m)})` : null, dmg.length && sp >= n * 0.01 ? `otherwise ${dmg.join(', ')}` : null, (m >= n * 0.01 || sp >= n * 0.01) && rest >= n * 0.01 ? `no spec (${pc(rest)})` : null, c(`backup2:${k}:${ph}`) >= n * 0.01 ? `the maul missed and she still isn't at the floor: ${K(x.spec === 'bgs' ? 'bgs' : 'maul')} again (${pc(c(`backup2:${k}:${ph}`))})` : null].filter(Boolean);
-          lines.push(parts.length ? `${at}: ${parts.join('; ')}.` : `${at}: the backup is almost never needed (under 1% of raids).`);   // under 1% of raids: left out
+          const exs = `${m >= n * 0.01 ? ex(`backup:${k}:${ph}:maul`, `${pnameOf(r.set, k)} ${at}: backup maul`) : ''}${dmg.length && sp >= n * 0.01 ? ex(`backup:${k}:${ph}:spec`, `${pnameOf(r.set, k)} ${at}: ${K(x.spec)} instead`) : ''}${c(`backup2:${k}:${ph}`) >= n * 0.01 ? ex(`backup2:${k}:${ph}`, `${pnameOf(r.set, k)} ${at}: second backup`) : ''}`;
+          lines.push(parts.length ? `${at}: ${parts.join('; ')}.${exs}` : `${at}: the backup is almost never needed (under 1% of raids).`);   // under 1% of raids: left out
         } else if (x.spec !== 'none') {
           const f = x.spec === 'zcb' && ph === 2 ? fired('zcb') + fired('claws') : fired(x.spec === 'bgs' ? 'bgs' : x.spec === 'maul' ? 'maul' : x.spec);
           const cl = x.spec === 'zcb' && ph === 2 ? c(`clawsForZcb:${k}`) : 0;
-          if (cl) lines.push(`${at}: ZCB, or claws instead if her HP is already under ${cb} (${pc(cl)}).`);
+          if (cl) lines.push(`${at}: ZCB, or claws instead if her HP is already under ${cb} (${pc(cl)}).${ex(`clawsForZcb:${k}`, `${pnameOf(r.set, k)} ${at}: claws instead`)}`);
           const bk = p.specs.findIndex((y, j) => j < ph && y.backup && c(`backup:${k}:${j}:maul`));   // an earlier backup maul used the spec
           // a P1 / P2 ZCB that didn't go off that phase moves to the start of the next (after its mauls, a backup first if needed)
           const cr = (x.spec === 'zcb' || x.spec === 'claws') && ph < 2 ? c(`carried:${k}:${ph}`) : 0, inPh = f - cr, nx = p.specs[ph + 1];
           if (cr >= n * 0.01) {
             const bkN = nx && nx.backup ? c(`backup:${k}:${ph + 1}:maul`) : 0, none = n - f;
             const parts = [inPh >= n * 0.01 ? `in P${ph + 1} (${pc(inPh)})` : null, `${inPh >= n * 0.01 ? `if P${ph + 1} was too fast (not enough spec yet, or too close to the maze)` : `never in time for P${ph + 1} - goes`} at the start of P${ph + 2}, once its mauls have landed${nx && nx.backup ? ' and no backup is needed' : ''} (${pc(cr)})`, bkN >= n * 0.01 ? `backup needed instead: ${K(nx.spec === 'bgs' ? 'bgs' : 'maul')}, no ${K(x.spec)} (${pc(Math.min(bkN, none))})` : null, none - Math.min(bkN, none) >= n * 0.01 ? `no ${K(x.spec)} (${pc(none - Math.min(bkN, none))})` : null].filter(Boolean);
-            lines.push(`${at}: ${K(x.spec)} ${parts.join('; ')}.`);
-          } else if (f < n * 0.99) lines.push(`${at}: ${K(x.spec)} goes off in ${pc(f)} - ${bk >= 0 ? `not if they backed up in P${bk + 1} (no spec left)` : 'otherwise no spec in time'}.`);
+            lines.push(`${at}: ${K(x.spec)} ${parts.join('; ')}.${ex(`carried:${k}:${ph}`, `${pnameOf(r.set, k)} ${at}: ${K(x.spec)} moved`)}`);
+          } else if (f < n * 0.99) lines.push(`${at}: ${K(x.spec)} goes off in ${pc(f)} - ${bk >= 0 ? `not if they backed up in P${bk + 1} (no spec left)` : 'otherwise no spec in time'}.${ex(x.spec === 'zcb' && ph === 2 ? `!fired:${k}:2:zcb&!fired:${k}:2:claws` : `!fired:${k}:${ph}:${x.spec === 'bgs' ? 'bgs' : x.spec === 'maul' ? 'maul' : x.spec}`, `${pnameOf(r.set, k)} ${at}: ${K(x.spec)} didn't go off`)}`);
         }
-        if (c(`zcbAfter:${k}:${ph}`) >= n * 0.01) lines.push(`${at}: ZCB after their backup maul - they still have 75% (the surge) (${pc(c(`zcbAfter:${k}:${ph}`))}).`);
-        if (c(`extra:${k}:${ph}`) >= n * 0.01) lines.push(`${at}: claws with the spec they have left, once their P3 plan is done (${pc(c(`extra:${k}:${ph}`))}).`);
+        if (c(`zcbAfter:${k}:${ph}`) >= n * 0.01) lines.push(`${at}: ZCB after their backup maul - they still have 75% (the surge) (${pc(c(`zcbAfter:${k}:${ph}`))}).${ex(`zcbAfter:${k}:${ph}`, `${pnameOf(r.set, k)} ${at}: ZCB after the backup`)}`);
+        if (c(`extra:${k}:${ph}`) >= n * 0.01) lines.push(`${at}: claws with the spec they have left, once their P3 plan is done (${pc(c(`extra:${k}:${ph}`))}).${ex(`extra:${k}:${ph}`, `${pnameOf(r.set, k)} ${at}: leftover claws`)}`);
         // who the horn went to, when that changes (a conditional maul that waits on a Barrage isn't buffed)
         const hr = Object.entries(ev).filter(([e, v]) => e.startsWith(`horn:${k}:${ph}:`) && v >= n * 0.01);
-        if (x.horn && hr.length > 1) lines.push(`${at} horn: ${hr.sort((u, w) => w[1] - u[1]).map(([e, v]) => { const js = e.split(':')[3].split('+').filter(Boolean).map(Number); return `${js.length ? js.map(nm).join(' + ') : 'nobody else'} (${js.length * 25 || 25}%) ${pc(v)}`; }).join(' · ')}.`);
-        if (x.horn && c(`fired:${k}:${ph}:horn`) < n * 0.99) lines.push(`${at}: horn goes off in ${pc(c(`fired:${k}:${ph}:horn`))} - otherwise not enough spec.`);
-        if (ph < 2 && c(`zcbCarry:${k}:${ph}`) && !(x.spec === 'zcb' && c(`carried:${k}:${ph}`) >= n * 0.01)) lines.push(`${at}: too close to the maze for the ZCB's ruby - keep it for the start of P${ph + 2} (${pc(c(`zcbCarry:${k}:${ph}`))}).`);
+        if (x.horn && hr.length > 1) lines.push(`${at} horn: ${hr.sort((u, w) => w[1] - u[1]).map(([e, v]) => { const js = e.split(':')[3].split('+').filter(Boolean).map(Number); return `${js.length ? js.map(nm).join(' + ') : 'nobody else'} (${js.length * 25 || 25}%) ${pc(v)}${ex(e, `${pnameOf(r.set, k)} ${at} horn: ${js.length ? js.map((j) => pnameOf(r.set, j)).join(' + ') : 'nobody else'}`)}`; }).join(' · ')}.`);
+        if (x.horn && c(`fired:${k}:${ph}:horn`) < n * 0.99) lines.push(`${at}: horn goes off in ${pc(c(`fired:${k}:${ph}:horn`))} - otherwise not enough spec.${ex(`!fired:${k}:${ph}:horn`, `${pnameOf(r.set, k)} ${at}: no horn`)}`);
+        if (ph < 2 && c(`zcbCarry:${k}:${ph}`) && !(x.spec === 'zcb' && c(`carried:${k}:${ph}`) >= n * 0.01)) lines.push(`${at}: too close to the maze for the ZCB's ruby - keep it for the start of P${ph + 2} (${pc(c(`zcbCarry:${k}:${ph}`))}).${ex(`zcbCarry:${k}:${ph}`, `${pnameOf(r.set, k)} ${at}: ZCB kept for P${ph + 2}`)}`);
       });
-      if (c(`halb:${k}`) >= n * 0.01) lines.push(`P3 last hit: Crystal halberd spec when they have 30%+ but can't claw and the team's next swings (this halberd included) kill her on average (${pc(c(`halb:${k}`))}).`);
-      if (c(`lbStall:${k}`) >= n * 0.01) lines.push(`Lightbearer: the cycles run out during a maze stall in ${pc(c(`lbStall:${k}`))} - stay on it until out of the stall (no ring swaps while stalling).`);
+      if (c(`halb:${k}`) >= n * 0.01) lines.push(`P3 last hit: Crystal halberd spec when they have 30%+ but can't claw and the team's next swings (this halberd included) kill her on average (${pc(c(`halb:${k}`))}).${ex(`halb:${k}`, `${pnameOf(r.set, k)}: halberd last hit`)}`);
+      if (c(`lbStall:${k}`) >= n * 0.01) lines.push(`Lightbearer: the cycles run out during a maze stall in ${pc(c(`lbStall:${k}`))} - stay on it until out of the stall (no ring swaps while stalling).${ex(`lbStall:${k}`, `${pnameOf(r.set, k)}: Lightbearer runs out in a stall`)}`);
       const plan = [`start ${p.startSpec}%`, p.prefire ? `${p.prefire} prefire` : null, p.surge ? 'surge with their first spec' : null, p.lbCycles ? `camp Lightbearer ${p.lbCycles} cycle${p.lbCycles > 1 ? 's' : ''}` : null, ...p.specs.map((x, ph) => (x.spec !== 'none' || x.horn || x.backup ? `P${ph + 1} ${specTxt(x, k, ph, P, r.set)}` : null))].filter(Boolean).map(esc).join(' · ');
       out.push(`<b>${nm(k)}</b>: ${plan || 'no specs'}${lines.length ? `<ul style="margin:2px 0 4px 18px;padding:0">${lines.map((l) => `<li>${l}</li>`).join('')}</ul>` : ' <span class="muted">- always as planned</span>'}`);
     });
@@ -641,7 +691,7 @@ export function createSote(host, { getTeam }) {
         return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>i${r.entry}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.25) - 1)])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.p1))}</td><td>${ft(med(r.split.maze1) + med(r.split.maze2))}</td><td>${ft(med(r.split.p2))}</td><td>${ft(med(r.split.p3))}</td>${anyWiped ? `<td>${(wiped(r) * 100).toFixed(1)}%</td>` : ''}<td style="white-space:nowrap"><button class="ghost sm" data-vshow="${idx}">Procedure</button> ${SETS.map((k) => `<button class="ghost sm" data-vuse="${idx}" data-to="${k}" title="Put this setup (and its entry instance) into set ${k}${rootState().sets[k] ? '' : ` - a new set, from set ${r.set}`}">Copy to set ${k}</button>`).join(' ')}</td></tr>
         <tr class="sub-row" data-vproc="${idx}" hidden><td colspan="${13 + asc.length + (withSet ? 1 : 0)}" style="text-align:left">
           <div class="small">Entry instance i${r.entry} (median by entry: ${r.byEntry.map((y) => `i${y.entry} ${ft(y.median)}`).join(', ')})</div>
-          ${procTable(r)}${adjustments(r)}${raidBar('v', idx, asc)}</td></tr>`; }).join('')}
+          ${procTable(r)}${adjustments(r)}${exampleBox('v', idx)}</td></tr>`; }).join('')}
       </table></div>`;
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Sotetseg: solver</h3>
       <div class="sub">Each played on the same ${all[0].totals.length.toLocaleString()} raids at its best entry instance${groups.length > 1 ? ' (every set on the same raids, so sets compare fairly)' : ''}. Times: median.</div>
@@ -686,6 +736,7 @@ export function createSote(host, { getTeam }) {
   sol.addEventListener('click', async (e) => {
     const t0 = e.target;
     if (t0.dataset.sraid) { showRaid(t0); return; }
+    if (t0.dataset.sraidex) { showRaidEx(t0); return; }
     if (t0.dataset.vshow != null) { const row = sol.querySelector(`[data-vproc="${t0.dataset.vshow}"]`); row.hidden = !row.hidden; return; }
     if (t0.dataset.vuse != null) {                                    // copy the setup (and its entry instance) into set A / B / C
       const r = vflat[Number(t0.dataset.vuse)], k = t0.dataset.to || rootState().cur, rs = rootState();

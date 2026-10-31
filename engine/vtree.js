@@ -61,7 +61,9 @@ export function verzikTreeHtml(by, cfgs, team, esc) {
     return `<li><b>${esc(c.name || `Player ${k + 1}`)}</b>${rows.length === 1 ? `: ${rows[0]}` : rows.length ? `<ul>${rows.map((r) => `<li>${r}</li>`).join('')}</ul>` : ': nothing to show'}</li>`;
   });
   return `<div class="vtree small" style="margin-top:6px"><b>Decision tree</b>
-    <div>${head}</div><ul style="margin:4px 0 0 18px;padding:0">${players.join('')}</ul></div>`;
+    <div>${head}</div>
+    <div class="row wrap" style="gap:6px;margin:4px 0 2px">${ds.map((d) => `<button class="ghost sm" data-vdawn="${d}" title="The median successful raid where P1 died in ${d} Dawns (in the Show raid box below)">Example ${d} Dawn</button>`).join('')}</div>
+    <ul style="margin:4px 0 0 18px;padding:0">${players.join('')}</ul></div>`;
 }
 
 /** Profile a setup in chunks (keeps the page responsive). onProgress(done, n). */

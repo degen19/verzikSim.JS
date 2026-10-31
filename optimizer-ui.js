@@ -327,7 +327,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
         row.hidden = !row.hidden; tb.textContent = row.hidden ? 'See setup' : 'Hide setup';
         if (!row.hidden && !cell.dataset.done) {
           cell.dataset.done = '1';
-          const setup = `<div style="width:0;min-width:100%;overflow-x:auto">${verzSetupHtml(x.cfgs, x.cfgs.map((c, k) => c.name || `Player ${k + 1}`), team)}${verzRaidBar(`opt-${tb.dataset.tree}-${Date.now()}`, x.cfgs, team, curBps)}</div>`;
+          const setup = `<div style="width:0;min-width:100%;overflow-x:auto">${verzSetupHtml(x.cfgs, x.cfgs.map((c, k) => c.name || `Player ${k + 1}`), team)}${verzRaidBar(`opt-${tb.dataset.tree}-${Date.now()}`, x.cfgs, team, curBps, { buttons: false })}</div>`;
           cell.innerHTML = `<div class="tree-slot muted small">Playing 2,000 raids for the decision tree...</div>${setup}`;
           try {
             const by = await profileChunks(x.cfgs, team, 2000, 4242, (d, n) => { cell.querySelector('.tree-slot').textContent = `Playing raids for the decision tree... ${d.toLocaleString()} / ${n.toLocaleString()}`; });

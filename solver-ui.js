@@ -474,7 +474,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       <button class="sm" data-save="${i}" title="Save as a named chart (Set A) in this browser's chart library">Save as chart</button>
       <span class="muted small" id="sv-msg-${i}"></span></div>
       <div id="sv-tree-${i}" style="margin-bottom:8px"><button class="ghost sm" data-vtree="${i}" title="Each player's plan by the Dawns P1 died in, and what they do if bounced (plays 2,000 raids)">Decision tree</button></div>`;
-    return `${actions}${verzSetupHtml(x.cfg, nm, results.team, { avg: x.c.k ? x.c.sum / x.c.k : null, p1Median: x.p1 ? x.p1.median : null })}${verzRaidBar(`sv-${i}-${Date.now()}`, x.cfg.map((c, k) => ({ ...c, name: nm[k] ?? c.name })), results.team, results.bps || [])}`;
+    return `${actions}${verzSetupHtml(x.cfg, nm, results.team, { avg: x.c.k ? x.c.sum / x.c.k : null, p1Median: x.p1 ? x.p1.median : null })}${verzRaidBar(`sv-${i}-${Date.now()}`, x.cfg.map((c, k) => ({ ...c, name: nm[k] ?? c.name })), results.team, results.bps || [], { buttons: false })}`;
   }
   function renderResults() {
     const out = root.querySelector('#sv-out'); if (!out) return;

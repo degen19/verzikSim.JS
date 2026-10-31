@@ -96,7 +96,8 @@ export function raidFull(cfgs, team, i, seed) {
  * Raids [from, to) of one setup. kind 'p2' = through the end of P2, 'full' = the whole room. bps = breakpoints in
  * seconds (a raid counts if it is equal or faster - tick times). Returns counts with the per-raid end ticks (-1 = failed).
  */
-export function evalRange(kind, cfgs, team, from, to, seed, bps) {
+export function evalRange(kind, cfgs, team, from, to, seed, bps, idx = null) {
+  if (idx) return evalIdx(kind, cfgs, team, idx, seed, bps);
   const n = to - from, ends = new Int16Array(n);
   const c = { n, k: 0, all50: 0, n100: 0, camp: 0, wipe: 0, under: bps.map(() => 0), ends, sum: 0 };
   const raid = kind === 'full' ? raidFull : raidP2;
@@ -110,6 +111,30 @@ export function evalRange(kind, cfgs, team, from, to, seed, bps) {
     if (r.end != null) { c.k++; c.sum += r.end; bps.forEach((b, j) => { if (r.end * 0.6 <= b + 1e-9) c.under[j]++; }); }
   }
   return c;
+}
+/** The same counts for a list of raid indices (in that order; ends[j] is raid idx[j]). */
+export function evalIdx(kind, cfgs, team, idx, seed, bps) {
+  const n = idx.length, ends = new Int16Array(n);
+  const c = { n, k: 0, all50: 0, n100: 0, camp: 0, wipe: 0, under: bps.map(() => 0), ends, sum: 0 };
+  const raid = kind === 'full' ? raidFull : raidP2;
+  idx.forEach((i, j) => {
+    const r = raid(cfgs, team, i, seed);
+    ends[j] = r.end ?? -1;
+    if (r.all50) c.all50++;
+    c.n100 += r.n100;
+    if (r.camp) c.camp++;
+    if (r.wipe) c.wipe++;
+    if (r.end != null) { c.k++; c.sum += r.end; bps.forEach((b, q) => { if (r.end * 0.6 <= b + 1e-9) c.under[q]++; }); }
+  });
+  return c;
+}
+/** Full-run counts `all` with the raids `idx` swapped from `was` (that setup's counts on just those raids) to `now` (another
+ *  setup's on the same raids): exact, as every count is a per-raid sum. */
+export function swapCounts(all, idx, was, now) {
+  const d = (k) => all[k] - was[k] + now[k], ends = Int16Array.from(all.ends);
+  idx.forEach((i, j) => { ends[i] = now.ends[j]; });
+  return { n: all.n, k: d('k'), all50: d('all50'), n100: d('n100'), camp: d('camp'), wipe: d('wipe'), sum: d('sum'), ends,
+    under: all.under.map((u, q) => u - was.under[q] + now.under[q]) };
 }
 /** Counts of consecutive raid ranges (in order) -> counts of the whole range. */
 export function mergeCounts(parts) {
@@ -258,6 +283,7 @@ export function diverseCharts(cf, team, { beam = 150, top = 40, sbOwner = null, 
 /** Runs everything in this process (the CLI). The page uses solver-pool.js, which has the same three calls. */
 export const localEvaluator = {
   async eval(kind, list, team, n, seed, bps) { return list.map((cfgs) => evalRange(kind, cfgs, team, 0, n, seed, bps)); },
+  async evalIdx(kind, list, team, idx, seed, bps) { return list.map((cfgs) => evalIdx(kind, cfgs, team, idx, seed, bps)); },
   async p1(base, team, lb, opts) { return p1Candidates(base, team, lb, opts); },
   async edits(cfg, team, plans, opts) { return editCandidates(cfg, team, plans, opts); },
   async p1sim(list, team, runs, seed) {
@@ -673,7 +699,8 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   // Dawn branches: P1 can die in fewer Dawn specs than charted, and the best ring swap can differ by branch (Ring % by
   // Dawns). For the best few setups, each Lightbearer player's swap for each branch (every Dawn count P1 died in on 1%+
   // of 500 P1s - the same cutoff as the decision tree) is moved +-10 / +-20 on its own, on the same full raids; a
-  // better one is kept and the next tried from it
+  // better one is kept and the next tried from it. A branch's ring value only changes the raids where P1 died in that
+  // many Dawns, so only those are played: the setup's full counts with those raids swapped (exact, and far fewer raids)
   if (team > 2 && (o.dawnRingTop ?? 4) > 0) {
     const tops = [], seenC = new Set();
     for (const x of s3) { const k = coreKey(x.cfg); if (seenC.has(k)) continue; seenC.add(k); tops.push(x); if (tops.length >= (o.dawnRingTop ?? 4)) break; }
@@ -681,13 +708,22 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
       let x = x0;
       const seen = {}; for (let i = 0; i < 500; i++) { const d = run_p1(x.cfg, team, new Rng(`dawns#${i}`)).dawns; seen[d] = (seen[d] || 0) + 1; }
       const branches = Object.keys(seen).map(Number).filter((d) => d > 0 && seen[d] >= 5).sort((a, b) => b - a);
+      // the full raids by the Dawns P1 died in (P1 plays out the same whatever the ring values after it)
+      const byD = {};
+      if (ev.evalIdx) for (let i = 0; i < o.n3; i++) { const d = run_p1(x.cfg, team, new Rng(`${seed}:full#${i}`)).dawns; (byD[d] ||= []).push(i); }
       for (let k = 0; k < x.cfg.length; k++) {
         if (!x.cfg[k].lightbearerOn) continue;
         for (const d of branches) {
           const c = x.cfg[k], cur = c.ringByDawns && typeof c.ringByDawns[d] === 'number' ? c.ringByDawns[d] : c.ringSwitch;
           const vals = (cur == null ? [70, 80, 90, 100] : [cur - 20, cur - 10, cur + 10, cur + 20]).filter((v) => v >= 10 && v <= 100);
           const list = vals.map((v) => x.cfg.map((cc, j) => (j === k ? { ...cc, ringByDawns: { ...(cc.ringByDawns || {}), [d]: v } } : cc)));
-          const res = await run('full', list, o.n3, 'full');
+          let res;
+          const idx = byD[d] || [];
+          if (ev.evalIdx) {                                           // only this branch's raids: exact, far less work
+            const [was, ...now] = idx.length ? await ev.evalIdx('full', [x.cfg, ...list], team, idx, `${seed}:full`, bpsFull) : [null];
+            res = idx.length ? now.map((c) => swapCounts(x.c, idx, was, c)) : list.map(() => x.c);
+            stats.raids += idx.length * (list.length + 1); o.progress && o.progress({ stage, raids: stats.raids });
+          } else res = await run('full', list, o.n3, 'full');
           stats.dawnRingTried = (stats.dawnRingTried || 0) + list.length;
           let best = -1; res.forEach((r, i) => { if (okSucc(r) && rank(r, true) > rank(best < 0 ? x.c : res[best], true) + 1e-12) best = i; });
           if (best >= 0) { x = { ...x, cfg: list[best], c: res[best] }; stats.dawnRingKept = (stats.dawnRingKept || 0) + 1; s3.push(x); }

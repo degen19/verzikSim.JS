@@ -312,7 +312,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const specsDefault = defaultSpecs(team);
   const MAX = SOTE_HP[team] || 4000;
   const marks = [Math.floor(MAX * MAZE_AT[0]), Math.floor(MAX * MAZE_AT[1]), 0];
-  let hp = MAX, defLvl = SOTE.def, drained = false, phase = 0, stopAt = marks[0];
+  let hp = MAX, defLvl = SOTE.def, drained = false, phase = 0, stopAt = marks[0], wipeAt = null;   // wipeAt: the tick everyone was dead
   let blocked = false;                          // she can't be damaged (maze) until `attackable`
   let attackable = 1, nextAttack = FIRST_ATTACK, kill = null, anim = DEATH_ANIM, end = null;
   const back = [];                              // the tick she's interactable again after each maze
@@ -1047,6 +1047,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     curTr = null;
     if (trace) TR({ t, hp, phase: blocked ? `Maze ${mazes.length}` : `P${phase + 1}` });   // her HP at the end of the tick
+    if (wipeAt == null && !alive().length) wipeAt = t;
   }
   if (kill != null) end = kill + anim;
   // report split: P1 (to the first proc), first maze (proc to the end of the last cycle before she's interactable),
@@ -1054,7 +1055,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const split = mazes.length >= 2 && back.length >= 2 && end != null
     ? { p1: mazes[0], maze1: back[0] - mazes[0], p2: mazes[1] - back[0], maze2: back[1] - mazes[1], p3: end - back[1], total: end } : null;
   if (phase >= 0 && ps.some((q) => q.prefire === 'Shadow Barrage') && !ev.has('barrage:landed')) mark('barrage:missed');
-  return { events: [...ev], end, kill, anim, mazes, split, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, role: p.role, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks, spec: p.spec, surgeAt: p.surgeAt, lbOffAt: p.lbOffAt })) };
+  return { events: [...ev], end, kill, anim, mazes, split, wipeAt, lost: mazes.map((x) => ticksLost(x, entry)), hp, ...st, players: ps.map((p) => ({ name: p.name, role: p.role, hp: p.hp, dead: p.dead, pnecks: p.pnecks, sharks: p.sharks, spec: p.spec, surgeAt: p.surgeAt, lbOffAt: p.lbOffAt })) };
 }
 
 /** Phase 1 only (start to the first maze): runSote stopped there. */

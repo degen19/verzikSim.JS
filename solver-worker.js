@@ -10,7 +10,7 @@ self.onmessage = (ev) => {
   const d = ev.data;
   try {
     let result;
-    if (d.cmd === 'eval') result = d.list.map((cfgs) => evalRange(d.kind, cfgs, d.team, d.from, d.to, d.seed, d.bps));
+    if (d.cmd === 'eval') result = d.list.map((cfgs) => evalRange(d.kind, cfgs, d.team, d.from, d.to, d.seed, d.bps, d.idx || null));   // idx: a list of raids instead of [from, to)
     else if (d.cmd === 'p1') result = p1Candidates(d.base, d.team, d.lb, d.opts);
     else if (d.cmd === 'edits') result = editCandidates(d.cfg, d.team, d.plans, d.opts);
     else if (d.cmd === 'p1sim') result = d.list.map((cfgs) => simP1(cfgs, d.team, cfgs.map((c) => c.actions), d.runs, d.seed, cfgs.map((c) => c.startSpec)));

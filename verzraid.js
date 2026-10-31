@@ -2,7 +2,7 @@
 // tick log on, and reads the Attack Timeline (attacks, damage, her attacks and HP, phase points) from that log - the
 // Verzik engines aren't changed for it. Used by the Report, Optimizer and Verz Solver.
 import { runOneSplit, runOneLogged, raidRng } from './engine/optimize.js';
-import { raidChoices, raidTitle, pickRaid, timelineHtml } from './raidview.js';
+import { pickRaid, timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
 
 const RAIDS = 2000, SEED = 9191;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -147,28 +147,82 @@ export function verzTrace(log, names, cfgs = null) {
 
 const LEGEND = 'lilac bar: a thrall hit · pink-tinted ticks: her healing shield (reds) · r: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · dots on the left: yellow brew, pink restore, white surge, green super combat, grey anything else · heart redemption proc · her row: red her attacks (BH blood heal, M magic, R ranged, GB green ball), purple PC a purple crab sent out, green + the purple heals her, orange PX its explosion, gold L lightning and LR its rebound - hover any cell for details';
 const store = new Map();
-/** The Show raid buttons for a setup (key: unique on the page). */
-export function verzRaidBar(key, cfgs, team, bps = []) {
-  store.set(key, { cfgs, team, raids: null });
-  return `<div class="row wrap" style="gap:6px;margin-top:8px;align-items:center"><b class="small">Show raid</b>${raidChoices(bps).map(([k, l]) => `<button class="ghost sm" data-vraid="${esc(key)}|${k}">${l}</button>`).join('')}<span class="muted small" data-vraidmsg="${esc(key)}"></span></div><div data-vraidout="${esc(key)}"></div>`;
+/** The Show raid buttons for a setup (key: unique on the page): successful raids, failed raids, and an example raid
+ *  for each Dawn count P1 died in (the decision tree's branches). */
+export function verzRaidBar(key, cfgs, team, bps = [], { buttons = true } = {}) {
+  store.set(key, { cfgs, team, bps, raids: null });
+  // Optimizer / Solver setup panels: no buttons - only the box the decision tree's "Example N Dawn" raids show in
+  if (!buttons) return `<div class="row wrap" style="gap:6px;align-items:center"><span class="muted small" data-vraidmsg="${esc(key)}"></span></div><div data-vraidout="${esc(key)}"></div>`;
+  // the raids are played straight away (in the background) so "View failed raids" only shows when some failed
+  // - once the bar is on screen (the Solver draws one per result, most of them folded away)
+  if (typeof window !== 'undefined') setTimeout(() => {
+    const bar = document.querySelector(`[data-vraidmsg="${CSS.escape(key)}"]`), go = () => playRaids(store.get(key), key).catch(() => {});
+    if (!bar) return;
+    if (typeof IntersectionObserver === 'undefined') { go(); return; }
+    const io = new IntersectionObserver((xs) => { if (xs.some((x) => x.isIntersecting)) { io.disconnect(); go(); } });
+    io.observe(bar.parentElement);
+  }, 50);
+  const b = (k, l, t) => `<button class="ghost sm" data-vraid="${esc(key)}|${k}" title="${esc(t)}">${l}</button>`;
+  return `<div class="row wrap" style="gap:6px;margin-top:8px;align-items:center"><b class="small">Show raid</b>${b('succ', 'View successful raids', 'Opens on the median raid; Previous / Next step through fastest, top 10%, top 25%, median, slowest and your breakpoints')}<span data-vraidfail="${esc(key)}" hidden>${b('fail', 'View failed raids', 'Opens on the fastest failed raid (the earliest into reds); Previous / Next to the median and slowest failed')}</span><span class="muted small" data-vraidmsg="${esc(key)}"></span></div><div data-vraidout="${esc(key)}"></div>`;
+}
+// the decision tree's "Example N Dawn" buttons: the Show raid box of the same setup (the nearest one around the tree)
+if (typeof document !== 'undefined' && !window.vDawnOn) {
+  window.vDawnOn = true;
+  document.addEventListener('click', (ev) => {
+    const b = ev.target && ev.target.closest && ev.target.closest('[data-vdawn]'); if (!b) return;
+    let el = b.parentElement, out = null;
+    while (el && !(out = el.querySelector('[data-vraidout]'))) el = el.parentElement;
+    if (!out) return;
+    const key = out.dataset.vraidout, fake = { dataset: { vraid: `${key}|dawn:${b.dataset.vdawn}` } };
+    showVerzRaid(fake, el).then(() => out.scrollIntoView({ block: 'nearest' }));
+  });
+}
+/** The setup's raids, once (in chunks: the page stays live): successful, failed (how far each got), and each one's
+ *  Dawn count. Shows the failed-raids button when there are any. */
+function playRaids(e, key) {
+  if (e.play) return e.play;
+  const el = (sel) => document.querySelector(`[${sel}="${CSS.escape(key)}"]`);
+  return (e.play = (async () => {
+    const raids = [], fails = [], all = [];
+    for (let i = 0; i < RAIDS; i += 100) {
+      for (let j = i; j < Math.min(RAIDS, i + 100); j++) {
+        const r = runOneSplit(e.cfgs, e.team, raidRng(SEED, j));
+        all.push({ i: j, total: r.end, key: r.key, dawns: r.dawns });
+        if (r.end != null) raids.push({ i: j, total: r.end, key: r.key, dawns: r.dawns });
+        else fails.push({ i: j, prog: r.reds ?? (r.p1end != null ? 1e6 + r.p1end : 2e6), reds: r.reds, dawns: r.dawns });   // failed: how far it got (reds proc tick; else P1's end)
+      }
+      const msg = el('data-vraidmsg'); if (msg && e.waiting) msg.textContent = `Playing ${RAIDS.toLocaleString()} raids... ${Math.min(RAIDS, i + 100).toLocaleString()}`;
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    Object.assign(e, { raids, fails, all });
+    const msg = el('data-vraidmsg'); if (msg) msg.textContent = '';
+    const fb = el('data-vraidfail'); if (fb) fb.hidden = !fails.length;
+  })());
 }
 /** A Show raid button was clicked (root: where the buttons are). */
 export async function showVerzRaid(btn, root) {
-  const [key, which] = btn.dataset.vraid.split(/\|(?=[^|]*$)/), e = store.get(key);
+  const [key, mode] = btn.dataset.vraid.split(/\|(?=[^|]*$)/), e = store.get(key);
   const box = root.querySelector(`[data-vraidout="${CSS.escape(key)}"]`), msg = root.querySelector(`[data-vraidmsg="${CSS.escape(key)}"]`);
   if (!e || !box) return;
-  if (!e.raids) {                                                     // the setup's raids, once (in chunks: the page stays live)
-    const raids = [];
-    for (let i = 0; i < RAIDS; i += 100) {
-      for (let j = i; j < Math.min(RAIDS, i + 100); j++) { const r = runOneSplit(e.cfgs, e.team, raidRng(SEED, j)); if (r.end != null) raids.push({ i: j, total: r.end, key: r.key }); }
-      if (msg) msg.textContent = `Playing ${RAIDS.toLocaleString()} raids to find it... ${Math.min(RAIDS, i + 100).toLocaleString()}`;
-      await new Promise((r) => setTimeout(r, 0));
-    }
-    e.raids = raids; if (msg) msg.textContent = '';
+  e.waiting = true; await playRaids(e, key); e.waiting = false;
+  const names = e.cfgs.map((c, k) => c.name || `Player ${k + 1}`);
+  const draw = (i, title) => { const r = runOneLogged(e.cfgs, e.team, raidRng(SEED, i)); return timelineHtml({ trace: verzTrace(r.log, names, e.cfgs), names, bossName: 'Verzik', end: r.end, title, legend: LEGEND }); };
+  const N = RAIDS.toLocaleString();
+  if (mode === 'succ') {
+    const steps = successSteps(e.raids, e.raids.length, RAIDS, e.bps || []);   // percentiles of the successful raids
+    raidNav(box, steps, steps.findIndex((s) => /Median/.test(s.label)), (st) => draw(st.pick.i,
+      `${st.label} successful raid (Verzik) - ${fmt(st.pick.total)} · ${st.freq} · ${st.pick.typical} of the ${st.pick.n} raids that ended at ${fmt(st.pick.total)} went this way (${e.raids.length.toLocaleString()} successful of ${N})`));
+  } else if (mode === 'fail') {
+    const steps = failSteps(e.fails);
+    raidNav(box, steps, 0, (st) => draw(st.f.i,
+      `${st.label} raid (Verzik) - ${st.f.reds != null ? `reached reds at ${fmt(st.f.reds)}, then failed` : 'failed before reds'} · ${e.fails.length.toLocaleString()} failed of ${N} (${(e.fails.length / RAIDS * 100).toFixed(1)}%)`));
+  } else if (mode.startsWith('dawn')) {
+    // the decision tree's branches: P1 died in N Dawns (1%+ of raids) - the median successful raid of each
+    const by = {}; for (const r of e.all) if (r.dawns != null) (by[r.dawns] ||= []).push(r);
+    const steps = Object.keys(by).map(Number).filter((d) => by[d].length >= RAIDS * 0.01).sort((a, b) => b - a)
+      .map((d) => { const ok = by[d].filter((r) => r.total != null); return { label: `Example ${d} Dawn (${(by[d].length / RAIDS * 100).toFixed(0)}%)`, d, ok, pick: pickRaid(ok, ok.length, 'median') }; });
+    raidNav(box, steps, Math.max(0, steps.findIndex((x) => x.d === Number(mode.split(':')[1]))), (st) => (st.pick ? draw(st.pick.i,
+      `Example: P1 died in ${st.d} Dawns (Verzik) - ${fmt(st.pick.total)} · the median of the ${st.ok.length.toLocaleString()} successful raids in this branch (${(by[st.d].length / RAIDS * 100).toFixed(1)}% of ${N} attempts died in ${st.d} Dawns)`)
+      : `<p class="muted small">No successful raid where P1 died in ${st.d} Dawns.</p>`));
   }
-  const pk = pickRaid(e.raids, e.raids.length, which);             // of the successful raids (failed ones have no room time)
-  if (!pk) { box.innerHTML = '<p class="muted small">Too few successful raids for that one.</p>'; return; }
-  const r = runOneLogged(e.cfgs, e.team, raidRng(SEED, pk.i)), names = e.cfgs.map((c, k) => c.name || `Player ${k + 1}`);
-  box.innerHTML = timelineHtml({ trace: verzTrace(r.log, names, e.cfgs), names, bossName: 'Verzik', end: r.end,
-    title: `${raidTitle(which, 'Verzik')} - ${fmt(pk.total)} (of the ${e.raids.length.toLocaleString()} successful raids out of ${RAIDS.toLocaleString()} played for this; ${pk.typical} of the ${pk.n} that ended at ${fmt(pk.total)} went this way)`, legend: LEGEND });
 }

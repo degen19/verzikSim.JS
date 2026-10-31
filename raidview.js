@@ -79,7 +79,7 @@ export function pickRaid(raids, allN, which) {
     const want = Math.round(Number(which.slice(3)) / 0.6);
     T = v.reduce((m, x) => (Math.abs(x - want) < Math.abs(m - want) || (Math.abs(x - want) === Math.abs(m - want) && x < m) ? x : m), v[0]);
   } else {
-    const at = { median: n >> 1, q25: Math.max(0, Math.floor(n * 0.25) - 1), q10: Math.max(0, Math.floor(n * 0.1) - 1), fast: 0 }[which];
+    const at = { median: n >> 1, q25: Math.max(0, Math.floor(n * 0.25) - 1), q10: Math.max(0, Math.floor(n * 0.1) - 1), fast: 0, slow: v.length - 1 }[which];
     if (at >= v.length) return null;
     T = v[at];
   }
@@ -88,6 +88,53 @@ export function pickRaid(raids, allN, which) {
   const key = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
   const r = same.find((x) => x.key === key);
   return { i: r.i, total: T, n: same.length, typical: count[key] };
+}
+
+// ---- stepping through raids (Previous / Next): the successful ones (fastest .. slowest, breakpoints by time), the failed
+// ones (fastest / median / slowest failed), or any other list (decision-tree branches)
+const pct = (x) => `${(x * 100).toFixed(x > 0 && x < 0.01 ? 2 : 1)}%`;
+const SUCC = [['fast', 'Fastest'], ['q10', 'Top 10%'], ['q25', 'Top 25%'], ['median', 'Median'], ['slow', 'Slowest']];
+/** The successful raids to step through: Fastest, Top 10%, Top 25%, Median, Slowest and one per breakpoint, in time
+ *  order (the same raid twice: one step, both names). raids: [{i, total, key}]; rankN: raids the percentiles count
+ *  (failed ones too, where the results tables count them); attempts: raids played. -> [{label, pick, freq}] */
+export function successSteps(raids, rankN, attempts, bps = []) {
+  const out = [];
+  for (const [which, label] of [...SUCC, ...[...bps].sort((a, b) => a - b).map((b) => [`bp:${b}`, `${fmtSec(b)} breakpoint`])]) {
+    const pick = pickRaid(raids, rankN, which); if (!pick) continue;
+    const same = out.find((x) => x.pick.i === pick.i);
+    if (same) { same.label += ` = ${label}`; continue; }
+    const k = raids.filter((r) => r.total === pick.total).length;
+    out.push({ label, pick, freq: `this time happens in ${pct(k / Math.max(1, attempts))} of attempts and ${pct(k / Math.max(1, raids.length))} of successful raids` });
+  }
+  return out.sort((a, b) => a.pick.total - b.pick.total || 0);
+}
+/** The failed raids to step through: fastest, median and slowest failed (by `prog`: lower is faster). fails: [{i, prog}]. */
+export function failSteps(fails) {
+  const v = fails.slice().sort((a, b) => a.prog - b.prog || a.i - b.i), out = [];
+  if (!v.length) return out;
+  for (const [label, f] of [['Fastest failed', v[0]], ['Median failed', v[v.length >> 1]], ['Slowest failed', v[v.length - 1]]]) {
+    const same = out.find((x) => x.f.i === f.i); if (same) { same.label += ` = ${label}`; continue; }
+    out.push({ label, f });
+  }
+  return out;
+}
+/** Previous / Next through `steps` ([{label, ...}]) in `box`, starting at `start`; draw(step) -> the timeline's HTML
+ *  (async allowed). The buttons say where they lead. */
+export function raidNav(box, steps, start, draw) {
+  let at = Math.max(0, Math.min(steps.length - 1, start));
+  const go = async () => {
+    const st = steps[at], prev = steps[at - 1], next = steps[at + 1];
+    const nav = `<div class="row wrap rvnav" style="gap:6px;align-items:center;margin:8px 0 6px">
+      <button class="ghost sm" data-rvstep="-1" ${prev ? '' : 'disabled'}>&larr; Previous${prev ? ` (${esc(prev.label)})` : ''}</button>
+      <span class="small muted">${at + 1} of ${steps.length}: <b>${esc(st.label)}</b></span>
+      <button class="ghost sm" data-rvstep="1" ${next ? '' : 'disabled'}>Next${next ? ` (${esc(next.label)})` : ''} &rarr;</button></div>`;
+    box.innerHTML = `${nav}<div class="small muted">Loading...</div>`;
+    const html = await draw(st);
+    box.innerHTML = nav + html;
+    box.querySelectorAll('[data-rvstep]').forEach((b) => b.addEventListener('click', () => { at += Number(b.dataset.rvstep); go(); }));
+  };
+  if (!steps.length) { box.innerHTML = '<p class="muted small">None to show.</p>'; return; }
+  go();
 }
 
 // cell colours by attack code (specs stand out; plain attacks are quiet)
