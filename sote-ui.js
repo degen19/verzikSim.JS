@@ -23,7 +23,7 @@ import { runSote } from './engine/sote.js';
 import { Rng } from './engine/rng.js';
 import { raidChoices, raidTitle, pickRaid, timelineHtml } from './raidview.js';
 
-const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}
+const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}  · solve: {surgeLimit, ...}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
 const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: kept for this page */ } };
@@ -77,7 +77,7 @@ export function createSote(host, { getTeam }) {
     `)}
     ${pane('solve', 'data-solve', `
       <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's prefire, start spec, surge, Lightbearer cycles and
-        specs in each phase (Maul, BGS, Claws, ZCB, backup, horn) and the entry instance, within the Surge potions / Lightbearers limits and the gear
+        specs in each phase (Maul, BGS, Claws, ZCB, backup, horn) and the entry instance, within the Solver surge limit, the room's Lightbearers limit and the gear
         each player has. Each round it tries every single change to one player (with Swaps: also moving a surge / Lightbearer to another player and
         swapping two players' specs in a phase; with Paired specs: two players' specs in a phase changed together) - on a few raids, then the best on
         more - and keeps the best if it beats the current setup, until nothing does (Restarts: again from two other starting setups). The top setups are then played at every entry instance and ranked: with breakpoints by the share finished at the fastest one (then the
@@ -86,6 +86,7 @@ export function createSote(host, { getTeam }) {
         <div data-vsets></div>
         <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label title="Quick: fewer raids per try and rounds; Thorough: more (slower, steadier)">Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
+        <label title="Surge potions the Solver may use (its own limit, separate from the room setting above). Starts at the room setting until you change it">Solver surge limit<select data-v="surgeLimit"></select></label>
         <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
       </div>
       <div class="row" style="margin-top:6px">
@@ -251,7 +252,7 @@ export function createSote(host, { getTeam }) {
       ${setBar()}
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>${esc(gearSetLabel(g, team(), x))}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         <label title="The 4-tick instance this set enters the room on (shifts the maze cycle). Each set in the Report runs on its own.">Entry instance<select data-entry>${[0, 1, 2, 3].map((x) => `<option value="${x}" ${x === Number(st.entry) ? 'selected' : ''}>i${x}</option>`).join('')}</select></label>
-        <label title="Surge potions the team can use in this room (the solver won't use more - keep some back for another room)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label title="Surge potions the team can use in this room - the spec planner warns when more players surge. The Solver has its own limit (it starts at this one)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label title="P3: anyone planned to ZCB claws instead once Sotetseg is below this HP (needs claws and 50% spec)">P3 ZCB → claws below (HP)<input type="number" min="0" step="50" style="width:80px" data-rnum="clawBelow" value="${esc(st.clawBelow ?? CLAW_BELOW)}"></label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Death ball: when everyone can take an even share, they all share it. Off (or someone too low): the target tick-eats it alone - a Guthix rest if they have one, else a shark - after Heal Othering their HP to a teammate"><input type="checkbox" data-rchk="splitBall" ${st.splitBall === false ? '' : 'checked'}>Split DD if healthy</label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Death ball taken alone with no Guthix rest: tick-heal it (a 3-tick stall while the lowest-HP teammate Heal Others them) before using a shark - the shark may be worth more for a maze"><input type="checkbox" data-rchk="stallTick" ${st.stallTick ? 'checked' : ''}>Stall tick-eat</label>
@@ -324,7 +325,7 @@ export function createSote(host, { getTeam }) {
     const t = e.target, st = tstate();
     if (t.dataset.gearset != null) { st.gearSet = t.value; persist(); render(); return; }
     if (t.dataset.entry != null) { st.entry = Number(t.value) || 0; persist(); return; }
-    if (t.dataset.rset) { st[t.dataset.rset] = Number(t.value); persist(); render(); return; }
+    if (t.dataset.rset) { st[t.dataset.rset] = Number(t.value); persist(); render(); if (t.dataset.rset === 'surgeLimit') showSol(); return; }
     if (t.dataset.rchk) { st[t.dataset.rchk] = t.checked; persist(); return; }
     if (t.dataset.rnum) { st[t.dataset.rnum] = t.value === '' ? null : Number(t.value); persist(); return; }
     if (t.dataset.sp) {
@@ -510,10 +511,18 @@ export function createSote(host, { getTeam }) {
   const ALLOW = ['prefire', 'start', 'surge', 'lb', 'specs', 'entry'];
   const SEARCH_DEFAULT = { swaps: true, pairs: false, restarts: true };
   const solState = () => { const st = rootState(); st.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])) }; st.solve.sets ||= [st.cur]; return st.solve; };
+  /** The Solver's own surge limit (0..team). Unset: the room setting of the current set, else everyone. */
+  const surgeCap = (v) => {
+    const t = team(), old = rootState().sets[rootState().cur]?.surgeLimit;
+    const n = Number.isInteger(Number(v.surgeLimit)) && v.surgeLimit !== '' && v.surgeLimit != null ? Number(v.surgeLimit) : Number.isInteger(old) ? old : t;
+    return Math.max(0, Math.min(t, n));
+  };
   const showSol = () => {
     const v = solState(), rs = rootState();
     sol.querySelector('[data-vsets]').innerHTML = setPicker((k) => !!rs.sets[k], v.sets, setLabel);
     sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="effort"]').value = v.effort;
+    const sl = surgeCap(v);
+    sol.querySelector('[data-v="surgeLimit"]').innerHTML = Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === sl ? 'selected' : ''}>${n}</option>`).join('');
     for (const k of ALLOW) sol.querySelector(`[data-va="${k}"]`).checked = v.allow[k] !== false;
     v.search ||= { ...SEARCH_DEFAULT };
     for (const k of Object.keys(SEARCH_DEFAULT)) sol.querySelector(`[data-vs="${k}"]`).checked = !!v.search[k];
@@ -521,7 +530,7 @@ export function createSote(host, { getTeam }) {
   for (const ev of ['input', 'change']) sol.addEventListener(ev, (e) => {
     const v = solState();
     if (e.target.dataset.runset) v.sets = pickSets(v.sets, e.target);
-    else if (e.target.dataset.v) v[e.target.dataset.v] = e.target.value;
+    else if (e.target.dataset.v) v[e.target.dataset.v] = e.target.dataset.v === 'surgeLimit' ? Number(e.target.value) : e.target.value;
     else if (e.target.dataset.va) v.allow[e.target.dataset.va] = e.target.checked;
     else if (e.target.dataset.vs) { v.search ||= { ...SEARCH_DEFAULT }; v.search[e.target.dataset.vs] = e.target.checked; }
     else return;
@@ -639,7 +648,7 @@ export function createSote(host, { getTeam }) {
     const base = all.map((p) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes }));
     const start = { entry: Number(st.entry) || 0, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
     const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick };
-    const sr = v.search || SEARCH_DEFAULT, sLim = Number.isInteger(st.surgeLimit) ? st.surgeLimit : t, lbLim = Number.isInteger(st.lbRings) ? st.lbRings : t;
+    const sr = v.search || SEARCH_DEFAULT, sLim = surgeCap(v), lbLim = Number.isInteger(st.lbRings) ? st.lbRings : t;
     /** A restart setup within the surge / Lightbearer limits and the weapons each player has. */
     const fit = (players) => { let su = 0, lb = 0; return players.map((p, j) => {
       const own = (w) => (all[j].gear.weapons || []).includes(w), okSpec = (x) => x.spec === 'none' || ({ maul: own('Elder maul') || own('Bandos godsword'), bgs: own('Bandos godsword'), claws: own('Dragon claws'), zcb: own('Zaryte crossbow') })[x.spec];
