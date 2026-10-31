@@ -19,7 +19,7 @@ import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresults.js';
 import { better as scoreBetter, scoreOf as soteScore, playersOf as soteBuild } from './engine/sotesolve.js';
-import { runSote } from './engine/sote.js';
+import { runSote, instanceOf } from './engine/sote.js';
 import { Rng } from './engine/rng.js';
 import { pickRaid, timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
 
@@ -570,7 +570,7 @@ export function createSote(host, { getTeam }) {
   /** A row's replay: draw raid i's timeline. */
   const soteDraw = (r, i, title) => {
     const { players, seed, entry, opts } = r.replay, trace = [], res = runSote(players, team(), new Rng(`${seed}#${i}`), null, { entry, ...opts, trace });
-    return timelineHtml({ trace, names: players.map((p, k) => pnameOf(r.set, k)), bossName: 'Sotetseg', end: res.end, title, legend: SOTE_LEGEND });
+    return timelineHtml({ trace, names: players.map((p, k) => pnameOf(r.set, k)), bossName: 'Sotetseg', end: res.end, title, legend: SOTE_LEGEND, tickInfo: (t) => `instance i${instanceOf(t, entry)}` });
   };
   /** Every raid of a row replayed once (cached): its time (null: wiped), wipe tick, split key and events - for failed
    *  raids and the decision tree's examples. */

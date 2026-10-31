@@ -261,10 +261,12 @@ export function supplyText(lines) {
   return out.join(', ');
 }
 
+/** Room time at tick t (0.6s a tick): m:ss.mmm. */
+const roomTime = (t) => { const ms = Math.round(t * 600), m = Math.floor(ms / 60000), r = ms - m * 60000; return `${m}:${String(Math.floor(r / 1000)).padStart(2, '0')}.${String(r % 1000).padStart(3, '0')}`; };
 /** The timeline. trace: [{t, i, code, dmg?, landed?, what?} a player's attack | {t, i, veng} a vengeance proc (damage to
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
-export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '' }) {
+export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '', tickInfo = null }) {
   const regen = new Map(), at = new Map(), horn = new Map(), thr = new Map(), slotN = new Map(), chosen = new Set(), onMaze = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
   for (const x of trace) {
     if (x.shade) shade.add(x.t);
@@ -283,7 +285,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   // hover: the tick - her phase and HP at the end of it, and what she did; an attack - what it did when it landed
   const evTip = (e) => e.tip || e.boss;
   const S = (t) => (shade.has(t) ? ' sh' : '');                      // a tinted (healing shield) tick
-  const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', shade.has(t) ? 'Healing shield up' : '', ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
+  const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t} · ${roomTime(t)}${tickInfo ? ` · ${tickInfo(t)}` : ''}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', shade.has(t) ? 'Healing shield up' : '', ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
   const hitTip = (nm, x) => [`${nm} - tick ${x.t}: ${x.what || CODE_NAME[x.code] || x.code}${x.code === 'H' || x.code === 'R' ? '' : x.landed == null ? ' - never landed (a maze or the kill came first)' : x.dmg ? ` - ${x.dmg} damage${x.crab ? ' to a crab' : ''} (lands tick ${x.landed})` : ` - missed / 0 (tick ${x.landed})`}`,
     x.target ? `Target: ${x.target}` : '',
     x.gear ? `Gear: ${x.gear}` : '',
