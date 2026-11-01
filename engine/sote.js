@@ -297,7 +297,7 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, clawBelow = CLAW_BELOW, splitBall = true, stallTick = false, trace = null, backupDef = BACKUP_DEF } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, clawBelow = CLAW_BELOW, splitBall = true, stallTick = false, trace = null, backupDef = BACKUP_DEF, noLateSurge = false } = {}) {
   // trace (the Show raid timeline): {t, i, code} a player's attack queued that tick, {t, boss} her attack, {t, mark} a
   // phase point - only when asked for (one replayed raid)
   const TR = trace ? (x) => { trace.push(x); return x; } : () => null;
@@ -351,7 +351,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const pid = rng.shuffle(ps.slice());
   const spend = (p, n, t) => {
     p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; p.startRegen = true; }   // a 95% start: its regen comes the next tick
-    if (p.surgePlan && !p.surged) {                                  // surge straight after their first spec
+    if (p.surgePlan && !p.surged && !(noLateSurge && phase > 0)) {   // surge straight after their first spec (noLateSurge: P1 only)
       const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++;
       L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`);
     }

@@ -56,6 +56,10 @@ export const keyOf = (cfg) => JSON.stringify([cfg.players, cfg.backupDef ?? null
 /** The changes the settings allow. ctx: {team, gear: [gear], allow: {prefire, start, surge, lb, specs}, surgeLimit,
  *  lbRings, swaps, pairs}. Always: every single change to one player. swaps: move a surge / Lightbearer from one player to
  *  another, and swap two players' specs in a phase. pairs: two players' specs in a phase changed together. */
+/** A player who surges does it in P1: their first spec is there (a P1 spec, backup or horn, or a ZCB spec prefire). */
+export const surgeInP1 = (p) => !p.surge || p.prefire === 'ZCB spec' || p.specs[0].spec !== 'none' || !!p.specs[0].backup || !!p.specs[0].horn;
+/** The 'no P2 / P3 surges' rule: surges only for players whose first spec is in P1. */
+const noLateSurges = (cfg) => ({ ...cfg, players: cfg.players.map((p) => (surgeInP1(p) ? p : { ...p, surge: false })) });
 export function neighbours(cfg, ctx) {
   const out = [], P = cfg.players, seen = new Set([keyOf(cfg)]);
   const own = (k, w) => (ctx.gear[k].weapons || []).includes(w);
@@ -152,6 +156,7 @@ export function neighbours(cfg, ctx) {
       }
     }
   }
+  if (ctx.noLateSurge) return out.filter((c) => c.players.every(surgeInP1));   // 'no P2 / P3 surges': only setups that surge in P1
   return out;
 }
 
@@ -182,6 +187,7 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
   const seen = new Map();                                            // key -> {cfg, score, raids}
   const note = (cfg, score, raids) => { const k = keyOf(cfg), o = seen.get(k); if (!o || raids >= o.raids) seen.set(k, { cfg, score, raids }); };
   let cur = { entry: ctx.start.entry ?? 0, backupDef: ctx.start.backupDef, players: ctx.start.players };
+  if (ctx.noLateSurge) cur = noLateSurges(cur);                   // the start setup too: a surge that would land in P2 / P3 comes off
   // the entry instance to search on: the start setup's best
   if (ctx.solveEntry) {
     progress('Finding the entry instance to search on...', 0);
@@ -190,7 +196,7 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     cur = { ...cur, entry: best };
   }
   const bigN = stages[stages.length - 1][0];
-  const starts = [cur, ...(ctx.restarts || []).map((x) => ({ entry: cur.entry, backupDef: cur.backupDef, players: x.players }))];   // restarts: other starting setups
+  const starts = [cur, ...(ctx.restarts || []).map((x) => ({ entry: cur.entry, backupDef: cur.backupDef, players: x.players })).map((x) => (ctx.noLateSurge ? noLateSurges(x) : x))];   // restarts: other starting setups
   for (const [si0, st0] of starts.entries()) {
   if (stopped()) break;
   cur = st0;

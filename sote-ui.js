@@ -95,6 +95,7 @@ export function createSote(host, { getTeam }) {
       <div class="row" style="margin-top:6px"><span class="muted small">Search:</span>
         ${[['swaps', 'Swaps', 'Also move a surge / Lightbearer from one player to another, and swap two players\' specs in a phase, in one step (finds swaps a one-change-at-a-time search can\'t when the surge limit is used up)'],
           ['pairs', 'Paired specs', 'Also change two players\' specs in the same phase together (slower)'],
+          ['noLateSurge', 'No P2 / P3 surges', 'Only setups where every surge is drunk in P1 (with a P1 spec, backup, horn or ZCB spec prefire); in its raids nobody surges in P2 or P3, even if their P1 spec slips to the next phase'],
           ['restarts', 'Restarts', 'Search again from two other starting setups - the default for the scale and the setup above with the players\' roles moved one along - and keep the best of everything (about 3x the time)']].map(([k, l, tt]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="${tt}"><input type="checkbox" data-vs="${k}">${l}</label>`).join('')}
       </div>
       <div data-vstatus class="muted" style="margin-top:8px"></div>
@@ -518,7 +519,7 @@ export function createSote(host, { getTeam }) {
   let vjob = null, vresults = null, vcombine = false;
   const vopen = {};
   const ALLOW = ['prefire', 'start', 'surge', 'lb', 'specs', 'entry'];
-  const SEARCH_DEFAULT = { swaps: true, pairs: false, restarts: true };
+  const SEARCH_DEFAULT = { swaps: true, pairs: false, restarts: true, noLateSurge: false };
   const solState = () => { const st = rootState(); st.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])) }; st.solve.sets ||= [st.cur]; return st.solve; };
   /** The Solver's own surge limit (0..team). Unset: the room setting of the current set, else everyone. */
   const surgeCap = (v) => {
@@ -719,7 +720,8 @@ export function createSote(host, { getTeam }) {
     const st = setOf(k), t = team(), all = playersNow(st);
     const base = all.map((p) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes }));
     const start = { entry: Number(st.entry) || 0, backupDef: st.backupDef ?? BACKUP_DEF, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
-    const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF };
+    const sr0 = v.search || SEARCH_DEFAULT;
+    const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF, ...(sr0.noLateSurge ? { noLateSurge: true } : {}) };
     const sr = v.search || SEARCH_DEFAULT, sLim = surgeCap(v), lbLim = Number.isInteger(st.lbRings) ? st.lbRings : t;
     /** A restart setup within the surge / Lightbearer limits and the weapons each player has. */
     const fit = (players) => { let su = 0, lb = 0; return players.map((p, j) => {
@@ -736,7 +738,7 @@ export function createSote(host, { getTeam }) {
     const pool = new SotePool(base, t, opts); me.pool = pool;
     try {
       const res = await solveSote({ team: t, base, start, gear: all.map((p) => p.gear), allow: { ...Object.fromEntries(ALLOW.map((x) => [x, v.allow[x] !== false])) },
-        surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[v.effort] || EFFORT.normal), top: 10, swaps: !!sr.swaps, pairs: !!sr.pairs, restarts },
+        surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[v.effort] || EFFORT.normal), top: 10, swaps: !!sr.swaps, pairs: !!sr.pairs, restarts, noLateSurge: !!sr.noLateSurge },
       (...args) => pool.run(...args), say, () => me.stopped);
       // Show raid: the final results were played on raids 'final#0..' at their entry instance - replayed from there
       const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];
