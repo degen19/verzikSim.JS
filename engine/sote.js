@@ -479,9 +479,11 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // entry: the first attack after the prefire is on her attack tick (the tick before it dropped - the flinch). A P1
     // maul / BGS player (planned, or waiting on a Barrage) doesn't drop it - the 6-tick maul puts them on her ticks
     // after; the P1 backup player doesn't either: they scythe, then 5 ticks later back up (realigned the same way) or,
-    // if not needed, drop that tick then. (Only where the flinch is played: 3-5 man.)
+    // if not needed, drop that tick then. A planned P1 claw doesn't drop it either: they claw then, with the mauls (the
+    // 4-tick claw puts them off her ticks without losing one). (Only where the flinch is played: 3-5 man.)
     const s0 = (p.specs || [])[0] || {};
     if (team > 2 && p.prefire && after && after < t && (s0.backup || (s0.spec === 'maul' || s0.spec === 'bgs'))) { p.next = after; p.entry = s0.backup ? 'backup' : 'maul'; }
+    else if (team > 2 && p.prefire && after && after < t && s0.spec === 'claws' && (p.gear.weapons || []).includes('Dragon claws')) { p.next = after; p.entry = 'claw'; }
     if (p.thrallNext == null) p.thrallBack = true;                  // no prefire: thrall with their first attack
   }
   const vengHit = (t, p, dmg, src) => {
@@ -658,7 +660,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         if (zcbWasted) { p.specDone[ph]++; p.zcbCarry = ph + 1; mark(`zcbCarry:${p.i}:${ph}`); L.on && L(`t${t} ${p.name} keeps their ZCB spec for the start of P${ph + 2} (P${ph + 1} too close to the maze)`); return 'scythe'; }
         return 'zcb';
       }
-      if (sp.spec === 'claws') return !alive().some(mauls) && !anyMaulPending() && p.spec >= 50 && has('Dragon claws') ? 'claw' : 'scythe';
+      // (the P1 entry claw goes with the mauls on that tick - it doesn't wait for them to land)
+      if (sp.spec === 'claws') return (p.entry === 'claw' && ph === 0 || (!alive().some(mauls) && !anyMaulPending())) && p.spec >= 50 && has('Dragon claws') ? 'claw' : 'scythe';
       return 'scythe';
     }
     // backup: scythe first; once the mauls (and earlier backups, if she still isn't at the floor) have landed. Up to
@@ -1054,7 +1057,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const ph = phase, has = (w) => (p.gear.weapons || []).includes(w);
       const act = chooseAct(p, t, ph, has);
       if (p.entry && ph === 0) {                                     // the entry rule above
-        const drop = act === 'scythe' && isHerTick(t + 1) && (p.entry === 'maul' || p.entryScythed);
+        const drop = act === 'scythe' && isHerTick(t + 1) && (p.entry === 'maul' || p.entry === 'claw' || p.entryScythed);   // (no claw after all: realign)
         if (drop || act !== 'scythe') p.entry = null;
         if (drop) { p.next = t + 1; L.on && L(`t${t} ${p.name} drops a tick (no maul now - back on her attack ticks)`); continue; }
       }
