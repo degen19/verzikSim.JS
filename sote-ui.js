@@ -554,14 +554,19 @@ export function createSote(host, { getTeam }) {
   const KINDS = { none: 'nothing', maul: 'Maul', claws: 'Claws', zcb: 'ZCB', bgs: 'BGS' };
   /** Who a horn buffs (as the engine picks): other players' planned (not backup) mauls / BGS that phase first, then
    *  their scythes (the buff is on the next melee hit - a scythe's first hitsplat), a planned ZCB player last. */
-  const hornTxt = (x, k, ph, P, set) => {
+  const hornTxt = (x, k, ph, P, set, ev = null) => {
     const others = P.map((q, j) => j).filter((j) => j !== k);
     const isM = (j) => ['maul', 'bgs'].includes(P[j].specs[ph].spec) && !P[j].specs[ph].backup && !(ph === 0 && P[j].specs[0].ifBarrage);
     const zcbNow = (j) => (P[j].specs[ph].spec === 'zcb' && !P[j].specs[ph].backup ? 1 : 0);
-    const recs = [...others.filter(isM), ...others.filter((j) => !isM(j)).sort((a, b) => zcbNow(a) - zcbNow(b))].slice(0, Number(x.horn) === 2 ? 2 : 1);
+    // who it buffs: with the raids played, the most common recipients there (a horn set to 2 may only afford 1); else
+    // the planned order - mauls first, then others' next hit, ZCB players last
+    const seen = ev ? Object.entries(ev).filter(([e]) => e.startsWith(`horn:${k}:${ph}:`)).sort((a, b) => b[1] - a[1]) : [];
+    const recs = seen.length ? seen[0][0].split(':')[3].split('+').filter(Boolean).map(Number)
+      : [...others.filter(isM), ...others.filter((j) => !isM(j)).sort((a, b) => zcbNow(a) - zcbNow(b))].slice(0, Number(x.horn) === 2 ? 2 : 1);
+    if (!recs.length) return `Horn (themselves only)${x.spec === 'none' && !x.backup ? '' : ' + '}`;
     return `Horn ${recs.map((j) => `${pnameOf(set, j)}'s ${isM(j) ? (P[j].specs[ph].spec === 'bgs' ? 'BGS' : 'maul') : 'next hit'}`).join(' + ')}${x.spec === 'none' && !x.backup ? '' : ' + '}`;
   };
-  const specTxt = (x, k, ph, P, set) => `${x.horn ? (P ? hornTxt(x, k, ph, P, set) : 'Horn + ') : ''}${x.horn && P && x.spec === 'none' && !x.backup ? '' : x.backup ? `backup (${x.spec === 'none' || x.spec === 'maul' ? 'maul if needed' : x.spec === 'bgs' ? 'BGS if needed' : `maul if needed, else ${KINDS[x.spec]}`}${Number(x.backups) === 2 ? ', up to 2 tries' : ''})` : KINDS[x.spec] || x.spec}${x.ifBarrage ? ` (Barrage landed: ${x.ifBarrage === 'none' ? 'first backup' : `first backup, else ${KINDS[x.ifBarrage]}`})` : ''}`;
+  const specTxt = (x, k, ph, P, set, ev = null) => `${x.horn ? (P ? hornTxt(x, k, ph, P, set, ev) : 'Horn + ') : ''}${x.horn && P && x.spec === 'none' && !x.backup ? '' : x.backup ? `backup (${x.spec === 'none' || x.spec === 'maul' ? 'maul if needed' : x.spec === 'bgs' ? 'BGS if needed' : `maul if needed, else ${KINDS[x.spec]}`}${Number(x.backups) === 2 ? ', up to 2 tries' : ''})` : KINDS[x.spec] || x.spec}${x.ifBarrage ? ` (Barrage landed: ${x.ifBarrage === 'none' ? 'first backup' : `first backup, else ${KINDS[x.ifBarrage]}`})` : ''}`;
   /** "If this happens, do this": the setup's contingencies, with the share of raids each came up in. */
   /** The decision tree: each player's planned route, then what they do if things go another way (share of raids). */
   /** Show raid: the buttons (kind: 'o' Optimizer / 'v' Solver row) and the timeline of the picked raid. */
@@ -626,7 +631,7 @@ export function createSote(host, { getTeam }) {
   };
   /** A setup's procedure: per player prefire, start spec, surge, Lightbearer and each phase's spec. r: {cfg, set}. */
   const procTable = (r) => `<table style="margin-top:4px"><tr><th>Player</th><th>Prefire</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>P1</th><th>P2</th><th>P3</th></tr>
-          ${r.cfg.players.map((p, k) => `<tr><td>${esc(pnameOf(r.set, k))}</td><td>${esc(p.prefire || 'none')}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td>${p.specs.map((x, ph) => `<td>${esc(specTxt(x, k, ph, r.cfg.players, r.set))}</td>`).join('')}</tr>`).join('')}</table>`;
+          ${r.cfg.players.map((p, k) => `<tr><td>${esc(pnameOf(r.set, k))}</td><td>${esc(p.prefire || 'none')}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td>${p.specs.map((x, ph) => `<td>${esc(specTxt(x, k, ph, r.cfg.players, r.set, r.events))}</td>`).join('')}</tr>`).join('')}</table>`;
   const adjustments = (r) => {
     const n = r.totals.length, ev = r.events || {}, P = r.cfg.players, nm = (k) => esc(pnameOf(r.set, k));
     const c = (k) => ev[k] || 0, pc = (x) => `<b>${Math.round(x / n * 100)}%</b>`;
@@ -687,7 +692,7 @@ export function createSote(host, { getTeam }) {
       });
       if (c(`halb:${k}`) >= n * 0.01) lines.push(`P3 last hit: Crystal halberd spec when they have 30%+ but can't claw and the team's next swings (this halberd included) kill her on average (${pc(c(`halb:${k}`))}).${ex(`halb:${k}`, `${pnameOf(r.set, k)}: halberd last hit`)}`);
       if (c(`lbStall:${k}`) >= n * 0.01) lines.push(`Lightbearer: the cycles run out during a maze stall in ${pc(c(`lbStall:${k}`))} - stay on it until out of the stall (no ring swaps while stalling).${ex(`lbStall:${k}`, `${pnameOf(r.set, k)}: Lightbearer runs out in a stall`)}`);
-      const plan = [`start ${p.startSpec}%`, p.prefire ? `${p.prefire} prefire` : null, p.surge ? 'surge with their first spec' : null, p.lbCycles ? `camp Lightbearer ${p.lbCycles} cycle${p.lbCycles > 1 ? 's' : ''}` : null, ...p.specs.map((x, ph) => (x.spec !== 'none' || x.horn || x.backup ? `P${ph + 1} ${specTxt(x, k, ph, P, r.set)}` : null))].filter(Boolean).map(esc).join(' · ');
+      const plan = [`start ${p.startSpec}%`, p.prefire ? `${p.prefire} prefire` : null, p.surge ? 'surge with their first spec' : null, p.lbCycles ? `camp Lightbearer ${p.lbCycles} cycle${p.lbCycles > 1 ? 's' : ''}` : null, ...p.specs.map((x, ph) => (x.spec !== 'none' || x.horn || x.backup ? `P${ph + 1} ${specTxt(x, k, ph, P, r.set, r.events)}` : null))].filter(Boolean).map(esc).join(' · ');
       out.push(`<b>${nm(k)}</b>: ${plan || 'no specs'}${lines.length ? `<ul style="margin:2px 0 4px 18px;padding:0">${lines.map((l) => `<li>${l}</li>`).join('')}</ul>` : ' <span class="muted">- always as planned</span>'}`);
     });
     return `<div class="small" style="margin-top:8px"><b>Decision tree</b><ul style="margin:4px 0 0 18px;padding:0">${out.map((x) => `<li>${x}</li>`).join('')}</ul></div>`;
