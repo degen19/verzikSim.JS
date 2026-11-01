@@ -103,8 +103,9 @@ export function successSteps(raids, rankN, attempts, bps = []) {
     const pick = pickRaid(raids, rankN, which); if (!pick) continue;
     const same = out.find((x) => x.pick.i === pick.i);
     if (same) { same.label += ` = ${label}`; continue; }
-    const k = raids.filter((r) => r.total === pick.total).length;
-    out.push({ label, pick, freq: `this time happens in ${pct(k / Math.max(1, attempts))} of attempts and ${pct(k / Math.max(1, raids.length))} of successful raids` });
+    // finished by this time (what the chart's line shows), then the share that ended exactly on it
+    const k = raids.filter((r) => r.total === pick.total).length, by = raids.filter((r) => r.total <= pick.total).length;
+    out.push({ label, pick, freq: `${pct(by / Math.max(1, attempts))} of attempts finish by this time (${pct(by / Math.max(1, raids.length))} of successful raids); ${pct(k / Math.max(1, attempts))} end exactly on it` });
   }
   return out.sort((a, b) => a.pick.total - b.pick.total || 0);
 }
