@@ -568,7 +568,9 @@ export function createSote(host, { getTeam }) {
   const raidBar = (kind, idx, bps = []) => { const rr = rowOf(kind, idx), fails = rr && rr.replay ? rr.replay.allN - rr.replay.raids.length : 0;   // failed raids: only when some wiped
     return `<div class="row wrap" style="gap:6px;margin-top:8px;align-items:center"><b class="small">Show raid</b><button class="ghost sm" data-sraid="${kind}|${idx}|succ" data-bps="${bps.join(',')}" title="Opens on the median raid; Previous / Next step through fastest, top 10%, top 25%, median, slowest and your breakpoints">View successful raids</button>${fails > 0 ? `<button class="ghost sm" data-sraid="${kind}|${idx}|fail" title="Opens on the fastest failed (wiped) raid; Previous / Next to the median and slowest">View failed raids</button>` : ''}<span class="muted small" data-sraidmsg="${kind}|${idx}"></span></div><div data-sraidout="${kind}|${idx}"></div>`; };
   /** Optimizer / Solver rows: no buttons - only the box the decision tree's examples show in. */
-  const exampleBox = (kind, idx) => `<span class="muted small" data-sraidmsg="${kind}|${idx}"></span><div data-sraidout="${kind}|${idx}"></div>`;
+  // (width 0 / min-width 100%: the box takes the row's visible width instead of stretching the table to the timeline's, so
+  // the timeline scrolls inside it and its header - toggles, Full screen - stays in view)
+  const exampleBox = (kind, idx) => `<span class="muted small" data-sraidmsg="${kind}|${idx}"></span><div style="width:0;min-width:100%"><div data-sraidout="${kind}|${idx}"></div></div>`;
   const SOTE_LEGEND = 'ZCB bolt and ZCB spec share the crossbow icon (hover to tell) · thrall icon (bottom right): a thrall hit · purple tint: the chosen player, under the maze; lighter: the others on the maze · white outline: a spec regen · skull: vengeance · supplies: shark icon · potion icons: brew, restore, super combat, surge; grey dot: anything else · heart redemption proc · her row: her attacks (black border: melee; ! death ball) - hover any cell for details';
   /** A row's replay: draw raid i's timeline. */
   const soteDraw = (r, i, title) => {
