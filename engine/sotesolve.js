@@ -7,7 +7,7 @@
 // improves (or the round limit). The best setups seen are then played at every entry instance and ranked.
 // Ranking: with breakpoints, the share of raids finished by the fastest breakpoint (then the next ...), then the
 // median; without, the median, then the top 25%, the top 10% and the mean.
-import { runSote, hornN } from './sote.js';
+import { runSote, hornN, BACKUP_DEF, BACKUP_DEFS } from './sote.js';
 import { Rng } from './rng.js';
 
 export const SOLVE_PREFIRES = [['', null], ['Twisted bow', 'Twisted bow'], ['ZCB auto', 'Zaryte crossbow'], ['ZCB spec', 'Zaryte crossbow'],
@@ -27,7 +27,7 @@ export function evalConfigs(configs, base, team, from, to, seed, entry, opts = {
   return configs.map((cfg) => {
     const players = playersOf(base, cfg), totals = [], split = { p1: [], maze1: [], p2: [], maze2: [], p3: [] }, events = {};
     for (let i = from; i < to; i++) {
-      const r = runSote(players, team, new Rng(`${seed}#${i}`), null, { ...opts, entry });
+      const r = runSote(players, team, new Rng(`${seed}#${i}`), null, { ...opts, entry, ...(cfg.backupDef != null ? { backupDef: cfg.backupDef } : {}) });
       const ev = new Set(r.events || []);
       for (const x of r.specLog || []) { ev.add(`fired:${x.i}:${x.carried ? x.ph - 1 : x.ph}:${x.kind}`); if (x.carried) ev.add(`carried:${x.i}:${x.ph - 1}`); }   // the specs that went off (a carried ZCB: its planned phase, + carried)
       for (const e of ev) events[e] = (events[e] || 0) + 1;   // raids it happened in (the Adjustments counts)
@@ -51,7 +51,7 @@ export function scoreOf(totals, bps = []) {
   return [...asc.map((b) => -v.filter((t) => t * 0.6 <= b + 1e-9).length / v.length), med(v), q25(v), q10(v), Math.round(mean * 20) / 20];
 }
 export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i] - 1e-12) return true; if (a[i] > b[i] + 1e-12) return false; } return false; };
-export const keyOf = (cfg) => JSON.stringify(cfg.players);
+export const keyOf = (cfg) => JSON.stringify([cfg.players, cfg.backupDef ?? null]);
 
 /** The changes the settings allow. ctx: {team, gear: [gear], allow: {prefire, start, surge, lb, specs}, surgeLimit,
  *  lbRings, swaps, pairs}. Always: every single change to one player. swaps: move a surge / Lightbearer from one player to
@@ -63,7 +63,7 @@ export function neighbours(cfg, ctx) {
   const specOk = (k, s) => s === 'none' || (s === 'bgs' ? own(k, 'Bandos godsword') && own(k, 'Elder maul') : (SPEC_NEEDS[s] || []).some((w) => own(k, w)));
   const many = (patches, what) => {                                  // patches: {player index: patch}
     const players = P.map((p, j) => (patches[j] ? { ...p, ...patches[j], specs: (patches[j].specs || p.specs).map((x) => ({ ...x })) } : p));
-    const c = { entry: cfg.entry, players, what }, k = keyOf(c);
+    const c = { entry: cfg.entry, backupDef: cfg.backupDef, players, what }, k = keyOf(c);
     if (!seen.has(k)) { seen.add(k); out.push(c); }
   };
   const push = (k, patch, what) => many({ [k]: patch }, what);
@@ -72,6 +72,11 @@ export function neighbours(cfg, ctx) {
   const barrager = (k) => own(k, 'Shadow ancient sceptre') && ctx.allow.prefire;
   const barragePossible = P.some((q, k) => q.prefire === 'Shadow Barrage' || barrager(k));
   const altOk = (k, alt) => alt === 'none' || own(k, alt === 'zcb' ? 'Zaryte crossbow' : 'Dragon claws');
+  // the team's 'no backup at or below this Defence' (only when someone backs up)
+  if (ctx.allow.specs && P.some((p) => p.specs.some((x) => x.backup))) {
+    const curD = cfg.backupDef ?? BACKUP_DEF;
+    for (const v of BACKUP_DEFS) if (v !== curD) { const c = { entry: cfg.entry, backupDef: v, players: P, what: v === 100 ? 'backups until her Defence is at the floor' : 'only back up if the primary maul misses' }, k = keyOf(c); if (!seen.has(k)) { seen.add(k); out.push(c); } }
+  }
   P.forEach((p, k) => {
     if (ctx.allow.prefire) for (const [v, need] of SOLVE_PREFIRES) if (v !== p.prefire && (!need || own(k, need))) push(k, { prefire: v }, `P${k + 1} prefire ${v || 'none'}`);
     if (ctx.allow.start) push(k, { startSpec: p.startSpec === 95 ? 100 : 95 }, `P${k + 1} start ${p.startSpec === 95 ? 100 : 95}%`);
@@ -176,7 +181,7 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
   const { bps = [], stages = [[60, 0.2], [240, 4], [1000, 1]], rounds = 8, finalRaids = 2000, top = 10 } = ctx;
   const seen = new Map();                                            // key -> {cfg, score, raids}
   const note = (cfg, score, raids) => { const k = keyOf(cfg), o = seen.get(k); if (!o || raids >= o.raids) seen.set(k, { cfg, score, raids }); };
-  let cur = { entry: ctx.start.entry ?? 0, players: ctx.start.players };
+  let cur = { entry: ctx.start.entry ?? 0, backupDef: ctx.start.backupDef, players: ctx.start.players };
   // the entry instance to search on: the start setup's best
   if (ctx.solveEntry) {
     progress('Finding the entry instance to search on...', 0);
@@ -185,7 +190,7 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     cur = { ...cur, entry: best };
   }
   const bigN = stages[stages.length - 1][0];
-  const starts = [cur, ...(ctx.restarts || []).map((x) => ({ entry: cur.entry, players: x.players }))];   // restarts: other starting setups
+  const starts = [cur, ...(ctx.restarts || []).map((x) => ({ entry: cur.entry, backupDef: cur.backupDef, players: x.players }))];   // restarts: other starting setups
   for (const [si0, st0] of starts.entries()) {
   if (stopped()) break;
   cur = st0;
@@ -208,7 +213,7 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     note(cur, curScore, bigN);
     const bestC = pool[0], bestS = seen.get(keyOf(bestC)).score;
     if (!better(bestS, curScore)) { progress(`Round ${round}: no change beats the current setup - done`, 1); break; }
-    cur = { entry: cur.entry, players: bestC.players, what: [...(cur.what || []), bestC.what] };
+    cur = { entry: cur.entry, backupDef: bestC.backupDef, players: bestC.players, what: [...(cur.what || []), bestC.what] };
     progress(`Round ${round}: kept "${bestC.what}"`, round / rounds);
   }
   }

@@ -14,7 +14,7 @@ import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './e
 import { parseBreakpoints } from './engine/optimize.js';
 import { solveSote } from './engine/sotesolve.js';
 import { SotePool } from './sote-solver-pool.js';
-import { defaultMazes, MAZE_HOW, defaultSpecs, defaultSetup, SPECS, SPEC_COST, CLAW_BELOW } from './engine/sote.js';
+import { defaultMazes, MAZE_HOW, defaultSpecs, defaultSetup, SPECS, SPEC_COST, CLAW_BELOW, BACKUP_DEF, BACKUP_PRIMARY } from './engine/sote.js';
 import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresults.js';
@@ -256,6 +256,7 @@ export function createSote(host, { getTeam }) {
       <div class="row" style="margin-bottom:8px"><label>Gear<select data-gearset>${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>${esc(gearSetLabel(g, team(), x))}${gearSet(g, team(), x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         <label title="The 4-tick instance this set enters the room on (shifts the maze cycle). Each set in the Report runs on its own.">Entry instance<select data-entry>${[0, 1, 2, 3].map((x) => `<option value="${x}" ${x === Number(st.entry) ? 'selected' : ''}>i${x}</option>`).join('')}</select></label>
         <label title="Surge potions the team can use in this room - the spec planner warns when more players surge. The Solver has its own limit (it starts at this one)">Surge potions<select data-rset="surgeLimit">${Array.from({ length: team() + 1 }, (_, n) => `<option value="${n}" ${n === surgeLimit ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Backups stand down once a planned maul has landed (her Defence 130 or less - one maul hit, or Barrage + maul) and do their planned damage spec instead (P3: claws with spec left). Off: they back up until she's at the floor. The Solver tries both"><input type="checkbox" data-rbdef ${(st.backupDef ?? BACKUP_DEF) >= BACKUP_PRIMARY ? 'checked' : ''}>Only back up if the primary maul misses</label>
         <label title="P3: anyone planned to ZCB claws instead once Sotetseg is below this HP (needs claws and 50% spec)">P3 ZCB → claws below (HP)<input type="number" min="0" step="50" style="width:80px" data-rnum="clawBelow" value="${esc(st.clawBelow ?? CLAW_BELOW)}"></label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Death ball: when everyone can take an even share, they all share it. Off (or someone too low): the target tick-eats it alone - a Guthix rest if they have one, else a shark - after Heal Othering their HP to a teammate"><input type="checkbox" data-rchk="splitBall" ${st.splitBall === false ? '' : 'checked'}>Split DD if healthy</label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Death ball taken alone with no Guthix rest: tick-heal it (a 3-tick stall while the lowest-HP teammate Heal Others them) before using a shark - the shark may be worth more for a maze"><input type="checkbox" data-rchk="stallTick" ${st.stallTick ? 'checked' : ''}>Stall tick-eat</label>
@@ -330,6 +331,7 @@ export function createSote(host, { getTeam }) {
     if (t.dataset.entry != null) { st.entry = Number(t.value) || 0; persist(); return; }
     if (t.dataset.rset) { st[t.dataset.rset] = Number(t.value); persist(); render(); if (t.dataset.rset === 'surgeLimit') showSol(); return; }
     if (t.dataset.rchk) { st[t.dataset.rchk] = t.checked; persist(); return; }
+    if (t.dataset.rbdef != null) { st.backupDef = t.checked ? BACKUP_PRIMARY : BACKUP_DEF; persist(); return; }
     if (t.dataset.rnum) { st[t.dataset.rnum] = t.value === '' ? null : Number(t.value); persist(); return; }
     if (t.dataset.sp) {
       const [k, ph, f] = t.dataset.sp.split('|'), p = st.players[Number(k)];
@@ -395,7 +397,7 @@ export function createSote(host, { getTeam }) {
     const n = Math.max(100, Number(r.raids) || 2000), t = team();
     const keys = r.sets.filter((k) => setOf(k));
     if (!keys.length) { err.textContent = 'Tick at least one set to run.'; return; }
-    const runs = keys.map((k) => { const st = setOf(k); return { k, st, players: playersNow(st), res: newSoteResult(), opts: { entry: Number(st.entry) || 0, clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick } }; });
+    const runs = keys.map((k) => { const st = setOf(k); return { k, st, players: playersNow(st), res: newSoteResult(), opts: { entry: Number(st.entry) || 0, clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF } }; });
     const labels = keys.map((k) => (r.labels[k] || '').trim() || `Set ${k}`);
     const seed = String(r.seed || '').trim() || `r${Date.now()}`;
     job = { stop: false }; const me = job;
@@ -476,7 +478,7 @@ export function createSote(host, { getTeam }) {
     const keys = o.sets.filter((k) => setOf(k));
     if (!keys.length) { err.textContent = 'Tick at least one set to run.'; return; }
     const n = Math.max(100, Number(o.raids) || 2000), t = team();
-    const runs = keys.map((k) => { const st = setOf(k); return { k, players: playersNow(st), opts: { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick }, res: [0, 1, 2, 3].map(() => newSoteResult()) }; });
+    const runs = keys.map((k) => { const st = setOf(k); return { k, players: playersNow(st), opts: { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF }, res: [0, 1, 2, 3].map(() => newSoteResult()) }; });
     const seed = String(o.seed || '').trim() || `o${Date.now()}`;
     ojob = { stop: false }; const me = ojob;
     obtn('run').disabled = true; obtn('stop').disabled = false;
@@ -626,12 +628,22 @@ export function createSote(host, { getTeam }) {
     const n = r.totals.length, ev = r.events || {}, P = r.cfg.players, nm = (k) => esc(pnameOf(r.set, k));
     const c = (k) => ev[k] || 0, pc = (x) => `<b>${Math.round(x / n * 100)}%</b>`;
     const cb = `${(setOf(r.set) || {}).clawBelow ?? CLAW_BELOW} HP`;   // the set's P3 ZCB -> claws threshold
+    const bd = r.cfg.backupDef ?? (setOf(r.set) || {}).backupDef ?? BACKUP_DEF;   // backups stand down at or below this Defence
     const isDef = (s) => s === 'maul' || s === 'bgs', K = (s) => (s === 'none' ? 'no spec' : KINDS[s]);
     const maulers = (ph, not) => P.map((q, j) => j).filter((j) => j !== not && isDef(P[j].specs[ph].spec) && !P[j].specs[ph].backup);
     const whose = (js) => (js.length ? `${js.map(nm).join(' / ')}'s maul${js.length > 1 ? 's' : ''}` : 'the mauls');
     // "example": the median raid of that branch (replays the row's raids once); key 'a&!b' = event a and not b
     const ex = (key, label) => ` <button class="ghost sm" style="padding:0 6px;font-size:11px" data-sraidex="${esc(key)}" data-exlabel="${esc(label)}" title="Show the median-time raid where this happened">${esc(label.split(': ').pop())}</button>`;
     const barr = P.findIndex((p) => p.prefire === 'Shadow Barrage'), out = [];
+    if (P.some((p) => p.specs.some((x) => x.backup))) out.push(bd > 100 ? 'Backups: <b>only if the primary maul misses</b> (her Defence still above 130).' : 'Backups maul until her Defence is at the floor (100).');
+    // late mauls swapped: later than the maul player's 3rd swing -> a ZCB / claws player with a maul takes it
+    for (const [e, v] of Object.entries(ev).filter(([e, v]) => /^swap:/.test(e) && v >= n * 0.01).sort()) {
+      const [, mi, ph, di] = e.split(':').map(Number), d = P[di].specs[ph].spec;
+      const back = c(`swapBack:${mi}:${ph}`), two = Object.entries(ev).filter(([e2]) => e2.startsWith('swap2:') && +e2.split(':')[2] === ph);
+      out.push(`P${ph + 1}: if ${nm(mi)}'s maul would come after their 3rd swing (${pc(v)}), ${nm(di)} mauls instead of their ${K(d)} and ${nm(mi)} claws.${ex(e, `P${ph + 1}: ${pnameOf(r.set, di)} mauls for ${pnameOf(r.set, mi)}`)}`
+        + (back >= n * 0.01 ? ` If that maul misses and ${nm(mi)} can maul by their 3rd swing, they maul after all (${pc(back)}).${ex(`swapBack:${mi}:${ph}`, `P${ph + 1}: ${pnameOf(r.set, mi)} mauls after all`)}` : '')
+        + two.filter(([, v2]) => v2 >= n * 0.01).map(([e2, v2]) => ` Missed and too late for ${nm(mi)}: ${nm(+e2.split(':')[1])} mauls (${pc(v2)}).${ex(e2, `P${ph + 1}: ${pnameOf(r.set, +e2.split(':')[1])} mauls`)}`).join(''));
+    }
     if (barr >= 0) out.push(`${nm(barr)}'s Shadow Barrage lands in ${pc(c('barrage:landed'))} of raids.${ex('barrage:landed', 'Barrage: lands')}${ex('barrage:missed', 'Barrage: misses')}`);
     P.forEach((p, k) => {
       const lines = [];
@@ -645,7 +657,9 @@ export function createSote(host, { getTeam }) {
           const m = c(`backup:${k}:${ph}:maul`), sp = c(`backup:${k}:${ph}:spec`), cl = ph === 2 && x.spec === 'zcb' ? Math.min(sp, c(`clawsForZcb:${k}`)) : 0, rest = n - m - sp;
           const dmg = x.spec === 'none' || isDef(x.spec) ? [] : cl >= sp && sp ? [`claws (her HP already under ${cb}) (${pc(sp)})`] : [sp - cl ? `${K(x.spec)} (${pc(sp - cl)})` : null, cl ? `claws instead if her HP is already under ${cb} (${pc(cl)})` : null].filter(Boolean);
           const parts = [m >= n * 0.01 ? `${K(x.spec === 'bgs' ? 'bgs' : 'maul')} once ${whose(maulers(ph, k))} ${maulers(ph, k).length === 1 ? 'has' : 'have'} landed, if her Defence isn't at the floor yet (${pc(m)})` : null, dmg.length && sp >= n * 0.01 ? `otherwise ${dmg.join(', ')}` : null, (m >= n * 0.01 || sp >= n * 0.01) && rest >= n * 0.01 ? `no spec (${pc(rest)})` : null, c(`backup2:${k}:${ph}`) >= n * 0.01 ? `the maul missed and she still isn't at the floor: ${K(x.spec === 'bgs' ? 'bgs' : 'maul')} again (${pc(c(`backup2:${k}:${ph}`))})` : null].filter(Boolean);
-          const exs = `${m >= n * 0.01 ? ex(`backup:${k}:${ph}:maul`, `${pnameOf(r.set, k)} ${at}: backup maul`) : ''}${dmg.length && sp >= n * 0.01 ? ex(`backup:${k}:${ph}:spec`, `${pnameOf(r.set, k)} ${at}: ${K(x.spec)} instead`) : ''}${c(`backup2:${k}:${ph}`) >= n * 0.01 ? ex(`backup2:${k}:${ph}`, `${pnameOf(r.set, k)} ${at}: second backup`) : ''}`;
+          const low = c(`backupLow:${k}:${ph}`);
+          if (bd > 100 && low >= n * 0.01) parts.push(`the primary maul landed (no backup${x.spec === 'zcb' || x.spec === 'claws' ? `, ${K(x.spec)} instead` : ph === 2 ? ', claws with spec left' : ''}) (${pc(low)})`);
+          const exs = `${bd > 100 && low >= n * 0.01 ? ex(`backupLow:${k}:${ph}`, `${pnameOf(r.set, k)} ${at}: primary landed, no backup`) : ''}${m >= n * 0.01 ? ex(`backup:${k}:${ph}:maul`, `${pnameOf(r.set, k)} ${at}: backup maul`) : ''}${dmg.length && sp >= n * 0.01 ? ex(`backup:${k}:${ph}:spec`, `${pnameOf(r.set, k)} ${at}: ${K(x.spec)} instead`) : ''}${c(`backup2:${k}:${ph}`) >= n * 0.01 ? ex(`backup2:${k}:${ph}`, `${pnameOf(r.set, k)} ${at}: second backup`) : ''}`;
           lines.push(parts.length ? `${at}: ${parts.join('; ')}.${exs}` : `${at}: the backup is almost never needed (under 1% of raids).`);   // under 1% of raids: left out
         } else if (x.spec !== 'none') {
           const f = x.spec === 'zcb' && ph === 2 ? fired('zcb') + fired('claws') : fired(x.spec === 'bgs' ? 'bgs' : x.spec === 'maul' ? 'maul' : x.spec);
@@ -704,8 +718,8 @@ export function createSote(host, { getTeam }) {
   async function solveSet(k, v, bps, me, say) {
     const st = setOf(k), t = team(), all = playersNow(st);
     const base = all.map((p) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes }));
-    const start = { entry: Number(st.entry) || 0, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
-    const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick };
+    const start = { entry: Number(st.entry) || 0, backupDef: st.backupDef ?? BACKUP_DEF, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
+    const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF };
     const sr = v.search || SEARCH_DEFAULT, sLim = surgeCap(v), lbLim = Number.isInteger(st.lbRings) ? st.lbRings : t;
     /** A restart setup within the surge / Lightbearer limits and the weapons each player has. */
     const fit = (players) => { let su = 0, lb = 0; return players.map((p, j) => {
@@ -729,7 +743,7 @@ export function createSote(host, { getTeam }) {
       return res.map((r) => {
         const raids = []; let j = 0;
         r.totals.forEach((tot, i) => { if (tot >= 9999) return; raids.push({ i, total: tot, key: SPL.map((q) => r.split[q][j]).join(',') }); j++; });
-        return { ...r, set: k, replay: { players: soteBuild(base, r.cfg), seed: 'final', entry: r.entry, opts, raids, allN: r.totals.length } };
+        return { ...r, set: k, replay: { players: soteBuild(base, r.cfg), seed: 'final', entry: r.entry, opts: { ...opts, ...(r.cfg.backupDef != null ? { backupDef: r.cfg.backupDef } : {}) }, raids, allN: r.totals.length } };
       });
     } finally { pool.stop(); }
   }
@@ -744,7 +758,7 @@ export function createSote(host, { getTeam }) {
       if (!rs.sets[k]) rs.sets[k] = structuredClone(setOf(r.set) || tstate());   // an empty set starts as a copy of the set solved (gear, mazes, supplies)
       const st = setOf(k), rp = repState(); if (!rp.sets.includes(k)) rp.sets = SETS.filter((x) => x === k || rp.sets.includes(x));
       r.cfg.players.forEach((p, j) => Object.assign(st.players[j], { prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ ...x })) }));
-      st.entry = r.entry; persist(); render(); showRep(); showOpt(); showSol();
+      st.entry = r.entry; if (r.cfg.backupDef != null) st.backupDef = r.cfg.backupDef; persist(); render(); showRep(); showOpt(); showSol();
       sol.querySelector('[data-vstatus]').textContent = `Set ${r.set} setup copied into set ${k} (entry instance i${r.entry}).`;
       return;
     }

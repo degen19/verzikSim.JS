@@ -195,6 +195,11 @@ export const ZCB_MARGIN = 100;    // P1 / P2: no ZCB unless its ruby (+ this for
 // would be her third attack after it. Its damage is shared by the players standing on it (by players alive / sharing):
 export const BALL = { 5: { 5: 14, 4: 21, 3: 38, 2: 87, 1: 350 }, 4: { 4: 17, 3: 31, 2: 70, 1: 280 }, 3: { 3: 23, 2: 52, 1: 210 }, 2: { 2: 35, 1: 140 }, 1: { 1: 70 } };
 export const BALL_EVERY = 10, BALL_LANDS = 15;
+// backups stand down once her Defence is at or below this: 100 = only at the floor; 130 = 'only back up if the primary
+// maul misses' (one landed maul: 200 -> 130; Barrage + maul: 111)
+export const BACKUP_DEF = 100;
+export const BACKUP_PRIMARY = 130;
+export const BACKUP_DEFS = [100, BACKUP_PRIMARY];
 export const CLAW_BELOW = 450;   // P3: a planned ZCB becomes claws once she's below this HP (the ruby's 22% is small by then)
 /** Show raid timeline codes for the prefires. */
 export const PREFIRE_CODE = { 'Twisted bow': 'TB', 'ZCB auto': 'Z', 'ZCB spec': 'ZCB', 'Shadow Barrage': 'SB', "Tumeken's shadow": 'TS' };
@@ -237,6 +242,9 @@ function playerDef(p, style) {
  *  (16.2s) is i0 and tick 38 (22.8s) is i3. Only shifts the maze cycle. A maze proc on i3 loses no ticks; on i2 1, i1 2,
  *  i0 3 (the runners wait for the i0 to move). */
 export const instanceOf = (t, entry = 0) => (t + entry + 1) % 4;
+/** A skipped maze: the player under's first attack, in ticks after the skippers' first, by the instance the maze procced on
+ *  (engine i0-i3; the reference's i1-i4 are i1, i2, i3, i0 here - i3 'off on 3' is the same in both). */
+export const UNDER_AFTER = [2, 1, 0, 3];   // i0 (= reference i4) +2, i1 +1, i2 +0, i3 +3
 /** Ticks lost at a maze proc on tick t. */
 export const ticksLost = (t, entry = 0) => (3 - instanceOf(t, entry) + 4) % 4;
 export const SHARK_HEAL = 20, REST_HEAL = 5, UNDER_EAT_BELOW = 85;   // under / running the maze: a shark below 85 HP
@@ -282,14 +290,14 @@ export const sharkSkipEats = (hp) => (SHARK_SKIP.find(([lo]) => hp >= lo) || [0,
  * players take orbs off prayer for veng whatever their HP (default 0: never)}.
  *
  * Mazes (skip / stall): the hit that reaches 66.6% / 33.3% (tick T) teleports everyone (T..T+4). One random player goes
- * under: no maze damage, first swing on T+19 (lands T+20). The others click on the first i3 from T+4, move on the i4
+ * under: no maze damage, first swing 0-3 ticks after the skippers' first (UNDER_AFTER, by the proc's instance). The others click on the first i3 from T+4, move on the i4
  * after (m), land on the maze on m+1 and stall 7 ticks (no veng casts), taking the stall damage (stallSkip) as they
  * come out on m+8 (i4). She's attackable on m+9 (i1); the runners attack on m+10 (i2, landing m+11) and her attacks
  * restart then, every 5 ticks. Her Defence resets (and can be drained again). Hits and her attacks still on the way at
  * the proc are dropped (assumed).
  * Returns {end, kill, mazes: [T, T], hp, dmg, orbs, melees, players}.
  */
-export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, clawBelow = CLAW_BELOW, splitBall = true, stallTick = false, trace = null } = {}) {
+export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, chanceAt = 0, clawBelow = CLAW_BELOW, splitBall = true, stallTick = false, trace = null, backupDef = BACKUP_DEF } = {}) {
   // trace (the Show raid timeline): {t, i, code} a player's attack queued that tick, {t, boss} her attack, {t, mark} a
   // phase point - only when asked for (one replayed raid)
   const TR = trace ? (x) => { trace.push(x); return x; } : () => null;
@@ -342,7 +350,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   // is made, so anyone after them that tick rolls against it, anyone before them doesn't
   const pid = rng.shuffle(ps.slice());
   const spend = (p, n, t) => {
-    p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; }
+    p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; p.startRegen = true; }   // a 95% start: its regen comes the next tick
     if (p.surgePlan && !p.surged) {                                  // surge straight after their first spec
       const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++;
       L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`);
@@ -364,12 +372,14 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const startMaze = (t) => {
     mazes.push(t);
     L.on && L(`t${t} *** MAZE ${mazes.length} (${mazes.length === 1 ? '66.6' : '33.3'}%) ***`);
-    blocked = true; hits = []; orbs = []; ball = null; skipAt = -1;   // a death ball on its way is gone too for (const p of ps) { p.pending = []; p.thrallNext = null; }   // thralls stop until they attack again
+    blocked = true; hits = []; orbs = []; ball = null; skipAt = -1;   // a death ball on its way is gone too
+    for (const p of ps) { p.pending = []; p.thrallNext = null; }   // thralls stop until they attack again
     defLvl = SOTE.def; drained = false;
     let m = t + 5; while (instanceOf(m, entry) !== 0) m++;           // runners: click on the first i3 from T+4, move on the i0 after
     if (team === 1) m += SOLO_UNDER;                                 // solos: under first, then skip the maze as the runner
     attackable = m + 9; nextAttack = m + 10; back.push(attackable);
-    TR({ t, mark: mazes.length === 1 ? '66%' : '33%' });            // the maze procs, by her HP TR({ t: attackable, mark: `P${mazes.length + 1}` });
+    TR({ t, mark: mazes.length === 1 ? '66%' : '33%' });            // the maze procs, by her HP
+    TR({ t: attackable, mark: `P${mazes.length + 1}` });
     const live = alive(), under = live.length > 1 ? rng.choice(live) : null;
     if (live.some((p) => p.how[mazes.length - 1] === 'run')) { runMaze(t, m, live, under); return; }   // anyone runs: all run
     const runners = live.filter((p) => p !== under);
@@ -405,7 +415,10 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       for (const p of stallers) for (let x = m + 1; x <= m + 7; x++) TR({ t: x, i: p.i, onMaze: true });
       for (const p of skippers) for (let x = m + 1; x <= m + 8; x++) TR({ t: x, i: p.i, onMaze: true });
     }
-    if (under) { under.mazeEatTill = t + 19; under.eatKeep = 1; under.next = t + 19; under.healFrom = t + 20; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${t + 19}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
+    // the player under (a skipped maze): their first attack is set by the instance the maze procced on - 1 tick after the
+    // skippers' first attack on i1, the same tick on i2, 3 after on i3, 2 after on i4 (reference i4 = i0 here)
+    const uFirst = m + 10 + UNDER_AFTER[instanceOf(t, entry)];
+    if (under) { under.mazeEatTill = uFirst; under.eatKeep = 1; under.next = uFirst; under.healFrom = uFirst + 1; under.thrallBack = true; L.on && L(`t${t} ${under.name} goes under (first swing t${uFirst}); runners stall t${m + 1}-${m + 7}, off t${m + 8}`); }
     pendingStall = { at: m + 8, runners: stallers };
   };
   let pendingStall = null, pendingSharks = [];
@@ -509,7 +522,49 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const isDef = (x) => x === 'maul' || x === 'bgs';                  // a Defence spec (Elder maul / Bandos godsword)
   const condMaul = (q, ph) => ph === 0 && !!q.specs[0].ifBarrage && isDef(q.specs[0].spec) && !q.specs[0].backup;
   const anyCond = ps.some((q) => condMaul(q, 0));
-  const plannedMaul = (q, ph) => isDef(q.specs[ph].spec) && !q.specs[ph].backup && !(condMaul(q, ph) && drained);   // a Barrage that landed: a conditional maul waits
+  const plannedMaul = (q, ph) => isDef(q.specs[ph].spec) && !q.specs[ph].backup && !(condMaul(q, ph) && drained);
+  // ---- a planned maul that comes too late (3-5 man): later than the maul player's 3rd swing of the phase
+  /** Ticks until they have 50% (regens: every 25 ticks on Lightbearer, else 50). */
+  const ticksTo50 = (q) => { if (q.spec >= 50) return 0; const per = q.lb || q.lbLeft > 0 ? 25 : 50; return Math.max(1, per - (q.regen || 0)) + (Math.ceil((50 - q.spec) / 10) - 1) * per; };
+  /** Can they maul by their 3rd swing of phase ph (from tick t)? */
+  const maulInTime = (q, ph, t) => {
+    if (q.spec >= 50) return true;
+    const done = q.swings[ph] || 0; if (done >= 3) return false;
+    return t + ticksTo50(q) <= Math.max(q.next ?? t, t) + 5 * (2 - done);
+  };
+  const ownsMaul = (q) => !!defAct(q, 'maul');
+  const dpsPlanned = (q, ph) => (q.specs[ph].spec === 'zcb' || q.specs[ph].spec === 'claws') && !q.specs[ph].backup && !q.specDone[ph];
+  /** A ZCB / claws player who can maul now takes the late maul. */
+  const takeMaul = (q, ph, t, why) => {
+    q.specs[ph] = { ...q.specs[ph], spec: 'maul', converted: q.specs[ph].spec };
+    L.on && L(`t${t} ${q.name} mauls in P${ph + 1} instead of their ${q.specs[ph].converted === 'zcb' ? 'ZCB' : 'claws'} (${why})`);
+  };
+  const swapPlanned = [false, false, false];
+  /** At the start of a phase: each planned maul later than its player's 3rd swing goes to a ZCB / claws player with a
+   *  maul and the spec now; the late maul player claws instead (nothing if they have no claws). */
+  const planSwaps = (ph, t) => {
+    for (const m of alive()) {
+      if (!plannedMaul(m, ph) || m.mauled[ph] || condMaul(m, ph) || maulInTime(m, ph, t)) continue;
+      const d = alive().find((q) => q !== m && dpsPlanned(q, ph) && ownsMaul(q) && q.spec >= 50 && !q.specs[ph].converted);
+      if (!d) continue;
+      takeMaul(d, ph, t, `${m.name}'s maul would come after their 3rd swing`);
+      m.specs[ph] = { ...m.specs[ph], spec: (m.gear.weapons || []).includes('Dragon claws') ? 'claws' : 'none', fromMaul: true, maulTo: d.i };
+      d.specs[ph].maulFor = m.i;
+      mark(`swap:${m.i}:${ph}:${d.i}`);
+    }
+  };
+  /** A converted maul missed: the original maul player mauls after all if they can by their 3rd swing (and haven't
+   *  clawed); otherwise another ZCB / claws player with a maul and the spec takes it. */
+  const swapMissed = (d, ph, t) => {
+    const m = ps.find((q) => q.i === d.specs[ph].maulFor);
+    if (m && !m.dead && m.specs[ph].fromMaul && !m.specDone[ph] && ownsMaul(m) && maulInTime(m, ph, t)) {
+      m.specs[ph] = { ...m.specs[ph], spec: 'maul', fromMaul: false };
+      mark(`swapBack:${m.i}:${ph}`); L.on && L(`t${t} ${d.name}'s maul missed: ${m.name} mauls after all (in time for their 3rd swing)`);
+      return;
+    }
+    const d2 = alive().find((q) => q !== d && dpsPlanned(q, ph) && ownsMaul(q) && q.spec >= 50 && !q.specs[ph].converted);
+    if (d2) { takeMaul(d2, ph, t, `${d.name}'s maul missed`); d2.specs[ph].maulFor = m ? m.i : null; mark(`swap2:${d2.i}:${ph}`); }
+  };   // a Barrage that landed: a conditional maul waits
   /** The Defence spec they'd use: the one picked if they have it, else the other one. */
   const defAct = (q, want) => { const own = (w) => (q.gear.weapons || []).includes(w); return want === 'bgs' ? (own('Bandos godsword') ? 'bgs' : own('Elder maul') ? 'maul' : null) : (own('Elder maul') ? 'maul' : own('Bandos godsword') ? 'bgs' : null); };
   /** Who a horn buffs: the first one or two other players with a planned maul this phase (25% each, as far as the spec goes). */
@@ -556,9 +611,12 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const chooseAct0 = (p, t, ph, has) => {
     let sp = p.specs[ph]; const floorNow = defLvl <= SOTE.defFloor;
     // a Barrage that landed + a maul that landed: her Defence is low enough - backups stand down (only with a conditional maul set)
-    const enough = floorNow || (ph === 0 && anyCond && drained && maulHits[0] > 0);
+    const lowEnough = !floorNow && defLvl <= backupDef;             // the 'no backup at or below' setting
+    const enough = floorNow || lowEnough || (ph === 0 && anyCond && drained && maulHits[0] > 0);
     if (ph === 2 && sp.spec === 'zcb' && hp < clawBelow && has('Dragon claws')) { sp = { ...sp, spec: 'claws' }; }   // late P3: claws over a ZCB
-    const mauls = (q) => plannedMaul(q, ph) && !q.mauled[ph] && q.spec >= 50 && !!defAct(q, q.specs[ph].spec);
+    // a planned maul still to come this phase, in time for its player's 3rd swing - the ZCB / claws / backup players wait
+    // for it (one later than that isn't waited on)
+    const mauls = (q) => plannedMaul(q, ph) && !q.mauled[ph] && !!defAct(q, q.specs[ph].spec) && maulInTime(q, ph, t);
     // P1 / P2: a ZCB's ruby (22% of her HP, max 110) would be cut short by the maze - wasted. They keep it for the start of
     // the next phase instead (after its mauls).
     const zcbWasted = ph < 2 && hp - stopAt < Math.min(110, Math.floor(hp * 0.22)) + ZCB_MARGIN;
@@ -606,6 +664,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // backup: scythe first; once the mauls (and earlier backups, if she still isn't at the floor) have landed. Up to
     // `backups` tries (1 or 2): a second only once their first has landed and missed, after every other backup's first.
     if (!p.swings[ph] || alive().some(mauls) || anyMaulPending()) return 'scythe';
+    if (lowEnough && !p.backups[ph] && !p.backOff[ph] && !specHitPending(p) && !alive().some((q) => q !== p && q.specs[ph].backup && specHitPending(q))) mark(`backupLow:${p.i}:${ph}`);   // stood down: her Defence at or below the setting
     const lim = backupsOf(sp), tries = (q) => q.backups[ph];
     if (!enough && tries(p) < lim && !p.backOff[ph]) {
       if (specHitPending(p)) return 'scythe';
@@ -825,6 +884,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         } else L.on && L(`t${t} ${p.name} ZCB spec misses`);
       } else if (kind === 'maul') {
         if (h[5]) maulHits[phase]++;
+        else if (team > 2 && p.specs[phase].converted && p.specs[phase].maulFor != null) swapMissed(p, phase, t);
 
         if (p.duoBackingUp && phase === 0) {                          // duos: the backup landed
           p.duoBackingUp = false;
@@ -968,9 +1028,12 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       if (wantLb !== p.lb) { p.lb = wantLb; if (p.lbLeft > 0 && p.lbStarted) L.on && L(`t${t} ${p.name} ${wantLb ? `back on Lightbearer (${p.lbLeft} cycles left)` : `at 100% - Ultor until they spec (${p.lbLeft} Lightbearer cycles left)`}`); if (wantLb) p.lbStarted = true; }
       if (p.regenHold) { /* waiting for their first spec */ } else if (p.spec < 100) {
         if (++p.regen >= (p.lb ? 25 : 50)) {                             // Lightbearer: a regen every 25 ticks
+          // the 95% start's regen (the tick after their first spec) is that start's, not a Lightbearer cycle
+          const own = p.startRegen; p.startRegen = false;
           const o0 = p.spec; p.regen = 0; p.spec = Math.min(100, p.spec + 10);
-          TR({ t, i: p.i, regen: `${p.lb ? 'Lightbearer ' : ''}spec regen ${o0}% -> ${p.spec}%` });
-          if (p.lb && p.lbLeft > 0 && --p.lbLeft <= 0) {
+          TR({ t, i: p.i, regen: `${p.lb && !own ? 'Lightbearer ' : ''}spec regen ${o0}% -> ${p.spec}%${own ? ' (95% start)' : ''}` });
+          if (own) L.on && L(`t${t} ${p.name} spec regen ${o0}% -> ${p.spec}% (95% start - not a Lightbearer cycle)`);
+          if (!own && p.lb && p.lbLeft > 0 && --p.lbLeft <= 0) {
             if (frozen) { mark(`lbStall:${p.i}`); L.on && L(`t${t} ${p.name} Lightbearer cycles done (${p.spec}%) in the stall - stays on it until they're out`); }
             else { p.lb = false; p.lbOffAt = t; L.on && L(`t${t} ${p.name} Lightbearer cycles done (${p.spec}%) - swaps to Ultor`); }
           }
@@ -978,6 +1041,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       } else p.regen = 0;
       if (!blocked && p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); hits[hits.length - 1].tr = TR({ t, i: p.i, thrall: true, dmg: 0, icon: 'Greater_ghost' }); p.thrallNext = t + 4; }
     }
+    // ---- a phase's first attackable tick: late mauls swapped (3-5 man)
+    if (team > 2 && !blocked && !swapPlanned[phase]) { swapPlanned[phase] = true; planSwaps(phase, t); }
     // ---- melee hits on players, then player attacks
     const floored = () => defLvl <= SOTE.defFloor;
     for (const p of pid.filter((q) => !q.dead)) {                    // in PID order (random each raid)
