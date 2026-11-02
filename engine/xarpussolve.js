@@ -1,26 +1,33 @@
-// Xarpus Solver: searches each player's Defence spec (maul / BGS / Ralos Spec / none), backup, damage spec (claws /
-// claws at the screech / ZCB / none), tick fix, start spec, Lightbearer cycles, surge and horn, and the set's Defence
-// stop and ZCB -> claws HP, for the best room times.
+// Xarpus Solver: searches each player's opening Defence spec (maul / BGS / Ralos Spec / none), who mauls again for
+// each number of opening mauls landed, the backup list (who, which spec, in what order, and "back up right away"), the
+// Defence target, damage spec (ZCB / claws / none) and holding ZCBs for the screech, tick fix, start spec, Lightbearer
+// cycles, surge and horn, the ZCB -> claws HP and the Chally last hit (and its threshold), for the best room times.
 // Search (as the Sotetseg Solver): from the setup given, each round every single change (with Swaps: also two players'
 // Defence specs swapped, a Lightbearer / surge moved) is played on a few raids, the best on more, the best of those on
 // many (the same raids for each), and the best is kept if it beats the current setup. Repeat until nothing improves.
 // The best setups seen are then played on more raids and ranked: with breakpoints by the share finished at the fastest
 // one (then the next), otherwise by the median, then the top 10%.
-import { runXarpus, canDo, SLOT_CHOICES, DEF_SLOTS, DPS_SPECS, FIXES } from './xarpus.js';
+import { runXarpus, canDo, OPENERS, BACKUP_SPECS, DPS_SPECS, FIXES, DEF_TARGETS, CHALLY_ATS, openMaulers } from './xarpus.js';
 import { Rng } from './rng.js';
 
-export const DEF_STOPS = [0, 10, 20, 30];
 export const ZCB_BELOWS = [0, 300, 400, 450, 500, 600, 800];
-export const MAUL_TARGETS = [1, 2, 3];
+/** A plan's re-maul table kept to its opening maulers (keys 0..number of them) and its backups to real players. In place. */
+export function normalizePlan(cfg) {
+  const m = openMaulers(cfg.players), r = {};
+  for (let n = 0; n <= m.length; n++) r[n] = [...new Set(((cfg.remaul || {})[n] || []).map(Number))].filter((k) => cfg.players[k]).sort((a, b) => a - b);
+  cfg.remaul = r;
+  cfg.backups = (cfg.backups || []).filter((b) => cfg.players[b.p]).map((b) => ({ p: Number(b.p), spec: b.spec, now: b.now == null || b.now >= m.length ? -1 : Number(b.now) }));
+  return cfg;
+}
 
-/** Play setups on raids [from, to) (seeds `<seed>#i`). cfg: {players: [plan], defStop, zcbBelow}; base: [{name, gear}];
+/** Play setups on raids [from, to) (seeds `<seed>#i`). cfg: {players: [plan], remaul, backups, defTarget, holdZcb, zcbBelow}; base: [{name, gear}];
  *  opts: {heals, exactHeals}. Returns per setup {totals, split: {toScreech, kill}, defEnd}. */
 export function evalXarpus(configs, base, team, from, to, seed, opts = {}) {
   return configs.map((cfg) => {
     const players = base.map((b, k) => ({ ...b, ...cfg.players[k] }));
     const totals = [], split = { toScreech: [], kill: [] }, defEnd = [];
     for (let i = from; i < to; i++) {
-      const r = runXarpus(players, team, new Rng(`${seed}#${i}`), null, { ...opts, defStop: cfg.defStop, zcbBelow: cfg.zcbBelow, maulTarget: cfg.maulTarget });
+      const r = runXarpus(players, team, new Rng(`${seed}#${i}`), null, { ...opts, defTarget: cfg.defTarget, remaul: cfg.remaul, backups: cfg.backups, holdZcb: cfg.holdZcb, chally: cfg.chally, challyAt: cfg.challyAt, zcbBelow: cfg.zcbBelow });
       if (r.end == null) { totals.push(99999); continue; }
       totals.push(r.end); defEnd.push(r.defEnd);
       const drop = r.dropAt ?? r.kill; split.toScreech.push(drop); split.kill.push(r.end - drop);
@@ -37,26 +44,24 @@ export function scoreOf(totals, bps = []) {
   return [...asc.map((b) => -v.filter((t) => t * 0.6 <= b + 1e-9).length / v.length), med(v), q10(v)];
 }
 export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i] - 1e-12) return true; if (a[i] > b[i] + 1e-12) return false; } return false; };
-export const keyOf = (cfg) => JSON.stringify([cfg.players, cfg.defStop, cfg.zcbBelow, cfg.maulTarget]);
+export const keyOf = (cfg) => JSON.stringify([cfg.players, cfg.remaul, cfg.backups, cfg.defTarget, cfg.holdZcb, cfg.zcbBelow, cfg.chally, cfg.chally ? cfg.challyAt : 0]);
 
-/** A setup with no Defence spec at all (planned or backup) is knocked out - it's never close. */
-export const hasDefence = (cfg) => cfg.players.some((p) => (p.defs || []).some((x) => x && x !== 'none'));
-/** The changes the ticked options allow. ctx: {gear: [gear], allow: {def, backup, dps, fix, start, lb, surge, horn,
- *  defStop, zcbBelow}, surgeLimit, lbRings, swaps}. */
+/** A setup with no Defence spec at all (opening or backup) is knocked out - it's never close. */
+export const hasDefence = (cfg) => cfg.players.some((p) => p.open && p.open !== 'none') || (cfg.backups || []).length > 0;
+/** The changes the ticked options allow. ctx: {gear: [gear], allow: {def, dps, fix, start, lb, surge, horn, defTarget,
+ *  zcbBelow, chally}, surgeLimit, lbRings, swaps, roles}. */
 export function neighbours(cfg, ctx) {
   const out = [], P = cfg.players, seen = new Set([keyOf(cfg)]);
   const add = (patches, setPatch, what) => {
-    const c = { ...cfg, ...setPatch, players: P.map((p, j) => (patches[j] ? { ...p, ...patches[j] } : p)), what };
+    const c = normalizePlan({ ...cfg, ...setPatch, players: P.map((p, j) => (patches[j] ? { ...p, ...patches[j] } : p)), what });
     const k = keyOf(c); if (!seen.has(k)) { seen.add(k); out.push(c); }
   };
   const ok = (k, v) => canDo(ctx.gear[k], v);
-  const withSlot = (p, j, v) => p.defs.map((x, i) => (i === j ? v : x));
   const surges = P.filter((p) => p.surge).length, lbs = P.filter((p) => p.lbCycles > 0).length;
+  const lab = (list, v) => (list.find((x) => x[0] === v) || [v, v])[1];
   P.forEach((p, k) => {
     const N = `P${k + 1}`;
-    // each Defence slot (only up to one past the last one used: the rest are empty)
-    const used = p.defs.reduce((m, x, j) => (x !== 'none' ? j + 1 : m), 0);
-    if (ctx.allow.def) for (let j = 0; j < Math.min(DEF_SLOTS, used + 1); j++) for (const [v, l] of SLOT_CHOICES) if (v !== p.defs[j] && ok(k, v)) add({ [k]: { defs: withSlot(p, j, v) } }, null, `${N} Defence ${j + 1}: ${l}`);
+    if (ctx.allow.def) for (const [v, l] of OPENERS) if (v !== p.open && ok(k, v)) add({ [k]: { open: v } }, null, `${N} opening ${l}`);
     if (ctx.allow.dps) for (const [v, l] of DPS_SPECS) if (v !== p.dps && ok(k, v)) add({ [k]: { dps: v } }, null, `${N} damage spec ${l}`);
     if (ctx.allow.fix) for (const [v, l] of FIXES) if (v !== p.fix && ok(k, v)) add({ [k]: { fix: v } }, null, `${N} tick fix ${l}`);
     if (ctx.allow.start) add({ [k]: { startSpec: p.startSpec === 95 ? 100 : 95 } }, null, `${N} start ${p.startSpec === 95 ? 100 : 95}%`);
@@ -64,26 +69,46 @@ export function neighbours(cfg, ctx) {
     if (ctx.allow.surge && (p.surge || surges < ctx.surgeLimit)) add({ [k]: { surge: !p.surge } }, null, `${N} ${p.surge ? 'no surge' : 'surge'}`);
     if (ctx.allow.horn && ctx.gear[k].horn) add({ [k]: { horn: !p.horn } }, null, `${N} ${p.horn ? 'no horn' : 'horn'}`);
   });
-  if (ctx.allow.maulTarget) for (const v of MAUL_TARGETS) if (v !== cfg.maulTarget) add({}, { maulTarget: v }, `Maul target ${v}`);
-  if (ctx.allow.defStop) for (const v of DEF_STOPS) if (v !== cfg.defStop) add({}, { defStop: v }, `Defence stop ${v}`);
+  if (ctx.allow.def) {
+    const m = openMaulers(P), B = cfg.backups || [];
+    // who mauls again, for each number of opening mauls landed
+    for (let n = 0; n <= m.length; n++) for (let k = 0; k < P.length; k++) {
+      if (!ok(k, 'maul')) continue;
+      const cur = cfg.remaul[n] || [], on = cur.includes(k);
+      add({}, { remaul: { ...cfg.remaul, [n]: on ? cur.filter((x) => x !== k) : [...cur, k] } }, `${n} of ${m.length} land: P${k + 1} ${on ? "doesn't maul" : 'mauls'}`);
+    }
+    // backups: add one at the end, drop one, move one up, change its spec or "back up right away"
+    P.forEach((_, k) => { for (const [v, l] of BACKUP_SPECS) if (ok(k, v)) add({}, { backups: [...B, { p: k, spec: v, now: -1 }] }, `backup P${k + 1} ${l}`); });
+    B.forEach((b, i) => {
+      add({}, { backups: B.filter((_, j) => j !== i) }, `no backup ${i + 1} (P${b.p + 1} ${lab(BACKUP_SPECS, b.spec)})`);
+      if (i > 0) add({}, { backups: B.map((x, j) => (j === i - 1 ? B[i] : j === i ? B[i - 1] : x)) }, `backup ${i + 1} (P${b.p + 1}) first`);
+      for (const [v, l] of BACKUP_SPECS) if (v !== b.spec && ok(b.p, v)) add({}, { backups: B.map((x, j) => (j === i ? { ...x, spec: v } : x)) }, `backup ${i + 1}: P${b.p + 1} ${l}`);
+      for (let now = -1; now < m.length; now++) if (now !== b.now) add({}, { backups: B.map((x, j) => (j === i ? { ...x, now } : x)) }, `backup ${i + 1} (P${b.p + 1}): ${now < 0 ? 'wait its turn' : `right away if ${now} or fewer land`}`);
+    });
+  }
+  if (ctx.allow.dps) add({}, { holdZcb: !cfg.holdZcb }, cfg.holdZcb ? "don't hold ZCBs for the screech" : 'hold ZCBs for the screech');
+  if (ctx.allow.defTarget) for (const v of DEF_TARGETS) if (v !== cfg.defTarget) add({}, { defTarget: v }, `Defence target ${v}`);
+  if (ctx.allow.chally) {
+    add({}, { chally: !cfg.chally }, cfg.chally ? 'no Chally last hit' : `Chally last hit at ${cfg.challyAt}%`);
+    if (cfg.chally) for (const v of CHALLY_ATS) if (v !== cfg.challyAt) add({}, { challyAt: v }, `Chally last hit at ${v}%`);
+  }
   if (ctx.allow.zcbBelow) for (const v of ZCB_BELOWS) if (v !== cfg.zcbBelow) add({}, { zcbBelow: v }, `ZCB -> claws below ${v}`);
-  // role changes: a player's Defence spec, damage spec, start spec and Lightbearer cycles changed together (finds plans
+  // role changes: a player's opening spec, damage spec, start spec and Lightbearer cycles changed together (finds plans
   // a one-change step can't - e.g. no maul: 95% start, ZCB, Lightbearer for a second)
   if (ctx.roles) P.forEach((p, k) => {
-    const firsts = ctx.allow.def ? ['none', 'maul', 'bgs', 'ralos'].filter((v) => ok(k, v)) : [p.defs[0]];
+    const opens = ctx.allow.def ? OPENERS.map((x) => x[0]).filter((v) => ok(k, v)) : [p.open];
     const dpss = ctx.allow.dps ? DPS_SPECS.map((x) => x[0]).filter((v) => ok(k, v)) : [p.dps];
     const starts = ctx.allow.start ? [100, 95] : [p.startSpec];
     const lbsK = ctx.allow.lb ? [0, 1, 2, 3].filter((c) => c === 0 || p.lbCycles > 0 || lbs < ctx.lbRings) : [p.lbCycles || 0];
-    for (const d0 of firsts) for (const dps of dpss) for (const startSpec of starts) for (const lbCycles of lbsK) {
-      const defs = d0 === 'none' ? p.defs.map(() => 'none') : withSlot(p, 0, d0);   // no Defence spec at all, or a new first one
-      const n = (JSON.stringify(defs) !== JSON.stringify(p.defs)) + (dps !== p.dps) + (startSpec !== p.startSpec) + (lbCycles !== (p.lbCycles || 0));
+    for (const open of opens) for (const dps of dpss) for (const startSpec of starts) for (const lbCycles of lbsK) {
+      const n = (open !== p.open) + (dps !== p.dps) + (startSpec !== p.startSpec) + (lbCycles !== (p.lbCycles || 0));
       if (n < 2) continue;                                            // single changes are above
-      add({ [k]: { defs, dps, startSpec, lbCycles } }, null, `P${k + 1} role: ${d0 === 'none' ? 'no Defence specs' : `first ${d0}`}, ${dps === 'none' ? 'no damage spec' : dps}, ${startSpec}% start, ${lbCycles} Lightbearer`);
+      add({ [k]: { open, dps, startSpec, lbCycles } }, null, `P${k + 1} role: ${open === 'none' ? 'no opening spec' : `opens ${open}`}, ${dps === 'none' ? 'no damage spec' : dps}, ${startSpec}% start, ${lbCycles} Lightbearer`);
     }
   });
   if (ctx.swaps) P.forEach((a, i) => P.forEach((b, j) => {
     if (i >= j) return;
-    if (ctx.allow.def && JSON.stringify(a.defs) !== JSON.stringify(b.defs) && b.defs.every((x) => ok(i, x)) && a.defs.every((x) => ok(j, x))) add({ [i]: { defs: [...b.defs] }, [j]: { defs: [...a.defs] } }, null, `Defence specs P${i + 1} <-> P${j + 1}`);
+    if (ctx.allow.def && a.open !== b.open && ok(i, b.open) && ok(j, a.open)) add({ [i]: { open: b.open }, [j]: { open: a.open } }, null, `opening specs P${i + 1} <-> P${j + 1}`);
     if (ctx.allow.dps && a.dps !== b.dps && ok(i, b.dps) && ok(j, a.dps)) add({ [i]: { dps: b.dps }, [j]: { dps: a.dps } }, null, `damage specs P${i + 1} <-> P${j + 1}`);
     if (ctx.allow.lb && (a.lbCycles || 0) !== (b.lbCycles || 0)) add({ [i]: { lbCycles: b.lbCycles || 0 }, [j]: { lbCycles: a.lbCycles || 0 } }, null, `Lightbearer P${i + 1} <-> P${j + 1}`);
     if (ctx.allow.surge && a.surge !== b.surge) add({ [i]: { surge: b.surge }, [j]: { surge: a.surge } }, null, `surge P${i + 1} <-> P${j + 1}`);

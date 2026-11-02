@@ -1,4 +1,4 @@
-// Xarpus report: run a batch of raids and lay out the times - exhumeds, to 25% (the screech), 25% to the kill and the
+// Xarpus report: run a batch of raids and lay out the times - exhumeds, to the screech, the screech to the kill and the
 // room (median / top 10% / top 25% / bottom 25% / fastest) - with the Verzik report's charts and breakpoints.
 import { runXarpus, EXHUMED_TICKS } from './xarpus.js';
 import { Rng } from './rng.js';
@@ -34,7 +34,7 @@ export function addXarpusRaids(res, players, team, from, to, { seed = 'xarpus', 
   return res;
 }
 
-const PARTS = [['exh', 'Exhumeds'], ['toScreech', 'Attackable to 25%'], ['kill', '25% to the end (incl. death animation)']];
+const PARTS = [['exh', 'Exhumeds'], ['toScreech', 'Attackable to the screech'], ['kill', 'Screech to the end (incl. death animation)']];
 const COL = ['#2a78d6', '#d64545', '#2f9e61'];
 const sortedOf = (a) => a.slice().sort((x, y) => x - y);
 const FIX_NAMES = { tick: 'lose a tick', scratch: 'claw scratch', claw: 'claw spec', bp: 'blowpipe hit', ayak: 'Ayak hit' };
@@ -82,7 +82,7 @@ export function xarpusReportHtml(resIn, team, opts = {}) {
   }).join('');
   return `<div class="vz-report">
 <h2>${team}-man Xarpus: room time${multi ? ` - ${all.length} sets compared` : ''}</h2>
-<div class="sub">${all[0].runs.toLocaleString()} raids${multi ? ' per set (the same raids for each)' : ''} · the room ends 5 ticks after the killing hit (4 with overkill) · sim v${VERSION}</div>
+<div class="sub">${all[0].runs.toLocaleString()} raids${multi ? ' per set (the same raids for each)' : ''} · the room ends 4 ticks after the killing hit (3 with overkill) · sim v${VERSION}</div>
 <div class="kpis">${kpis}</div>
 <h3>Splits</h3>${splits}
 <h3>Odds</h3>${oddsT}${fixT}
