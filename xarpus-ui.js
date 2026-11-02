@@ -407,6 +407,25 @@ export function createXarpus(host, { getTeam }) {
     finally { vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
 
+  /** Full raid: solve the current set with the Full raid's Gear set, Lightbearers and the surge cooldowns carried in
+   *  (ticks per player). Returns the ranked setups, each with what a full raid needs to play it ({players, opts}). */
+  async function fullRaidSolve({ gearSet: gs, lbRings, surgeCd, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
+    const t = team(), st = structuredClone(cur()); st.gearSet = gs;
+    const v = solState(), all = playersNow(st).map((p, k) => ({ ...p, surgeCd: surgeCd[k] || 0 }));
+    const base = all.map((p) => ({ name: p.name, gear: p.gear, surgeCd: p.surgeCd })), names = all.map((p) => p.name);
+    const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'horn' || f === 'surge' ? !!p[f] : p[f]]));
+    const setPlan = (x) => normalizePlan({ players: x.players.map(planOf), remaul: structuredClone(x.remaul), backups: structuredClone(x.backups), defTarget: Number(x.defTarget) || 20, holdZcb: !!x.holdZcb, chally: !!x.chally, challyAt: Number(x.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
+    const fitLb = (plan) => { let n = 0; plan.players.forEach((p) => { if (p.lbCycles > 0) { if (n >= lbRings) p.lbCycles = 0; else n++; } }); return plan; };
+    const start = fitLb(setPlan(st)), heals = { heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals };
+    const pool = new XarpusPool(base, t, heals); onPool(pool);
+    try {
+      const items = await solveXarpus({ start, gear: all.map((p) => p.gear), allow: { ...v.allow }, surgeLimit: t, lbRings, swaps: true, roles: true,
+        restarts: [fitLb(setPlan(defaultXarpusPlan(t)))], bps, ...(EFFORT[effort] || EFFORT.normal), top: 10 }, (...args) => pool.run(...args), say, stopped);
+      return items.map((r) => ({ ...r, set: rootState().cur, names, run: { players: base.map((b, k) => ({ ...b, ...r.cfg.players[k] })), opts: { ...heals, ...r.cfg } } }));
+    } finally { pool.stop(); }
+  }
+  /** Full raid: show setups (best first) in this tab's Solver results. */
+  const fullRaidShow = (items, bps) => { vresults = { groups: [{ k: rootState().cur, label: 'Full raid', items }], bps, t: team() }; showResults(); };
   function refreshAll() { render(); showRep(); showSol(); }
-  return { refresh: () => { state = loadKey(STORE); saved = loadKey(SAVED); refreshAll(); }, api: { rootState, setOf, cur, playersNow, optsOf, team, persist, render: refreshAll, repState } };
+  return { refresh: () => { state = loadKey(STORE); saved = loadKey(SAVED); refreshAll(); }, api: { rootState, setOf, cur, playersNow, optsOf, team, persist, render: refreshAll, repState, fullRaidSolve, fullRaidShow } };
 }

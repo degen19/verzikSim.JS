@@ -116,7 +116,7 @@ export function migrateXarpus(st, team) {
   return st;
 }
 const PRAY = { Piety: [1.20, 1.23], Zeal: [1.25, 1.28] };
-const RANGED = 112, MAGIC = 99;
+const RANGED = 112, RANGED_UNPOTTED = 99, MAGIC = 99;   // Ralos players pot range for Xarpus (112); everyone else is on 99
 
 const defRoll = (lvl, style) => (style === 'mage' ? (XARPUS.magic + 9) * (XARPUS.dfn.magic + 64)
   : (lvl + 9) * ((style === 'range' ? XARPUS.dfn.light : XARPUS.dfn.slash) + 64));
@@ -129,9 +129,9 @@ function melee(p, weapon, idx, defLvl, accMult = 1) {
   return [hit_chance(Math.floor(ea * (b.atk[idx] + 64) * accMult), defRoll(defLvl, 'melee')), Math.floor((es * (b.str + 64) + 320) / 640)];
 }
 /** Ranged on Rigour in a set: [chance, max]. */
-function ranged(set, defLvl, accMult = 1) {
+function ranged(set, defLvl, accMult = 1, lvl = RANGED) {
   const b = bonuses(set), v = b.eliteVoid ? [1.10, 1.125] : [1, 1];
-  const ea = Math.floor((Math.floor(RANGED * 1.20) + 8) * v[0]), es = Math.floor((Math.floor(RANGED * 1.23) + 8) * v[1]);
+  const ea = Math.floor((Math.floor(lvl * 1.20) + 8) * v[0]), es = Math.floor((Math.floor(lvl * 1.23) + 8) * v[1]);
   return [hit_chance(Math.floor(ea * (b.atk[4] + 64) * accMult), defRoll(defLvl, 'range')), Math.floor(0.5 + es * (b.rstr + 64) / 640)];
 }
 /** Blowpipe hit: Rigour, their ranged cape, gloves and necklace over their melee gear. */
@@ -216,6 +216,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       surgePlan: !!c.surge, surged: false, surgeReady: Math.max(0, Number(c.surgeCd) || 0), surgeAt: null,
       lb: false, lbLeft: Number(c.lbCycles || 0), dpsFrom: Number(c.dpsFrom) || 0, dps, fix, horn: !!c.horn && !!g.horn, firstSpec: false,
       open, openDone: open === 'none', noMaul: !own('Elder maul'), used: 0, attacks: 0, remaulDue: false, halb: own('Crystal halberd'), hornUsed: false, scytheSure: false,
+      rangedLvl: open === 'ralos' || (backups || []).some((b) => Number(b.p) === i && b.spec === 'ralos') ? RANGED : RANGED_UNPOTTED,
       next: EXH + 1, hornUntil: -1, thrallNext: EXH + 1 + rng.randint(1, 2) };
   });
   // surge cooldown carried in: it doesn't tick between rooms, so it's ready `surgeCd` ticks into this room (the exhumeds count)
@@ -331,7 +332,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       if (kind === 'ralos') {                                         // two rolls; a hit (1+) drains before the second roll
         let total = 0; const parts = [], defBeforeRalos = defLvl;
         for (let k = 0; k < 2; k++) {
-          const [ch, mx] = ranged(bestWorn(p.gear, 'range', 'Tonalztics of Ralos').set, defLvl, 1.5);
+          const [ch, mx] = ranged(bestWorn(p.gear, 'range', 'Tonalztics of Ralos').set, defLvl, 1.5, p.rangedLvl);
           const d = rng.random() < ch || specsLand ? Math.max(1, rng.randint(0, Math.floor(mx * 0.75))) : 0;   // a hit that passes accuracy: at least 1 (specsLand: always)
           parts.push(d); total += d;
           if (d >= 1) { st.specs.ralosHits++; lowerDef(t, `${p.name} Ralos Spec hit ${k + 1}`, RALOS_DRAIN); }
@@ -339,7 +340,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
         if (h.tr) Object.assign(h.tr, { amt: total, parts: parts.join('/'), def: defBeforeRalos, defAfter: defLvl });
         damage(t, total, `${p.name} Ralos Spec ${parts.join('/')}`, 'ralos');
       } else if (kind === 'zcb') {
-        const [ch] = ranged(bestWorn(p.gear, 'range', 'Zaryte crossbow').set, defLvl, 2);
+        const [ch] = ranged(bestWorn(p.gear, 'range', 'Zaryte crossbow').set, defLvl, 2, p.rangedLvl);
         const ok = rng.random() < ch, ruby = Math.min(110, Math.floor(hp * 0.22));
         if (h.tr) h.tr.amt = ok ? ruby : 0;
         if (ok) damage(t, ruby, `${p.name} ZCB spec ruby`, 'zcb');
@@ -435,7 +436,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
         const [ch, mx] = melee(p, 'Dragon claws', 1, defLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
         hits.push([t + MELEE_DELAY, p, d, 'claw scratch (tick fix)', 'scratch']); p.next = t + 4;
       } else if (act === 'fix:bp') {
-        const [ch, mx] = ranged(bpSet(p), defLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
+        const [ch, mx] = ranged(bpSet(p), defLvl, 1, p.rangedLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
         hits.push([t + BP_DELAY, p, d, 'blowpipe (tick fix)', 'bp']); p.next = t + 2;
       } else if (act === 'fix:ayak') {
         const [ch, mx] = ayak(p), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;

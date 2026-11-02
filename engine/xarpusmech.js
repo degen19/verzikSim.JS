@@ -27,7 +27,7 @@ export const XARPUS_MECHANICS = {
       R('Defence spec limit', 'All', 'At most 2 Defence specs each (opening, maul again, backups) - 3 in solos. Any past that are skipped.'),
       R('Elder maul', 'All', 'A hit lowers his Defence by 35% as the attack is made (anyone after them that tick rolls against it - random PID each raid); +25% accuracy. Diminishing returns once his Defence is down.'),
       R('BGS', 'All', '2x accuracy, max x1.1 x1.1; a hit lowers his Defence by the damage.'),
-      R('Ralos Spec', 'All', 'In their best ranged gear (Rigour): two hits, each 0-75% of their ranged max, +50% accuracy, landing 3 ticks later. Each hit of 1+ lowers his Defence by 27 (1/8 of his Magic, rounded down); the first hit\'s drain counts for the second roll.'),
+      R('Ralos Spec', 'All', 'In their best ranged gear (Rigour, 112 Ranged - Ralos players pot range; everyone else\'s ZCB / blowpipe is on 99): two hits, each 0-75% of their ranged max, +50% accuracy, landing 3 ticks later. Each hit of 1+ lowers his Defence by 27 (1/8 of his Magic, rounded down); the first hit\'s drain counts for the second roll.'),
       R('Soulflame horn', 'All', 'On the interact tick: the caster and the first other opening mauler can\'t miss their next maul / BGS - so it only ever helps the opening mauls.', 'Horn'),
     ] },
     { title: 'Attacks and damage specs', rows: [
