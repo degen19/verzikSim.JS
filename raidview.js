@@ -268,7 +268,7 @@ const roomTime = (t) => { const ms = Math.round(t * 600), m = Math.floor(ms / 60
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
 export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '', tickInfo = null, from = 1 }) {   // from: the first tick shown
-  const regen = new Map(), at = new Map(), horn = new Map(), thr = new Map(), slotN = new Map(), chosen = new Set(), onMaze = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
+  const xfer = new Map(), regen = new Map(), at = new Map(), horn = new Map(), thr = new Map(), slotN = new Map(), chosen = new Set(), onMaze = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
   for (const x of trace) {
     if (x.shade) shade.add(x.t);
     else if (x.chosen) chosen.add(`${x.i}:${x.t}`);
@@ -278,6 +278,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     else if (x.boss) boss.set(x.t, [...(boss.get(x.t) || []), { kind: 'attack', ...x }]);
     else if (x.hp != null) hpAt.set(x.t, x);
     else if (x.regen) regen.set(`${x.i}:${x.t}`, x.regen);
+    else if (x.xfer) xfer.set(`${x.i}:${x.t}`, x.xfer);   // a spec transfer: its icon shares the cell
     else if (x.veng != null) veng.set(`${x.i}:${x.t}`, x.veng);
     else if (x.supply) { sup.set(`${x.i}:${x.t}`, [...(sup.get(`${x.i}:${x.t}`) || []), x.supply]); if (x.slot) slotN.set(`${x.i}:${x.t}`, x.slot); }
     else if (x.i != null && x.code === 'H') horn.set(`${x.i}:${x.t}`, x);   // a horn: its own icon, sharing the cell with an attack
@@ -317,7 +318,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     const bossRow = `<div class="lab boss">${esc(bossName)}</div>${ticks.map(bossCell).join('')}`;
     const CH = (i, t) => (chosen.has(`${i}:${t}`) ? ' ch' : onMaze.has(`${i}:${t}`) ? ' mz' : '');   // the chosen player (under the maze); the others on it
     const rows = names.map((nm, i) => `<div class="lab">${esc(nm)}</div>${ticks.map((t) => {
-      const key = `${i}:${t}`, x = at.get(key), h = horn.get(key), v = veng.get(key), su = sup.get(key), rg = regen.get(key), tr = thr.get(key);
+      const key = `${i}:${t}`, xf = xfer.get(key), x = at.get(key), h = horn.get(key), v = veng.get(key), su = sup.get(key), rg = regen.get(key), tr = thr.get(key);
       // a thrall hit: its icon in the bottom-right corner (melee thrall in Verzik P1, mage thrall elsewhere)
       const trt = tr ? `${tr.icon === 'Greater_zombie' ? 'Melee' : 'Mage'} thrall hit ${tr.dmg ?? 0}${tr.landed ? ` (lands t${tr.landed})` : ''}` : '';
       const thrMark = tr ? `<span class="th">${img(tr.icon || 'Greater_ghost')}</span>` : '';
@@ -330,13 +331,14 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       const sharkImg = shark ? `<span class="sk">${icon('Shark')}</span>` : '', potImg = pots.map(([, f]) => `<span class="pt">${img(f)}</span>`).join('');
       const vengImg = v != null ? `<span class="vg">${CODE_ICON.V ? icon('V') : '<span class="vt">V</span>'}</span>` : '';
       const hornImg = h ? icon('H') : '', ht = h ? hitTip(nm, h) : '';
-      const n = (x ? 1 : 0) + (h ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0) + pots.length, dots = kinds.has('other');
+      const xfImg = xf ? `<span class="xf">${img('Spec_transfer')}</span>` : '', xt = xf ? `${nm} - tick ${t}: ${xf}` : '';
+      const n = (x ? 1 : 0) + (h ? 1 : 0) + (xf ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0) + pots.length, dots = kinds.has('other');
       const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}${rg ? ' rgo' : ''}${S(t)}${CH(i, t)}`;   // hd: icons nudged right of the dot
-      const body = `${hornImg}${vengImg}${sharkImg}${potImg}${marks}${thrMark}`;
-      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${fit}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${body}</div>`;
-      if (h) return `<div class="c a${fit}" style="color:${CODE_COL.H}" data-tip="${esc([ht, vt, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
-      if (v != null) return `<div class="c v${fit}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
-      if (su || rg || tr) return `<div class="c${fit}" data-tip="${esc(`${nm} - tick ${t}: ${[st, trt, rt].filter(Boolean).join('\n')}`)}">${body}</div>`;
+      const body = `${xfImg}${hornImg}${vengImg}${sharkImg}${potImg}${marks}${thrMark}`;
+      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${fit}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, xt, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${body}</div>`;
+      if (h) return `<div class="c a${fit}" style="color:${CODE_COL.H}" data-tip="${esc([ht, xt, vt, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
+      if (v != null) return `<div class="c v${fit}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, xt, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
+      if (su || rg || tr || xf) return `<div class="c${fit}" data-tip="${esc(xf ? [xt, st, trt, rt].filter(Boolean).join('\n') : `${nm} - tick ${t}: ${[st, trt, rt].filter(Boolean).join('\n')}`)}">${body}</div>`;
       return CH(i, t) ? `<div class="c${S(t)}${CH(i, t)}" data-tip="${esc(`${nm} - tick ${t}: ${chosen.has(key) ? 'chosen - under the maze' : 'on the maze'}`)}"></div>` : `<div class="c${S(t)}"></div>`;
     }).join('')}`).join('');
     blocks.push(`<div class="blk" style="${cols}">${mk}${head}${bossRow}${rows}</div>`);

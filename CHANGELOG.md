@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.3 - 2026-11-03
+- `verzraid.js` `verzTrace`: a sip window's potion slots start at the player's last potion + 3 (they were drawn from the window line's tick, so could land 1-2 ticks after a sip); spec transfer lines -> `{xfer}` (spec tracking: the giver 0%, the target 100%). `raidview.js` timeline: `xfer` entries - `img/icons/Spec_transfer.png`, sharing the cell, tooltip. Xarpus timeline boss row: `Xarpus.png` (exhumeds end) and `Xarpus_screech.png` (screech).
+
 ## v1.25.2 - 2026-11-03
 - Xarpus Show raid (`xarpus-ui.js`): a setup's 2,000 raids played once (seed `xshow`), Previous / Next through fastest / Top 10% / Top 25% / median / slowest / breakpoints (`raidview.js` timeline, starting at the exhumeds' end - new `from` option), failed raids if any, and the opening mauls landed split with a median example raid each. In the Solver's Procedure rows and the Full raid's Xarpus procedure (`api.procedure`). `runXarpus` trace now in the timeline's format (attacks with codes, landed tick, damage, spec and his Defence; horns, surges, regens, thralls, his HP per tick, exhumeds end / screech / death) and returns `openLanded` / `openMaulers`. Ralos Spec code `Ra` with its icon (`img/icons/Tonalztics_of_ralos.png`).
 

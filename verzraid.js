@@ -39,6 +39,8 @@ export function verzTrace(log, names, cfgs = null) {
     return [WEAPON_OF[code], c.helm, c.body, c.legs, amulet, ring[k]].filter(Boolean).join(', ');
   };
   let phase = 'P1', hp = null, lastT = 0;
+  const lastPot = names.map(() => -99);                                // each player's last potion sip (3 ticks apart)
+  const POT = /brew|restore|super combat|surge|divine|ranging|saturated/i;
   const hpAt = (t) => { if (hp != null) trace.push({ t, hp: Math.max(0, hp), phase }); };
   for (const line of log) {
     const sec = line.match(/=== (PHASE 2|RED CRABS|PHASE 3) ===/);
@@ -92,12 +94,24 @@ export function verzTrace(log, names, cfgs = null) {
     const pm = rest.replace(/^(?:P\d->P\d|shield)\s+/, '').match(/^(.+?): (.*)$/); if (!pm || !byName.has(pm[1])) continue;   // (P1->P2 / reds shield sip windows)
     const i = byName.get(pm[1]), what = pm[2];
     if (/swaps to Ultor/.test(what)) ring[i] = 'Ultor ring';
+    const xf = what.match(/^spec transfer -> (.+?) \(/);
+    if (xf) {
+      trace.push({ t, i, xfer: `Spec transfer to ${xf[1]} - they go to 100%; ${pm[1]} to 0% and -10 HP` });
+      spec[i] = 0; if (byName.has(xf[1])) spec[byName.get(xf[1])] = 100;
+      continue;
+    }
     const sm = what.match(/Atk (\d+) Str (\d+)(?: Def (\d+))?/); if (sm) { stats[i].atk = +sm[1]; stats[i].str = +sm[2]; if (sm[3]) stats[i].def = +sm[3]; }
     const mb = what.match(/Magic boosted to (\d+)/); if (mb) stats[i].mag = +mb[1];
     if (SUPPLY.test(what) && !/held for|would be|kept at|window over/.test(what)) {
       // a sip window (P1->P2, reds shield, P2->P3) logs its slots on one line, " | " between them: drawn 3 ticks apart (visual)
       const slots = what.replace(/\s*,?\s*\(?Atk \d+ Str \d+(?: Def \d+)?\)?/, '').replace(/^P\d->P\d /, '').split(' | ');
-      slots.forEach((x, k) => trace.push({ t: t + 3 * k, i, supply: x, ...(slots.length > 1 ? { slot: `sip ${k + 1} of ${slots.length} (window from tick ${t})` } : {}) }));
+      // potions 3 ticks apart: a window's first sip waits for the player's last one (the window line comes on its first tick)
+      let at = t;
+      slots.forEach((x, k) => {
+        if (POT.test(x)) { at = Math.max(at, lastPot[i] + 3); lastPot[i] = at; }
+        trace.push({ t: at, i, supply: x, ...(slots.length > 1 ? { slot: `sip ${k + 1} of ${slots.length} (window from tick ${t})` } : {}) });
+        at += slots.length > 1 ? 3 : 0;
+      });
     }
     // a thrall hit (lands the tick after it attacks)
     const th = what.match(/^Thrall (?:lands )?(\d+)\b/);                          // P1: 'Thrall lands N', later 'Thrall N'

@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.2';
+export const VERSION = '1.25.3';
 export const CHANGES = [
+  { version: '1.25.3', date: '2026-11-03', items: [
+    'Show raid (Verzik): potion sips are drawn at least 3 ticks apart (a sip window - P1 to P2, the reds shield, P2 to P3 - starts 3 ticks after the last sip); spec transfers have their own icon (sharing the cell) with who they transfer to on hover. Xarpus: his icon on the tick the exhumeds end, the screech icon on the screech.',
+  ] },
   { version: '1.25.2', date: '2026-11-03', items: [
     'Xarpus: Show raid in each Solver setup\'s procedure and in the Full raid\'s Xarpus procedure - the raid timeline for the fastest, Top 10%, Top 25%, median and slowest raids and your breakpoints, plus how often 0, 1, 2... opening mauls land, with an example raid for each.',
   ] },
