@@ -487,7 +487,8 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         await rooms.sote.fullProcedure(inner, { players, entry: r.setup.sote.entry || 0, opts: r.setup.sote.opts || {}, names, bps: roomBps(0), say });
         msg.textContent = '';
       } else if (j === 1) {
-        box.innerHTML = entryLine(e, 1) + rooms.xarpus.procHtml({ cfg: { ...r.setup.xarpus.opts, players }, names });
+        box.innerHTML = entryLine(e, 1); const inner = document.createElement('div'); box.append(inner);
+        rooms.xarpus.procedure(inner, { cfg: { ...r.setup.xarpus.opts, players }, names, run: { players, opts: r.setup.xarpus.opts } }, roomBps(1));
         msg.textContent = '';
       } else {
         const late = cfgs.map((c, k) => (c.customSurgeTick != null ? `${esc(names[k])} surges on tick ${c.customSurgeTick} (${fsec(c.customSurgeTick)}${e && e.cd[k] > 0 ? ', once the cooldown is up' : ''})` : null)).filter(Boolean);

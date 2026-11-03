@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.2 - 2026-11-03
+- Xarpus Show raid (`xarpus-ui.js`): a setup's 2,000 raids played once (seed `xshow`), Previous / Next through fastest / Top 10% / Top 25% / median / slowest / breakpoints (`raidview.js` timeline, starting at the exhumeds' end - new `from` option), failed raids if any, and the opening mauls landed split with a median example raid each. In the Solver's Procedure rows and the Full raid's Xarpus procedure (`api.procedure`). `runXarpus` trace now in the timeline's format (attacks with codes, landed tick, damage, spec and his Defence; horns, surges, regens, thralls, his HP per tick, exhumeds end / screech / death) and returns `openLanded` / `openMaulers`. Ralos Spec code `Ra` (icon listed in `tools/fetch-icons.mjs`; shows "Ra" until it's downloaded).
+
 ## v1.25.1 - 2026-11-02
 - Reds (`engine/reds.js`, 3-5 man): a shadow plan (claw_first / shadow16) is set on r11 only if the shadow player is under 100% and won't project two claws, and no other player without a shadow plan projects two claws (`project_two_claws(q, r, r + 10)`); a shadow player with no shadow plan can be the r16 two-claw skipper, and never shadows from a distance while skipping. P2 horns in reds count in `reds_line.Hn` ("1 horn" in the line text; not counted as an attack); the decision tree adds each P2 horn's share of raids that reach reds. Full raid: the shown combination's three reports run in the background right after the solve (and when another combination is shown).
 

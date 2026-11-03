@@ -173,6 +173,8 @@ function halbSpec(p, defLvl, rng) {
 export const CHALLY_AT = 5;
 export const CHALLY_ATS = [3, 5, 7, 10];
 
+/** Show raid timeline codes (raidview.js) by hit kind. */
+const TRACE_CODE = { scythe: 'S', maul: 'EM', bgs: 'BGS', ralos: 'Ra', zcb: 'ZCB', halb: 'Ch', claw: 'C', scratch: 'Cs', bp: 'BP', ayak: 'E' };
 /** The default plan by scale: {players: [{startSpec, surge, lbCycles, open, horn, dps, fix}], remaul, backups, defTarget, holdZcb}. */
 export function defaultXarpusPlan(team) {
   const P = (open, dps, extra = {}) => ({ startSpec: 100, surge: false, lbCycles: 0, open, horn: false, dps, fix: 'tick', ...extra });
@@ -223,7 +225,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
   const pid = rng.shuffle(ps.slice());
   let hits = [];                                                    // [tick, player, amount | null, label, kind, hit]; .role: open / remaul / backup
   const has = (p, w) => (p.gear.weapons || []).includes(w);
-  const drinkSurge = (p, t) => { const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++; L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`); };
+  const drinkSurge = (p, t) => { const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++; if (trace) trace.push({ t, i: p.i, supply: `spec surge (${o}% -> ${p.spec}%)` }); L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`); };
   const spend = (p, n, t) => {
     p.spec -= n; p.firstSpec = true;
     if (p.regenHold) { p.regenHold = false; p.regen = 49; p.freeRegen = true; }   // a 95% start: the regen the tick after isn't a Lightbearer cycle
@@ -319,6 +321,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     const rec = ps.find((q) => q !== c && (q.open === 'maul' || q.open === 'bgs'));
     spend(c, HORN_COST, EXH); st.specs.horn++; st.specLog.push({ i: c.i, kind: 'horn', t: EXH });
     c.hornUntil = EXH + HORN_TICKS; c.hornUsed = true; if (rec) rec.hornUntil = EXH + HORN_TICKS;
+    if (trace) trace.push({ t: EXH, i: c.i, code: 'H', what: `Soulflame horn: ${c.name}${rec ? ` and ${rec.name}` : ''} can't miss their next maul / BGS`, spec: c.spec + HORN_COST, specAfter: c.spec });
     L.on && L(`t${EXH} ${c.name} Soulflame horn (${c.spec}% left): ${c.name}${rec ? ` and ${rec.name}` : ''} can't miss their next maul / BGS`);
   }
   for (let t = EXH + 1; t <= EXH + 3000 && kill == null; t++) {
@@ -326,6 +329,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     const landing = hits.filter((h) => h[0] === t); hits = hits.filter((h) => h[0] !== t);
     for (const h of landing) {
       const [, p, amt, label, kind, hit] = h;
+      if (h.tr && (kill == null || kill === t)) h.tr.landed = t;
       if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${p.name} ${label} lands after the kill (overkill)`); } break; }
       if (kind === 'maul' && hit) maulsLanded++;
       if (h.role === 'open' && kind === 'maul') { openSeen++; if (hit) openLanded++; }
@@ -337,17 +341,22 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
           parts.push(d); total += d;
           if (d >= 1) { st.specs.ralosHits++; lowerDef(t, `${p.name} Ralos Spec hit ${k + 1}`, RALOS_DRAIN); }
         }
-        if (h.tr) Object.assign(h.tr, { amt: total, parts: parts.join('/'), def: defBeforeRalos, defAfter: defLvl });
+        if (h.tr) Object.assign(h.tr, { dmg: total, what: `Ralos Spec ${parts.join('/')} - his Defence ${defBeforeRalos} -> ${defLvl}` });
         damage(t, total, `${p.name} Ralos Spec ${parts.join('/')}`, 'ralos');
       } else if (kind === 'zcb') {
         const [ch] = ranged(bestWorn(p.gear, 'range', 'Zaryte crossbow').set, defLvl, 2, p.rangedLvl);
         const ok = rng.random() < ch, ruby = Math.min(110, Math.floor(hp * 0.22));
-        if (h.tr) h.tr.amt = ok ? ruby : 0;
+        if (h.tr) Object.assign(h.tr, ok ? { dmg: ruby, ruby: true } : { dmg: 0 });
         if (ok) damage(t, ruby, `${p.name} ZCB spec ruby`, 'zcb');
         else L.on && L(`t${t} ${p.name} ZCB spec misses`);
       } else damage(t, amt, `${p.name} ${label}`, kind);
     }
-    if (kill != null) break;
+    if (trace) {
+      trace.push({ t, hp: Math.max(0, hp), phase: dropAt == null ? 'to the screech' : 'after the screech' });
+      if (t === screech) trace.push({ t, boss: 'Screech', short: 'Sc', kind: 'screech', tip: 'Screech (he dropped to 33% of his starting HP)' });
+      if (dropAt === t) trace.push({ t, mark: '33%' });
+    }
+    if (kill != null) { if (trace) trace.push({ t, boss: 'Dies', short: '☠', kind: 'kill', tip: `Xarpus dies - the room ends ${anim} ticks later` }); break; }
     // ---- spec regen, Lightbearer, a surge that was waiting on its cooldown, thralls
     for (const p of ps) {
       if (p.surgePlan && !p.surged && p.firstSpec && t >= p.surgeReady && p.spec <= 75) drinkSurge(p, t);
@@ -356,18 +365,18 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       if (!p.regenHold && p.spec < 100) {
         if (++p.regen >= (p.lb ? 25 : 50)) {
           p.regen = 0; p.spec = Math.min(100, p.spec + 10);
+          if (trace) trace.push({ t, i: p.i, regen: `spec regen -> ${p.spec}%${p.lb ? ' (Lightbearer)' : ''}` });
           if (p.freeRegen) p.freeRegen = false;
           else if (p.lb && --p.lbLeft <= 0) { p.lb = false; L.on && L(`t${t} ${p.name} Lightbearer cycles done (${p.spec}%) - Ultor`); }
         }
       } else if (!p.regenHold) p.regen = 0;
-      if (p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); p.thrallNext = t + 4; }
+      if (p.thrallNext === t) { hits.push([t + 1, p, rng.randint(0, 3), 'thrall', 'thrall']); if (trace) hits[hits.length - 1].tr = { t, i: p.i, thrall: true, dmg: hits[hits.length - 1][2], icon: 'Greater_ghost' }, trace.push(hits[hits.length - 1].tr); p.thrallNext = t + 4; }
     }
     // ---- player attacks, in PID order
     planDefence(t);
-    const hpNow = hp;                                                 // (trace: his HP as the attacks go off)
     for (const p of pid) {
       if (t !== p.next) continue;
-      const n0 = hits.length, d0 = defLvl;
+      const n0 = hits.length, d0 = defLvl, specAt0 = p.spec;
       const da = defAct(p, t);
       let act = da ? da.kind : dpsAct(p, t) || 'scythe';
       // Chally last hit: once he's at or below the threshold, a player who'd scythe halberds with 30%; one with a horn and
@@ -377,6 +386,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
         else if (p.horn && !p.hornUsed && p.spec >= HORN_COST) {
           spend(p, HORN_COST, t); p.hornUsed = true; st.specs.horn++; st.specs.lateHorn++; st.specLog.push({ i: p.i, kind: 'horn', t });
           p.scytheSure = true; const rec = pid.find((q) => q !== p && q.next > t); if (rec) rec.scytheSure = true;
+          if (trace) trace.push({ t, i: p.i, code: 'H', what: `Soulflame horn for the last hit: ${p.name}${rec ? ` and ${rec.name}` : ''} can't miss their next swing`, spec: p.spec + HORN_COST, specAfter: p.spec });
           L.on && L(`t${t} ${p.name} Soulflame horn for the last hit (${p.spec}% left): ${p.name}${rec ? ` and ${rec.name}` : ''} can't miss their next swing`);
         }
       }
@@ -448,15 +458,15 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
         hits.push([t + MELEE_DELAY, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}${act === 'fix:tick' ? ' (tick fix: next swing a tick late)' : ''}`, 'scythe']);
         p.next = t + (act === 'fix:tick' ? 6 : 5);
       }
-      if (trace) for (const h of hits.slice(n0)) {                   // this attack: his HP / Defence as it goes off, Defence after a maul / BGS
-        h.tr = { t, lands: h[0], name: p.name, what: h[3], kind: h[4], amt: h[2], hp: hpNow, def: d0, defAfter: defLvl };
+      if (trace) for (const h of hits.slice(n0)) {                   // this attack (the Show raid timeline): what it was, his Defence as it went off
+        h.tr = { t, i: p.i, code: TRACE_CODE[h[4]] || 'S', what: `${h[3]}${defLvl !== d0 ? ` - his Defence ${d0} -> ${defLvl}` : ` (his Defence ${d0})`}`, dmg: h[2], landed: null, spec: specAt0, specAfter: p.spec };
         trace.push(h.tr);
       }
     }
   }
   const end = kill == null ? null : kill + anim;
-  if (trace) trace.sort((a, b) => a.t - b.t);
-  return { end, kill, anim, startHp: START, heals: nHeals, screech, dropAt, defZeroAt, defEnd: defLvl, defLastAt: lastDefAt, maulHits: maulsLanded, ...st,
+  if (trace) { trace.push({ t: EXH, boss: 'Exhumeds end', short: 'X', kind: 'exh', tip: `The exhumeds end - ${nHeals} heal${nHeals === 1 ? '' : 's'}, he starts on ${START} HP` }); trace.sort((a, b) => a.t - b.t); }
+  return { end, kill, anim, startHp: START, heals: nHeals, screech, dropAt, defZeroAt, defEnd: defLvl, defLastAt: lastDefAt, maulHits: maulsLanded, openLanded, openMaulers: maulers.length, ...st,
     players: ps.map((p) => ({ name: p.name, spec: p.spec, surgeAt: p.surgeAt,
       // surge cooldown left after the room (it doesn't tick between rooms)
       surgeCd: end == null ? 0 : p.surgeAt != null ? Math.max(0, p.surgeAt + SURGE_CD - end) : Math.max(0, p.surgeReady - end) })) };

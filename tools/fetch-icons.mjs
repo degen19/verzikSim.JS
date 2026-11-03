@@ -11,7 +11,7 @@ const FILES = [['Soulflame_horn', ['Soulflame_horn']], ['Eye_of_ayak', ['Eye_of_
   ['Vengeance', ['Vengeance_icon', 'Vengeance']], ['Scythe_of_vitur', ['Scythe_of_vitur']], ['Twisted_bow', ['Twisted_bow']],
   ['Zaryte_crossbow', ['Zaryte_crossbow']], ['Tumekens_shadow', ["Tumeken's_shadow"]], ['Elder_maul', ['Elder_maul']], ['Bandos_godsword', ['Bandos_godsword']],
   ['Dragon_claws', ['Dragon_claws']], ['Crystal_halberd', ['Crystal_halberd']], ['Toxic_blowpipe', ['Toxic_blowpipe']], ['Dawnbringer', ['Dawnbringer']],
-  ['Sulphur_blades', ['Sulphur_blades']], ['Sanguinesti_staff', ['Sanguinesti_staff']], ['Shark', ['Shark']]];
+  ['Sulphur_blades', ['Sulphur_blades']], ['Sanguinesti_staff', ['Sanguinesti_staff']], ['Shark', ['Shark']], ['Tonalztics_of_ralos', ['Tonalztics_of_ralos', 'Tonalztics_of_ralos_(charged)']]];
 mkdirSync('img/icons', { recursive: true });
 for (const [save, names] of FILES) {
   const out = `img/icons/${save}.png`;

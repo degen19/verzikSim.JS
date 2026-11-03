@@ -146,7 +146,7 @@ const CODE_COL = {
 };
 const CODE_NAME = { S: 'Scythe', TB: 'Twisted bow', Z: 'ZCB', ZCB: 'ZCB spec', SB: 'Shadow Barrage', TS: "Tumeken's shadow", EM: 'Elder maul spec',
   BGS: 'BGS spec', C: 'Claw spec', Ch: 'Crystal halberd spec', H: 'Soulflame horn', BP: 'Blowpipe', D: 'Dawnbringer spec', P: 'Surge pot', SH: 'Shadow',
-  E: 'Eye of ayak', SuB: 'Sulphur blades', T: 'Sang', R: 'Forced spec regen', Cs: 'Claw scratch', Sh: 'Shadow', F: 'Tick fill', '3t': '3-tick weapon' };
+  E: 'Eye of ayak', SuB: 'Sulphur blades', T: 'Sang', R: 'Forced spec regen', Cs: 'Claw scratch', Sh: 'Shadow', F: 'Tick fill', '3t': '3-tick weapon', Ra: 'Ralos spec' };
 // weapon icons: the OSRS Wiki's item images, downloaded once into img/icons (tools/fetch-icons.mjs) and served from
 // the site - never loaded from the wiki. The text code shows for any icon that isn't there.
 const ICONS = 'img/icons/';
@@ -154,7 +154,7 @@ const ICONS = 'img/icons/';
 const CODE_ICON = { S: 'Scythe_of_vitur', TB: 'Twisted_bow', Z: 'Zaryte_crossbow', ZCB: 'Zaryte_crossbow', TS: 'Tumekens_shadow',
   EM: 'Elder_maul', BGS: 'Bandos_godsword', C: 'Dragon_claws', Cs: 'Dragon_claws', Ch: 'Crystal_halberd', BP: 'Toxic_blowpipe',
   D: 'Dawnbringer', SuB: 'Sulphur_blades', T: 'Sanguinesti_staff', Sh: 'Tumekens_shadow', Shark: 'Shark', Redemption: 'Redemption',
-  H: 'Soulflame_horn', E: 'Eye_of_ayak', SB: 'Shadow_Barrage', V: 'Vengeance' };
+  H: 'Soulflame_horn', E: 'Eye_of_ayak', SB: 'Shadow_Barrage', V: 'Vengeance', Ra: 'Tonalztics_of_ralos' };
 /** An icon by file name (nothing if the file isn't there). */
 const img = (name) => `<img src="${ICONS}${name}.png" alt="" onerror="this.remove()">`;
 // potions: their icons (sharing the cell like the shark); anything else stays a grey dot
@@ -163,7 +163,7 @@ const icon = (code) => (CODE_ICON[code]
   ? `<img src="${ICONS}${CODE_ICON[code]}.png" alt="${esc(code)}" onerror="this.replaceWith(document.createTextNode(this.alt))">`
   : esc(code));
 // her events: the colour by kind (her attacks red, purple crab, heals green, damage to her orange, lightning gold)
-const BOSS_BG = { attack: '#7a2433', purple: '#6b3fa0', heal: '#2f7a3f', boom: '#b8641f', lightning: '#9a7f12', rebound: '#b59a1c' };
+const BOSS_BG = { attack: '#7a2433', purple: '#6b3fa0', heal: '#2f7a3f', boom: '#b8641f', lightning: '#9a7f12', rebound: '#b59a1c', screech: '#b8641f', kill: '#4a4d5c', exh: '#2f5f7a' };
 const BOSS_ATTACK = new Set(['attack', 'purple', 'lightning']);   // red tick numbers: the ticks she attacks
 const CSS = `<style>
 .rv{background:#16171f;color:#d7d9e0;border-radius:8px;padding:10px 12px;font:12px/1.2 system-ui,sans-serif;overflow-x:auto}
@@ -267,7 +267,7 @@ const roomTime = (t) => { const ms = Math.round(t * 600), m = Math.floor(ms / 60
 /** The timeline. trace: [{t, i, code, dmg?, landed?, what?} a player's attack | {t, i, veng} a vengeance proc (damage to
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
-export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '', tickInfo = null }) {
+export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '', tickInfo = null, from = 1 }) {   // from: the first tick shown
   const regen = new Map(), at = new Map(), horn = new Map(), thr = new Map(), slotN = new Map(), chosen = new Set(), onMaze = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
   for (const x of trace) {
     if (x.shade) shade.add(x.t);
@@ -296,7 +296,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   ].filter(Boolean).join('\n');
   const last = Math.max(end || 0, ...trace.map((x) => x.t));
   const blocks = [];
-  for (let a = 1; a <= last; a += perRow) {
+  for (let a = Math.max(1, from); a <= last; a += perRow) {
     const b = Math.min(last, a + perRow - 1), ticks = Array.from({ length: b - a + 1 }, (_, k) => a + k);
     const cols = `grid-template-columns:auto repeat(${ticks.length},24px)`;
     const mk = ticks.some((t) => marks.has(t)) ? `<div></div>${ticks.map((t) => `<div class="mk">${marks.has(t) ? marks.get(t).map((m) => `<span>${esc(m)}</span>`).join('<br>') : ''}</div>`).join('')}` : '';

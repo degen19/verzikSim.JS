@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.1';
+export const VERSION = '1.25.2';
 export const CHANGES = [
+  { version: '1.25.2', date: '2026-11-03', items: [
+    'Xarpus: Show raid in each Solver setup\'s procedure and in the Full raid\'s Xarpus procedure - the raid timeline for the fastest, Top 10%, Top 25%, median and slowest raids and your breakpoints, plus how often 0, 1, 2... opening mauls land, with an example raid for each.',
+  ] },
   { version: '1.25.1', date: '2026-11-02', items: [
     'Verzik reds (3-5 man): a shadow player only does a shadow sequence when they don\'t and won\'t have 100% spec for two claws AND nobody else has or will have it either (a two-claw player already makes the bounce 50%, and a scythe beats a shadow hit). A shadow player who will have 100% can now be the two-claw player.',
     'Verzik decision tree: P2 horns show in the reds lines, with how often each player\'s P2 horn goes off.',
