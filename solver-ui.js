@@ -3,7 +3,7 @@
 // The inputs come from the chart template's own fields (engine/chartform.js), so defaults match the chart.
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart, ringByDawnsText } from './engine/sim.js';
-import { withGear, withGearSet, GEAR_SETS, blowpipes, gearOfLetter } from './engine/gearstore.js';
+import { withGear, withGearSet, GEAR_SETS, blowpipes, gearOfLetter, loadGear, gearSet as gearSetOf, playersOf as gearPlayersOf } from './engine/gearstore.js';
 import { describe, readValues, overlaySheet, shadowBlock, SHADOW_MODES, multiInput, multiFromBox, migrateKeys } from './engine/chartform.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { verzikTreeHtml, profileChunks } from './engine/vtree.js';
@@ -266,8 +266,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   root.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.sec) open[d.dataset.sec] = d.open; }, true);
 
   // ---- run
-  async function buildCfgs() {
-    const v = { ...V() }, s = S();
+  async function buildCfgs(vIn = null, sIn = null) {
+    const v = { ...(vIn || V()) }, s = sIn || S();
     for (let k = 0; k < team; k++) {                                 // Boak side -> the chart's two checkboxes
       const e = s.boak[k] === 'East';
       if (field('gear', 'East Boak', k)) v[`gear|East Boak|${k}`] = e;
@@ -281,8 +281,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     }
     for (const f of tpl[team].desc.fields.values()) if (f.table === 'chart') v[f.key] = '';
     const ws = overlaySheet(tpl[team].ws, { A: tpl[team].desc }, { A: v });
-    const cfgs = withGearSet(await parse_chart({ sheetnames: [`${team}-man`], load: async () => ws }, team, null, 'A', { deferBP: true }), team, S().gearSet || 'A');
-    lastValues = v;                                                   // the form as run (for Copy to set / Save as chart)
+    const cfgs = withGearSet(await parse_chart({ sheetnames: [`${team}-man`], load: async () => ws }, team, null, 'A', { deferBP: true }), team, s.gearSet || 'A');
+    if (!vIn) lastValues = v;                                         // the form as run (for Copy to set / Save as chart)
     return cfgs.map((c) => ({ ...c, actions: {}, lightbearerOn: false, ringSwitch: null, targetSpec: null, startSpec: 100,
       PurpleDC: false, Purple2DC: false, WestDC: false, EastDC: false, horn: false, hornP2: false, hornP3: false }));
   }
@@ -503,7 +503,55 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
           <div style="width:0;min-width:100%;overflow-x:auto">${setupHtml(x, nm)}</div></td></tr>`).join('')}</table></div>`;
   }
 
+  /** Full raid: solve Verzik with this tab's settings, the Full raid's Gear set and Lightbearers and the surge cooldowns
+   *  carried in (ticks per player). chartSet 'A' / 'B' / 'C': your chart's P1 as it is (only rings, DCs, horns... searched). */
+  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, hornOwners = null, supplies = {}, chartSet = null, chart = null, bps = [], effort = 'standard', surgeCd = [], say = () => {}, stopped = () => false, onPool = () => {} }) {
+    // the Full raid's own settings (nothing from this tab): the chart template's defaults, its supplies, shadows from the Gear tab
+    team = getTeam(); await ensure(team);
+    const gp = (() => { const set = gearSetOf(loadGear(), team, gs); return set ? gearPlayersOf(set, team) : null; })();
+    const values = { ...tpl[team].defaults };
+    const put = (key, x) => { if (tpl[team].desc.fields.has(key)) values[key] = x; };
+    for (const [h, x] of Object.entries(supplies.team || {})) put(`team|${h}|team`, x);
+    (supplies.players || []).forEach((sp, k) => { for (const [h, x] of Object.entries(sp)) put(`gear|${h}|${k}`, x); });
+    const shadowOwners = (gp || []).map((g) => (g.weapons || []).includes("Tumeken's shadow"));
+    shadowOwners.forEach((x, k) => put(`gear|Shadow|${k}`, x));
+    if (team === 2 && shadowOwners.filter(Boolean).length !== 1) throw new Error("Duos: exactly one player needs a Tumeken's shadow (Gear tab) - the mage.");
+    const sx = { gearSet: gs, boak: Array.from({ length: team }, (_, k) => (k < 2 ? 'West' : 'East')) };
+    for (let k = 0; k < team; k++) if (tpl[team].desc.fields.has(`gear|East Pattern|${k}`)) values[`gear|East Pattern|${k}`] = '0-T';
+    const cd = (c, k) => ({ ...c, surgeCdTicks: surgeCd[k] || 0 });
+    const cfgs = (await buildCfgs(values, sx)).map(cd);
+    const seeds = [];
+    if (chart) seeds.push({ cfg: cfgs.map((c, k) => ({ ...c, actions: { ...(chart.acts[k] || {}) }, startSpec: Number(chart.start[k]) === 95 ? 95 : 100 })), label: 'Your P1 chart' });
+    else if (chartSet) {
+      const wb = getWorkbook ? await getWorkbook() : null, ws = wb ? await wb.load(`${team}-man`) : null;
+      if (!ws) throw new Error('No Verzik chart on the page - load or build one, or untick "Use my Verzik P1 chart".');
+      let cfg = withGearSet(await parse_chart(wb, team, null, chartSet, { deferBP: true }), team, gs);
+      if (cfg.length !== team || !cfg.some((c) => c.actions && Object.keys(c.actions).length)) throw new Error(`Verzik set ${chartSet} has no P1 chart.`);
+      // the chart's P1; everything else (supplies, shadows) from the Full raid like the rest
+      cfg = cfg.map((c, k) => ({ ...cfgs[k], actions: c.actions, startSpec: c.startSpec, lightbearerOn: c.lightbearerOn, dawnThr: c.dawnThr, eastBoak: c.eastBoak || cfgs[k].eastBoak, westBoak: c.westBoak || cfgs[k].westBoak, eastPattern: c.eastPattern || cfgs[k].eastPattern, ringSwitch: c.ringSwitch, targetSpec: c.targetSpec, customSurgeTick: c.customSurgeTick }));
+      seeds.push({ cfg, label: `Set ${chartSet}` });
+    }
+    const p = new SolverPool(); onPool(p);
+    const timer = setInterval(() => { if (stopped()) p.stop(); }, 300);
+    try {
+      const depth = ROOM_DEPTHS[effort] || ROOM_DEPTHS.standard;
+      const res = await solveRoom(cfgs, team, {
+        rings: lbRings, lbOwners, horns: team === 2 ? 0 : (hornLimit ?? 0), hornOwners, bpsFull: bps, rankBy: bps.length ? '0' : 'success', minSuccess: 0,
+        sbOwner: null, ...depth, top: 10, seed: `full${Date.now()}`, progress: (x) => say(`${x.stage} · ${x.raids.toLocaleString()} raids`),
+        shadowSearch: team !== 2 && shadowOwners.some(Boolean), sideSearch: team !== 2, ebtSearch: false,
+        seeds, onlySeeds: seeds.length > 0,
+      }, p);
+      return { ...res, names: (gp || []).map((g, k) => g.name || `Player ${k + 1}`) };
+    } finally { clearInterval(timer); p.stop(); }
+  }
+  /** Full raid: show a Verzik result in this tab's results (with its setups, decision trees and example raids). */
+  function fullRaidShow(res, bps) {
+    results = { ...res, bps, team, names: res.names || names(), minSucc: S().minSucc, ofKills: false, secs: 0, values: lastValues, mine: {}, skipped: [] };
+    sortCol = null; sortDir = 1; shownSetups.clear(); render();
+  }
+
   return {
+    api: { fullRaidSolve, fullRaidShow },
     async refresh() {
       const t = getTeam();
       if (running && t !== team) return;                              // keep the running solve on screen

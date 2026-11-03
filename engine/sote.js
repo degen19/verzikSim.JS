@@ -329,7 +329,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const st = { specLog: [], specMissed: [], dmg: { prefire: 0, scythe: 0, maul: 0, bgs: 0, claw: 0, halb: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, bgs: 0, bgsHit: 0, claw: 0, halb: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, balls: 0, ballSplit: 0, ballEat: 0, ballHeal: 0, sharks: 0, rests: 0, restores: 0, locator: 0, lateOrb: 0, runs: [], stalls: [], sharkSkips: [] };
   const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
     prefire: c.prefire || '', pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? 100),
-    surgePlan: !!c.surge, regen: 0, specs: [0, 1, 2].map((k) => ({ ...S_('none'), ...((c.specs || specsDefault[i] || [])[k] || {}) })), hornDone: [false, false, false],
+    surgePlan: !!c.surge, surgeReady: Math.max(0, Number(c.surgeCd) || 0), regen: 0, specs: [0, 1, 2].map((k) => ({ ...S_('none'), ...((c.specs || specsDefault[i] || [])[k] || {}) })), hornDone: [false, false, false],
     hornUntil: -1, surged: false, surgeAt: null, zcbCarry: -1, clawCarry: -1, vengPops: [0, 0, 0], orbedDown: -1, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: false, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
     role: c.role || ROLES[i], mauled: [0, 0, 0], backups: [0, 0, 0], backOff: [false, false, false], dmgSpecs: [0, 0, 0], thrallNext: null, hp: 99, dead: false, veng: true, vengReady: 0, noVengUntil: 0, prayOffUntil: 0,
     lastMelee: -9, next: null, pending: [] }));
@@ -351,7 +351,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const pid = rng.shuffle(ps.slice());
   const spend = (p, n, t) => {
     p.spec -= n; if (p.regenHold) { p.regenHold = false; p.regen = 49; p.startRegen = true; }   // a 95% start: its regen comes the next tick
-    if (p.surgePlan && !p.surged && !(noLateSurge && phase > 0)) {   // surge straight after their first spec (noLateSurge: P1 only)
+    p.specced = true;
+    if (p.surgePlan && !p.surged && t >= p.surgeReady && !(noLateSurge && phase > 0)) {   // surge straight after their first spec (noLateSurge: P1 only); a cooldown carried in from earlier rooms (full raid): once it's up
       const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++;
       L.on && L(`t${t} ${p.name} surge ${o}% -> ${p.spec}%`);
     }
@@ -1022,6 +1023,11 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     }
     // ---- spec regen (10% per 50 ticks below 100) and thralls (0-3 every 4 ticks, landing a tick later; not in a maze)
     for (const p of alive()) {
+      // a surge that was waiting on its cooldown (carried in from earlier rooms): as soon as it's up, if they've specced and are at 75% or less
+      if (p.surgePlan && !p.surged && p.specced && t >= p.surgeReady && p.spec <= 75 && !(noLateSurge && phase > 0)) {
+        const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgeAt = t; st.specs.surge++;
+        L.on && L(`t${t} ${p.name} surge (cooldown up) ${o}% -> ${p.spec}%`);
+      }
       // Lightbearer only while it's doing something: at 100% (or waiting on a 95% start's first spec) they wear Ultor and
       // go back on Lightbearer for the cycles left once their spec is below 100 again
       // stalling the maze: no ring swaps (only running it or under) - cycles that run out in the stall stay on to the end of it

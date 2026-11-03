@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.24.0';
+export const VERSION = '1.25.0';
 export const CHANGES = [
+  { version: '1.25.0', date: '2026-11-02', items: [
+    'Added the Full raid solver: Sotetseg, Xarpus and Verzik solved as one raid, with surge cooldowns and doses carried room to room. It checks every way each player can spread their surges across the rooms, and ranks the plans on your total time (or each room\'s breakpoint) or on success rate. Each boss has Show procedure (its decision tree; Verzik\'s P1 chart) and Show report (20,000 raids). Use my Verzik P1 chart: build one there or load it from a Verzik set.',
+  ] },
   { version: '1.24.0', date: '2026-10-28', items: [
     'Added solo Verzik. Not yet tracking deaths in solos - that will come at a later date and be used to measure success % and blood fury thresholds',
   ] },

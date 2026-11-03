@@ -18,11 +18,17 @@ export const newXarpusResult = () => ({ runs: 0, total: [], split: { exh: [], to
 
 /** Play raids [from, to) into `res` (seeds '<seed>#i'). opts: runXarpus options + seed. */
 export function addXarpusRaids(res, players, team, from, to, { seed = 'xarpus', ...opts } = {}) {
-  const EXH = EXHUMED_TICKS[team];
   for (let i = from; i < to; i++) {
-    const r = runXarpus(players, team, new Rng(`${seed}#${i}`), null, opts);
+    addXarpusRun(res, runXarpus(players, team, new Rng(`${seed}#${i}`), null, opts), team);
+  }
+  return res;
+}
+
+/** One raid's result r into a report result. */
+export function addXarpusRun(res, r, team) {
+  const EXH = EXHUMED_TICKS[team];
     res.runs++;
-    if (r.end == null) { res.failed++; continue; }
+    if (r.end == null) { res.failed++; return res; }
     res.total.push(r.end); res.split.exh.push(EXH);
     const drop = r.dropAt ?? r.kill; res.split.toScreech.push(drop - EXH); res.split.kill.push(r.end - drop);
     res.startHp.push(r.startHp); res.heals.push(r.heals); res.defEnd.push(r.defEnd); res.maulHits.push(r.maulHits); res.ralosHits.push(r.specs.ralosHits);
@@ -30,7 +36,6 @@ export function addXarpusRaids(res, players, team, from, to, { seed = 'xarpus', 
     if (r.fixes.length) res.fixRaids++;
     for (const f of r.fixes) res.fixes[f.fix] = (res.fixes[f.fix] || 0) + 1;
     for (const [k, v] of Object.entries(r.specs)) res.specs[k] = (res.specs[k] || 0) + v;
-  }
   return res;
 }
 

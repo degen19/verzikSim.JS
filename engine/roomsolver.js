@@ -56,7 +56,7 @@ const twoClaws = (team, players) => players.filter((p) => !p.dead && (team === 2
 const FAIL = { end: null, all50: false, n100: 0, camp: false, wipe: false };
 
 /** P1 -> P2 -> reds (3-5 man reds, or duo reds). Returns {r1, r2, r3} or {fail} (with wipe set for a P1 wipe). */
-function toRedsEnd(cfgs, team, rng) {
+export function toRedsEnd(cfgs, team, rng) {
   const r1 = run_p1(cfgs, team, rng);
   if (r1.end == null || r1.players.every((p) => p.dead)) return { fail: FAIL };
   if (team === 2 && wiped(r1.players, ['P1'])) return { fail: { ...FAIL, wipe: true } };
@@ -158,11 +158,12 @@ function twinKeys(cfgs) {
 }
 
 /** Who gets the Lightbearers: every set of `rings` players, players with the same setup tried in one order. */
-export function lbAssignments(cfgs, rings) {
+export function lbAssignments(cfgs, rings, owners = null) {
   const n = cfgs.length, keys = twinKeys(cfgs), out = [], seen = new Set();
   for (let m = 0; m < 1 << n; m++) {
     let bits = 0; for (let k = 0; k < n; k++) if (m >> k & 1) bits++;
     if (bits !== rings) continue;
+    if (owners && Array.from({ length: n }, (_, k) => m >> k & 1).some((x, k) => x && !owners[k])) continue;   // no trades: only the players holding one
     const sig = JSON.stringify(keys.map((k, i) => [k, m >> i & 1]).sort());
     if (seen.has(sig)) continue; seen.add(sig);
     out.push(Array.from({ length: n }, (_, k) => !!(m >> k & 1)));
@@ -369,9 +370,10 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const nBP = Math.max(1, Math.min(team, o.nBP ?? base.filter((c) => c.hasBP !== false).length));
   const bpSets = o.bpSearch && nBP < team ? combos(team, nBP).map((ks) => base.map((_, k) => ks.includes(k))) : [base.map((c) => c.hasBP !== false)];
   const jobs = [];
-  for (const bp of bpSets) {
+  // o.onlySeeds (Full raid "Use my Verzik P1 chart"): no P1 search - your chart's P1 as it is, everything else searched
+  if (!o.onlySeeds) for (const bp of bpSets) {
     const b2 = base.map((c, k) => ({ ...c, hasBP: bp[k] }));
-    for (const lb of lbAssignments(b2, o.rings)) jobs.push({ bp, lb, b2 });
+    for (const lb of lbAssignments(b2, o.rings, o.lbOwners)) jobs.push({ bp, lb, b2 });
   }
   stats.lbSets = jobs.length;
   const p1 = await Promise.all(jobs.map((j) => ev.p1(j.b2, team, j.lb, { beam: o.p1Beam ?? 150, top: o.p1Top, gap, sbOwner: o.sbOwner ?? null, clawRule, diverse: !!o.p1Diverse })));
@@ -382,12 +384,12 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     log(`  LB ${jobs[i].lb.map((x) => (x ? 1 : 0)).join('')}${bpSets.length > 1 ? ` BP ${jobs[i].bp.map((x) => (x ? 1 : 0)).join('')}` : ''}: ${r.charts} P1 charts`);
   });
   T('p1', t0);
-  if (!cands.length) return { top: [], stats, gap, fallback: false, bps: [] };
+  if (!cands.length && !(o.onlySeeds && (o.seeds || []).length)) return { top: [], stats, gap, fallback: false, bps: [] };
 
   // P2-end breakpoints for the early stages (10th / 25th / 50th percentile of a first setup), unless given
   let bps = o.bps && o.bps.length ? o.bps : [];
   if (!bps.length) {
-    const c0 = cands[0].cfg, bp0 = c0.findIndex((c) => c.hasBP !== false);
+    const c0 = cands.length ? cands[0].cfg : o.seeds[0].cfg, bp0 = c0.findIndex((c) => c.hasBP !== false);
     const [r] = await run('p2', [c0.map((c, k) => ({ ...c, PurpleDC: k === bp0 }))], Math.max(400, o.n1 * 2), 'p2bp');
     bps = pctl(r.ends, [0.10, 0.25, 0.50]);
     if (!bps.length) bps = [0];
@@ -400,7 +402,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const edited = [];
   const minE = o.minSuccess || 0;
   const erank = (c) => (c.k / c.n >= minE - CLAW_TOL.early - 1e-9 ? 1 : 0) + score(c, true);   // the minimum success first
-  for (const sd of (o.editRounds ?? 2) > 0 ? o.seeds || [] : []) {
+  for (const sd of (o.editRounds ?? 2) > 0 && !o.onlySeeds ? o.seeds || [] : []) {
     step('Editing your chart');
     const lb = sd.cfg.map((c) => !!c.lightbearerOn), purple = Math.max(0, sd.cfg.findIndex((c) => c.PurpleDC));
     const cfgOf = (x) => sd.cfg.map((c, k) => ({ ...c, actions: x.acts[k], startSpec: x.plan.start[k] }));
@@ -522,7 +524,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     let cur = s, changed = false;
     for (let st = 0; st < 2 * (o.horns || 0); st++) {
       const holders = cur.cfg.filter((c) => c.horn).length;
-      const ks = [...Array(team).keys()].filter((k) => cur.cfg[k].horn || holders < o.horns);
+      const ks = [...Array(team).keys()].filter((k) => (cur.cfg[k].horn || holders < o.horns) && (!o.hornOwners || o.hornOwners[k]));
       const list = ks.map((k) => withHorn(cur.cfg, k, !cur.cfg[k].hornP2, !!cur.cfg[k].hornP3));
       const res = await run('p2', list, o.n2, 'ring');
       stats.hornP2Tried += res.length;
@@ -646,7 +648,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     let cur = x, changed = false;
     for (let st = 0; st < 2 * (o.horns || 0); st++) {
       const holders = cur.cfg.filter((c) => c.horn).length;
-      const ks = [...Array(team).keys()].filter((k) => cur.cfg[k].horn || holders < o.horns);
+      const ks = [...Array(team).keys()].filter((k) => (cur.cfg[k].horn || holders < o.horns) && (!o.hornOwners || o.hornOwners[k]));
       const list = ks.map((k) => withHorn(cur.cfg, k, !!cur.cfg[k].hornP2, !cur.cfg[k].hornP3));
       const res = await run('full', list, o.n3, 'full');
       stats.hornP3Tried += res.length;

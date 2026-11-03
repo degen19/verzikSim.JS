@@ -113,8 +113,12 @@ export function neighbours(cfg, ctx) {
     if (ctx.allow.lb && (a.lbCycles || 0) !== (b.lbCycles || 0)) add({ [i]: { lbCycles: b.lbCycles || 0 }, [j]: { lbCycles: a.lbCycles || 0 } }, null, `Lightbearer P${i + 1} <-> P${j + 1}`);
     if (ctx.allow.surge && a.surge !== b.surge) add({ [i]: { surge: b.surge }, [j]: { surge: a.surge } }, null, `surge P${i + 1} <-> P${j + 1}`);
   }));
-  return out.filter(hasDefence);
+  return out.filter((c) => hasDefence(c) && itemsOk(c.players, ctx));
 }
+/** Full raid: Lightbearers only for the players holding one this room (ctx.lbOwners), and no more horn users than the
+ *  raid has horns (ctx.hornLimit). */
+export const itemsOk = (players, ctx) => (!ctx.lbOwners || players.every((p, k) => !(p.lbCycles > 0) || ctx.lbOwners[k]))
+  && (ctx.hornLimit == null || players.filter((p) => p.horn).length <= ctx.hornLimit);
 
 /** ctx: {start: cfg, gear, allow, surgeLimit, lbRings, swaps, restarts: [cfg], bps, rounds, stages, finalRaids, top}.
  *  run(configs, from, to, seed) -> Promise<[{totals, split}]>. Returns [{cfg, score, totals, split}] best first. */

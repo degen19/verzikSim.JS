@@ -402,7 +402,7 @@ export class Player {
     this.atk = this.str = this.dfn = 118;
     this.rng = this.mag = 99;
     this.sip_ready = 0;
-    this.surge_ready = 0;
+    this.surge_ready = Number(dget(cfg, 'surgeCdTicks', 0)) || 0;   // full raid: the surge cooldown carried in from earlier rooms
     this.surge_pending = null;
     this.gain_src = 'regen';                  // where their last spec gain came from: 'regen' or 'other'
     this.custom_tick = dget(cfg, 'customSurgeTick');

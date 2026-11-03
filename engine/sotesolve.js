@@ -156,9 +156,12 @@ export function neighbours(cfg, ctx) {
       }
     }
   }
-  if (ctx.noLateSurge) return out.filter((c) => c.players.every(surgeInP1));   // 'no P2 / P3 surges': only setups that surge in P1
-  return out;
+  return out.filter((c) => (!ctx.noLateSurge || c.players.every(surgeInP1)) && itemsOk(c.players, ctx));   // 'no P2 / P3 surges': only setups that surge in P1
 }
+/** Full raid: Lightbearers only for the players holding one this room (ctx.lbOwners), and no more horn users than the
+ *  raid has horns (ctx.hornLimit). */
+export const itemsOk = (players, ctx) => (!ctx.lbOwners || players.every((p, k) => !(p.lbCycles > 0) || ctx.lbOwners[k]))
+  && (ctx.hornLimit == null || players.filter((p) => p.specs.some((x) => x.horn)).length <= ctx.hornLimit);
 
 /** A copy of cfg without the planned specs and horns that (almost) never went off in `events` (fired:i:ph:kind counts), or null. */
 export function pruneUnfired(cfg, events, raids = 0) {

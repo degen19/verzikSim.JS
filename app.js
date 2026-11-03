@@ -12,6 +12,7 @@ import { createSolver } from './solver-ui.js';
 import { createGear } from './gear-ui.js';
 import { createSote } from './sote-ui.js';
 import { createXarpus } from './xarpus-ui.js';
+import { createFullRaid } from './fullraid-ui.js';
 import { createSolo } from './solo-ui.js';
 import { withGear, importGear, absorbValues } from './engine/gearstore.js';
 import { SimPool } from './pool.js';
@@ -78,9 +79,10 @@ $('src').addEventListener('click', async (e) => {
 });
 $('team').addEventListener('change', async () => {
   soloMode();
-  if (team() === 1) { if (room === 'sote') sote.refresh(); if (room === 'xarpus') xarpus.refresh(); if (room === 'gear') gear.refresh(); return; }   // solo Verzik: its own panel (no chart)
+  if (team() === 1) { if (room === 'sote') sote.refresh(); if (room === 'xarpus') xarpus.refresh(); if (room === 'full') fullRaid.refresh(); if (room === 'gear') gear.refresh(); return; }   // solo Verzik: its own panel (no chart)
   if (room === 'sote') sote.refresh();
   if (room === 'xarpus') xarpus.refresh();
+  if (room === 'full') fullRaid.refresh();
   showRunBps();
   if (source === 'build') await builder.show(team());
   if (tab === 'opt') optimizer.refresh();
@@ -150,6 +152,14 @@ const gear = createGear($('room-gear'), { getTeam: team });
 const sote = createSote($('room-sote'), { getTeam: team });
 const xarpus = createXarpus($('room-xarpus'), { getTeam: team });
 const solo = createSolo($('room-solo'));
+/** Full raid: the room solvers' hooks, and opening a room's Solver results (a procedure from the Full raid). */
+const openSolver = (r) => {
+  showRoom(r);
+  if (r === 'verzik') { const b = $('tabs').querySelector('[data-tab="solve"]'); if (b) b.click(); $('tab-solve').scrollIntoView({ block: 'start' }); return; }
+  const host = $(`room-${r}`), b = host.querySelector('[data-subtabs] [data-t="solve"]'); if (b) b.click();
+  const pane = host.querySelector('[data-pane="solve"]'); if (pane) pane.scrollIntoView({ block: 'start' });
+};
+const fullRaid = createFullRaid($('room-full'), { getTeam: team, rooms: { sote: sote.api, xarpus: xarpus.api, verzik: solver.api }, goTo: openSolver, getWorkbook: async () => (source === 'build' || !imported ? builder.workbook(team()) : imported), setLabel: (b) => ($(`lab${b}`) ? $(`lab${b}`).value.trim() : ''), runVerzik: (c, t, n, seed, onP) => runWorkers(c, t, n, seed, onP) });
 // top-level tabs: Gear / Verzik (Sotetseg, Xarpus and Full raid come later). Remembered in the address (#gear) and this browser.
 const ROOM_KEY = 'verzikSim.room.v1';
 let room = 'verzik';
@@ -161,13 +171,15 @@ function soloMode() {
   if (isSolo && room === 'verzik') solo.refresh();
 }
 function showRoom(r, push = true) {
-  room = r === 'gear' ? 'gear' : r === 'sote' ? 'sote' : r === 'xarpus' ? 'xarpus' : 'verzik';
+  room = r === 'gear' ? 'gear' : r === 'sote' ? 'sote' : r === 'xarpus' ? 'xarpus' : r === 'full' ? 'full' : 'verzik';
   [...$('rooms').querySelectorAll('[data-room]')].forEach((b) => b.classList.toggle('on', b.dataset.room === room));
   $('room-gear').hidden = room !== 'gear';
   $('room-sote').hidden = room !== 'sote';
   if (room === 'sote') sote.refresh();
   $('room-xarpus').hidden = room !== 'xarpus';
   if (room === 'xarpus') xarpus.refresh();
+  $('room-full').hidden = room !== 'full';
+  if (room === 'full') fullRaid.refresh();
   $('room-verzik').hidden = room !== 'verzik' || team() === 1;
   $('room-solo').hidden = room !== 'verzik' || team() !== 1;
   if (room === 'gear') gear.refresh();

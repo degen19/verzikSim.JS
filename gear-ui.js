@@ -116,7 +116,7 @@ export function createGear(root, { getTeam }) {
       <h4>Weapons</h4>
       <div class="row wrap" style="gap:18px;align-items:flex-start">
         ${STYLES.map(([st, l]) => `<div><div class="muted small">${l}</div>${WEAPONS_OWNED[st].map((w) => { const fixed = w === 'Dragon claws' && team() <= 2; return `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"${fixed ? ' title="Duo and solo players always have Dragon claws"' : ''}><input type="checkbox" data-w="${esc(w)}" ${fixed || (pl.weapons || []).includes(w) ? 'checked' : ''}${fixed ? ' disabled' : ''}>${esc(w)}</label>`; }).join('')}</div>`).join('')}
-        <div><div class="muted small">Other</div><label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Needed to redemption skip at Sotetseg (orb down to 1 HP)"><input type="checkbox" data-g="locator" ${pl.locator ? 'checked' : ''}>Locator orb</label><label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Soulflame horn - needed to horn at Sotetseg"><input type="checkbox" data-g="horn" ${pl.horn ? 'checked' : ''}>Soulflame horn</label></div>
+        <div><div class="muted small">Other</div><label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Needed to redemption skip at Sotetseg (orb down to 1 HP)"><input type="checkbox" data-g="locator" ${pl.locator ? 'checked' : ''}>Locator orb</label><label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Soulflame horn - needed to horn at Sotetseg"><input type="checkbox" data-g="horn" ${pl.horn ? 'checked' : ''}>Soulflame horn</label><label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Brings a Lightbearer - the Full raid solver hands the team's Lightbearers out room by room (they can be traded between rooms)"><input type="checkbox" data-g="lightbearer" ${pl.lightbearer ? 'checked' : ''}>Lightbearer</label></div>
         <div>
           <label>Arrows<select data-g="arrows">${ARROWS.map((a) => `<option ${a === pl.arrows ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
           <label style="margin-top:6px">Bolts<select data-g="bolts">${BOLTS.map((a) => `<option ${a === pl.bolts ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
@@ -194,6 +194,7 @@ export function createGear(root, { getTeam }) {
       pl.weapons = [...set];
     } else if (t.dataset.g === 'locator') pl.locator = t.checked;
     else if (t.dataset.g === 'horn') pl.horn = t.checked;
+    else if (t.dataset.g === 'lightbearer') pl.lightbearer = t.checked;
     else if (t.dataset.g === 'name') pl.name = t.value || `Player ${cur + 1}`;
     else if (['arrows', 'bolts', 'prayer'].includes(t.dataset.g)) pl[t.dataset.g] = t.value;
     else if (t.dataset.g) { const [style, slot] = t.dataset.g.split('|'); pl[style][slot] = t.value; }

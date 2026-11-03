@@ -599,10 +599,11 @@ export function createSote(host, { getTeam }) {
   };
   /** A decision-tree key: 'a&!b' - raids with event a and without b. */
   const evMatch = (key) => { const terms = key.split('&').map((x) => (x.startsWith('!') ? [false, x.slice(1)] : [true, x])); return (ev) => terms.every(([want, e]) => ev.has(e) === want); };
-  const rowOf = (kind, idx) => ({ o: oflat, v: vflat, r: rflat })[kind][Number(idx)];
+  const rowOf = (kind, idx) => ({ o: oflat, v: vflat, r: rflat, f: fflat })[kind][Number(idx)];
+  let fflat = [], fullNames = [];                                    // Full raid tab: its procedures (names from its Gear set)
   const showRaid = async (b) => {
     const [kind, idx, mode] = b.dataset.sraid.split('|'), r = rowOf(kind, idx);
-    const box = host.querySelector(`[data-sraidout="${kind}|${idx}"]`), msg = host.querySelector(`[data-sraidmsg="${kind}|${idx}"]`);
+    const box = document.querySelector(`[data-sraidout="${kind}|${idx}"]`), msg = document.querySelector(`[data-sraidmsg="${kind}|${idx}"]`);
     if (!r || !r.replay || !box) return;
     const { raids, allN, entry } = r.replay, N = allN.toLocaleString();
     if (mode === 'succ') {
@@ -620,9 +621,9 @@ export function createSote(host, { getTeam }) {
   };
   /** A decision-tree line's example: the median-time raid of the ones where that branch happened. */
   const showRaidEx = async (b) => {
-    const td = b.closest('td'), out = td && td.querySelector('[data-sraidout]'); if (!out) return;
+    const td = b.closest('td, [data-procbox]'), out = td && td.querySelector('[data-sraidout]'); if (!out) return;
     const [kind, idx] = out.dataset.sraidout.split('|'), r = rowOf(kind, idx);
-    const msg = host.querySelector(`[data-sraidmsg="${kind}|${idx}"]`); if (!r || !r.replay) return;
+    const msg = document.querySelector(`[data-sraidmsg="${kind}|${idx}"]`); if (!r || !r.replay) return;
     const all = await soteReplayAll(r, msg), m = evMatch(b.dataset.sraidex), sub = all.filter((x) => m(x.ev)), ok = sub.filter((x) => x.total != null);
     const pk = pickRaid(ok, ok.length, 'median'), label = b.dataset.exlabel || 'example';
     if (!pk) { out.innerHTML = `<p class="muted small">No successful raid for "${esc(label)}".</p>`; out.scrollIntoView({ block: 'nearest' }); return; }
@@ -635,7 +636,7 @@ export function createSote(host, { getTeam }) {
   const adjustments = (r) => {
     const n = r.totals.length, ev = r.events || {}, P = r.cfg.players, nm = (k) => esc(pnameOf(r.set, k));
     const c = (k) => ev[k] || 0, pc = (x) => `<b>${Math.round(x / n * 100)}%</b>`;
-    const cb = `${(setOf(r.set) || {}).clawBelow ?? CLAW_BELOW} HP`;   // the set's P3 ZCB -> claws threshold
+    const cb = `${r.cfg.clawBelow ?? (setOf(r.set) || {}).clawBelow ?? CLAW_BELOW} HP`;   // the set's P3 ZCB -> claws threshold
     const bd = r.cfg.backupDef ?? (setOf(r.set) || {}).backupDef ?? BACKUP_DEF;   // backups stand down at or below this Defence
     const isDef = (s) => s === 'maul' || s === 'bgs', K = (s) => (s === 'none' ? 'no spec' : KINDS[s]);
     const maulers = (ph, not) => P.map((q, j) => j).filter((j) => j !== not && isDef(P[j].specs[ph].spec) && !P[j].specs[ph].backup);
@@ -721,15 +722,18 @@ export function createSote(host, { getTeam }) {
       ${setResultsHtml(groups, { combine: vcombine, table, open: vopen, better: (a, b) => scoreBetter(a.score, b.score) })}</div>`;
   };
   wireSetResults(sol.querySelector('[data-vout]'), vopen, (c) => { vcombine = c; showResults(); });
-  const pnameOf = (setKey, k) => { const st = setOf(setKey) || tstate(), g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null; return (gp && gp[k] && gp[k].name) || `Player ${k + 1}`; };
+  const pnameOf = (setKey, k) => { if (setKey === '__full') return fullNames[k] || `Player ${k + 1}`; const st = setOf(setKey) || tstate(), g = loadGear(), set = gearSet(g, team(), st.gearSet), gp = set ? playersOf(set, team()) : null; return (gp && gp[k] && gp[k].name) || `Player ${k + 1}`; };
   /** Solve one set from its own setup. */
-  async function solveSet(k, v, bps, me, say) {
-    const st = setOf(k), t = team(), all = playersNow(st);
-    const base = all.map((p) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes }));
+  async function solveSet(k, v, bps, me, say, full = null) {
+    const st = full ? full.st : setOf(k), t = team();
+    let all = playersNow(st);
+    if (full) all = all.map((p, j) => { const gear = { ...p.gear, ...(full.gearPatch[j] || {}) };   // Full raid: who holds a horn this room
+      return { ...p, gear, specs: p.specs.map((x) => ({ ...x, horn: gear.horn ? x.horn : false })) }; });
+    const base = all.map((p, j) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes, ...(full ? { surgeCd: full.surgeCd[j] || 0 } : {}) }));
     const start = { entry: Number(st.entry) || 0, backupDef: st.backupDef ?? BACKUP_DEF, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
     const sr0 = v.search || SEARCH_DEFAULT;
     const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF, ...(sr0.noLateSurge ? { noLateSurge: true } : {}) };
-    const sr = v.search || SEARCH_DEFAULT, sLim = surgeCap(v), lbLim = Number.isInteger(st.lbRings) ? st.lbRings : t;
+    const sr = v.search || SEARCH_DEFAULT, sLim = full ? t : surgeCap(v), lbLim = full ? full.lbRings : Number.isInteger(st.lbRings) ? st.lbRings : t;
     /** A restart setup within the surge / Lightbearer limits and the weapons each player has. */
     const fit = (players) => { let su = 0, lb = 0; return players.map((p, j) => {
       const own = (w) => (all[j].gear.weapons || []).includes(w), okSpec = (x) => x.spec === 'none' || ({ maul: own('Elder maul') || own('Bandos godsword'), bgs: own('Bandos godsword'), claws: own('Dragon claws'), zcb: own('Zaryte crossbow') })[x.spec];
@@ -743,9 +747,10 @@ export function createSote(host, { getTeam }) {
       { players: fit(start.players.map((_, j) => structuredClone(start.players[(j + 1) % t]))) },
     ] : [];
     const pool = new SotePool(base, t, opts); me.pool = pool;
+    if (full) start.players = fit(start.players).map((p, j) => (full.lbOwners && !full.lbOwners[j] ? { ...p, lbCycles: 0 } : p));   // the Full raid's Lightbearers / gear
     try {
       const res = await solveSote({ team: t, base, start, gear: all.map((p) => p.gear), allow: { ...Object.fromEntries(ALLOW.map((x) => [x, v.allow[x] !== false])) },
-        surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[v.effort] || EFFORT.normal), top: 10, swaps: !!sr.swaps, pairs: !!sr.pairs, restarts, noLateSurge: !!sr.noLateSurge },
+        surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[full ? full.effort : v.effort] || EFFORT.normal), top: 10, ...(full ? { lbOwners: full.lbOwners, hornLimit: full.hornLimit } : {}), swaps: !!sr.swaps, pairs: !!sr.pairs, restarts, noLateSurge: !!sr.noLateSurge },
       (...args) => pool.run(...args), say, () => me.stopped);
       // Show raid: the final results were played on raids 'final#0..' at their entry instance - replayed from there
       const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];
@@ -797,6 +802,35 @@ export function createSote(host, { getTeam }) {
     finally { vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
 
+  /** Full raid: solve the current set with the Full raid's Gear set, Lightbearers and surge cooldowns carried in (ticks).
+   *  Returns the ranked setups; each has its replay (players, entry, opts) for playing it in a full raid. */
+  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, gearPatch = [], supplies = [], noLateSurge = false, surgeCd, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
+    // the Full raid's own settings (nothing from this tab): default plan, its supplies and mazes, every option searched
+    const t = team(), ds = defaultSetup(t), dsp = defaultSpecs(t);
+    const st = { gearSet: gs, entry: 0, players: Array.from({ length: t }, (_, k) => ({ ...blank(), prefire: ds[k].prefire, startSpec: ds[k].startSpec, surge: ds[k].surge, specs: dsp[k].map((x) => ({ ...x })), ...(supplies[k] || {}) })) };
+    const v = { allow: {}, search: { ...SEARCH_DEFAULT, noLateSurge } };
+    const me = { stopped: false, pool: null }, timer = setInterval(() => { if (stopped()) { me.stopped = true; if (me.pool) me.pool.stop(); } }, 300);
+    try { return await solveSet(rootState().cur, v, bps, new Proxy(me, { set: (o, k, x) => { o[k] = x; if (k === 'pool') onPool(x); return true; } }), say, { st, surgeCd, lbRings, lbOwners, hornLimit, gearPatch, effort }); }
+    finally { clearInterval(timer); }
+  }
+  /** Full raid: show setups (best first) in this tab's Solver results. */
+  const fullRaidShow = (items, bps) => { vresults = { groups: [{ k: rootState().cur, label: 'Full raid', items }], bps, t: team() }; showResults(); };
+  /** Full raid tab: a Sotetseg setup's procedure and decision tree (with example raids), played on n raids into `el`.
+   *  players carry the surge cooldown / doses they come into the raid with. */
+  async function fullProcedure(el, { players, entry = 0, opts = {}, names = [], n = 2000, seed = 'fullproc', bps = [], say = () => {} }) {
+    fullNames = names;
+    const res = newSoteResult(), t = team(), o = { entry, ...opts };
+    for (let i = 0; i < n; i += 100) { addSoteRaids(res, players, t, i, Math.min(n, i + 100), { seed, ...o }); say(`Playing Sotetseg raids... ${Math.min(n, i + 100).toLocaleString()} / ${n.toLocaleString()}`); await new Promise((z) => setTimeout(z, 0)); }
+    const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];
+    const r = { set: '__full', cfg: { players, backupDef: opts.backupDef, clawBelow: opts.clawBelow }, events: res.events || {}, totals: [...res.total, ...Array(res.wipes).fill(9999)],
+      replay: { players, seed, entry, opts: o, raids: (res.idx || []).map((i, j) => ({ i, total: res.total[j], key: SPL.map((q) => res.split[q][j]).join(',') })), allN: res.runs } };
+    const idx = fflat.push(r) - 1;
+    el.innerHTML = `<div data-procbox>${procTable(r)}${adjustments(r)}${raidBar('f', idx, bps)}</div>`;
+    if (!el.dataset.wired) {
+      el.dataset.wired = '1';
+      el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.sraidex) showRaidEx(b); else if (b.dataset.sraid) showRaid(b); });
+    }
+  }
   function refreshAll() { render(); showRep(); showOpt(); showSol(); }
-  return { refresh: () => { state = load(); saved = loadSaved(); refreshAll(); } };
+  return { refresh: () => { state = load(); saved = loadSaved(); refreshAll(); }, api: { fullRaidSolve, fullRaidShow, team, fullProcedure } };
 }

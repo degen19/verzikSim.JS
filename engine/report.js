@@ -165,7 +165,7 @@ export function histogramSvg(res, labels, range = null) {   // range: {lo, hi} s
   if (range) { lo = Math.max(all[0], Math.floor(range.lo)); hi = Math.max(lo + 1, Math.min(all[all.length - 1], Math.ceil(range.hi))); }   // cropped
   const xs = []; for (let s = lo; s <= hi; s++) xs.push(s);
   const series = res.map((r) => {
-    const n = r.total.length || 1; const c = new Map();
+    const n = (r.ofAll ? r.runs : r.total.length) || 1; const c = new Map();   // ofAll: % of every attempt (Full raid), else of the successful runs
     for (const t of r.total) { const s = Math.round(t * 0.6); c.set(s, (c.get(s) || 0) + 1); }
     return xs.map((s) => (c.get(s) || 0) / n * 100);
   });
@@ -250,7 +250,7 @@ export function cumulativeSvg(res, labels, bps = [], range = null) {   // bps: b
   for (let v = 0; v <= 100; v += 20) g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" class="grid"/><text x="${L - 6}" y="${Y(v) + 4}" class="ax" text-anchor="end">${v}</text>`;
   const curves = [], dots = [], items = [];
   res.forEach((r, k) => {
-    const n = r.total.length || 1; const c = new Map();
+    const n = (r.ofAll ? r.runs : r.total.length) || 1; const c = new Map();   // ofAll: % of every attempt (Full raid), else of the successful runs
     for (const t of r.total) { const s = Math.round(t * 0.6); c.set(s, (c.get(s) || 0) + 1); }
     let run = r.total.filter((t) => Math.round(t * 0.6) < lo).length;
     const cum = xs.map((s) => { run += c.get(s) || 0; return run / n * 100; });
