@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.7';
+export const VERSION = '1.25.8';
 export const CHANGES = [
+  { version: '1.25.8', date: '2026-11-03', items: [
+    'Xarpus reports (the Xarpus tab\'s Run report and the Full raid\'s Xarpus report): Show raid - view the raids the report just played.',
+  ] },
   { version: '1.25.7', date: '2026-11-03', items: [
     'Xarpus tick fix: "Lose a tick" is now "Lose tick(s)" - they lose 1 tick 75% of the time and 2 ticks 25%.',
     'Show raid: the average hits name the actual 3-tick weapon (e.g. Obligator), can be minimized, and count hits as rolled - a hit past the kill (or a Sotetseg maze) counts what it rolled, not just the damage it could deal.',

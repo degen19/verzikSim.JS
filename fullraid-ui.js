@@ -448,6 +448,8 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         html = soteReportHtml([await reportPool().report({ room: 'sote', players, opts: o, team: t }, 0, N, seed, prog)], t, { ...opts, entries: [o.entry] });
       } else if (j === 1) {
         html = xarpusReportHtml([await reportPool().report({ room: 'xarpus', players, opts: r.setup.xarpus.opts, team: t }, 0, N, seed, prog)], t, opts);
+        (r.repRaids ||= [])[j] = { players, opts: r.setup.xarpus.opts, seed, n: N };
+        html += '<div class="vz-report" style="margin-top:10px" data-xrepraids></div>';
       } else {
         if (!runVerzik) throw new Error('the report runner is not available here');
         html = verzReportHtml([await runVerzik(cfgs, t, N, Math.floor(Math.random() * 1e9), (f) => prog(Math.round(f * N)))], [label], t, N, opts);
@@ -470,6 +472,8 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       const html = await buildReport(ci, j), el = box();
       if (!el) return;
       el.innerHTML = html; el.hidden = false;
+      const rr = results.ranked[ci].repRaids && results.ranked[ci].repRaids[j], xe = el.querySelector('[data-xrepraids]');
+      if (rr && xe && rooms.xarpus.reportRaids) rooms.xarpus.reportRaids(xe, { run: { players: rr.players, opts: rr.opts }, names: results.names }, roomBps(j), { seed: rr.seed, n: rr.n });
       const bb = host.querySelector(`[data-rrep="${ci}|${j}"]`); if (bb) bb.textContent = 'Hide report';
       sayTo(ci, j).textContent = '';
     } catch (x) { sayTo(ci, j).textContent = `Couldn't run: ${x.message}`; } finally { b.disabled = false; }

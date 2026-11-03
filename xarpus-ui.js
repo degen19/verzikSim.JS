@@ -294,6 +294,9 @@ export function createXarpus(host, { getTeam }) {
         if (!runs[0].res.runs) { status.textContent = 'Stopped.'; return; }
         const opts = { breakpoints: bps, labels }, all = runs.map((x) => x.res);
         out.innerHTML = xarpusReportHtml(all, t, opts); lastPage = xarpusReportPage(all, t, opts); btn('dl').disabled = false;
+        // Show raid, per set: the raids just played (replayed from their seed)
+        out.insertAdjacentHTML('beforeend', `<div class="vz-report" style="margin-top:10px">${runs.map((x, j) => `<div style="margin-bottom:6px">${runs.length > 1 ? `<b>${esc(labels[j])}</b>` : ''}<div data-xrepraids="${j}"></div></div>`).join('')}</div>`);
+        runs.forEach((x, j) => reportRaids(out.querySelector(`[data-xrepraids="${j}"]`), { run: { players: x.players, opts: x.opts }, names: x.players.map((q, k) => q.name || `Player ${k + 1}`) }, bps, { seed, n: x.res.runs }));
         status.textContent = `${me.stop ? 'Stopped at' : 'Done:'} ${runs[0].res.runs.toLocaleString()} raids${runs.length > 1 ? ' per set' : ''} (seed ${seed}).`;
         return;
       }
@@ -366,16 +369,16 @@ export function createXarpus(host, { getTeam }) {
   const xflat = [];
   const X_LEGEND = 'Elder maul / BGS / Ralos Spec: hover for his Defence before and after · ZCB: the ruby (red outline) · claw scratch / blowpipe / Ayak: a tick fix · thrall icon (bottom right): a thrall hit · white outline: a spec regen · his row: his attack at the start of each cycle (from the second cycle after the exhumeds), then after the screech (one action skipped) a turn every two cycles (green), ☠ he dies';
   /** The Show raid bar for a setup r ({run: {players, opts}, names}); filled once its raids are played (fillXBar). */
-  function xBar(r, bps = [], withProc = false) {
-    const idx = xflat.push({ r, bps }) - 1;
-    return `${withProc ? `<div data-xproc="${idx}">${procHtml(r)}</div>` : ''}<div class="small" style="margin-top:8px" data-xbar="${idx}"><span class="muted">Show raid: playing ${X_RAIDS.toLocaleString()} raids...</span></div><span class="muted small" data-xraidmsg="${idx}"></span><div style="width:0;min-width:100%"><div data-xraidout="${idx}"></div></div>`;
+  function xBar(r, bps = [], withProc = false, { seed = X_SEED, n = X_RAIDS } = {}) {   // seed / n: a report's own raids
+    const idx = xflat.push({ r, bps, seed, n }) - 1;
+    return `${withProc ? `<div data-xproc="${idx}">${procHtml(r)}</div>` : ''}<div class="small" style="margin-top:8px" data-xbar="${idx}"><span class="muted">Show raid: playing ${n.toLocaleString()} raids...</span></div><span class="muted small" data-xraidmsg="${idx}"></span><div style="width:0;min-width:100%"><div data-xraidout="${idx}"></div></div>`;
   }
   async function xPlay(x) {
     if (x.all) return x.all;
     const { players, opts } = x.r.run, all = [], t = team();
-    const stats = { n: X_RAIDS, ...players.map(() => ({ spec: {}, fix: {} })) };
-    for (let i = 0; i < X_RAIDS; i++) {
-      const res = runXarpus(players, t, new Rng(`${X_SEED}#${i}`), null, opts);
+    const stats = { n: x.n, ...players.map(() => ({ spec: {}, fix: {} })) };
+    for (let i = 0; i < x.n; i++) {
+      const res = runXarpus(players, t, new Rng(`${x.seed}#${i}`), null, opts);
       for (const [k, kinds] of players.map((_, k) => [k, new Set(res.specLog.filter((z) => z.i === k).map((z) => z.kind))])) for (const q of kinds) stats[k].spec[q] = (stats[k].spec[q] || 0) + 1;
       for (const [k, fx2] of players.map((_, k) => [k, new Set(res.fixes.filter((z) => z.i === k).map((z) => z.fix))])) for (const q of fx2) stats[k].fix[q] = (stats[k].fix[q] || 0) + 1;
       all.push({ i, total: res.end, key: res.end == null ? '' : `${(res.dropAt ?? res.kill) - EXHUMED_TICKS[t]},${res.end - (res.dropAt ?? res.kill)}`, open: res.openLanded, nOpen: res.openMaulers });
@@ -393,10 +396,10 @@ export function createXarpus(host, { getTeam }) {
     el.innerHTML = `<div class="row wrap" style="gap:6px;align-items:center"><b>Show raid</b>
         <button class="ghost sm" data-xraid="${idx}|succ" title="Opens on the median raid; Previous / Next step through fastest, top 10%, top 25%, median, slowest and your breakpoints">View successful raids</button>
         ${fails ? `<button class="ghost sm" data-xraid="${idx}|fail">View failed raids (${pc(fails)})</button>` : ''}</div>
-      ${nOpen ? `<div style="margin-top:4px">Opening mauls landed (of ${X_RAIDS.toLocaleString()} raids): ${by.map((n, k) => (n ? `<b>${k}</b> ${pc(n)} <button class="ghost sm" style="padding:0 6px;font-size:11px" data-xex="${idx}|${k}" title="The median raid where ${k} of the opening mauls landed">example</button>` : null)).filter(Boolean).join(' · ')}</div>` : ''}`;
+      ${nOpen ? `<div style="margin-top:4px">Opening mauls landed (of ${x.n.toLocaleString()} raids): ${by.map((n, k) => (n ? `<b>${k}</b> ${pc(n)} <button class="ghost sm" style="padding:0 6px;font-size:11px" data-xex="${idx}|${k}" title="The median raid where ${k} of the opening mauls landed">example</button>` : null)).filter(Boolean).join(' · ')}</div>` : ''}`;
   }
   const xDraw = (x, i, title) => {
-    const { players, opts } = x.r.run, trace = [], res = runXarpus(players, team(), new Rng(`${X_SEED}#${i}`), null, { ...opts, trace });
+    const { players, opts } = x.r.run, trace = [], res = runXarpus(players, team(), new Rng(`${x.seed}#${i}`), null, { ...opts, trace });
     return timelineHtml({ trace, names: x.r.names || players.map((p, k) => p.name || `Player ${k + 1}`), bossName: 'Xarpus', end: res.end, title, legend: X_LEGEND, from: EXHUMED_TICKS[team()] });
   };
   async function showXRaid(b) {
@@ -417,6 +420,12 @@ export function createXarpus(host, { getTeam }) {
     raidNav(box, failSteps(fl), 0, (st) => xDraw(x, st.f.i, `${st.label} raid (Xarpus) - didn't finish`));
   }
   /** Full raid tab: a setup's procedure with Show raid, into `el` (its own clicks). r: {cfg, names, run: {players, opts}}. */
+  /** A report's Show raid (its own raids replayed: seed / n), into `el` (its own clicks). r: {run: {players, opts}, names}. */
+  function reportRaids(el, r, bps = [], { seed, n }) {
+    el.innerHTML = xBar(r, bps, false, { seed, n });
+    el.querySelectorAll('[data-xbar]').forEach(fillXBar);
+    if (!el.dataset.wired) { el.dataset.wired = '1'; el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && (b.dataset.xraid || b.dataset.xex)) showXRaid(b); }); }
+  }
   function procedure(el, r, bps = []) {
     el.innerHTML = xBar(r, bps, true);
     el.querySelectorAll('[data-xbar]').forEach(fillXBar);
@@ -515,5 +524,5 @@ export function createXarpus(host, { getTeam }) {
   /** Full raid: show setups (best first) in this tab's Solver results. */
   const fullRaidShow = (items, bps) => { vresults = { groups: [{ k: rootState().cur, label: 'Full raid', items }], bps, t: team() }; showResults(); };
   function refreshAll() { render(); showRep(); showSol(); }
-  return { refresh: () => { state = loadKey(STORE); saved = loadKey(SAVED); refreshAll(); }, api: { rootState, setOf, cur, playersNow, optsOf, team, persist, render: refreshAll, repState, fullRaidSolve, fullRaidShow, procHtml, procedure } };
+  return { refresh: () => { state = loadKey(STORE); saved = loadKey(SAVED); refreshAll(); }, api: { rootState, setOf, cur, playersNow, optsOf, team, persist, render: refreshAll, repState, fullRaidSolve, fullRaidShow, procHtml, procedure, reportRaids } };
 }

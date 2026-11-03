@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.8 - 2026-11-03
+- Xarpus Run report and the Full raid's Xarpus report: Show raid under the report (`reportRaids` in `xarpus-ui.js`: the report's own raids replayed from its seed, `xBar` / `xPlay` take a seed and raid count).
+
 ## v1.25.7 - 2026-11-03
 - Xarpus: fix 'tick' ("Lose tick(s)") - the scythe's next attack 6 ticks later 75% of the time, 7 ticks 25% (an RNG draw only when it happens). Show raid: the average hits are a collapsible `<details>` (remembered: `verzikSim.rvSumMin`); 3-tick attacks grouped by the weapon (`x.weapon`); damage compared as rolled - Verzik attack lines' hitsplat lists (`rolledAll`, so hits past the kill count), P1 overkill lines with the roll when uncapped, Sotetseg / Xarpus hits still in the air at the kill.
 
