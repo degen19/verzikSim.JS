@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.4';
+export const VERSION = '1.25.5';
 export const CHANGES = [
+  { version: '1.25.5', date: '2026-11-03', items: [
+    'Xarpus procedures (Solver and Full raid): once the setup\'s raids are played, each player\'s opening spec, damage spec and tick fix show how often they actually happened - and a planned ZCB the player never has 75% spec for in time shows as what they do instead (claws).',
+  ] },
   { version: '1.25.4', date: '2026-11-03', items: [
     'Show raid (Sotetseg, Xarpus, Verzik): each attack\'s hover now shows the player\'s accuracy for that attack (both rolls for a halberd / Ralos Spec).',
   ] },

@@ -335,14 +335,30 @@ export function createXarpus(host, { getTeam }) {
   const fsB = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floor(b / 60)}:${r < 10 ? '0' : ''}${r}`; };
   const lab = (list, v) => (list.find((x) => x[0] === v) || [v, v])[1];
   /** A setup laid out: the players, who mauls again, the backups, the rest. */
-  const procHtml = (r) => {
+  /** stats (once its raids are played): per player, the share of raids each spec / tick fix went off in - shown beside
+   *  the plan, so a plan that can't happen (a ZCB they never have 75% for) says what they did instead. */
+  const procHtml = (r, stats = null) => {
     const c = r.cfg, m = openMaulers(c.players), nm = (k) => esc(r.names[k]);
+    const pct = (n) => `${Math.round(n * 100)}%`, KIND = { maul: 'maul', bgs: 'BGS', ralos: 'Ralos', zcb: 'ZCB', claw: 'claws', halb: 'halberd', horn: 'horn' };
+    const did = (k, kinds) => { if (!stats) return ''; const x = stats[k], parts = kinds.filter((q) => x.spec[q]).map((q) => `${KIND[q]} ${pct(x.spec[q] / stats.n)}`);
+      return `<div class="muted" style="font-size:11px">in raids: ${parts.join(' · ') || 'none'}</div>`; };
+    const dmgCell = (p, k) => {
+      if (!stats) return lab(DPS_SPECS, p.dps);
+      const x = stats[k], zcb = (x.spec.zcb || 0) / stats.n, cl = (x.spec.claw || 0) / stats.n;
+      if (p.dps === 'zcb' && zcb < 0.01) return `${cl >= 0.01 ? 'Claws' : 'None'} <span class="muted" style="font-size:11px">(ZCB planned - never 75% spec in time)</span>${did(k, ['claw'])}`;
+      return `${lab(DPS_SPECS, p.dps)}${did(k, ['zcb', 'claw', 'halb'])}`;
+    };
+    const fixCell = (p, k) => {
+      if (!stats) return lab(FIXES, p.fix);
+      const f = stats[k].fix, tot = Object.values(f).reduce((a, b) => a + b, 0);
+      return `${lab(FIXES, p.fix)}${tot ? `<div class="muted" style="font-size:11px">in raids: ${Object.entries(f).map(([q, n]) => `${{ tick: 'lose a tick', scratch: 'claw scratch', claw: 'claw spec', bp: 'blowpipe', ayak: 'Ayak' }[q] || q} ${pct(n / stats.n)}`).join(' · ')}</div>` : ''}`;
+    };
     const re = m.length ? Array.from({ length: m.length + 1 }, (_, n) => `${n} land: ${(c.remaul[n] || []).map(nm).join(', ') || 'nobody'}`).join(' · ') : 'nobody opens with a maul';
     const bk = (c.backups || []).map((b, i) => `${i + 1}. ${nm(b.p)} ${lab(BACKUP_SPECS, b.spec)}${b.now >= 0 ? ` (right away if ${b.now} or fewer land)` : ''}`).join(' → ') || 'none';
     return `<div class="small">Maul again - ${re}</div><div class="small">Backups (Defence target ${c.defTarget}): ${bk}</div>
       <div class="small">ZCBs ${c.holdZcb ? 'held for the screech' : 'once the mauls are in'} · ZCB → claws below ${c.zcbBelow} HP · ${c.chally ? `Chally last hit at ${c.challyAt}%` : 'no Chally last hit'}</div>
       <table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>Opening spec</th><th>Damage spec</th><th>Tick fix</th><th>Horn</th></tr>
-      ${c.players.map((p, k) => `<tr><td>${nm(k)}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td><td>${lab(OPENERS, p.open)}</td><td>${lab(DPS_SPECS, p.dps)}</td><td>${lab(FIXES, p.fix)}</td><td>${p.horn ? 'yes' : '-'}</td></tr>`).join('')}</table>`;
+      ${c.players.map((p, k) => `<tr><td>${nm(k)}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td><td>${lab(OPENERS, p.open)}${did(k, ['maul', 'bgs', 'ralos'])}</td><td>${dmgCell(p, k)}</td><td>${fixCell(p, k)}</td><td>${p.horn ? 'yes' : '-'}</td></tr>`).join('')}</table>`;
   };
   // ---- Show raid: a setup's raids (played once, 2,000 of them), its timeline for the fastest / Top 10% / ... / median /
   // slowest and breakpoints, and an example raid for each number of opening mauls landed
@@ -350,23 +366,28 @@ export function createXarpus(host, { getTeam }) {
   const xflat = [];
   const X_LEGEND = 'Elder maul / BGS / Ralos Spec: hover for his Defence before and after · ZCB: the ruby (red outline) · claw scratch / blowpipe / Ayak: a tick fix · thrall icon (bottom right): a thrall hit · white outline: a spec regen · his row: his attack at the start of each cycle (from the second cycle after the exhumeds), then after the screech (one action skipped) a turn every two cycles (green), ☠ he dies';
   /** The Show raid bar for a setup r ({run: {players, opts}, names}); filled once its raids are played (fillXBar). */
-  function xBar(r, bps = []) {
+  function xBar(r, bps = [], withProc = false) {
     const idx = xflat.push({ r, bps }) - 1;
-    return `<div class="small" style="margin-top:8px" data-xbar="${idx}"><span class="muted">Show raid: playing ${X_RAIDS.toLocaleString()} raids...</span></div><span class="muted small" data-xraidmsg="${idx}"></span><div style="width:0;min-width:100%"><div data-xraidout="${idx}"></div></div>`;
+    return `${withProc ? `<div data-xproc="${idx}">${procHtml(r)}</div>` : ''}<div class="small" style="margin-top:8px" data-xbar="${idx}"><span class="muted">Show raid: playing ${X_RAIDS.toLocaleString()} raids...</span></div><span class="muted small" data-xraidmsg="${idx}"></span><div style="width:0;min-width:100%"><div data-xraidout="${idx}"></div></div>`;
   }
   async function xPlay(x) {
     if (x.all) return x.all;
     const { players, opts } = x.r.run, all = [], t = team();
+    const stats = { n: X_RAIDS, ...players.map(() => ({ spec: {}, fix: {} })) };
     for (let i = 0; i < X_RAIDS; i++) {
       const res = runXarpus(players, t, new Rng(`${X_SEED}#${i}`), null, opts);
+      for (const [k, kinds] of players.map((_, k) => [k, new Set(res.specLog.filter((z) => z.i === k).map((z) => z.kind))])) for (const q of kinds) stats[k].spec[q] = (stats[k].spec[q] || 0) + 1;
+      for (const [k, fx2] of players.map((_, k) => [k, new Set(res.fixes.filter((z) => z.i === k).map((z) => z.fix))])) for (const q of fx2) stats[k].fix[q] = (stats[k].fix[q] || 0) + 1;
       all.push({ i, total: res.end, key: res.end == null ? '' : `${(res.dropAt ?? res.kill) - EXHUMED_TICKS[t]},${res.end - (res.dropAt ?? res.kill)}`, open: res.openLanded, nOpen: res.openMaulers });
       if (i % 200 === 199) await new Promise((z) => setTimeout(z, 0));
     }
+    x.stats = stats;
     return (x.all = all);
   }
   async function fillXBar(el) {
     if (el.dataset.filled) return; el.dataset.filled = '1';
     const idx = Number(el.dataset.xbar), x = xflat[idx], all = await xPlay(x), ok = all.filter((z) => z.total != null), fails = all.length - ok.length;
+    const pe = document.querySelector(`[data-xproc="${idx}"]`); if (pe) pe.innerHTML = procHtml(x.r, x.stats);
     const nOpen = all[0] ? all[0].nOpen : 0, pc = (n) => `${(n / all.length * 100).toFixed(n / all.length < 0.1 ? 1 : 0)}%`;
     const by = Array.from({ length: nOpen + 1 }, (_, n) => all.filter((z) => z.open === n).length);
     el.innerHTML = `<div class="row wrap" style="gap:6px;align-items:center"><b>Show raid</b>
@@ -397,7 +418,7 @@ export function createXarpus(host, { getTeam }) {
   }
   /** Full raid tab: a setup's procedure with Show raid, into `el` (its own clicks). r: {cfg, names, run: {players, opts}}. */
   function procedure(el, r, bps = []) {
-    el.innerHTML = procHtml(r) + xBar(r, bps);
+    el.innerHTML = xBar(r, bps, true);
     el.querySelectorAll('[data-xbar]').forEach(fillXBar);
     if (!el.dataset.wired) { el.dataset.wired = '1'; el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && (b.dataset.xraid || b.dataset.xex)) showXRaid(b); }); }
   }
@@ -413,7 +434,7 @@ export function createXarpus(host, { getTeam }) {
         return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td>${withSet ? `<td data-setcol="${r.set}" style="color:var(--c);font-weight:700">${esc(setLabel(r.set))}</td>` : ''}<td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>${asc.map((b) => `<td>${(v.filter((x) => x * 0.6 <= b + 1e-9).length / v.length * 100).toFixed(1)}%</td>`).join('')}<td>${ft(med(r.split.toScreech) - EXH)}</td><td>${ft(med(r.split.kill))}</td><td>${r.defEnd.length ? (r.defEnd.reduce((a, b) => a + b, 0) / r.defEnd.length).toFixed(1) : '-'}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${idx}">Procedure</button> ${SETS.map((k) => `<button class="ghost sm" data-vuse="${idx}" data-to="${k}" title="Put this setup into set ${k}${rootState().sets[k] ? '' : ` - a new set, from set ${r.set}`}">Copy to set ${k}</button>`).join(' ')}</td></tr>
         <tr class="sub-row" data-vproc="${idx}" hidden><td colspan="${9 + asc.length + (withSet ? 1 : 0)}" style="text-align:left">
-          ${procHtml(r)}${r.run ? xBar(r, bps) : ''}</td></tr>`; }).join('')}
+          ${r.run ? xBar(r, bps, true) : procHtml(r)}</td></tr>`; }).join('')}
       </table></div>`;
     const all = groups.flatMap((g) => g.items);
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${t}-man Xarpus: solver</h3>

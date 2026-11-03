@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.5 - 2026-11-03
+- Xarpus procedure table (`xarpus-ui.js` `procHtml(r, stats)`): after Show raid's 2,000 raids, "in raids" shares per player (specs from `specLog`, tick fixes from `fixes`); a planned ZCB under 1% of raids is shown as "Claws (ZCB planned - never 75% spec in time)" (or None). The table re-renders in place (`data-xproc`).
+
 ## v1.25.4 - 2026-11-03
 - Show raid tooltips: "Accuracy: X%" (`acc` on trace attacks; an array for two rolls). Verzik: `acc X%` added to the log lines that lacked it (P1 Dawn spec / auto 100%, P2 last swing before the shield, reds blowpipe on a crab / collision shadow / halberds / bounced ZCB, duo reds crab and Verzik swings / claws / scratches / halberd, P3 scythe / 3-tick / scratch / claws / halberd, solo) and read by `verzTrace`; P3 3-tick attacks now drawn; P1 "lands after kill" lines no longer drawn as attacks. Sotetseg / Xarpus engines put `acc` on their trace entries (prefires and ZCB / Ralos at landing). Results unchanged (no RNG change).
 
