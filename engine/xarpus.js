@@ -53,8 +53,8 @@ export const RALOS_DRAIN = Math.floor(XARPUS.magic / 8);
 //    HP (below it: claws instead, if they have them); Claws (50%) once no Defence spec is still to come. As often as their
 //    spec allows. A Claw spec tick fix goes before a held ZCB.
 //  - The screech: once he's at or below 33% of his starting HP (base + heals), on the next i0. A player whose scythe (or ZCB)
-//    would go off on the i3 before it - who could see he was below 33% the tick before - tick fixes instead: lose a tick
-//    (scythe, next attack 6 ticks later), a claw scratch or claw spec (4 ticks), a blowpipe hit (2) or an Ayak hit (3),
+//    would go off on the i3 before it - who could see he was below 33% the tick before - tick fixes instead: lose tick(s)
+//    (scythe, next attack 6 ticks later, 7 a quarter of the time), a claw scratch or claw spec (4 ticks), a blowpipe hit (2) or an Ayak hit (3),
 //    then scythes every 5 ticks again. Nothing else happens; they attack until he's dead. The room ends on the 5th tick
 //    counting the one the killing hit lands on (the 4th with overkill: another hitsplat on the killing tick).
 //  - Thralls (0-3 every 4 ticks) from everyone's first attack. Spec: 10% every 50 ticks (Lightbearer: 25) below 100;
@@ -81,7 +81,7 @@ export const defCap = (team) => (team === 1 ? 3 : 2);
 export const OPENERS = [['none', 'None'], ['maul', 'Elder maul'], ['bgs', 'BGS'], ['ralos', 'Ralos Spec']];
 export const BACKUP_SPECS = [['ralos', 'Ralos Spec'], ['bgs', 'BGS'], ['maul', 'Elder maul']];
 export const DPS_SPECS = [['none', 'None'], ['zcb', 'ZCB'], ['claws', 'Claws']];
-export const FIXES = [['tick', 'Lose a tick'], ['ayak', '3-tick (Eye of ayak)'], ['bp', 'Blowpipe (2 ticks)'], ['claw', 'Claw spec'], ['scratch', 'Claw scratch (4 ticks)']];
+export const FIXES = [['tick', 'Lose tick(s)'], ['ayak', '3-tick (Eye of ayak)'], ['bp', 'Blowpipe (2 ticks)'], ['claw', 'Claw spec'], ['scratch', 'Claw scratch (4 ticks)']];
 const NEED = { maul: 'Elder maul', bgs: 'Bandos godsword', ralos: 'Tonalztics of Ralos', claws: 'Dragon claws', zcb: 'Zaryte crossbow',
   scratch: 'Dragon claws', claw: 'Dragon claws', bp: 'Toxic blowpipe', ayak: 'Eye of ayak' };
 export { NEED };
@@ -332,7 +332,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     for (const h of landing) {
       const [, p, amt, label, kind, hit] = h;
       if (h.tr && (kill == null || kill === t)) h.tr.landed = t;
-      if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${p.name} ${label} lands after the kill (overkill)`); } break; }
+      if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${p.name} ${label} lands after the kill (overkill)`); } if (trace) for (const x of landing.slice(landing.indexOf(h))) if (x.tr && x.tr.landed == null && x[2] != null) x.tr.landed = x[0]; break; }
       if (kind === 'maul' && hit) maulsLanded++;
       if (h.role === 'open' && kind === 'maul') { openSeen++; if (hit) openLanded++; }
       if (kind === 'ralos') {                                         // two rolls; a hit (1+) drains before the second roll
@@ -453,12 +453,13 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       } else if (act === 'fix:ayak') {
         const [ch, mx] = ayak(p), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0; acc = ch; exp = hitMV(ch, mx);
         hits.push([t + AYAK_DELAY, p, d, 'Ayak (tick fix)', 'ayak']); p.next = t + 3;
-      } else {                                                        // scythe (fix 'tick': a scythe, next attack a tick late)
+      } else {                                                        // scythe (fix 'tick': a scythe, next attack 1 tick late - 2 ticks a quarter of the time)
         const [ch, mx] = melee(p, 'Scythe of vitur', 1, defLvl);
         const sure = p.scytheSure; p.scytheSure = false; acc = sure ? 1 : ch; exp = scytheMV(acc, mx);   // a last-hit horn: this swing can't miss
         const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m) => (sure || rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
-        hits.push([t + MELEE_DELAY, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}${act === 'fix:tick' ? ' (tick fix: next swing a tick late)' : ''}`, 'scythe']);
-        p.next = t + (act === 'fix:tick' ? 6 : 5);
+        const lose = act === 'fix:tick' ? (rng.random() < 0.75 ? 1 : 2) : 0;   // lose tick(s): 1 tick 75% of the time, 2 ticks 25%
+        hits.push([t + MELEE_DELAY, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}${lose ? ` (tick fix: next swing ${lose} tick${lose > 1 ? 's' : ''} late)` : ''}`, 'scythe']);
+        p.next = t + 5 + lose;
       }
       if (trace) for (const h of hits.slice(n0)) {                   // this attack (the Show raid timeline): what it was, his Defence as it went off
         h.tr = { t, i: p.i, code: TRACE_CODE[h[4]] || 'S', what: `${h[3]}${defLvl !== d0 ? ` - his Defence ${d0} -> ${defLvl}` : ` (his Defence ${d0})`}`, dmg: h[2], landed: null, spec: specAt0, specAfter: p.spec, acc, exp };
@@ -467,6 +468,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     }
   }
   const end = kill == null ? null : kill + anim;
+  if (trace) for (const h of hits) if (h.tr && h.tr.landed == null && h[2] != null) h.tr.landed = h[0];   // hits in the air at the kill count as rolled
   if (trace) {
     // his row: an attack at the start of each cycle (the first one after the exhumeds skipped: EXH + 7, then every 4),
     // up to the screech; the screech skips one action, then he turns every two cycles (screech + 8, + 16, ...)

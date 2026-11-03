@@ -165,7 +165,7 @@ export function createXarpus(host, { getTeam }) {
       <p class="muted small" style="margin:0 0 6px">Each player does at most ${cap} Defence specs (opening, maul again, backups)${t === 1 ? '' : ' - 3 in solos'} - so a player who mauls again skips their backup. A spec they don't have in the Gear set is skipped.</p>
       ${blk(4, 'Damage specs and tick fixes', `<div class="row" style="align-items:flex-start;gap:24px"><div class="scroll"><table class="bt"><tr><th></th>
           <th title="After their own Defence specs, as often as their spec allows. ZCB: held for the screech (see the right) or once the mauls are settled. Claws: once no Defence spec is still to come">Damage spec</th>
-          <th title="If their scythe (or ZCB) would go off on the i3 before the screech: lose a tick (scythe, next attack 6 ticks later), an Eye of ayak hit (3 ticks - their magic gear), a blowpipe hit (2 - Rigour, quiver, gloves, necklace), a claw spec or a claw scratch (4 ticks)">Tick fix at the screech</th></tr>
+          <th title="If their scythe (or ZCB) would go off on the i3 before the screech: lose tick(s) (scythe, next attack 6 ticks later - 7 a quarter of the time: they lose 1 tick 75% of the time, 2 ticks 25%), an Eye of ayak hit (3 ticks - their magic gear), a blowpipe hit (2 - Rigour, quiver, gloves, necklace), a claw spec or a claw scratch (4 ticks)">Tick fix at the screech</th></tr>
         ${st.players.map((p, k) => `<tr><td class="rl">${esc(pname(k))}</td><td>${sel(k, 'dps', DPS_SPECS, p.dps, 120)}</td><td>${sel(k, 'fix', FIXES, p.fix, 200)}</td></tr>`).join('')}</table></div>
         <div style="max-width:420px">${pick()} style="color:var(--ink)"><input type="checkbox" data-s="holdZcb" ${st.holdZcb ? 'checked' : ''}>Hold ZCBs for the screech</label>
           <p class="muted small" style="margin:4px 0 10px">Players with ZCB hold it until the screech, then fire on their first attack from it - nobody waits for anyone else, so no ticks are lost. Off: they ZCB once the mauls are in.</p>
@@ -351,7 +351,7 @@ export function createXarpus(host, { getTeam }) {
     const fixCell = (p, k) => {
       if (!stats) return lab(FIXES, p.fix);
       const f = stats[k].fix, tot = Object.values(f).reduce((a, b) => a + b, 0);
-      return `${lab(FIXES, p.fix)}${tot ? `<div class="muted" style="font-size:11px">in raids: ${Object.entries(f).map(([q, n]) => `${{ tick: 'lose a tick', scratch: 'claw scratch', claw: 'claw spec', bp: 'blowpipe', ayak: 'Ayak' }[q] || q} ${pct(n / stats.n)}`).join(' · ')}</div>` : ''}`;
+      return `${lab(FIXES, p.fix)}${tot ? `<div class="muted" style="font-size:11px">in raids: ${Object.entries(f).map(([q, n]) => `${{ tick: 'lose tick(s)', scratch: 'claw scratch', claw: 'claw spec', bp: 'blowpipe', ayak: 'Ayak' }[q] || q} ${pct(n / stats.n)}`).join(' · ')}</div>` : ''}`;
     };
     const re = m.length ? Array.from({ length: m.length + 1 }, (_, n) => `${n} land: ${(c.remaul[n] || []).map(nm).join(', ') || 'nobody'}`).join(' · ') : 'nobody opens with a maul';
     const bk = (c.backups || []).map((b, i) => `${i + 1}. ${nm(b.p)} ${lab(BACKUP_SPECS, b.spec)}${b.now >= 0 ? ` (right away if ${b.now} or fewer land)` : ''}`).join(' → ') || 'none';

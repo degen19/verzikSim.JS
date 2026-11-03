@@ -302,7 +302,9 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   // trace (the Show raid timeline): {t, i, code} a player's attack queued that tick, {t, boss} her attack, {t, mark} a
   // phase point - only when asked for (one replayed raid)
   const TR = trace ? (x) => { trace.push(x); return x; } : () => null;
-  let curTr = null;                                                   // the traced attack whose hit is landing now
+  let curTr = null;
+  /** Show raid: a hit past the kill still counts as rolled (a 50 on 10 HP deals 10, but it rolled 50). */
+  const creditRolled = (h) => { if (h.tr && typeof h[2] === 'number' && h[2] > 0) { h.tr.rolled = (h.tr.rolled || 0) + h[2]; if (h.tr.landed == null) h.tr.landed = h[0]; } };                                                   // the traced attack whose hit is landing now
   // (trace) what they wear for an attack, and when their next spec regen comes
   const gearOf = (p, style, weapon) => { const w = ringOn(worn(p.gear, style, weapon), p); return Object.values(w).filter((x) => x && x !== 'none').join(', '); };
   const regenIn = (p) => (p.spec >= 100 ? null : Math.max(1, (p.lb ? 25 : 50) - (p.regen || 0)));
@@ -867,7 +869,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     curTr = null;
     for (const h of landing) {
       curTr = h.tr || null; if (curTr) curTr.landed = t;
-      if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${h[1].name} ${h[3]} lands after the kill (overkill)`); } break; }
+      if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${h[1].name} ${h[3]} lands after the kill (overkill)`); } if (trace) for (const x of landing.slice(landing.indexOf(h))) creditRolled(x); break; }
       const [, p, , label, kind] = h;
       if (kind && PREFIRE[kind]) {
         const n = prefireNumbers(p, kind, defLvl), rb = Math.min(110, Math.floor(hp * 0.22));
@@ -1129,6 +1131,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     if (wipeAt == null && !alive().length) wipeAt = t;
   }
   if (kill != null) end = kill + anim;
+  if (trace) for (const h of hits) creditRolled(h);                  // hits still in the air at the kill
   // report split: P1 (to the first proc), first maze (proc to the end of the last cycle before she's interactable),
   // P2 (interactable to the second proc), second maze, P3 (to the end of the room)
   const split = mazes.length >= 2 && back.length >= 2 && end != null

@@ -182,7 +182,7 @@ const BOSS_ATTACK = new Set(['attack', 'purple', 'lightning']);   // red tick nu
 const CSS = `<style>
 .rv{background:#16171f;color:#d7d9e0;border-radius:8px;padding:10px 12px;font:12px/1.2 system-ui,sans-serif;overflow-x:auto}
 .rv h4{margin:0;color:#fff;font-size:15px}
-.rv .rvsum{margin:0 0 8px;font-size:12px;line-height:1.5;position:sticky;left:0}.rv .rvsum .muted{color:#8b8fa3}.rv .rvsum b{color:#fff}
+.rv .rvsum{margin:0 0 8px;font-size:12px;line-height:1.5;position:sticky;left:0}.rv .rvsum summary{cursor:pointer;color:#c9ccd8;font-weight:600;margin-bottom:2px}.rv .rvsum .muted{color:#8b8fa3}.rv .rvsum b{color:#fff}
 .rv .rvh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 8px;position:sticky;left:0}
 .rv .rvfs{background:#2a2c3b;color:#e6e8ef;border:1px solid #474b60;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
 .rv .rvfs:hover{background:#353849}
@@ -284,23 +284,25 @@ const normCdf = (z) => { const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2
 const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`; };
 const signed = (d) => `{{${d >= 0 ? 'g' : 'r'}:${d >= 0 ? '+' : ''}${d.toFixed(1)}}}`;
 const r1 = (x) => (Math.round(x * 10) / 10).toString();
-const dmgOf = (x) => x.rolled ?? x.dmg ?? 0;   // the hitsplats as rolled (Sotetseg: damage past a maze / the kill isn't dealt)
+const dmgOf = (x) => x.rolledAll ?? x.rolled ?? x.dmg ?? 0;   // the hitsplats as rolled (Sotetseg: damage past a maze / the kill isn't dealt)
 /** Player attacks with an expected damage (that landed): each one's cumulative damage / expected so far for its
  *  player (x.cum), and the raid's average hit per weapon with its percentile (the average's normal approximation from
  *  each attack's mean and variance) - vengeance procs too, without a percentile. */
 function damageSummary(trace, names) {
-  const atks = trace.filter((x) => x.i != null && x.code && x.exp && x.landed != null).sort((a, b) => a.t - b.t);
+  const atks = trace.filter((x) => x.i != null && x.code && x.exp && (x.landed != null || x.rolledAll != null)).sort((a, b) => a.t - b.t);
   const run = names.map(() => [0, 0]);
   for (const x of atks) { const c = run[x.i]; c[0] += dmgOf(x); c[1] += x.exp[0]; x.cum = [c[0], c[1]]; }
   const by = new Map();
-  for (const x of atks) { const k = CODE_NAME[x.code] || x.code, g = by.get(k) || { n: 0, d: 0, m: 0, v: 0 }; g.n++; g.d += dmgOf(x); g.m += x.exp[0]; g.v += Math.max(0, x.exp[1]); by.set(k, g); }
+  for (const x of atks) { const k = x.weapon || CODE_NAME[x.code] || x.code, g = by.get(k) || { n: 0, d: 0, m: 0, v: 0 }; g.n++; g.d += dmgOf(x); g.m += x.exp[0]; g.v += Math.max(0, x.exp[1]); by.set(k, g); }
   const rows = [...by.entries()].sort((a, b) => b[1].n - a[1].n).map(([k, g]) => {
     const pc = g.v > 0 ? Math.round(Math.min(99.9, Math.max(0.1, normCdf((g.d - g.m) / Math.sqrt(g.v)) * 100))) : null;
     return `Average ${k}${/spec$/i.test(k) ? '' : ' hit'}: <b>${r1(g.d / g.n)}</b> <span class="muted">(${pc == null ? 'always the same' : `${ordinal(Math.max(1, Math.min(99, pc)))} percentile`} · expected ${r1(g.m / g.n)} · ${g.n} attack${g.n === 1 ? '' : 's'})</span>`;
   });
   const vg = trace.filter((x) => x.veng != null);
   if (vg.length) rows.push(`Average Vengeance hit: <b>${r1(vg.reduce((a, x) => a + x.veng, 0) / vg.length)}</b> <span class="muted">(${vg.length} proc${vg.length === 1 ? '' : 's'})</span>`);
-  return rows.length ? `<div class="rvsum">${rows.map((x) => `<div>${x}</div>`).join('')}</div>` : '';
+  if (!rows.length) return '';
+  let closed = false; try { closed = localStorage.getItem('verzikSim.rvSumMin') === '1'; } catch { /* storage off */ }
+  return `<details class="rvsum"${closed ? '' : ' open'} ontoggle="try{localStorage.setItem('verzikSim.rvSumMin',this.open?'':'1')}catch(e){}"><summary>Average hits this raid</summary>${rows.map((x) => `<div>${x}</div>`).join('')}</details>`;
 }
 /** An attack's accuracy for the tooltip: 0.74 -> '74.0%'; two rolls ([first, second], e.g. a halberd's) -> '74.0% / 55.5%'. */
 const accText = (a) => (Array.isArray(a) ? a.map((x) => `${(x * 100).toFixed(1)}%`).join(' / ') : `${(a * 100).toFixed(1)}%`);
@@ -338,7 +340,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   ].filter(Boolean).join('\n');
   const last = Math.max(end || 0, ...trace.map((x) => x.t));
   const summary = damageSummary(trace, names);
-  const xTip = (x) => (x && x.exp && x.cum ? [`Damage: ${dmgOf(x)}${x.rolled != null && x.rolled !== (x.dmg || 0) ? ` (${x.dmg || 0} dealt - the rest past her maze / kill point)` : ''}`, `Expected damage: ${r1(x.exp[0])} (${signed(dmgOf(x) - x.exp[0])})`,
+  const xTip = (x) => (x && x.exp && x.cum ? [`Damage: ${dmgOf(x)}${dmgOf(x) !== (x.dmg || 0) ? ` (${x.dmg || 0} dealt - the rest past a maze or the kill)` : ''}`, `Expected damage: ${r1(x.exp[0])} (${signed(dmgOf(x) - x.exp[0])})`,
     `Cumulative damage: ${x.cum[0]}`, `C. expected damage: ${r1(x.cum[1])} (${signed(x.cum[0] - x.cum[1])})`].join('\n') : '');
   const blocks = [];
   for (let a = Math.max(1, from); a <= last; a += perRow) {

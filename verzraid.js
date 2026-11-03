@@ -128,7 +128,11 @@ export function verzTrace(log, names, cfgs = null) {
     if (vg) { trace.push({ t, i, veng: +vg[1] }); continue; }
     if (/^SOULFLAME HORN/.test(what)) { const fr = what.match(/guaranteed first hit for (.*)$/); trace.push({ t, i, code: 'H', what: `Soulflame horn${fr ? ` - guaranteed first hit for ${fr[1]}` : ''}` }); continue; }
     if (/^Thrall|^regen|^spec |^surge|swaps to|boak, can't|lines up with|bounced|^last scythe before|skips the bounce|has spec for|no claws on|off the team|back on the team|\(tank\)/.test(what) && !/ZCB/.test(what)) continue;
-    if (/lands after (the )?kill/.test(what)) continue;
+    if (/lands after (the )?kill/.test(what)) {                       // past the kill: still counts as rolled (a 50 on 10 HP rolled 50)
+      const am = what.match(/ (\d+) lands after the kill/) || what.match(/rolled (\d+)/), a = last.get(i);
+      if (am && a) { a.rolled = (a.rolled ?? a.dmg ?? 0) + +am[1]; if (a.landed == null) a.landed = t; }
+      continue;
+    }
     // a damage line: credit the player's last attack
     const dmg = what.match(/(?:hit \d+ (?:on \w+ crab )?|lands |spec lands |^\S.*? )(-?\d+)(?: \([^)]*\))? -> (Verzik|crab) -?\d+/);
     if (dmg && !/queued/.test(what)) {
@@ -141,6 +145,9 @@ export function verzTrace(log, names, cfgs = null) {
     const txt = q ? q[1] : what;
     if (!q && !/^(Scythe|SHADOW|ZCB|CLAW SPEC|HALBERD SPEC|claw scratch|blowpipe at purple|Blowpipe on|TICK FILL|no claws - HALBERD|3-TICK)/.test(what)) continue;
     const a = { t, i, code: codeOf(txt.replace(/^no claws - /, '')), what: txt.split(' (')[0] };
+    const rl = what.match(/-> \[([^\]]*)\]\s*$/) || what.match(/-> (\d+)\s*$/);   // the attack's hitsplats as rolled (they count even past the kill)
+    if (rl) a.rolledAll = rl[1].split(',').reduce((s, x) => s + (Number(x) || 0), 0);
+    if (a.code === '3t') { const wm = txt.match(/^3-TICK \(([^)]+)\)/); a.weapon = { Ayak: 'Eye of ayak' }[wm ? wm[1] : ''] || (wm ? wm[1] : a.what); }   // the actual 3-tick weapon
     if (spec[i] != null) {
       a.spec = sc ? +sc[1] : before; a.specAfter = spec[i];
       const nx = regens[i].find((x) => x > t); a.regenIn = a.spec >= 100 || nx == null ? null : nx - t;

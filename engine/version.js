@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.6';
+export const VERSION = '1.25.7';
 export const CHANGES = [
+  { version: '1.25.7', date: '2026-11-03', items: [
+    'Xarpus tick fix: "Lose a tick" is now "Lose tick(s)" - they lose 1 tick 75% of the time and 2 ticks 25%.',
+    'Show raid: the average hits name the actual 3-tick weapon (e.g. Obligator), can be minimized, and count hits as rolled - a hit past the kill (or a Sotetseg maze) counts what it rolled, not just the damage it could deal.',
+  ] },
   { version: '1.25.6', date: '2026-11-03', items: [
     'Show raid (all rooms): an Expected damage toggle (next to Thralls) - hovering a player\'s attack shows its damage, the expected damage of that attack from their accuracy and max hit (green / red: how far over or under), their cumulative damage in the room so far and their cumulative expected damage. Above the timeline: the raid\'s average hit for each weapon with its percentile, and the average vengeance hit.',
   ] },

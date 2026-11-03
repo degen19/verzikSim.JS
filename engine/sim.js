@@ -774,7 +774,7 @@ export function run_p1(cfgs, team, rng, log = null) {
       const [, , p, dmg, cap, label] = h;
       if (kill_tick != null) {
         anim = 4;
-        L.on && L(`t${rjust(t, 3)} ${p.name}: ${label} lands after kill (overkill)`);
+        L.on && L(`t${rjust(t, 3)} ${p.name}: ${label} lands after kill (overkill${cap == null ? `, rolled ${dmg}` : ''})`);
         break;
       }
       let ctr = null;

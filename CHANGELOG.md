@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.7 - 2026-11-03
+- Xarpus: fix 'tick' ("Lose tick(s)") - the scythe's next attack 6 ticks later 75% of the time, 7 ticks 25% (an RNG draw only when it happens). Show raid: the average hits are a collapsible `<details>` (remembered: `verzikSim.rvSumMin`); 3-tick attacks grouped by the weapon (`x.weapon`); damage compared as rolled - Verzik attack lines' hitsplat lists (`rolledAll`, so hits past the kill count), P1 overkill lines with the roll when uncapped, Sotetseg / Xarpus hits still in the air at the kill.
+
 ## v1.25.6 - 2026-11-03
 - `engine/expdmg.js`: exact mean / variance of an attack's damage (hitsplats landing with chance ch for max(1, 0..max), P1's counter cap, scythe's 3 splats and horn buff, the claws cascade (horned too), halberd + max/10, Dawn spec 75-150, ruby bolts). Verzik log lines carry `exp mean/variance` (read by `verzTrace`); the Sotetseg / Xarpus traces carry `exp` (Sotetseg also `rolled`: the hitsplats as rolled, damage past a maze threshold or the kill included). `raidview.js`: per-player cumulative damage / expected (`x.cum`), `data-xtip` tooltip block (green / red differences; hidden by the new Expected damage toggle), and the per-weapon average hit with its percentile (normal approximation from the attacks' means and variances) plus the average vengeance hit above the blocks. No RNG change - results unchanged.
 

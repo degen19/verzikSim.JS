@@ -42,7 +42,7 @@ export function addXarpusRun(res, r, team) {
 const PARTS = [['exh', 'Exhumeds'], ['toScreech', 'Attackable to the screech'], ['kill', 'Screech to the end (incl. death animation)']];
 const COL = ['#2a78d6', '#d64545', '#2f9e61'];
 const sortedOf = (a) => a.slice().sort((x, y) => x - y);
-const FIX_NAMES = { tick: 'lose a tick', scratch: 'claw scratch', claw: 'claw spec', bp: 'blowpipe hit', ayak: 'Ayak hit' };
+const FIX_NAMES = { tick: 'lose tick(s)', scratch: 'claw scratch', claw: 'claw spec', bp: 'blowpipe hit', ayak: 'Ayak hit' };
 
 /** Report body (a <div class="vz-report">). res: one result, or several (sets compared on the same raids) with opts.labels. */
 export function xarpusReportHtml(resIn, team, opts = {}) {
