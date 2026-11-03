@@ -1,5 +1,6 @@
 // P2 red crab phase: shield, crab swings, 7 Verzik attacks, bounce on her 2nd attack, claws, crab heal, fail at r44.
 // Line-by-line port of verzik_sim/reds.py
+import { hitMV, sumMV, scytheMV, clawMV, halbMV, rubyAutoMV, expText } from './expdmg.js';
 import * as supplies from './supplies.js';
 import { CAMP, CLAW_BY_R, auto_surge, custom_surge, bf_swap, bf_heal, lb_swap_ok, swap_due, ARMOUR, FIXED, AMULETS, RINGS, PRAYERS, hit_chance, fmt } from './sim.js';
 import * as horn from './horn.js';
@@ -362,7 +363,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
             vq.push([t + 2, rank.get(p), 0, 'Blowpipe', d, p, 'crab:' + p.red_crab]);
             p.next_attack = t + 2;
-            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Blowpipe on ${p.red_crab} crab (acc ${fx(ch * 100, 1)}%) -> ${d}`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Blowpipe on ${p.red_crab} crab (acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))}) -> ${d}`);
             shield_sips(p, t, r, L);
           } else if (r <= SHIELD - 5) {
             const [ch, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL);
@@ -371,7 +372,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
               vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p, 'crab:' + p.red_crab]);
             });
             p.next_attack = t + 5;
-            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe on ${p.red_crab} crab (acc ${fx(ch * 100, 1)}%, max ${mx})`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe on ${p.red_crab} crab (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))})`);
           } else {
             L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: too late for a crab swing`);
           }
@@ -424,7 +425,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
           st['shadow'] += 1; st['shadow_dmg'] += d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
           p.next_attack = t + 5; p.reds_n = n;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow, acc ${fx(ch * 100, 1)}%) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow, acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))}) -> ${d}`);
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
@@ -435,7 +436,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const hits = halb_hits(p, rng);
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
           p.next_attack = t + 7; p.reds_n = n; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC from range on the r36 collision (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%) -> ${pylist(hits)}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC from range on the r36 collision (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%, ${expText(halbMV(p3.melee(p, p3.HALB, P2_DEF[1])[0], p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0], p3.melee(p, p3.HALB, P2_DEF[1])[1]))}) -> ${pylist(hits)}`);
           continue;
         } else if (verz && !p.zcb_due) {
           p.next_attack = t + 1;
@@ -450,7 +451,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
           st['shadow'] += 1; st['shadow_dmg'] += d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
           p.next_attack = t + 5;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (${why}, acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (${why}, acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
         } else if (p.zcb_due) {
           const [ch, mx] = zcb_auto(p);
           p.zcb_due = false;
@@ -460,11 +461,11 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             p.hp -= floordiv(p.hp, 10);
             supplies.check_death(p, 'reds', L, t);
             vq.push([t + 3, rank.get(p), 0, 'ZCB ruby proc', 0, p, 'ruby']);
-            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced, acc ${fx(ch * 100, 1)}%) -> RUBY PROC (22% of current HP, cap 110)`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced, acc ${fx(ch * 100, 1)}%, ${expText(rubyAutoMV(0.066, Math.min(110, Math.floor(hp * 0.22)), ch, mx))}) -> RUBY PROC (22% of current HP, cap 110)`);
           } else {
             const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
             vq.push([t + 3, rank.get(p), 0, 'ZCB auto', d, p, 'dmg']);
-            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced, acc ${fx(ch * 100, 1)}%) -> ${d}`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced, acc ${fx(ch * 100, 1)}%, ${expText(rubyAutoMV(0.066, Math.min(110, Math.floor(hp * 0.22)), ch, mx))}) -> ${d}`);
           }
           p.next_attack = t + 5;
         } else if (p.has_dc === false && !p.reds_bounced && p.sh_plan == null && (
@@ -474,7 +475,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const hits = halb_hits(p, rng);
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
           p.next_attack = t + 7; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%) -> ${pylist(hits)}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%, ${expText(halbMV(p3.melee(p, p3.HALB, P2_DEF[1])[0], p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0], p3.melee(p, p3.HALB, P2_DEF[1])[1]))}) -> ${pylist(hits)}`);
         } else if (p.spec >= 50 && p.has_dc !== false && (
           (p.sh_plan == null && n >= 3)
           || (p.sh_plan === 'claw_first' && n === 1 && p.reds_claws === 0)
@@ -488,7 +489,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
           });
           p.next_attack = t + 4;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, `
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, ${expText(clawMV(ch, mx))}, `
             + `max ${mx}) -> ${pylist(hits)}`);
         } else if (r === 40 && p.spec >= 30 && p.has_halb !== false && !ga(p, 'horn_p2', false) && r40_halberd_ok(hp, team, cfgs)) {
           const old = p.spec; p.spec -= 30;
@@ -499,7 +500,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           });
           p.next_attack = t + 7;
           st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch1 * 100, 1)}% / ${fx(ch2 * 100, 1)}%) -> ${pylist(hits)}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch1 * 100, 1)}% / ${fx(ch2 * 100, 1)}%, ${expText(halbMV(ch1, ch2, m))}) -> ${pylist(hits)}`);
         } else {
           const [ch, mx] = scythe_roll(p);
           const splats = [];
@@ -513,7 +514,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           if (buffed) {
             st['horn_hits'] += 1; p.horn_buff = null;
           }
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe #${n} (acc ${fx(ch * 100, 1)}%, max ${mx}`
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe #${n} (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(scytheMV(ch, mx, { buffed: !!buffed }))}`
             + `${buffed ? ', HORN: 1st hit guaranteed' : ''}) -> ${pylist(splats)}`);
         }
         p.reds_n = n;

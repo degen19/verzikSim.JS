@@ -61,6 +61,7 @@ export const RALOS_DRAIN = Math.floor(XARPUS.magic / 8);
 //    a 95% start regens the tick after their first spec (not a Lightbearer cycle). Surge (if planned): +25% straight after
 //    their first spec - once its cooldown (500 ticks, carried in from earlier rooms: surgeCd) is up, else as soon as it is.
 //  - Damage to players doesn't matter in this room.
+import { hitMV, sumMV, scytheMV, clawMV, halbMV, constMV } from './expdmg.js';
 import { hit_chance } from './sim.js';
 import { worn, bonuses, bestWorn, slotItem } from './loadout.js';
 import { ITEMS } from './gear.js';
@@ -168,7 +169,7 @@ function halbSpec(p, defLvl, rng) {
   const ea = Math.floor(118 * pa) + 8, es = Math.floor(118 * ps) + 3 + 8;
   const atk = b.atk[1] - scy.atk[1] + HALB.atk, mx = Math.floor((es * (b.str - (scy.str || 0) + HALB.str + 64) + 320) / 640);
   const ch = (m) => hit_chance(Math.floor(ea * (atk + 64) * m), defRoll(defLvl, 'melee'));
-  const r = [ch(1), ch(0.75)].map((c) => (rng.random() < c ? Math.max(1, rng.randint(0, mx)) + Math.floor(mx / 10) : 0)); r.acc = [ch(1), ch(0.75)]; return r;
+  const r = [ch(1), ch(0.75)].map((c) => (rng.random() < c ? Math.max(1, rng.randint(0, mx)) + Math.floor(mx / 10) : 0)); r.acc = [ch(1), ch(0.75)]; r.m = mx; return r;
 }
 /** Chally last hit: off by default; when on, a player who'd scythe halberds (30%) once his HP is at or below this % of his starting HP. */
 export const CHALLY_AT = 5;
@@ -335,19 +336,19 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       if (kind === 'maul' && hit) maulsLanded++;
       if (h.role === 'open' && kind === 'maul') { openSeen++; if (hit) openLanded++; }
       if (kind === 'ralos') {                                         // two rolls; a hit (1+) drains before the second roll
-        let total = 0; const parts = [], defBeforeRalos = defLvl, accs = [];
+        let total = 0; const parts = [], defBeforeRalos = defLvl, accs = [], exps = [];
         for (let k = 0; k < 2; k++) {
-          const [ch, mx] = ranged(bestWorn(p.gear, 'range', 'Tonalztics of Ralos').set, defLvl, 1.5, p.rangedLvl); accs.push(ch);
+          const [ch, mx] = ranged(bestWorn(p.gear, 'range', 'Tonalztics of Ralos').set, defLvl, 1.5, p.rangedLvl); accs.push(ch); exps.push(hitMV(ch, Math.floor(mx * 0.75)));
           const d = rng.random() < ch || specsLand ? Math.max(1, rng.randint(0, Math.floor(mx * 0.75))) : 0;   // a hit that passes accuracy: at least 1 (specsLand: always)
           parts.push(d); total += d;
           if (d >= 1) { st.specs.ralosHits++; lowerDef(t, `${p.name} Ralos Spec hit ${k + 1}`, RALOS_DRAIN); }
         }
-        if (h.tr) Object.assign(h.tr, { acc: accs, dmg: total, what: `Ralos Spec ${parts.join('/')} - his Defence ${defBeforeRalos} -> ${defLvl}` });
+        if (h.tr) Object.assign(h.tr, { acc: accs, exp: sumMV(...exps), dmg: total, what: `Ralos Spec ${parts.join('/')} - his Defence ${defBeforeRalos} -> ${defLvl}` });
         damage(t, total, `${p.name} Ralos Spec ${parts.join('/')}`, 'ralos');
       } else if (kind === 'zcb') {
         const [ch] = ranged(bestWorn(p.gear, 'range', 'Zaryte crossbow').set, defLvl, 2, p.rangedLvl);
         const ok = rng.random() < ch, ruby = Math.min(110, Math.floor(hp * 0.22));
-        if (h.tr) Object.assign(h.tr, { acc: ch }, ok ? { dmg: ruby, ruby: true } : { dmg: 0 });
+        if (h.tr) Object.assign(h.tr, { acc: ch, exp: constMV(ch, ruby) }, ok ? { dmg: ruby, ruby: true } : { dmg: 0 });
         if (ok) damage(t, ruby, `${p.name} ZCB spec ruby`, 'zcb');
         else L.on && L(`t${t} ${p.name} ZCB spec misses`);
       } else damage(t, amt, `${p.name} ${label}`, kind);
@@ -402,19 +403,19 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       p.attacks++;
       if (act !== 'scythe' && !act.startsWith('fix:')) st.specLog.push({ i: p.i, kind: act, t, when: da ? da.role : undefined });
       const tag = da && da.role !== 'open' ? ` (${da.role === 'remaul' ? (p.open === 'maul' ? 'maul again' : 'mauls short') : 'backup'})` : '';
-      let acc = null;                                                 // (trace: their accuracy for this attack)
+      let acc = null, exp = null;                                     // (trace: their accuracy and expected damage for this attack)
       if (act === 'maul' || act === 'bgs') {
         spend(p, 50, t);
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;
         if (act === 'maul') {
           st.specs.maul++;
-          const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25), hit = horned || rng.random() < ch || specsLand; acc = horned ? 1 : ch;
+          const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25), hit = horned || rng.random() < ch || specsLand; acc = horned ? 1 : ch; exp = hitMV(acc, mx);
           const d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
           if (hit) { st.specs.maulHit++; lowerDef(t, `${p.name} Elder maul`, Math.floor(defLvl * 0.35)); }
           hits.push(Object.assign([t + MELEE_DELAY, p, d, `Elder maul spec${horned ? ' (horned)' : ''}${hit ? '' : ' misses'}`, 'maul', hit], { role: da && da.role }));
         } else {
           st.specs.bgs++;
-          const [ch, mx0] = melee(p, 'Bandos godsword', 1, defLvl, 2), mx = Math.floor(Math.floor(mx0 * 1.1) * 1.1), hit = horned || rng.random() < ch || specsLand; acc = horned ? 1 : ch;
+          const [ch, mx0] = melee(p, 'Bandos godsword', 1, defLvl, 2), mx = Math.floor(Math.floor(mx0 * 1.1) * 1.1), hit = horned || rng.random() < ch || specsLand; acc = horned ? 1 : ch; exp = hitMV(acc, mx);
           const d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
           if (hit) { st.specs.bgsHit++; lowerDef(t, `${p.name} BGS`, bgsToZero ? defLvl : d); }   // bgsToZero: checking against a raid that hit 0 there
           hits.push(Object.assign([t + MELEE_DELAY, p, d, `BGS spec${horned ? ' (horned)' : ''}${hit ? '' : ' misses'}`, da && da.asMaul ? 'maul' : 'bgs', hit], { role: da && da.role }));
@@ -433,34 +434,34 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
         p.next = t + 5;
       } else if (act === 'halb') {
         spend(p, 30, t); st.specs.halb++;
-        const parts = halbSpec(p, defLvl, rng); acc = parts.acc;
+        const parts = halbSpec(p, defLvl, rng); acc = parts.acc; exp = halbMV(acc[0], acc[1], parts.m);
         hits.push([t + MELEE_DELAY, p, parts[0] + parts[1], `halberd spec ${parts.join('/')} (last hit)`, 'halb']);
         L.on && L(`t${t} ${p.name} Crystal halberd spec - last hit (${p.spec}% left)`);
         p.next = t + 7;
       } else if (act === 'claw' || act === 'fix:claw') {
         spend(p, 50, t); st.specs.claw++;
-        const parts = clawSpec(p, defLvl, rng); acc = parts.acc;
+        const parts = clawSpec(p, defLvl, rng); acc = parts.acc; exp = clawMV(acc, melee(p, 'Dragon claws', 1, defLvl)[1]);
         hits.push([t + MELEE_DELAY, p, parts.reduce((a, b) => a + b, 0), `claw spec ${parts.join('/')}${act === 'fix:claw' ? ' (tick fix)' : ''}`, 'claw']);
         L.on && L(`t${t} ${p.name} claw spec${act === 'fix:claw' ? ' (tick fix)' : ''} (${p.spec}% left)`);
         p.next = t + 4;
       } else if (act === 'fix:scratch') {
-        const [ch, mx] = melee(p, 'Dragon claws', 1, defLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0; acc = ch;
+        const [ch, mx] = melee(p, 'Dragon claws', 1, defLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0; acc = ch; exp = hitMV(ch, mx);
         hits.push([t + MELEE_DELAY, p, d, 'claw scratch (tick fix)', 'scratch']); p.next = t + 4;
       } else if (act === 'fix:bp') {
-        const [ch, mx] = ranged(bpSet(p), defLvl, 1, p.rangedLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0; acc = ch;
+        const [ch, mx] = ranged(bpSet(p), defLvl, 1, p.rangedLvl), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0; acc = ch; exp = hitMV(ch, mx);
         hits.push([t + BP_DELAY, p, d, 'blowpipe (tick fix)', 'bp']); p.next = t + 2;
       } else if (act === 'fix:ayak') {
-        const [ch, mx] = ayak(p), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0; acc = ch;
+        const [ch, mx] = ayak(p), d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0; acc = ch; exp = hitMV(ch, mx);
         hits.push([t + AYAK_DELAY, p, d, 'Ayak (tick fix)', 'ayak']); p.next = t + 3;
       } else {                                                        // scythe (fix 'tick': a scythe, next attack a tick late)
         const [ch, mx] = melee(p, 'Scythe of vitur', 1, defLvl);
-        const sure = p.scytheSure; p.scytheSure = false; acc = sure ? 1 : ch;   // a last-hit horn: this swing can't miss
+        const sure = p.scytheSure; p.scytheSure = false; acc = sure ? 1 : ch; exp = scytheMV(acc, mx);   // a last-hit horn: this swing can't miss
         const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m) => (sure || rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
         hits.push([t + MELEE_DELAY, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}${act === 'fix:tick' ? ' (tick fix: next swing a tick late)' : ''}`, 'scythe']);
         p.next = t + (act === 'fix:tick' ? 6 : 5);
       }
       if (trace) for (const h of hits.slice(n0)) {                   // this attack (the Show raid timeline): what it was, his Defence as it went off
-        h.tr = { t, i: p.i, code: TRACE_CODE[h[4]] || 'S', what: `${h[3]}${defLvl !== d0 ? ` - his Defence ${d0} -> ${defLvl}` : ` (his Defence ${d0})`}`, dmg: h[2], landed: null, spec: specAt0, specAfter: p.spec, acc };
+        h.tr = { t, i: p.i, code: TRACE_CODE[h[4]] || 'S', what: `${h[3]}${defLvl !== d0 ? ` - his Defence ${d0} -> ${defLvl}` : ` (his Defence ${d0})`}`, dmg: h[2], landed: null, spec: specAt0, specAfter: p.spec, acc, exp };
         trace.push(h.tr);
       }
     }

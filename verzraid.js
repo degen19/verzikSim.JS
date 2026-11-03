@@ -151,7 +151,8 @@ export function verzTrace(log, names, cfgs = null) {
     a.target = purple ? 'the purple crab' : crab ? `the ${crab[1]} red crab` : 'Verzik';
     if (/RUBY PROC/.test(what)) a.ruby = true;
     const ac = what.match(/acc (\d+(?:\.\d+)?)%(?: \/ (\d+(?:\.\d+)?)%)?/);   // their accuracy for this attack (two rolls: first / second)
-    if (ac) a.acc = ac[2] != null ? [ac[1] / 100, ac[2] / 100] : ac[1] / 100;                             // a ZCB auto's ruby proc (red border)
+    if (ac) a.acc = ac[2] != null ? [ac[1] / 100, ac[2] / 100] : ac[1] / 100;
+    const ex = what.match(/exp (\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)/); if (ex) a.exp = [+ex[1], +ex[2]];   // expected damage: mean / variance                             // a ZCB auto's ruby proc (red border)
     trace.push(a); last.set(i, a);
     if (/PASSES|-> \[/.test(what) && /blowpipe at purple/.test(what)) a.landed = t;
   }

@@ -1,4 +1,5 @@
 // Phase 3: from P2 HP 0 to the end of the P3 death animation. (Port of p3.py)
+import { hitMV, sumMV, scytheMV, clawMV, halbMV, expText } from './expdmg.js';
 import * as supplies from './supplies.js';
 import * as horn from './horn.js';
 import { auto_surge, custom_surge, bf_swap, bf_heal, hit_chance, PRAYERS } from './sim.js';
@@ -809,7 +810,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), 0, '3-tick hit', d, p]);
         }
         p.next_attack = t + 3;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: 3-TICK (${p.has3}) #${n} (acc ${fx(ch * 100, 1)}%) -> ${d}`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: 3-TICK (${p.has3}) #${n} (acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, m))}) -> ${d}`);
       } else if (use === 'S') {
         const [ch, m] = melee(p, SCY, P3_DEF[1]);
         const sp = [];
@@ -823,7 +824,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 5;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe #${n} (chart ${tick(t)}, acc ${fx((buffed ? 1 : ch) * 100, 1)}%) -> [${sp.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe #${n} (chart ${tick(t)}, acc ${fx((buffed ? 1 : ch) * 100, 1)}%, ${expText(scytheMV(ch, m, { buffed }))}) -> [${sp.join(', ')}]`);
       } else if (use === 'X') {
         const [ch, m] = melee(p, CLAW, P3_DEF[1]);
         const ds = [];
@@ -833,7 +834,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         });
         p.next_attack = t + 4;
         st['scratches'] += 1;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: claw scratch #${n} (acc ${fx(ch * 100, 1)}%) -> [${ds.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: claw scratch #${n} (acc ${fx(ch * 100, 1)}%, ${expText(sumMV(hitMV(ch, m), hitMV(ch, floordiv(m, 2))))}) -> [${ds.join(', ')}]`);
       } else if (use === 'C') {
         p.spec -= 50;
         st['claws'] += 1;
@@ -843,7 +844,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 4;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: CLAW SPEC #${n} (chart ${tick(t)}, acc ${fx(ch * 100, 1)}%) -> [${hits.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: CLAW SPEC #${n} (chart ${tick(t)}, acc ${fx(ch * 100, 1)}%, ${expText(clawMV(ch, m))}) -> [${hits.join(', ')}]`);
       } else {
         p.spec -= 30;
         p.halb_done = true;
@@ -861,7 +862,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 7;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: HALBERD SPEC #${n} (chart ${tick(t)}, acc ${fx((hb ? 1 : ch1) * 100, 1)}% / ${fx(ch2 * 100, 1)}%) -> [${hits.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: HALBERD SPEC #${n} (chart ${tick(t)}, acc ${fx((hb ? 1 : ch1) * 100, 1)}% / ${fx(ch2 * 100, 1)}%, ${expText(halbMV(hb ? 1 : ch1, ch2, m))}) -> [${hits.join(', ')}]`);
       }
       if (p.resync_after) {
         p.resync_after = false;

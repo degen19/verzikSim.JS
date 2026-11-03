@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.5';
+export const VERSION = '1.25.6';
 export const CHANGES = [
+  { version: '1.25.6', date: '2026-11-03', items: [
+    'Show raid (all rooms): an Expected damage toggle (next to Thralls) - hovering a player\'s attack shows its damage, the expected damage of that attack from their accuracy and max hit (green / red: how far over or under), their cumulative damage in the room so far and their cumulative expected damage. Above the timeline: the raid\'s average hit for each weapon with its percentile, and the average vengeance hit.',
+  ] },
   { version: '1.25.5', date: '2026-11-03', items: [
     'Xarpus procedures (Solver and Full raid): once the setup\'s raids are played, each player\'s opening spec, damage spec and tick fix show how often they actually happened - and a planned ZCB the player never has 75% spec for in time shows as what they do instead (claws).',
   ] },

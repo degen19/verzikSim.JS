@@ -1,5 +1,6 @@
 // Port of duo_reds.py - Duo reds: a planned 2-down. Two sets of red crabs back to back.
 // See the Python module docstring for the full rules.
+import { hitMV, sumMV, scytheMV, clawMV, halbMV, expText } from './expdmg.js';
 import { floordiv, pymod, pyround, ga, truthy, range, sum, any, sorted, dget, has, rjust, fx, maxBy } from './util.js';
 import * as supplies from './supplies.js';
 import * as _sim from './sim.js';
@@ -388,7 +389,7 @@ export function _hit_crab_scythe(p, t, r, vq, rank, rng, L, st, why) {
   });
   p.next_attack = t + 5;
   st['crab_swings'] += 1;
-  L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: Scythe on ${p.red_crab} crab (${why}, acc ${fx(ch * 100, 1)}%)`);
+  L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: Scythe on ${p.red_crab} crab (${why}, acc ${fx(ch * 100, 1)}%, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))})`);
 }
 
 export function _scythe_verzik(p, t, r, vq, rank, rng, L, s, tag = '') {
@@ -400,7 +401,7 @@ export function _scythe_verzik(p, t, r, vq, rank, rng, L, s, tag = '') {
   });
   p.next_attack = t + 5;
   p.reds_n += 1;
-  L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: Scythe${tag} (acc ${fx(ch * 100, 1)}%) -> ${plist(sp)}`);
+  L.on && L(`t${rjust(t, 4)} s${s} r${r} ${p.name}: Scythe${tag} (acc ${fx(ch * 100, 1)}%, ${expText(scytheMV(ch, mx))}) -> ${plist(sp)}`);
 }
 
 /** [accuracy, maxes, hit delay, speed] for a fill attack on the crab or on Verzik. */
@@ -506,13 +507,13 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
       if (tgt === 'verzik' && kind === 'scratch' && !ga(p, 'shadow', false) && p.spec >= 50) {
         // non-shadow player: the r40 scratch on Verzik becomes a claw spec
         const old = p.spec; p.spec -= 50;
-        const [hits, cch] = claw_spec(p, rng);
+        const [hits, cch, cmx] = claw_spec(p, rng);
         hits.forEach((dd, k) => {
           vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, dd, p, 'dmg']);
         });
         p.next_attack = t + 4; p.reds_n += 1; p.set1_r40_claw = true;
         st['set1_r40_claw'] = dget(st, 'set1_r40_claw', 0) + 1;
-        L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: CLAW SPEC on r40 instead of the scratch (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%) -> ${plist(hits)}`);
+        L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: CLAW SPEC on r40 instead of the scratch (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%, ${expText(clawMV(cch, cmx))}) -> ${plist(hits)}`);
         return;
       }
       _fill(p, t, r, kind, tgt, vq, rank, rng, L, st);
@@ -567,13 +568,13 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     // shadow player with spec to spare: claw now, still has 50%+ for the set-2 claw (then shadow)
     const old = p.spec;
     p.spec -= 50;
-    const [hits, cch] = claw_spec(p, rng);
+    const [hits, cch, cmx] = claw_spec(p, rng);
     hits.forEach((dd, k) => {
       vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, dd, p, 'dmg']);
     });
     p.next_attack = t + 4; p.reds_n += 1; p.set1_claw = true;
     st['set1_claws'] = dget(st, 'set1_claws', 0) + 1;
-    L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: CLAW SPEC in set 1 (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%, still 50%+ by set 2) -> ${plist(hits)}`);
+    L.on && L(`t${rjust(t, 4)} s1 r${r} ${p.name}: CLAW SPEC in set 1 (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%, ${expText(clawMV(cch, cmx))}, still 50%+ by set 2) -> ${plist(hits)}`);
     return;
   }
   _scythe_verzik(p, t, r, vq, rank, rng, L, 1);
@@ -641,14 +642,14 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
       if (ga(p, 'crab_bp', false)) {
         const [ch, mx] = bp_vs(p, CRAB_DEF_ROLL);                // under 70: blowpipe the crab, then shark + brew + super combat
         vq.push([t + 2, rank.get(p), 0, 'Blowpipe', roll(rng, ch, mx), p, 'crab:' + p.red_crab]);
-        L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: Blowpipe on ${p.red_crab} crab (death charge swing, acc ${fx(ch * 100, 1)}%)`);
+        L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: Blowpipe on ${p.red_crab} crab (death charge swing, acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))})`);
         supplies.window(p, Math.max(1, floordiv(SHIELD - 1 - r, 3) + 1), L, t, `s2 r${r} shield `, { sharks: true, brews: !p.shadow });
       } else if (r <= SHIELD - 5) {
         const [ch, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL);
         [mx, floordiv(mx, 2)].forEach((m, k) => {
           vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, roll(rng, ch, m), p, 'crab:' + p.red_crab]);
         });
-        L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: Scythe on ${p.red_crab} crab (death charge swing, acc ${fx(ch * 100, 1)}%)`);
+        L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: Scythe on ${p.red_crab} crab (death charge swing, acc ${fx(ch * 100, 1)}%, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))})`);
       }
       p.dc_swing_done = true;
     }
@@ -687,7 +688,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
       vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
       p.next_attack = t + 5; p.reds_n = n;
       st['shadow'] += 1;
-      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: SHADOW on the collision tick (acc ${fx(ch * 100, 1)}%) -> ${d}`);
+      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: SHADOW on the collision tick (acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))}) -> ${d}`);
       return;
     }
     p.next_attack = t + 1;
@@ -708,18 +709,18 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     });
     p.next_attack = t + 7; p.reds_n = n;
     st['halb'] += 1;
-    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: HALBERD SPEC on r40 (acc ${fx(ch1 * 100, 1)}% / ${fx(ch2 * 100, 1)}%) -> ${plist(hits)}`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: HALBERD SPEC on r40 (acc ${fx(ch1 * 100, 1)}% / ${fx(ch2 * 100, 1)}%, ${expText(halbMV(ch1, ch2, m))}) -> ${plist(hits)}`);
     return;
   }
   if (p.plan === 'r40claw') {
     if (p.claws_done === 0 && p.spec >= 50 && r <= 36) {
       const old = p.spec; p.spec -= 50;
-      const [hits, cch] = claw_spec(p, rng);
+      const [hits, cch, cmx] = claw_spec(p, rng);
       hits.forEach((d, k) => {
         vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
       });
       p.next_attack = t + 4; p.reds_n = n; p.claws_done += 1; st['claws'] += 1;
-      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%) -> ${plist(hits)}`);
+      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%, ${expText(clawMV(cch, cmx))}) -> ${plist(hits)}`);
       return;
     }
     if (p.reds_n === 0 && !p.scratch_done) {
@@ -730,7 +731,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
         vq.push([t + 1, rank.get(p), k, 'Claw scratch', d, p, 'dmg']);
       });
       p.next_attack = t + 4; p.reds_n = n; p.scratch_done = true; st['scratch'] += 1;
-      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch r11 (no claw yet, acc ${fx(ch * 100, 1)}%) -> ${plist(ds)}`);
+      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch r11 (no claw yet, acc ${fx(ch * 100, 1)}%, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))}) -> ${plist(ds)}`);
       return;
     }
     _scythe_verzik(p, t, r, vq, rank, rng, L, 2);
@@ -748,19 +749,19 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     });
     p.next_attack = t + 4; p.reds_n = n; p.scratch_done = true;
     st['scratch'] += 1;
-    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch (acc ${fx(ch * 100, 1)}%) -> ${plist(ds)}`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch (acc ${fx(ch * 100, 1)}%, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))}) -> ${plist(ds)}`);
     return;
   }
   if (want_claw) {
     const old = p.spec;
     p.spec -= 50;
-    const [hits, cch] = claw_spec(p, rng);
+    const [hits, cch, cmx] = claw_spec(p, rng);
     hits.forEach((d, k) => {
       vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
     });
     p.next_attack = t + 4; p.reds_n = n; p.claws_done += 1;
     st['claws'] += 1;
-    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%) -> ${plist(hits)}`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%, ${expText(clawMV(cch, cmx))}) -> ${plist(hits)}`);
     return;
   }
   _scythe_verzik(p, t, r, vq, rank, rng, L, 2);

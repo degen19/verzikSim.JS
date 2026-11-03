@@ -11,7 +11,7 @@ const fitRv = (rv) => {
 };
 const closeRv = (rv) => { rv.classList.remove('max'); rv.style.zoom = ''; const b = rv.querySelector('.rvfs'); if (b) b.textContent = 'Full screen'; document.body.style.overflow = ''; };
 /** Timeline toggles (thralls / vengs / supplies / regens): show or hide markers already drawn; remembered in this browser. */
-const RV_TOGS = [['th', 'Thralls'], ['vg', 'Vengs'], ['sp', 'Supplies'], ['rg', 'Regens']];
+const RV_TOGS = [['th', 'Thralls'], ['xd', 'Expected damage'], ['vg', 'Vengs'], ['sp', 'Supplies'], ['rg', 'Regens']];
 const rvHidden = () => { try { return JSON.parse(localStorage.getItem('verzikSim.rvHide') || '["th"]'); } catch { return ['th']; } };   // thralls hidden until ticked
 if (typeof window !== 'undefined' && !window.rvTog) {
   window.rvTog = (box) => {
@@ -42,7 +42,21 @@ if (typeof document !== 'undefined' && !window.rvTipOn) {
     tip.style.left = `${Math.max(4, x + 14 + w > window.innerWidth ? x - w - 14 : x + 14)}px`;
     tip.style.top = `${Math.max(4, y + 16 + h > window.innerHeight ? y - h - 12 : y + 16)}px`;
   };
-  const show = (el, x, y) => { if (!document.body.contains(tip)) document.body.appendChild(tip); tip.textContent = el.dataset.tip; tip.style.display = 'block'; place(x, y); };
+  const show = (el, x, y) => {
+    if (!document.body.contains(tip)) document.body.appendChild(tip);
+    tip.textContent = el.dataset.tip;
+    const rv = el.closest('.rv');
+    if (el.dataset.xtip && !(rv && rv.classList.contains('hide-xd'))) {   // expected damage: {{g:+3.1}} green, {{r:-3.1}} red
+      for (const line of el.dataset.xtip.split('\n')) {
+        tip.append('\n');
+        for (const part of line.split(/(\{\{[gr]:[^}]*\}\})/)) {
+          const m = part.match(/^\{\{([gr]):([^}]*)\}\}$/);
+          if (m) { const sp = document.createElement('span'); sp.style.color = m[1] === 'g' ? '#3fbf6f' : '#ff5c5c'; sp.style.fontWeight = '600'; sp.textContent = m[2]; tip.append(sp); } else if (part) tip.append(part);
+        }
+      }
+    }
+    tip.style.display = 'block'; place(x, y);
+  };
   const hide = () => { tip.style.display = 'none'; };
   const cellOf = (e) => (e.target && e.target.closest ? e.target.closest('.rv [data-tip]') : null);
   document.addEventListener('pointerover', (e) => { if (e.pointerType === 'mouse') { const c = cellOf(e); if (c && c.dataset.tip) show(c, e.clientX, e.clientY); else hide(); } });
@@ -168,6 +182,7 @@ const BOSS_ATTACK = new Set(['attack', 'purple', 'lightning']);   // red tick nu
 const CSS = `<style>
 .rv{background:#16171f;color:#d7d9e0;border-radius:8px;padding:10px 12px;font:12px/1.2 system-ui,sans-serif;overflow-x:auto}
 .rv h4{margin:0;color:#fff;font-size:15px}
+.rv .rvsum{margin:0 0 8px;font-size:12px;line-height:1.5;position:sticky;left:0}.rv .rvsum .muted{color:#8b8fa3}.rv .rvsum b{color:#fff}
 .rv .rvh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 8px;position:sticky;left:0}
 .rv .rvfs{background:#2a2c3b;color:#e6e8ef;border:1px solid #474b60;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
 .rv .rvfs:hover{background:#353849}
@@ -264,6 +279,29 @@ export function supplyText(lines) {
 
 /** Room time at tick t (0.6s a tick): m:ss.mmm. */
 const roomTime = (t) => { const ms = Math.round(t * 600), m = Math.floor(ms / 60000), r = ms - m * 60000; return `${m}:${String(Math.floor(r / 1000)).padStart(2, '0')}.${String(r % 1000).padStart(3, '0')}`; };
+/** Standard normal CDF (Abramowitz-Stegun 7.1.26). */
+const normCdf = (z) => { const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-z * z / 2); return z >= 0 ? (1 + y) / 2 : (1 - y) / 2; };
+const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`; };
+const signed = (d) => `{{${d >= 0 ? 'g' : 'r'}:${d >= 0 ? '+' : ''}${d.toFixed(1)}}}`;
+const r1 = (x) => (Math.round(x * 10) / 10).toString();
+const dmgOf = (x) => x.rolled ?? x.dmg ?? 0;   // the hitsplats as rolled (Sotetseg: damage past a maze / the kill isn't dealt)
+/** Player attacks with an expected damage (that landed): each one's cumulative damage / expected so far for its
+ *  player (x.cum), and the raid's average hit per weapon with its percentile (the average's normal approximation from
+ *  each attack's mean and variance) - vengeance procs too, without a percentile. */
+function damageSummary(trace, names) {
+  const atks = trace.filter((x) => x.i != null && x.code && x.exp && x.landed != null).sort((a, b) => a.t - b.t);
+  const run = names.map(() => [0, 0]);
+  for (const x of atks) { const c = run[x.i]; c[0] += dmgOf(x); c[1] += x.exp[0]; x.cum = [c[0], c[1]]; }
+  const by = new Map();
+  for (const x of atks) { const k = CODE_NAME[x.code] || x.code, g = by.get(k) || { n: 0, d: 0, m: 0, v: 0 }; g.n++; g.d += dmgOf(x); g.m += x.exp[0]; g.v += Math.max(0, x.exp[1]); by.set(k, g); }
+  const rows = [...by.entries()].sort((a, b) => b[1].n - a[1].n).map(([k, g]) => {
+    const pc = g.v > 0 ? Math.round(Math.min(99.9, Math.max(0.1, normCdf((g.d - g.m) / Math.sqrt(g.v)) * 100))) : null;
+    return `Average ${k}${/spec$/i.test(k) ? '' : ' hit'}: <b>${r1(g.d / g.n)}</b> <span class="muted">(${pc == null ? 'always the same' : `${ordinal(Math.max(1, Math.min(99, pc)))} percentile`} · expected ${r1(g.m / g.n)} · ${g.n} attack${g.n === 1 ? '' : 's'})</span>`;
+  });
+  const vg = trace.filter((x) => x.veng != null);
+  if (vg.length) rows.push(`Average Vengeance hit: <b>${r1(vg.reduce((a, x) => a + x.veng, 0) / vg.length)}</b> <span class="muted">(${vg.length} proc${vg.length === 1 ? '' : 's'})</span>`);
+  return rows.length ? `<div class="rvsum">${rows.map((x) => `<div>${x}</div>`).join('')}</div>` : '';
+}
 /** An attack's accuracy for the tooltip: 0.74 -> '74.0%'; two rolls ([first, second], e.g. a halberd's) -> '74.0% / 55.5%'. */
 const accText = (a) => (Array.isArray(a) ? a.map((x) => `${(x * 100).toFixed(1)}%`).join(' / ') : `${(a * 100).toFixed(1)}%`);
 /** The timeline. trace: [{t, i, code, dmg?, landed?, what?} a player's attack | {t, i, veng} a vengeance proc (damage to
@@ -299,6 +337,9 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     x.spec != null ? (x.regenIn == null ? (x.spec >= 100 ? 'Spec full (no regen running)' : '') : `Next spec regen: ${x.regenIn} tick${x.regenIn === 1 ? '' : 's'} (tick ${x.t + x.regenIn})`) : '',
   ].filter(Boolean).join('\n');
   const last = Math.max(end || 0, ...trace.map((x) => x.t));
+  const summary = damageSummary(trace, names);
+  const xTip = (x) => (x && x.exp && x.cum ? [`Damage: ${dmgOf(x)}${x.rolled != null && x.rolled !== (x.dmg || 0) ? ` (${x.dmg || 0} dealt - the rest past her maze / kill point)` : ''}`, `Expected damage: ${r1(x.exp[0])} (${signed(dmgOf(x) - x.exp[0])})`,
+    `Cumulative damage: ${x.cum[0]}`, `C. expected damage: ${r1(x.cum[1])} (${signed(x.cum[0] - x.cum[1])})`].join('\n') : '');
   const blocks = [];
   for (let a = Math.max(1, from); a <= last; a += perRow) {
     const b = Math.min(last, a + perRow - 1), ticks = Array.from({ length: b - a + 1 }, (_, k) => a + k);
@@ -338,7 +379,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       const n = (x ? 1 : 0) + (h ? 1 : 0) + (xf ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0) + pots.length, dots = kinds.has('other');
       const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}${rg ? ' rgo' : ''}${S(t)}${CH(i, t)}`;   // hd: icons nudged right of the dot
       const body = `${xfImg}${hornImg}${vengImg}${sharkImg}${potImg}${marks}${thrMark}`;
-      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${fit}" style="color:${CODE_COL[x.code] || '#fff'}" data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, xt, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${body}</div>`;
+      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${fit}" style="color:${CODE_COL[x.code] || '#fff'}"${xTip(x) ? ` data-xtip="${esc(xTip(x))}"` : ''} data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, xt, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${body}</div>`;
       if (h) return `<div class="c a${fit}" style="color:${CODE_COL.H}" data-tip="${esc([ht, xt, vt, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
       if (v != null) return `<div class="c v${fit}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, xt, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
       if (su || rg || tr || xf) return `<div class="c${fit}" data-tip="${esc(xf ? [xt, st, trt, rt].filter(Boolean).join('\n') : `${nm} - tick ${t}: ${[st, trt, rt].filter(Boolean).join('\n')}`)}">${body}</div>`;
@@ -348,5 +389,5 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   }
   const hid = typeof window !== 'undefined' ? rvHidden() : [];
   const togs = `<span class="togs">${RV_TOGS.map(([k, l]) => `<label><input type="checkbox" data-rvtog="${k}" onchange="rvTog(this)" ${hid.includes(k) ? '' : 'checked'}>${l}</label>`).join('')}</span>`;
-  return `${CSS}<div class="rv${hid.map((k) => ` hide-${k}`).join('')}"><div class="rvh">${title ? `<h4>${esc(title)}</h4>` : '<span></span>'}${togs}<button type="button" class="rvfs" onclick="rvFull(this)">Full screen</button></div>${blocks.join('')}${legend ? `<div class="legend">${legend}</div>` : ''}</div>`;
+  return `${CSS}<div class="rv${hid.map((k) => ` hide-${k}`).join('')}"><div class="rvh">${title ? `<h4>${esc(title)}</h4>` : '<span></span>'}${togs}<button type="button" class="rvfs" onclick="rvFull(this)">Full screen</button></div>${summary}${blocks.join('')}${legend ? `<div class="legend">${legend}</div>` : ''}</div>`;
 }

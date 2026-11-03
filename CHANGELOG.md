@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.6 - 2026-11-03
+- `engine/expdmg.js`: exact mean / variance of an attack's damage (hitsplats landing with chance ch for max(1, 0..max), P1's counter cap, scythe's 3 splats and horn buff, the claws cascade (horned too), halberd + max/10, Dawn spec 75-150, ruby bolts). Verzik log lines carry `exp mean/variance` (read by `verzTrace`); the Sotetseg / Xarpus traces carry `exp` (Sotetseg also `rolled`: the hitsplats as rolled, damage past a maze threshold or the kill included). `raidview.js`: per-player cumulative damage / expected (`x.cum`), `data-xtip` tooltip block (green / red differences; hidden by the new Expected damage toggle), and the per-weapon average hit with its percentile (normal approximation from the attacks' means and variances) plus the average vengeance hit above the blocks. No RNG change - results unchanged.
+
 ## v1.25.5 - 2026-11-03
 - Xarpus procedure table (`xarpus-ui.js` `procHtml(r, stats)`): after Show raid's 2,000 raids, "in raids" shares per player (specs from `specLog`, tick fixes from `fixes`); a planned ZCB under 1% of raids is shown as "Claws (ZCB planned - never 75% spec in time)" (or None). The table re-renders in place (`data-xproc`).
 

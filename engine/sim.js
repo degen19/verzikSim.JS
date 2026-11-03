@@ -1,5 +1,6 @@
 // Port of sim.py - Verzik (ToB Normal Mode) tick simulator - Phase 1 stage.
 // (main() / CLI / csv / report printing not ported.)
+import { hitMV, splatsMV, DAWN_SPEC_MV, expText } from './expdmg.js';
 import {
   floordiv, pymod, ga, dget, has, intKeys, blockRows, isStr, isNum, sum, sorted, maxBy, rjust, ljust, fx, range,
 } from './util.js';
@@ -1031,14 +1032,15 @@ export function run_p1(cfgs, team, rng, log = null) {
           p.dawns_used += 1;
           if (p.auto_r === 'pending') p.auto_r = t + 1;
           splats = [[rng.randint(75, 150), null]];
-          info = `spec ${fx(old)}% -> ${fx(p.spec)}%, acc 100%`;
+          info = `spec ${fx(old)}% -> ${fx(p.spec)}%, acc 100%, ${expText(DAWN_SPEC_MV)}`;
         } else if (act === 'A') {
           splats = roll_attack(p, act, rng);
-          info = 'acc 100%';
+          info = `acc 100%, ${expText(hitMV(1, dawn_auto_max(p)))}`;
         } else {
           let ch, mx;
           [splats, ch, mx] = roll_attack(p, act, rng);
-          info = `acc ${fx(ch * 100, 1)}%, max ${mx}`;
+          const maxes = act === 'S' ? [mx, floordiv(mx, 2), floordiv(mx, 4)] : act === 'SB' ? [mx - floordiv(mx, 2), floordiv(mx, 2)] : [mx];
+          info = `acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(splatsMV(ch, maxes, splats[0] ? splats[0][1] : null))}`;
         }
         p.next_attack = t + w.speed;
         p.last_atk_t = t;

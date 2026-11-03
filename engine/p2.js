@@ -1,4 +1,5 @@
 // Port of p2.py - Phase 2 up to the red crab proc. Continues from the P1 state produced by sim.run_p1.
+import { hitMV, scytheMV, rubyAutoMV, expText } from './expdmg.js';
 import * as supplies from './supplies.js';
 import {
   auto_surge, custom_surge, lb_swap_ok, swap_due, WEAPONS, ARMOUR, FIXED, AMULETS, RINGS, CONFLICTION, PRAYERS,
@@ -255,7 +256,7 @@ export function run_p2(p1, team, rng, log = null) {
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + sh_delay, rank.get(p), 0, `Shadow (${sh_why})`, d, p]);
           shadow_stats['casts'] += 1; shadow_stats['dmg'] += d;
-          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - SHADOW [${sh_why}] (acc ${fx(ch * 100, 1)}%) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - SHADOW [${sh_why}] (acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))}) -> ${d}`);
         } else {
           const [ch, mx] = scythe_roll(p);
           const sp = [];
@@ -264,7 +265,7 @@ export function run_p2(p1, team, rng, log = null) {
             sp.push(d);
             vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
           });
-          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - Scythe (acc ${fx(ch * 100, 1)}%) -> [${sp.join(', ')}]`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - Scythe (acc ${fx(ch * 100, 1)}%, ${expText(scytheMV(ch, mx))}) -> [${sp.join(', ')}]`);
         }
         p.next_attack = t + 5;
         p.last_swing = true;
@@ -450,12 +451,12 @@ export function run_p2(p1, team, rng, log = null) {
             p.hp -= floordiv(p.hp, 10);
             supplies.check_death(p, 'P2', L, t);
             vq.push([t + 3, rank.get(p), 0, 'ZCB ruby proc', null, p]);
-            L.on && L(`t${rjust(t, 4)} ${p.name}: ZCB (bounced, acc ${fx(ch * 100, 1)}%) -> RUBY PROC (22% of current HP, cap 110)`);
+            L.on && L(`t${rjust(t, 4)} ${p.name}: ZCB (bounced, acc ${fx(ch * 100, 1)}%, ${expText(rubyAutoMV(ZCB_RUBY.ruby, Math.min(110, Math.floor(hp * 0.22)), ch, mx))}) -> RUBY PROC (22% of current HP, cap 110)`);
           } else {
             const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
             vq.push([t + 3, rank.get(p), 0, 'ZCB (bounced)', d, p]);
             ebt.dmg += d;
-            L.on && L(`t${rjust(t, 4)} ${p.name}: ZCB (bounced, acc ${fx(ch * 100, 1)}%, max ${mx}) -> ${d}`);
+            L.on && L(`t${rjust(t, 4)} ${p.name}: ZCB (bounced, acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(rubyAutoMV(ZCB_RUBY.ruby, Math.min(110, Math.floor(hp * 0.22)), ch, mx))}) -> ${d}`);
           }
           p.next_attack = t + 5;
         } else if (p.mode === 'melee' && sh) {
@@ -468,7 +469,7 @@ export function run_p2(p1, team, rng, log = null) {
           if (p.ring === 'Lightbearer') {
             p.lb_p2 = ga(p, 'lb_p2', 0) + 1;
           }
-          L.on && L(`t${rjust(t, 4)} ${p.name}: SHADOW [${sh_why}] (acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + sh_delay}) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: SHADOW [${sh_why}] (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + sh_delay}) -> ${d}`);
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
@@ -479,7 +480,7 @@ export function run_p2(p1, team, rng, log = null) {
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow (3:1)', d, p]);
           p.next_attack = t + 5;
           shadow_stats['casts'] += 1; shadow_stats['dmg'] += d;
-          L.on && L(`t${rjust(t, 4)} ${p.name}: SHADOW [3:1] (acc ${fx(ch * 100, 1)}%, max ${mx}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: SHADOW [3:1] (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
@@ -523,7 +524,7 @@ export function run_p2(p1, team, rng, log = null) {
             p.ebt_zcb = true;
             L.on && L(`t${rjust(t, 4)} ${p.name}: bounced - ZCB next (t${p.next_attack})`);
           }
-          L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe (acc ${fx(ch * 100, 1)}%, max ${mx}, ring ${p.ring}) -> [${splats.join(', ')}]`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(scytheMV(ch, mx))}, ring ${p.ring}) -> [${splats.join(', ')}]`);
           if (p.ring === 'Lightbearer') {
             p.lb_p2 = ga(p, 'lb_p2', 0) + 1;
           }
