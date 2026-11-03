@@ -190,7 +190,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     if (b.dataset.rrep) { const [ci, j] = b.dataset.rrep.split('|').map(Number); showRoomReport(ci, j, b); return; }
     if (b.dataset.rproc) { const [ci, j] = b.dataset.rproc.split('|').map(Number); showRoomProc(ci, j, b); return; }
     if (b.dataset.vraid) { showVerzRaid(b, host); return; }
-    if (b.dataset.chart != null) { charted = Number(b.dataset.chart); showResults(); host.querySelector('[data-charts]')?.scrollIntoView({ block: 'nearest' }); return; }
+    if (b.dataset.chart != null) { charted = Number(b.dataset.chart); showResults(); autoReports(charted); host.querySelector('[data-charts]')?.scrollIntoView({ block: 'nearest' }); return; }
     const a = b.dataset.act; if (!a) return;
     const status = host.querySelector('[data-status]'), err = host.querySelector('[data-err]');
     if (a === 'stop') { if (job) { job.stopped = true; for (const p of job.pools) p.stop(); } return; }
@@ -338,7 +338,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       try { res = await pool.run(top.map((x) => ({ sote: x.vars[0].setup, xarpus: x.vars[1].setup, verzik: { cfgs: x.vars[2].setup.cfgs } })), 0, ef.raids, seed); } finally { pool.stop(); }
       const ranked = top.map((x, i) => ({ ...x, setup: { sote: x.vars[0].setup, xarpus: x.vars[1].setup, verzik: x.vars[2].setup }, ...res[i], score: fullScore(res[i], how) }))
         .sort((x, y) => (fullBetter(x.score, y.score) ? -1 : fullBetter(y.score, x.score) ? 1 : 0));
-      results = { ranked, vBps, how, t, ctx: { team: t, surgeCd: cd0, doses: doses0 }, seed, names: gp.map((p, k) => p.name || `Player ${k + 1}`), raids: ef.raids, plans: scored.length, nVariants: variants.length }; charted = 0;
+      results = { ranked, vBps, how, t, ctx: { team: t, surgeCd: cd0, doses: doses0 }, seed, names: gp.map((p, k) => p.name || `Player ${k + 1}`), raids: ef.raids, plans: scored.length, nVariants: variants.length }; charted = 0; autoReports(0);
       status.textContent = `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
     } catch (x) {
       status.textContent = me.stopped ? 'Stopped.' : '';
@@ -403,11 +403,14 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
   const reportPool = () => (rpool && rpool.ctx === results.ctx ? rpool : (rpool && rpool.stop(), rpool = new FullRaidPool(results.ctx)));
   /** What each player comes into each room with in this combination (cached): from whole raids. */
   async function entriesOf(ci, msg) {
-    const r = results.ranked[ci]; if (r.entries) return r.entries;
-    const setup = { sote: r.setup.sote, xarpus: r.setup.xarpus, verzik: { cfgs: r.setup.verzik.cfgs } };
-    r.entries = await reportPool().entries(setup, 0, ENTRY_RAIDS, `ent-${results.seed}`, (d) => { msg.textContent = `Playing whole raids for what each player comes into the room with... ${d.toLocaleString()} / ${ENTRY_RAIDS.toLocaleString()}`; });
-    msg.textContent = '';
-    return r.entries;
+    const r = results.ranked[ci];
+    if (!r.entries) {
+      const setup = { sote: r.setup.sote, xarpus: r.setup.xarpus, verzik: { cfgs: r.setup.verzik.cfgs } };
+      r.entries = reportPool().entries(setup, 0, ENTRY_RAIDS, `ent-${results.seed}`, (d) => { msg.textContent = `Playing whole raids for what each player comes into the room with... ${d.toLocaleString()} / ${ENTRY_RAIDS.toLocaleString()}`; })
+        .catch((x) => { r.entries = null; throw x; });
+    }
+    const e = await r.entries; msg.textContent = '';
+    return e;
   }
   const roomBps = (j) => (results.how.mode === 'rooms' ? (results.how.rooms[j] != null ? [results.how.rooms[j]] : []) : []);
   const entryLine = (e, j) => {
@@ -428,33 +431,48 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     return { e, cfgs: (e ? verzikCfgs(r.setup.verzik.cfgs, e.cd, e.doses) : r.setup.verzik.cfgs).map((c, k) => ({ ...c, name: names[k] ?? c.name })) };
   }
   /** Show report: the room's standard report (as its Run report gives it), 20,000 raids of this procedure. */
-  async function showRoomReport(ci, j, b) {
-    const box = host.querySelector(`[data-rout="rep|${ci}|${j}"]`), msg = host.querySelector(`[data-rmsg="${ci}|${j}"]`);
-    if (!box.hidden && box.innerHTML) { box.hidden = true; b.textContent = 'Show report'; return; }
-    const r = results.ranked[ci];
-    if (r.rep && r.rep[j]) { box.innerHTML = r.rep[j]; box.hidden = false; b.textContent = 'Hide report'; return; }
-    b.disabled = true;
-    try {
-      const t = results.t, label = `#${ci + 1}`, opts = { breakpoints: roomBps(j), labels: [label] }, N = REPORT_RAIDS, seed = `rep${Date.now()}`;
+  /** A status line under a boss (looked up each time: the results may have been redrawn since). */
+  const sayTo = (ci, j) => ({ set textContent(x) { const m = host.querySelector(`[data-rmsg="${ci}|${j}"]`); if (m) m.textContent = x; } });
+  /** Room j's report for combination ci (one run, cached as a promise: started by the solve finishing or by Show report). */
+  function buildReport(ci, j) {
+    const r = results.ranked[ci], res0 = results; r.repP ||= [];
+    if (r.repP[j]) return r.repP[j];
+    const msg = sayTo(ci, j);
+    r.repP[j] = (async () => {
+      const t = res0.t, label = `#${ci + 1}`, opts = { breakpoints: roomBps(j), labels: [label] }, N = REPORT_RAIDS, seed = `rep${Date.now()}`;
       const { e, players, cfgs } = await roomEntry(ci, j, msg);
-      const prog = (d) => { msg.textContent = `Running the report... ${d.toLocaleString()} / ${N.toLocaleString()} raids`; };
+      const prog = (d, n = N) => { if (results === res0) msg.textContent = `Running the report... ${Number(d).toLocaleString()} / ${Number(n).toLocaleString()} raids`; };
       let html;
       if (j === 0) {
         const su = r.setup.sote, o = { entry: su.entry || 0, ...(su.opts || {}) };
-        const res = await reportPool().report({ room: 'sote', players, opts: o, team: t }, 0, N, seed, prog);
-        html = soteReportHtml([res], t, { ...opts, entries: [o.entry] });
+        html = soteReportHtml([await reportPool().report({ room: 'sote', players, opts: o, team: t }, 0, N, seed, prog)], t, { ...opts, entries: [o.entry] });
       } else if (j === 1) {
-        const res = await reportPool().report({ room: 'xarpus', players, opts: r.setup.xarpus.opts, team: t }, 0, N, seed, prog);
-        html = xarpusReportHtml([res], t, opts);
+        html = xarpusReportHtml([await reportPool().report({ room: 'xarpus', players, opts: r.setup.xarpus.opts, team: t }, 0, N, seed, prog)], t, opts);
       } else {
         if (!runVerzik) throw new Error('the report runner is not available here');
-        const res = await runVerzik(cfgs, t, N, Math.floor(Math.random() * 1e9), (d, n) => { msg.textContent = `Running the report... ${Number(d).toLocaleString()} / ${Number(n).toLocaleString()} raids`; });
-        html = verzReportHtml([res], [label], t, N, opts);
+        html = verzReportHtml([await runVerzik(cfgs, t, N, Math.floor(Math.random() * 1e9), (f) => prog(Math.round(f * N)))], [label], t, N, opts);
       }
-      msg.textContent = '';
-      (r.rep ||= [])[j] = `${entryLine(e, j)}${html}`;
-      box.innerHTML = r.rep[j]; box.hidden = false; b.textContent = 'Hide report';
-    } catch (x) { msg.textContent = `Couldn't run: ${x.message}`; } finally { b.disabled = false; }
+      if (results === res0) msg.textContent = 'Report ready.';
+      return `${entryLine(e, j)}${html}`;
+    })().catch((x) => { r.repP[j] = null; throw x; });
+    return r.repP[j];
+  }
+  /** Start the shown combination's reports in the background, one boss after another. */
+  function autoReports(ci) {
+    const res0 = results;
+    (async () => { for (const j of [0, 1, 2]) { if (results !== res0) return; try { await buildReport(ci, j); } catch (x) { sayTo(ci, j).textContent = `Couldn't run the report: ${x.message}`; } } })();
+  }
+  async function showRoomReport(ci, j, b) {
+    const box = () => host.querySelector(`[data-rout="rep|${ci}|${j}"]`);
+    if (!box().hidden && box().innerHTML) { box().hidden = true; b.textContent = 'Show report'; return; }
+    b.disabled = true;
+    try {
+      const html = await buildReport(ci, j), el = box();
+      if (!el) return;
+      el.innerHTML = html; el.hidden = false;
+      const bb = host.querySelector(`[data-rrep="${ci}|${j}"]`); if (bb) bb.textContent = 'Hide report';
+      sayTo(ci, j).textContent = '';
+    } catch (x) { sayTo(ci, j).textContent = `Couldn't run: ${x.message}`; } finally { b.disabled = false; }
   }
   async function showRoomProc(ci, j, b) {
     const box = host.querySelector(`[data-rout="proc|${ci}|${j}"]`), msg = host.querySelector(`[data-rmsg="${ci}|${j}"]`);
@@ -497,6 +515,6 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       ${ROOM_NAMES.map((rn, j) => `<h4>${rn}</h4><div class="scroll">${chartBox((rg) => cumulativeSvg(room(j), [rn], roomBp(j), rg).replace('% of successful runs finished by this time', '% of all attempts finished by this time'))}</div>`).join('')}</details></div>`;
   }
 
-  if (typeof window !== 'undefined') { window.__fullRaidResults = () => results; window.__fullRaidSet = (x) => { results = x; charted = 0; showResults(); }; }   // for tests
+  if (typeof window !== 'undefined') { window.__fullRaidResults = () => results; window.__fullRaidSet = (x) => { results = x; charted = 0; autoReports(0); showResults(); }; }   // for tests
   return { refresh: render };
 }

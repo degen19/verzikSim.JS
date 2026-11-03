@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.0';
+export const VERSION = '1.25.1';
 export const CHANGES = [
+  { version: '1.25.1', date: '2026-11-02', items: [
+    'Verzik reds (3-5 man): a shadow player only does a shadow sequence when they don\'t and won\'t have 100% spec for two claws AND nobody else has or will have it either (a two-claw player already makes the bounce 50%, and a scythe beats a shadow hit). A shadow player who will have 100% can now be the two-claw player.',
+    'Verzik decision tree: P2 horns show in the reds lines, with how often each player\'s P2 horn goes off.',
+    'Full raid: each boss\'s report starts running as soon as the solve finishes.',
+  ] },
   { version: '1.25.0', date: '2026-11-02', items: [
     'Added the Full raid solver: Sotetseg, Xarpus and Verzik solved as one raid, with surge cooldowns and doses carried room to room. It checks every way each player can spread their surges across the rooms, and ranks the plans on your total time (or each room\'s breakpoint) or on success rate. Each boss has Show procedure (its decision tree; Verzik\'s P1 chart) and Show report (20,000 raids). Use my Verzik P1 chart: build one there or load it from a Verzik set.',
   ] },

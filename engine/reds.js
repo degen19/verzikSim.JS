@@ -268,15 +268,15 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       if (r === BOUNCE_R) {
         const alive = players.filter((p) => !p.dead);
         for (const p of alive) {
-          if (p.reds_n === 1 && p.next_attack <= t && !ga(p, 'shadow', false) && p.has_dc !== false
-              && project_two_claws(p, r, r + 5)) {     // a shadow player is never the two-claw skipper
+          if (p.reds_n === 1 && p.next_attack <= t && !(ga(p, 'shadow', false) && p.sh_plan != null) && p.has_dc !== false
+              && project_two_claws(p, r, r + 5)) {     // a shadow player on a shadow plan is never the two-claw skipper
             p.skip16 = true;
           }
         }
         for (const p of alive) {
           // nobody has 100% for two claws: shadow players hit from a distance instead of chancing it;
           // a shadow player under 50% on r11 always does (scythe > shadow > scythe ...)
-          if (ga(p, 'shadow', false) && p.reds_n === 1 && p.next_attack <= t
+          if (ga(p, 'shadow', false) && !p.skip16 && p.reds_n === 1 && p.next_attack <= t
               && (p.sh_plan === 'shadow16' || !alive.some((q) => q.skip16))) {
             p.dist16 = true;
           }
@@ -385,7 +385,12 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       }
       if (r === 11) {
         p.next_attack = p === pdc ? Math.max(t, p.next_attack) : t;                           // everyone hits Verzik on the first tick
-        if (ga(p, 'shadow', false) && p.spec < 100) {
+        // a shadow sequence only when they don't have (and won't have) 100% for two claws AND nobody else (no shadow
+        // plan of their own) has or will have it either - a two-claw player already makes the bounce 50%, and a
+        // scythe beats a shadow hit
+        const twoClaws = (q) => !q.dead && q.has_dc !== false && project_two_claws(q, r, r + 10);
+        const otherTwo = players.some((q) => q !== p && !(ga(q, 'shadow', false) && q.spec < 100 && !twoClaws(q)) && twoClaws(q));
+        if (ga(p, 'shadow', false) && p.spec < 100 && !twoClaws(p) && !otherTwo) {
           p.sh_plan = p.spec >= 50 && p.has_dc !== false ? 'claw_first' : 'shadow16';
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: shadow player on ${fx(p.spec)}% -> `
             + (p.sh_plan === 'claw_first' ? 'claw > scythe > shadow > scythes' : 'scythe > shadow (r16) > scythes, one claw by r31'));
@@ -395,7 +400,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           && !(p.reds_n + 1 >= 3 && p.spec >= 50)) {
         const nic = (q) => q.reds_n + 1 >= 3 && q.spec >= 50 && !q.zcb_due;
         if (horn.try_horn(p, players, rank, 'p2', team, nic, L, t, `r${r} `)) {
-          st['horns'] += 1;
+          st['horns'] += 1; p.reds_line.Hn = (p.reds_line.Hn || 0) + 1;
         }
       }
       if (t < p.next_attack) {

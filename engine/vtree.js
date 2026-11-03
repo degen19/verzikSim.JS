@@ -5,7 +5,7 @@
 import { branchProfile } from './optimize.js';
 
 const MIN = 0.01;
-const attacks = (line) => (line.match(/\d+/g) || []).reduce((n, x) => n + Number(x), 0);
+const attacks = (line) => (line.replace(/\d+ horns?/g, '').match(/\d+/g) || []).reduce((n, x) => n + Number(x), 0);
 const pc = (x) => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`;
 
 /** The reds lines worth showing: their usual one, then any other that came up in 1%+ of all raids (not one where she
@@ -57,6 +57,11 @@ export function verzikTreeHtml(by, cfgs, team, esc) {
       }
       const ls = mainLines(bl, all);
       if (b >= all * MIN && ls.length) rows.push(`if bounced (${pc(b / reds)} of raids that reach reds): ${esc(linesText(ls))}`);
+    }
+    if (team > 2 && c.horn && c.hornP2) {                             // the P2 horn: no attack of its own, so say how often it goes off
+      let h = 0, reds = 0;
+      for (const d of Object.keys(by)) for (const src of [by[d].lines[k], by[d].blines[k] || {}]) for (const [l, v] of Object.entries(src)) { reds += v; if (/horn/.test(l)) h += v; }
+      if (reds) rows.push(`P2 horn: goes off in reds in ${pc(h / reds)} of raids that reach reds (from their 2nd attack, on 25-49% spec)${h / reds < MIN ? ' - almost never: they don\'t have the spec for it' : ''}`);
     }
     return `<li><b>${esc(c.name || `Player ${k + 1}`)}</b>${rows.length === 1 ? `: ${rows[0]}` : rows.length ? `<ul>${rows.map((r) => `<li>${r}</li>`).join('')}</ul>` : ': nothing to show'}</li>`;
   });
