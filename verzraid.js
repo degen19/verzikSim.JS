@@ -128,7 +128,7 @@ export function verzTrace(log, names, cfgs = null) {
     if (vg) { trace.push({ t, i, veng: +vg[1] }); continue; }
     if (/^SOULFLAME HORN/.test(what)) { const fr = what.match(/guaranteed first hit for (.*)$/); trace.push({ t, i, code: 'H', what: `Soulflame horn${fr ? ` - guaranteed first hit for ${fr[1]}` : ''}` }); continue; }
     if (/^Thrall|^regen|^spec |^surge|swaps to|boak, can't|lines up with|bounced|^last scythe before|skips the bounce|has spec for|no claws on|off the team|back on the team|\(tank\)/.test(what) && !/ZCB/.test(what)) continue;
-    if (/lands after the kill/.test(what)) continue;
+    if (/lands after (the )?kill/.test(what)) continue;
     // a damage line: credit the player's last attack
     const dmg = what.match(/(?:hit \d+ (?:on \w+ crab )?|lands |spec lands |^\S.*? )(-?\d+)(?: \([^)]*\))? -> (Verzik|crab) -?\d+/);
     if (dmg && !/queued/.test(what)) {
@@ -139,7 +139,7 @@ export function verzTrace(log, names, cfgs = null) {
     // an attack queued this tick
     const q = what.match(/^(.*?) queued/) || what.match(/^last swing before the shield - (\w+)/);
     const txt = q ? q[1] : what;
-    if (!q && !/^(Scythe|SHADOW|ZCB|CLAW SPEC|HALBERD SPEC|claw scratch|blowpipe at purple|Blowpipe on|TICK FILL|no claws - HALBERD)/.test(what)) continue;
+    if (!q && !/^(Scythe|SHADOW|ZCB|CLAW SPEC|HALBERD SPEC|claw scratch|blowpipe at purple|Blowpipe on|TICK FILL|no claws - HALBERD|3-TICK)/.test(what)) continue;
     const a = { t, i, code: codeOf(txt.replace(/^no claws - /, '')), what: txt.split(' (')[0] };
     if (spec[i] != null) {
       a.spec = sc ? +sc[1] : before; a.specAfter = spec[i];
@@ -149,7 +149,9 @@ export function verzTrace(log, names, cfgs = null) {
     a.stats = statText(i);
     const crab = what.match(/on (?:their )?(\w+) crab/), purple = /purple crab/i.test(what);
     a.target = purple ? 'the purple crab' : crab ? `the ${crab[1]} red crab` : 'Verzik';
-    if (/RUBY PROC/.test(what)) a.ruby = true;                             // a ZCB auto's ruby proc (red border)
+    if (/RUBY PROC/.test(what)) a.ruby = true;
+    const ac = what.match(/acc (\d+(?:\.\d+)?)%(?: \/ (\d+(?:\.\d+)?)%)?/);   // their accuracy for this attack (two rolls: first / second)
+    if (ac) a.acc = ac[2] != null ? [ac[1] / 100, ac[2] / 100] : ac[1] / 100;                             // a ZCB auto's ruby proc (red border)
     trace.push(a); last.set(i, a);
     if (/PASSES|-> \[/.test(what) && /blowpipe at purple/.test(what)) a.landed = t;
   }

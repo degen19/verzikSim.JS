@@ -1031,10 +1031,10 @@ export function run_p1(cfgs, team, rng, log = null) {
           p.dawns_used += 1;
           if (p.auto_r === 'pending') p.auto_r = t + 1;
           splats = [[rng.randint(75, 150), null]];
-          info = `spec ${fx(old)}% -> ${fx(p.spec)}%`;
+          info = `spec ${fx(old)}% -> ${fx(p.spec)}%, acc 100%`;
         } else if (act === 'A') {
           splats = roll_attack(p, act, rng);
-          info = '';
+          info = 'acc 100%';
         } else {
           let ch, mx;
           [splats, ch, mx] = roll_attack(p, act, rng);

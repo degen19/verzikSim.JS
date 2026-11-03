@@ -362,7 +362,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
             vq.push([t + 2, rank.get(p), 0, 'Blowpipe', d, p, 'crab:' + p.red_crab]);
             p.next_attack = t + 2;
-            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Blowpipe on ${p.red_crab} crab -> ${d}`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Blowpipe on ${p.red_crab} crab (acc ${fx(ch * 100, 1)}%) -> ${d}`);
             shield_sips(p, t, r, L);
           } else if (r <= SHIELD - 5) {
             const [ch, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL);
@@ -424,7 +424,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
           st['shadow'] += 1; st['shadow_dmg'] += d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
           p.next_attack = t + 5; p.reds_n = n;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow) -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow, acc ${fx(ch * 100, 1)}%) -> ${d}`);
           if (p.thrall_next == null) {
             p.thrall_next = t + rng.randint(1, 2);
           }
@@ -435,7 +435,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const hits = halb_hits(p, rng);
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
           p.next_attack = t + 7; p.reds_n = n; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC from range on the r36 collision (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC from range on the r36 collision (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%) -> ${pylist(hits)}`);
           continue;
         } else if (verz && !p.zcb_due) {
           p.next_attack = t + 1;
@@ -460,7 +460,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             p.hp -= floordiv(p.hp, 10);
             supplies.check_death(p, 'reds', L, t);
             vq.push([t + 3, rank.get(p), 0, 'ZCB ruby proc', 0, p, 'ruby']);
-            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced) -> RUBY PROC (22% of current HP, cap 110)`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ZCB auto (bounced, acc ${fx(ch * 100, 1)}%) -> RUBY PROC (22% of current HP, cap 110)`);
           } else {
             const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
             vq.push([t + 3, rank.get(p), 0, 'ZCB auto', d, p, 'dmg']);
@@ -474,7 +474,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const hits = halb_hits(p, rng);
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
           p.next_attack = t + 7; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%) -> ${pylist(hits)}`);
         } else if (p.spec >= 50 && p.has_dc !== false && (
           (p.sh_plan == null && n >= 3)
           || (p.sh_plan === 'claw_first' && n === 1 && p.reds_claws === 0)
@@ -499,7 +499,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           });
           p.next_attack = t + 7;
           st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
-          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%) -> ${pylist(hits)}`);
+          L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch1 * 100, 1)}% / ${fx(ch2 * 100, 1)}%) -> ${pylist(hits)}`);
         } else {
           const [ch, mx] = scythe_roll(p);
           const splats = [];

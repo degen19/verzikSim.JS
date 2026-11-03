@@ -264,6 +264,8 @@ export function supplyText(lines) {
 
 /** Room time at tick t (0.6s a tick): m:ss.mmm. */
 const roomTime = (t) => { const ms = Math.round(t * 600), m = Math.floor(ms / 60000), r = ms - m * 60000; return `${m}:${String(Math.floor(r / 1000)).padStart(2, '0')}.${String(r % 1000).padStart(3, '0')}`; };
+/** An attack's accuracy for the tooltip: 0.74 -> '74.0%'; two rolls ([first, second], e.g. a halberd's) -> '74.0% / 55.5%'. */
+const accText = (a) => (Array.isArray(a) ? a.map((x) => `${(x * 100).toFixed(1)}%`).join(' / ') : `${(a * 100).toFixed(1)}%`);
 /** The timeline. trace: [{t, i, code, dmg?, landed?, what?} a player's attack | {t, i, veng} a vengeance proc (damage to
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
@@ -292,6 +294,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     x.target ? `Target: ${x.target}` : '',
     x.gear ? `Gear: ${x.gear}` : '',
     x.stats ? `Stats: ${x.stats}` : '',
+    x.acc != null ? `Accuracy: ${accText(x.acc)}` : '',
     x.spec != null ? `Spec: ${Math.round(x.spec)}%${x.specAfter != null && x.specAfter !== x.spec ? ` -> ${Math.round(x.specAfter)}%` : ''}` : '',
     x.spec != null ? (x.regenIn == null ? (x.spec >= 100 ? 'Spec full (no regen running)' : '') : `Next spec regen: ${x.regenIn} tick${x.regenIn === 1 ? '' : 's'} (tick ${x.t + x.regenIn})`) : '',
   ].filter(Boolean).join('\n');

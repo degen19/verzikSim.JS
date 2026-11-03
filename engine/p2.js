@@ -255,7 +255,7 @@ export function run_p2(p1, team, rng, log = null) {
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + sh_delay, rank.get(p), 0, `Shadow (${sh_why})`, d, p]);
           shadow_stats['casts'] += 1; shadow_stats['dmg'] += d;
-          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - SHADOW [${sh_why}] -> ${d}`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - SHADOW [${sh_why}] (acc ${fx(ch * 100, 1)}%) -> ${d}`);
         } else {
           const [ch, mx] = scythe_roll(p);
           const sp = [];
@@ -264,7 +264,7 @@ export function run_p2(p1, team, rng, log = null) {
             sp.push(d);
             vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
           });
-          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - Scythe -> [${sp.join(', ')}]`);
+          L.on && L(`t${rjust(t, 4)} ${p.name}: last swing before the shield - Scythe (acc ${fx(ch * 100, 1)}%) -> [${sp.join(', ')}]`);
         }
         p.next_attack = t + 5;
         p.last_swing = true;
@@ -450,7 +450,7 @@ export function run_p2(p1, team, rng, log = null) {
             p.hp -= floordiv(p.hp, 10);
             supplies.check_death(p, 'P2', L, t);
             vq.push([t + 3, rank.get(p), 0, 'ZCB ruby proc', null, p]);
-            L.on && L(`t${rjust(t, 4)} ${p.name}: ZCB (bounced) -> RUBY PROC (22% of current HP, cap 110)`);
+            L.on && L(`t${rjust(t, 4)} ${p.name}: ZCB (bounced, acc ${fx(ch * 100, 1)}%) -> RUBY PROC (22% of current HP, cap 110)`);
           } else {
             const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
             vq.push([t + 3, rank.get(p), 0, 'ZCB (bounced)', d, p]);

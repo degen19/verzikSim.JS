@@ -116,7 +116,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
       if (!p.specced) { p.specced = true; p.surge_due = true; }
       vq.push([t + 2, 0, rng.randint(75, 150), null, 'Dawn spec']);
       p.next_attack = t + 4;
-      L.on && L(`t${rjust(t, 4)} Dawn spec (${fx(o)}% -> ${fx(p.spec)}%)`);
+      L.on && L(`t${rjust(t, 4)} Dawn spec (${fx(o)}% -> ${fx(p.spec)}%, acc 100%)`);
     } else {
       vq.push([t + 2, 0, Math.max(1, rng.randint(0, dmax)), null, 'Dawn auto']);   // always hits: a 0 is brought up to 1
       p.next_attack = t + 4;
@@ -184,14 +184,14 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
     const [ch, mx] = scythe_roll(p), sp = [];
     [mx, floordiv(mx, 2), floordiv(mx, 4)].forEach((m, k) => { const d = roll(rng, ch, m); sp.push(d); vq.push([t + 1, k, `Scythe hit ${k + 1}`, d, 'v']); });
     p.next_attack = t + 5; p.in_mage = false;
-    L.on && L(`t${rjust(t, 4)} ${tag}Scythe -> [${sp.join(', ')}]`);
+    L.on && L(`t${rjust(t, 4)} ${tag}Scythe (acc ${fx(ch * 100, 1)}%) -> [${sp.join(', ')}]`);
   };
   const claw = (t, tag = '') => {
     const o = p.spec; p.spec -= 50; st.claws += 1;
-    const [hits] = claw_spec(p, rng);
+    const [hits, cch] = claw_spec(p, rng);
     hits.forEach((d, k) => vq.push([t + 1, k, `Claw spec hit ${k + 1}`, d, 'v']));
     p.next_attack = t + 4; p.in_mage = false;
-    L.on && L(`t${rjust(t, 4)} ${tag}CLAW SPEC (${fx(o)}% -> ${fx(p.spec)}%) -> [${hits.join(', ')}]`);
+    L.on && L(`t${rjust(t, 4)} ${tag}CLAW SPEC (${fx(o)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%) -> [${hits.join(', ')}]`);
   };
   /** Spec about to go over 100 (at 100, or a regen due before their next attack would cap it). */
   const overflow = () => p.spec >= 100 || (p.spec > 90 && p.auto_r == null && p.regen_period() - p.regen_timer <= 5);
@@ -362,13 +362,13 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
         const [c, mx] = shadowCrabNums(), d = roll(rng, c, mx);
         vq.push([t + SHADOW_DELAY_NEAR, 0, 'Shadow', d, 'crab']); st.shadows += 1;
         p.next_attack = t + 5; p.in_mage = true;
-        L.on && L(`t${rjust(t, 4)} ${tag}Shadow on the crab (${why}) -> ${d}`);
+        L.on && L(`t${rjust(t, 4)} ${tag}Shadow on the crab (${why}, acc ${fx(c * 100, 1)}%) -> ${d}`);
         return;
       }
       const [c, mx] = melee_max_acc(p, 125, 75, CRAB_DEF_ROLL);
       [mx, floordiv(mx, 2)].forEach((m, k) => vq.push([t + 1, k, `Scythe hit ${k + 1}`, roll(rng, c, m), 'crab']));
       p.next_attack = t + 5; p.in_mage = false;
-      L.on && L(`t${rjust(t, 4)} ${tag}Scythe on the crab (${why})`);
+      L.on && L(`t${rjust(t, 4)} ${tag}Scythe on the crab (${why}, acc ${fx(c * 100, 1)}%)`);
     }
     function act(t, r, verz, tag) {
       if (pc && pc.alive && p.has_bp) {                              // a purple carried into reds: blowpipe it from r0
@@ -426,7 +426,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
         const hb = (d) => (d > 0 ? d + p3.halb_bonus(m) : 0), hits = [hb(roll(rng, c1, m)), hb(roll(rng, c2, m))];
         hits.forEach((d, k) => vq.push([t + 1, k, `Halberd spec hit ${k + 1}`, d, 'v']));
         p.next_attack = t + 7; p.in_mage = false;
-        L.on && L(`t${rjust(t, 4)} ${tag}HALBERD SPEC on r40 -> [${hits.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${tag}HALBERD SPEC on r40 (acc ${fx(c1 * 100, 1)}% / ${fx(c2 * 100, 1)}%) -> [${hits.join(', ')}]`);
         return;
       }
       if (plan === 'claw + scratch' && claws === 1 && !scratched) {

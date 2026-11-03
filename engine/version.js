@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.3';
+export const VERSION = '1.25.4';
 export const CHANGES = [
+  { version: '1.25.4', date: '2026-11-03', items: [
+    'Show raid (Sotetseg, Xarpus, Verzik): each attack\'s hover now shows the player\'s accuracy for that attack (both rolls for a halberd / Ralos Spec).',
+  ] },
   { version: '1.25.3', date: '2026-11-03', items: [
     'Show raid (Verzik): potion sips are drawn at least 3 ticks apart (a sip window - P1 to P2, the reds shield, P2 to P3 - starts 3 ticks after the last sip); spec transfers have their own icon (sharing the cell) with who they transfer to on hover. Xarpus Show raid: his attack at the start of each cycle (from the second cycle after the exhumeds), and after the screech (one action skipped) his turn every two cycles.',
   ] },

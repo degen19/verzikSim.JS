@@ -809,7 +809,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), 0, '3-tick hit', d, p]);
         }
         p.next_attack = t + 3;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: 3-TICK (${p.has3}) #${n} -> ${d}`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: 3-TICK (${p.has3}) #${n} (acc ${fx(ch * 100, 1)}%) -> ${d}`);
       } else if (use === 'S') {
         const [ch, m] = melee(p, SCY, P3_DEF[1]);
         const sp = [];
@@ -823,7 +823,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 5;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe #${n} (chart ${tick(t)}) -> [${sp.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: Scythe #${n} (chart ${tick(t)}, acc ${fx((buffed ? 1 : ch) * 100, 1)}%) -> [${sp.join(', ')}]`);
       } else if (use === 'X') {
         const [ch, m] = melee(p, CLAW, P3_DEF[1]);
         const ds = [];
@@ -833,7 +833,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         });
         p.next_attack = t + 4;
         st['scratches'] += 1;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: claw scratch #${n} -> [${ds.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: claw scratch #${n} (acc ${fx(ch * 100, 1)}%) -> [${ds.join(', ')}]`);
       } else if (use === 'C') {
         p.spec -= 50;
         st['claws'] += 1;
@@ -843,7 +843,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 4;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: CLAW SPEC #${n} (chart ${tick(t)}) -> [${hits.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: CLAW SPEC #${n} (chart ${tick(t)}, acc ${fx(ch * 100, 1)}%) -> [${hits.join(', ')}]`);
       } else {
         p.spec -= 30;
         p.halb_done = true;
@@ -861,7 +861,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
           vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 7;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: HALBERD SPEC #${n} (chart ${tick(t)}) -> [${hits.join(', ')}]`);
+        L.on && L(`t${rjust(t, 4)} ${p.name}: HALBERD SPEC #${n} (chart ${tick(t)}, acc ${fx((hb ? 1 : ch1) * 100, 1)}% / ${fx(ch2 * 100, 1)}%) -> [${hits.join(', ')}]`);
       }
       if (p.resync_after) {
         p.resync_after = false;

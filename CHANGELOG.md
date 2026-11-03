@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.4 - 2026-11-03
+- Show raid tooltips: "Accuracy: X%" (`acc` on trace attacks; an array for two rolls). Verzik: `acc X%` added to the log lines that lacked it (P1 Dawn spec / auto 100%, P2 last swing before the shield, reds blowpipe on a crab / collision shadow / halberds / bounced ZCB, duo reds crab and Verzik swings / claws / scratches / halberd, P3 scythe / 3-tick / scratch / claws / halberd, solo) and read by `verzTrace`; P3 3-tick attacks now drawn; P1 "lands after kill" lines no longer drawn as attacks. Sotetseg / Xarpus engines put `acc` on their trace entries (prefires and ZCB / Ralos at landing). Results unchanged (no RNG change).
+
 ## v1.25.3 - 2026-11-03
 - `verzraid.js` `verzTrace`: a sip window's potion slots start at the player's last potion + 3 (they were drawn from the window line's tick, so could land 1-2 ticks after a sip); spec transfer lines -> `{xfer}` (spec tracking: the giver 0%, the target 100%). `raidview.js` timeline: `xfer` entries - `img/icons/Spec_transfer.png`, sharing the cell, tooltip. Xarpus timeline: his row - an attack (`Xarpus.png`) every 4 ticks from the exhumeds' end + 7 until the screech, then a turn (`Xarpus_turn.png`) every 8 ticks from the screech + 8 (one action skipped); Start / Screech marks.
 

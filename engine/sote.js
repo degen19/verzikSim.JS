@@ -127,7 +127,7 @@ function halbSpec(p, defLvl, rng) {
   const atk = b.atk[1] - scy.atk[1] + HALB.atk, mx = Math.floor((es * (b.str - (scy.str || 0) + HALB.str + 64) + 320) / 640);
   const ch = (m) => hit_chance(Math.floor(ea * (atk + 64) * m), defRoll(defLvl, 'melee'));
   const avg = (m) => ch(m) * (mx / 2 + 0.5 + Math.floor(mx / 10));   // a landed hit: 1..max (about max / 2) + max / 10
-  return { mx: 2 * (mx + Math.floor(mx / 10)), avg: avg(1) + avg(0.75), roll: () => [ch(1), ch(0.75)].map((c) => (rng.random() < c ? Math.max(1, rng.randint(0, mx)) + Math.floor(mx / 10) : 0)) };
+  return { mx: 2 * (mx + Math.floor(mx / 10)), avg: avg(1) + avg(0.75), acc: [ch(1), ch(0.75)], roll: () => [ch(1), ch(0.75)].map((c) => (rng.random() < c ? Math.max(1, rng.randint(0, mx)) + Math.floor(mx / 10) : 0)) };
 }
 /** Dragon claws (Slice and Dice): the four hits. */
 function clawSpec(p, defLvl, rng, horned = false) {
@@ -868,7 +868,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${h[1].name} ${h[3]} lands after the kill (overkill)`); } break; }
       const [, p, , label, kind] = h;
       if (kind && PREFIRE[kind]) {
-        const n = prefireNumbers(p, kind, defLvl);
+        const n = prefireNumbers(p, kind, defLvl); if (h.tr) h.tr.acc = n.ch;
         if (rng.random() < n.ch) {
           let d = Math.max(1, rng.randint(0, n.mx));
           if (n.ruby && (PREFIRE[kind].spec || rng.random() < 0.066)) {      // ruby bolt (e) through the ZCB: 22% of her HP, max 110
@@ -881,7 +881,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           damage(t, d, `${p.name} ${label}`, 'prefire');
         } else L.on && L(`t${t} ${p.name} ${label} misses`);
       } else if (kind === 'zcb') {
-        const n = prefireNumbers(p, 'ZCB spec', defLvl);
+        const n = prefireNumbers(p, 'ZCB spec', defLvl); if (h.tr) h.tr.acc = n.ch;
         if (rng.random() < n.ch) {
           const r = Math.min(110, Math.floor(hp * 0.22)); p.hp -= Math.floor(p.hp / 10);
           damage(t, r, `${p.name} ZCB spec ruby`, 'zcb');
@@ -1082,7 +1082,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         spend(p, 50, t); p.mauled[ph]++; p.specDone[ph]++; st.specs.maul++;
         const [ch, mx] = melee(p, 'Elder maul', 2, defLvl, 1.25);
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;   // Soulflame horn: this hit can't miss
-        const hit = horned || rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
+        const hit = horned || rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0; if (trE) trE.acc = horned ? 1 : ch;
         if (hit) st.specs.maulHit++;
         if (hit) lowerDef(t, 'Elder maul', Math.floor(defLvl * 0.35));   // as the attack is made (PID)
         hits.push([t + 1, p, d, `Elder maul spec ${hit ? d : 'misses'}`, 'maul', hit]);
@@ -1092,7 +1092,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         spend(p, 50, t); p.mauled[ph]++; p.specDone[ph]++; st.specs.bgs++;
         const [ch, mx0] = melee(p, 'Bandos godsword', 1, defLvl, 2), mx = Math.floor(Math.floor(mx0 * 1.1) * 1.1);
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;
-        const hit = horned || rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0;
+        const hit = horned || rng.random() < ch, d = hit ? Math.max(1, rng.randint(0, mx)) : 0; if (trE) trE.acc = horned ? 1 : ch;
         if (hit) st.specs.bgsHit++;
         if (hit) lowerDef(t, 'BGS', d);
         hits.push([t + 1, p, d, `BGS spec ${hit ? d : 'misses'}`, 'maul', hit, 'bgs']);
@@ -1100,19 +1100,20 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
         p.lastMelee = t; p.next = nextAfter(t, 6, p);
       } else if (act === 'halb') {
         spend(p, 30, t); st.specs.halb++;
-        const parts = halbSpec(p, defLvl, rng).roll();
+        const hs = halbSpec(p, defLvl, rng), parts = hs.roll(); if (trE) trE.acc = hs.acc;
         hits.push([t + 1, p, parts[0] + parts[1], `halberd spec ${parts.join('/')}`, 'halb']);
         L.on && L(`t${t} ${p.name} Crystal halberd spec - last hit (${p.spec}% left)`);
         p.lastMelee = t; p.next = nextAfter(t, 7, p);
       } else if (act === 'claw' || act === 'clawCarry') {
         spend(p, 50, t); if (act === 'claw') { p.specDone[ph]++; p.dmgSpecs[ph]++; } st.specs.claw++;
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;   // horn buff: the second accuracy roll
-        const parts = clawSpec(p, defLvl, rng, horned);
+        const parts = clawSpec(p, defLvl, rng, horned); if (trE) trE.acc = melee(p, 'Dragon claws', 1, defLvl)[0];
         hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `claw spec ${parts.join('/')}`, 'claw']);
         p.lastMelee = t; p.next = nextAfter(t, 4, p);
       } else {
         const [ch, mx] = scythe(p, defLvl);
         const horned = t <= p.hornUntil; if (horned) p.hornUntil = -1;   // horn buff: the first hitsplat can't miss
+        if (trE) trE.acc = horned ? [1, ch] : ch;
         const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m, j) => ((horned && j === 0) || rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
         hits.push([t + 1, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}`, null]);
         p.lastMelee = t; p.next = nextAfter(t, 5, p);
