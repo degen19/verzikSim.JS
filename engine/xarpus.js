@@ -353,7 +353,6 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     }
     if (trace) {
       trace.push({ t, hp: Math.max(0, hp), phase: dropAt == null ? 'to the screech' : 'after the screech' });
-      if (t === screech) trace.push({ t, boss: 'Screech', short: 'Sc', kind: 'screech', icon: 'Xarpus_screech', prio: 2, tip: 'Screech - he turns (he dropped to 33% of his starting HP)' });
       if (dropAt === t) trace.push({ t, mark: '33%' });
     }
     if (kill != null) { if (trace) trace.push({ t, boss: 'Dies', short: '☠', kind: 'kill', tip: `Xarpus dies - the room ends ${anim} ticks later` }); break; }
@@ -465,7 +464,18 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     }
   }
   const end = kill == null ? null : kill + anim;
-  if (trace) { trace.push({ t: EXH, boss: 'Exhumeds end', short: 'X', kind: 'exh', icon: 'Xarpus', prio: 1, tip: `The exhumeds end - ${nHeals} heal${nHeals === 1 ? '' : 's'}, he starts on ${START} HP` }); trace.sort((a, b) => a.t - b.t); }
+  if (trace) {
+    // his row: an attack at the start of each cycle (the first one after the exhumeds skipped: EXH + 7, then every 4),
+    // up to the screech; the screech skips one action, then he turns every two cycles (screech + 8, + 16, ...)
+    const last = kill ?? (EXH + 3000);
+    trace.push({ t: EXH, mark: 'Start' }, { t: EXH, boss: 'Exhumeds end', short: '', kind: 'exh', tip: `The exhumeds end - ${nHeals} heal${nHeals === 1 ? '' : 's'}, he starts on ${START} HP` });
+    for (let x = EXH + 7; x <= last && (screech == null || x < screech); x += 4) trace.push({ t: x, boss: 'Attack', kind: 'attack', icon: 'Xarpus', tip: 'attack' });
+    if (screech != null && screech <= last) {
+      trace.push({ t: screech, mark: 'Screech' });
+      for (let x = screech + 8; x <= last; x += 8) trace.push({ t: x, boss: 'Turn', kind: 'turn', icon: 'Xarpus_turn', tip: 'turns' });
+    }
+    trace.sort((a, b) => a.t - b.t);
+  }
   return { end, kill, anim, startHp: START, heals: nHeals, screech, dropAt, defZeroAt, defEnd: defLvl, defLastAt: lastDefAt, maulHits: maulsLanded, openLanded, openMaulers: maulers.length, ...st,
     players: ps.map((p) => ({ name: p.name, spec: p.spec, surgeAt: p.surgeAt,
       // surge cooldown left after the room (it doesn't tick between rooms)

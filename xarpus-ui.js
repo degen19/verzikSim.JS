@@ -348,7 +348,7 @@ export function createXarpus(host, { getTeam }) {
   // slowest and breakpoints, and an example raid for each number of opening mauls landed
   const X_RAIDS = 2000, X_SEED = 'xshow';
   const xflat = [];
-  const X_LEGEND = 'Elder maul / BGS / Ralos Spec: hover for his Defence before and after · ZCB: the ruby (red outline) · claw scratch / blowpipe / Ayak: a tick fix · thrall icon (bottom right): a thrall hit · white outline: a spec regen · boss row: Xarpus - the exhumeds end (he can be attacked), green - the screech, ☠ he dies';
+  const X_LEGEND = 'Elder maul / BGS / Ralos Spec: hover for his Defence before and after · ZCB: the ruby (red outline) · claw scratch / blowpipe / Ayak: a tick fix · thrall icon (bottom right): a thrall hit · white outline: a spec regen · his row: his attack at the start of each cycle (from the second cycle after the exhumeds), then after the screech (one action skipped) a turn every two cycles (green), ☠ he dies';
   /** The Show raid bar for a setup r ({run: {players, opts}, names}); filled once its raids are played (fillXBar). */
   function xBar(r, bps = []) {
     const idx = xflat.push({ r, bps }) - 1;

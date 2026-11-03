@@ -163,7 +163,7 @@ const icon = (code) => (CODE_ICON[code]
   ? `<img src="${ICONS}${CODE_ICON[code]}.png" alt="${esc(code)}" onerror="this.replaceWith(document.createTextNode(this.alt))">`
   : esc(code));
 // her events: the colour by kind (her attacks red, purple crab, heals green, damage to her orange, lightning gold)
-const BOSS_BG = { attack: '#7a2433', purple: '#6b3fa0', heal: '#2f7a3f', boom: '#b8641f', lightning: '#9a7f12', rebound: '#b59a1c', screech: '#b8641f', kill: '#4a4d5c', exh: '#2f5f7a' };
+const BOSS_BG = { attack: '#7a2433', purple: '#6b3fa0', heal: '#2f7a3f', boom: '#b8641f', lightning: '#9a7f12', rebound: '#b59a1c', screech: '#b8641f', kill: '#4a4d5c', exh: '#2f5f7a', turn: '#2f3242' };
 const BOSS_ATTACK = new Set(['attack', 'purple', 'lightning']);   // red tick numbers: the ticks she attacks
 const CSS = `<style>
 .rv{background:#16171f;color:#d7d9e0;border-radius:8px;padding:10px 12px;font:12px/1.2 system-ui,sans-serif;overflow-x:auto}
