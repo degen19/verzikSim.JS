@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.11 - 2026-11-05
+- `raidview.js` average hits: scythe attacks grouped by phase from the trace's P2 / P3 marks (by the tick the attack goes off; P2 includes reds); rows of one weapon kept together. Verzik averages count only scythes / Dawnbringer specs in P1 and only hits on Verzik (no crabs) from P2 on.
+
 ## v1.25.10 - 2026-11-05
 - `withGearSet`: dropped the Shadow-without-a-shadow note (the builder already shows that box unticked / disabled, so the note contradicted it; the tick was and is ignored).
 

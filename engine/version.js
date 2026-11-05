@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.10';
+export const VERSION = '1.25.11';
 export const CHANGES = [
+  { version: '1.25.11', date: '2026-11-05', items: [
+    'Verzik Show raid: the average Scythe hit is split by phase (P1 / P2 / P3) - P1\'s damage cap pulled the whole-raid average well down. P2 includes reds. In P1 only scythes and Dawnbringer specs count towards these averages, and from P2 on only hits on Verzik (not crabs).',
+  ] },
   { version: '1.25.10', date: '2026-11-05', items: [
     'No more "Shadow is ticked but Gear set A has no Tumeken\'s shadow" chart note for a player whose Shadow box shows unticked and greyed out (a chart saved with Shadow ticked, then used with a Gear set without a shadow). The setting was always ignored.',
   ] },

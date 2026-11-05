@@ -293,10 +293,19 @@ function damageSummary(trace, names) {
   const run = names.map(() => [0, 0]);
   for (const x of atks) { const c = run[x.i]; c[0] += dmgOf(x); c[1] += x.exp[0]; x.cum = [c[0], c[1]]; }
   const by = new Map();
-  for (const x of atks) { const k = x.weapon || CODE_NAME[x.code] || x.code, g = by.get(k) || { n: 0, d: 0, m: 0, v: 0 }; g.n++; g.d += dmgOf(x); g.m += x.exp[0]; g.v += Math.max(0, x.exp[1]); by.set(k, g); }
-  const rows = [...by.entries()].sort((a, b) => b[1].n - a[1].n).map(([k, g]) => {
+  // Verzik: scythe hits split by phase (P1's damage cap pulls a whole-raid average well down); P2 includes reds
+  const mk = (m) => { const x = trace.find((y) => y.mark === m); return x ? x.t : null; }, p2 = mk('P2'), p3 = mk('P3');
+  const phaseOf = (t) => (p2 == null ? '' : t < p2 ? 'P1' : p3 == null || t < p3 ? 'P2' : 'P3');
+  for (const x of atks) {
+    // Verzik: in P1 only scythes and Dawnbringer specs count; from P2 on only hits on Verzik (no crabs)
+    if (p2 != null && (phaseOf(x.t) === 'P1' ? !['S', 'D'].includes(x.code) : (x.crab || (x.target && x.target !== 'Verzik')))) continue;
+    const base = x.weapon || CODE_NAME[x.code] || x.code, ph = x.code === 'S' ? phaseOf(x.t) : '', k = ph ? `${base} (${ph})` : base;
+    const g = by.get(k) || { base, ph, n: 0, d: 0, m: 0, v: 0 }; g.n++; g.d += dmgOf(x); g.m += x.exp[0]; g.v += Math.max(0, x.exp[1]); by.set(k, g);
+  }
+  const baseN = new Map(); for (const g of by.values()) baseN.set(g.base, (baseN.get(g.base) || 0) + g.n);
+  const rows = [...by.entries()].sort((a, b) => baseN.get(b[1].base) - baseN.get(a[1].base) || a[1].base.localeCompare(b[1].base) || a[1].ph.localeCompare(b[1].ph)).map(([k, g]) => {
     const pc = g.v > 0 ? Math.round(Math.min(99.9, Math.max(0.1, normCdf((g.d - g.m) / Math.sqrt(g.v)) * 100))) : null;
-    return `Average ${k}${/spec$/i.test(k) ? '' : ' hit'}: <b>${r1(g.d / g.n)}</b> <span class="muted">(${pc == null ? 'always the same' : `${ordinal(Math.max(1, Math.min(99, pc)))} percentile`} · expected ${r1(g.m / g.n)} · ${g.n} attack${g.n === 1 ? '' : 's'})</span>`;
+    return `Average ${g.base}${/spec$/i.test(g.base) ? '' : ' hit'}${g.ph ? ` (${g.ph})` : ''}: <b>${r1(g.d / g.n)}</b> <span class="muted">(${pc == null ? 'always the same' : `${ordinal(Math.max(1, Math.min(99, pc)))} percentile`} · expected ${r1(g.m / g.n)} · ${g.n} attack${g.n === 1 ? '' : 's'})</span>`;
   });
   const vg = trace.filter((x) => x.veng != null);
   if (vg.length) rows.push(`Average Vengeance hit: <b>${r1(vg.reduce((a, x) => a + x.veng, 0) / vg.length)}</b> <span class="muted">(${vg.length} proc${vg.length === 1 ? '' : 's'})</span>`);
