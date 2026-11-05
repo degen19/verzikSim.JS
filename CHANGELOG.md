@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.14 - 2026-11-05
+- Sotetseg: spec `onlyIfNone` (backups only): counts as 'enough' once a maul landed that phase (`maulHits[ph] > 0`), event `backupNone:k:ph`. Spec planner checkbox "Only if 0 mauls landed" (with Backup), procedure text and decision-tree line; Solver neighbour toggles it (and swaps / pruning carry it).
+
 ## v1.25.13 - 2026-11-05
 - `planner.js` `plan`: End spec (and the duo P2 projection's starting point) at P1's end (the Death tick, or the last charted tick) instead of the player's last charted spec / surge / regen, so regens in between count; the timeline runs to P1's end.
 

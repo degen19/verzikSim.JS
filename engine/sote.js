@@ -619,7 +619,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     let sp = p.specs[ph]; const floorNow = defLvl <= SOTE.defFloor;
     // a Barrage that landed + a maul that landed: her Defence is low enough - backups stand down (only with a conditional maul set)
     const lowEnough = !floorNow && defLvl <= backupDef;             // the 'no backup at or below' setting
-    const enough = floorNow || lowEnough || (ph === 0 && anyCond && drained && maulHits[0] > 0);
+    // a backup set to 'only if no maul landed': a maul landed this phase - no backup, their damage spec instead
+    const enough = floorNow || lowEnough || (ph === 0 && anyCond && drained && maulHits[0] > 0) || (!!sp.onlyIfNone && sp.backup && maulHits[ph] > 0);
     if (ph === 2 && sp.spec === 'zcb' && hp < clawBelow && has('Dragon claws')) { sp = { ...sp, spec: 'claws' }; }   // late P3: claws over a ZCB
     // a planned maul still to come this phase, in time for its player's 3rd swing - the ZCB / claws / backup players wait
     // for it (one later than that isn't waited on)
@@ -672,7 +673,8 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
     // backup: scythe first; once the mauls (and earlier backups, if she still isn't at the floor) have landed. Up to
     // `backups` tries (1 or 2): a second only once their first has landed and missed, after every other backup's first.
     if (!p.swings[ph] || alive().some(mauls) || anyMaulPending()) return 'scythe';
-    if (lowEnough && !p.backups[ph] && !p.backOff[ph] && !specHitPending(p) && !alive().some((q) => q !== p && q.specs[ph].backup && specHitPending(q))) mark(`backupLow:${p.i}:${ph}`);   // stood down: her Defence at or below the setting
+    if (lowEnough && !p.backups[ph] && !p.backOff[ph] && !specHitPending(p) && !alive().some((q) => q !== p && q.specs[ph].backup && specHitPending(q))) mark(`backupLow:${p.i}:${ph}`);
+    if (sp.onlyIfNone && maulHits[ph] > 0 && !p.backups[ph] && !p.backOff[ph] && !specHitPending(p)) mark(`backupNone:${p.i}:${ph}`);   // a maul landed: no backup (only if none landed)   // stood down: her Defence at or below the setting
     const lim = backupsOf(sp), tries = (q) => q.backups[ph];
     if (!enough && tries(p) < lim && !p.backOff[ph]) {
       if (specHitPending(p)) return 'scythe';

@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.13';
+export const VERSION = '1.25.14';
 export const CHANGES = [
+  { version: '1.25.14', date: '2026-11-05', items: [
+    'Sotetseg spec planner: a backup can be set to "Only if 0 mauls landed" (shown with Backup, next to Tries) - if any of that phase\'s mauls landed, they don\'t back up and do their damage spec instead. The Solver tries it too, and the procedure says how often it held off.',
+  ] },
   { version: '1.25.13', date: '2026-11-05', items: [
     'Spec planner (Verzik chart): End spec is now each player\'s spec when P1 dies - natural regens (every 50 ticks, 25 with Lightbearer) between their last spec and P1\'s death count. It used to stop at their last spec, surge or regen on the chart.',
   ] },
