@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.11';
+export const VERSION = '1.25.12';
 export const CHANGES = [
+  { version: '1.25.12', date: '2026-11-05', items: [
+    'Optimizer: each player has a Custom surge timing (m:ss) option, like the chart builder\'s - set one or more room times to try (\'off\' = as charted). Setting one takes that player\'s P off the P1 chart (one surge a room); copying a setup to the builder writes the timing and the chart without the P.',
+  ] },
   { version: '1.25.11', date: '2026-11-05', items: [
     'Verzik Show raid: the average Scythe hit is split by phase (P1 / P2 / P3) - P1\'s damage cap pulled the whole-raid average well down. P2 includes reds. In P1 only scythes and Dawnbringer specs count towards these averages, and from P2 on only hits on Verzik (not crabs).',
   ] },

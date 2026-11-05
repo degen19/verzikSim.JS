@@ -4,7 +4,7 @@ import { plan } from './planner.js';
 import { Rng } from './rng.js';
 import { ITEMS } from './gear.js';
 import { multiPicks, multiText } from './chartform.js';
-import { run_p1, Player, ringByDawnsText } from './sim.js';
+import { run_p1, Player, ringByDawnsText, surge_tick } from './sim.js';
 import { run_p2 } from './p2.js';
 import { run_reds } from './reds.js';
 import { run_duo_reds } from './duo_reds.js';
@@ -201,6 +201,8 @@ export function cfgsToFields(cfgs, team) {
     put('setup', 'WestDC', k, !!c.WestDC); put('setup', 'EastDC', k, !!c.EastDC);
     put('setup', 'Ring switch %', k, c.ringSwitch ?? '');
     put('setup', 'Ring % by Dawns', k, ringByDawnsText(c.ringByDawns));
+    { const tk = c.customSurgeTick; put('setup', 'Custom Surge Timing', k, tk == null ? '' : (() => { const sec = tk * 0.6, m = Math.floor(sec / 60); return `${m}:${(sec - m * 60).toFixed(1).padStart(4, '0')}`; })()); }
+    if (c.customSurgeTick != null) for (let t = 1; t <= 140; t++) if (!c.actions || c.actions[t] !== 'P') put('chart', String(t), k, (c.actions && c.actions[t]) || '');   // its P taken off the chart
     if (c.amulet_mode || c.amulet) put('gear', 'amulet', k, c.amulet);
     put('gear', 'Has BP', k, c.hasBP !== false);
     put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB);
@@ -322,6 +324,15 @@ export function catalog(cfgs, team) {
           apply: (cf, v) => { cf[i].ringByDawns = { ...(cf[i].ringByDawns || {}), [d]: v }; } });
       }
     }
+    // Custom surge timing (as on the chart builder): their surge on that room time instead of a P on the P1 chart - 'off' =
+    // as charted. Setting one takes their charted P(s) off the P1 chart (one surge a room).
+    const fmtT = (tk) => { const sec = tk * 0.6, m = Math.floor(sec / 60); return `${m}:${(sec - m * 60).toFixed(1).padStart(4, '0')}`; };
+    opts.push({ id: `surge_${i}`, group: g, label: 'Custom surge timing (m:ss)', kind: 'time', current: c.customSurgeTick != null ? fmtT(c.customSurgeTick) : 'off',
+      apply: (cf, v) => {
+        if (v === 'off') { cf[i].customSurgeTick = c.customSurgeTick ?? null; return; }
+        cf[i].customSurgeTick = v;
+        cf[i].actions = Object.fromEntries(Object.entries(cf[i].actions || {}).filter(([, a]) => a !== 'P'));
+      } });
     opts.push({ id: `amulet_${i}`, group: g, label: 'Amulet', kind: 'choice', choices: ['Rancour', 'Blood fury'], current: c.amulet || 'Rancour',
       apply: (cf, v) => { cf[i].amulet = v; } });
     if (c.shadow) {

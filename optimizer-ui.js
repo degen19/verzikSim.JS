@@ -1,5 +1,5 @@
 // Optimizer tab: choose inputs to vary, set breakpoints, see the estimated run time, run a staged search.
-import { parse_chart } from './engine/sim.js';
+import { parse_chart, surge_tick } from './engine/sim.js';
 import { threadCount, workersAvailable } from './pool.js';
 import { catalog, applyCombo, validCfgs, dawnsOk, dawnShortfalls, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts, cfgsToFields } from './engine/optimize.js';
 import { withGear } from './engine/gearstore.js';
@@ -78,6 +78,10 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     if (o.kind === 'num') {
       return s.text.split(/[,\s]+/).filter(Boolean).map((x) => (x.toLowerCase() === 'off' ? 'off' : Number(x))).filter((x) => x === 'off' || Number.isFinite(x));
     }
+    if (o.kind === 'time') {                                         // m:ss room times (or 'off') -> room ticks
+      const tk = (x) => { try { return surge_tick(x); } catch { return null; } };
+      return [...new Set(s.text.split(/[,\s]+/).filter(Boolean).map((x) => (x.toLowerCase() === 'off' ? 'off' : tk(x))).filter((x) => x === 'off' || Number.isFinite(x)))];
+    }
     return o.choices.filter((c) => s.picks.has(c));
   }
   const sweep = () => opts.filter((o) => sel[o.id]?.on).map((o) => ({ id: o.id, values: values(o) })).filter((s) => s.values.length);
@@ -96,7 +100,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       return `<details class="ogroup" data-group="${esc(g)}" ${openGroups.has(g) ? 'open' : ''}><summary><h4 style="display:inline">${esc(g)}</h4> <span class="muted small">${n ? `${n} varied` : `${list.length} option${list.length === 1 ? '' : 's'}`}</span></summary>${list.map((o) => {
       const s = sel[o.id];
       const cur = `<span class="muted small">now: ${esc(o.current ?? '-')}</span>`;
-      const editor = o.kind === 'num'
+      const editor = o.kind === 'num' || o.kind === 'time'
         ? `<input data-text="${o.id}" value="${esc(s.text)}" ${s.on ? '' : 'disabled'} style="width:170px">`
         : o.choices.map((c) => `<label class="pick"><input type="checkbox" data-pick="${o.id}" value="${esc(c)}" ${s.picks.has(c) ? 'checked' : ''} ${s.on ? '' : 'disabled'}>${esc(c)}</label>`).join('');
       return `<div class="orow ${s.on ? 'on' : ''}"><label class="vary"><input type="checkbox" data-on="${o.id}" ${s.on ? 'checked' : ''}>${esc(o.label)}</label>${cur}<span class="oed">${editor}</span></div>`;
@@ -282,6 +286,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
   function describeCombo(combo, setOpts = opts) {
     const parts = Object.entries(combo).filter(([id]) => setOpts.some((x) => x.id === id)).map(([id, v]) => {
       const o = setOpts.find((x) => x.id === id);
+      if (o.kind === 'time' && v !== 'off') { const sec = v * 0.6, m = Math.floor(sec / 60); v = `${m}:${(sec - m * 60).toFixed(1).padStart(4, '0')}`; }   // room ticks -> m:ss
       const changed = String(o.current) !== String(v);
       const label = o.group === 'Death charges' || o.group === 'Team' ? o.label : `${o.group} ${o.label.toLowerCase()}`;
       return `<span class="${changed ? 'chg' : ''}">${esc(label)}: <b>${esc(v)}</b></span>`;
@@ -416,7 +421,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       if (sets.length > 1 && new Set(vals.map(([, v]) => String(v))).size > 1) o.current = vals.map(([b, v]) => `${b}: ${v ?? '-'}`).join(' · ');
     }
     for (const o of opts) {
-      if (!sel[o.id]) sel[o.id] = { on: false, text: o.kind === 'num' ? (o.id.startsWith('ring') ? DEFAULT_NUM.ring : DEFAULT_NUM.deep) : '', picks: new Set(o.choices || []) };
+      if (!sel[o.id]) sel[o.id] = { on: false, text: o.kind === 'time' ? (o.current !== 'off' ? `off, ${o.current}` : 'off, 0:30, 1:00') : o.kind === 'num' ? (o.id.startsWith('ring') ? DEFAULT_NUM.ring : DEFAULT_NUM.deep) : '', picks: new Set(o.choices || []) };
     }
     rankOptions(); renderOpts();
   }
