@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.13 - 2026-11-05
+- `planner.js` `plan`: End spec (and the duo P2 projection's starting point) at P1's end (the Death tick, or the last charted tick) instead of the player's last charted spec / surge / regen, so regens in between count; the timeline runs to P1's end.
+
 ## v1.25.12 - 2026-11-05
 - Optimizer: `surge_${i}` options (kind `time`: m:ss values or 'off', parsed with `surge_tick`); applying one sets `customSurgeTick` and drops the player's charted P actions. `cfgsToFields` writes Custom Surge Timing (and the chart without the P when one is set). The Verz Solver already had its Custom surge (m:ss) column.
 

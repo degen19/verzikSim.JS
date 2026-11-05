@@ -68,12 +68,13 @@ export function readPlanInputs(ws, team, block = 'A') {
 
 /** Compute End spec, Room Time, LB swings, Time of regen and the bonus labels for every player. */
 export function plan({ team, players, nPurples, deathTick, maxTick }) {
-  const T = Math.max(maxTick, 1);
+  let T = Math.max(maxTick, 1);
   // P1 ends on the Death tick, else the last tick with anything charted
   let lastCharted = 0;
   for (const p of players) for (const t of Object.keys(p.acts)) lastCharted = Math.max(lastCharted, Number(t));
   const death = deathTick ?? lastCharted;
   const p2Start = death + (deathTick == null ? 19 : 21);
+  T = Math.max(T, death);                                           // the timeline runs to P1's end (regens after their last spec count)
   const n = players.length;
   const spec = players.map((p) => [p.start]), timer = players.map(() => [0]), last = players.map(() => 0), short = players.map(() => []);
   const surge = players.map((p) => (p.surge != null && !Object.values(p.acts).includes('P') ? p.surge : null));
@@ -105,7 +106,9 @@ export function plan({ team, players, nPurples, deathTick, maxTick }) {
     }
   }
   return players.map((p, i) => {
-    const N = last[i];
+    // End spec: their spec when P1 dies - natural regens (and Lightbearer's) after their last spec count too; a custom
+    // surge still to come is added
+    const N = Math.max(last[i], death);
     const C = Math.min(100, spec[i][N] + (surge[i] != null && surge[i] > N ? 25 : 0));
     const D = timer[i][N];
     const purple = team === 2 ? 15 * p.purple1 + 15 * (nPurples === 2 && p.purple2) : 15 * p.purple1;

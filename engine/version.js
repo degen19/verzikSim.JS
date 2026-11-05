@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.12';
+export const VERSION = '1.25.13';
 export const CHANGES = [
+  { version: '1.25.13', date: '2026-11-05', items: [
+    'Spec planner (Verzik chart): End spec is now each player\'s spec when P1 dies - natural regens (every 50 ticks, 25 with Lightbearer) between their last spec and P1\'s death count. It used to stop at their last spec, surge or regen on the chart.',
+  ] },
   { version: '1.25.12', date: '2026-11-05', items: [
     'Optimizer: each player has a Custom surge timing (m:ss) option, like the chart builder\'s - set one or more room times to try (\'off\' = as charted). Setting one takes that player\'s P off the P1 chart (one surge a room); copying a setup to the builder writes the timing and the chart without the P.',
   ] },
