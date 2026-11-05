@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.10 - 2026-11-05
+- `withGearSet`: dropped the Shadow-without-a-shadow note (the builder already shows that box unticked / disabled, so the note contradicted it; the tick was and is ignored).
+
 ## v1.25.9 - 2026-11-05
 - `verzTrace`: attack lines that mention a bounce (`SHADOW (distance, skips the bounce chance...)`, `SHADOW (bounced...)`) were dropped by the non-attack filter; attack lines are now exempt from it.
 

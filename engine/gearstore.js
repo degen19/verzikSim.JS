@@ -52,7 +52,7 @@ export function withGearSet(cfgs, team, letter) {
   const ps = playersOf(t.sets[letter], team);
   const out = cfgs.map((c, k) => applyToCfg(c, ps[k]));
   out.notes = [...(cfgs.notes || [])];
-  cfgs.forEach((c, k) => { if (c.shadow && !out[k].shadow) out.notes.push(`${c.name || `P${k + 1}`}: Shadow is ticked but Gear set ${letter} has no Tumeken's shadow for them - their shadow settings are ignored.`); });
+  // (a Shadow tick for a player with no shadow in the Gear set is ignored - the chart shows that box unticked and greyed out, so no note)
   const nm = (k) => cfgs[k].name || `P${k + 1}`;
   // tradeable items charted for a player who doesn't have one: they run, with a note to trade it over
   const owns = (k, w) => (ps[k].weapons || []).includes(w);

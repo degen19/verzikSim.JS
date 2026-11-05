@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.9';
+export const VERSION = '1.25.10';
 export const CHANGES = [
+  { version: '1.25.10', date: '2026-11-05', items: [
+    'No more "Shadow is ticked but Gear set A has no Tumeken\'s shadow" chart note for a player whose Shadow box shows unticked and greyed out (a chart saved with Shadow ticked, then used with a Gear set without a shadow). The setting was always ignored.',
+  ] },
   { version: '1.25.9', date: '2026-11-05', items: [
     'Verzik Show raid: a shadow from a distance on the r16 bounce, and a shadow while bounced, are drawn on the timeline again (the sim always did them; the chart was leaving them out).',
   ] },
