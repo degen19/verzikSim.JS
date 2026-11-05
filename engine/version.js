@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.25.8';
+export const VERSION = '1.25.9';
 export const CHANGES = [
+  { version: '1.25.9', date: '2026-11-05', items: [
+    'Verzik Show raid: a shadow from a distance on the r16 bounce, and a shadow while bounced, are drawn on the timeline again (the sim always did them; the chart was leaving them out).',
+  ] },
   { version: '1.25.8', date: '2026-11-03', items: [
     'Xarpus reports (the Xarpus tab\'s Run report and the Full raid\'s Xarpus report): Show raid - view the raids the report just played.',
   ] },

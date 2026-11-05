@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.25.9 - 2026-11-05
+- `verzTrace`: attack lines that mention a bounce (`SHADOW (distance, skips the bounce chance...)`, `SHADOW (bounced...)`) were dropped by the non-attack filter; attack lines are now exempt from it.
+
 ## v1.25.8 - 2026-11-03
 - Xarpus Run report and the Full raid's Xarpus report: Show raid under the report (`reportRaids` in `xarpus-ui.js`: the report's own raids replayed from its seed, `xBar` / `xPlay` take a seed and raid count).
 

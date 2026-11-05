@@ -127,7 +127,8 @@ export function verzTrace(log, names, cfgs = null) {
     const vg = what.match(/VENG (\d+) -> Verzik/);
     if (vg) { trace.push({ t, i, veng: +vg[1] }); continue; }
     if (/^SOULFLAME HORN/.test(what)) { const fr = what.match(/guaranteed first hit for (.*)$/); trace.push({ t, i, code: 'H', what: `Soulflame horn${fr ? ` - guaranteed first hit for ${fr[1]}` : ''}` }); continue; }
-    if (/^Thrall|^regen|^spec |^surge|swaps to|boak, can't|lines up with|bounced|^last scythe before|skips the bounce|has spec for|no claws on|off the team|back on the team|\(tank\)/.test(what) && !/ZCB/.test(what)) continue;
+    if (/^Thrall|^regen|^spec |^surge|swaps to|boak, can't|lines up with|bounced|^last scythe before|skips the bounce|has spec for|no claws on|off the team|back on the team|\(tank\)/.test(what) && !/ZCB/.test(what)
+        && !/^(SHADOW|Scythe|CLAW SPEC|HALBERD SPEC|claw scratch|Blowpipe on|3-TICK)\b/.test(what)) continue;   // (an attack line that mentions a bounce - a shadow from a distance - is still an attack)
     if (/lands after (the )?kill/.test(what)) {                       // past the kill: still counts as rolled (a 50 on 10 HP rolled 50)
       const am = what.match(/ (\d+) lands after the kill/) || what.match(/rolled (\d+)/), a = last.get(i);
       if (am && a) { a.rolled = (a.rolled ?? a.dmg ?? 0) + +am[1]; if (a.landed == null) a.landed = t; }
