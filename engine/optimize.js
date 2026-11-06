@@ -205,7 +205,7 @@ export function cfgsToFields(cfgs, team) {
     if (c.customSurgeTick != null) for (let t = 1; t <= 140; t++) if (!c.actions || c.actions[t] !== 'P') put('chart', String(t), k, (c.actions && c.actions[t]) || '');   // its P taken off the chart
     if (c.amulet_mode || c.amulet) put('gear', 'amulet', k, c.amulet);
     put('gear', 'Has BP', k, c.hasBP !== false);
-    put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB);
+    put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB); put('gear', 'Tome Reds', k, !!c.tomeReds);
     put('gear', 'Shadow camp', k, !!c.shadowCamp); put('gear', 'Deep proc', k, !!c.deepProc);
     if ('pneckP1' in c) put('gear', 'Pneck on P1', k, !!c.pneckP1);
     if (Array.isArray(c.bfIn)) put('gear', 'Blood fury in', k, multiText('Blood fury in', c.bfIn));

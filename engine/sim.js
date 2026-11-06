@@ -622,7 +622,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
         ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
         ['horn', 'Horn'], ['hornP2', 'P2 horn'], ['hornP3', 'P3 horn'],
         ['eastBoak', 'East Boak'], ['westBoak', 'West Boak'], ['redemptionFlick', 'Redemption flick'], ['pneckP1', 'Pneck on P1'], ['passGreen', 'Pass green if death'],
-        ['hasBP', 'Has BP']]) {
+        ['hasBP', 'Has BP'], ['tomeReds', 'Tome Reds']]) {
         if (get(h) != null && pystr(get(h)).trim() !== '') cfgs[k][key] = yes(get(h));
       }
       // Has BP (blank / no column = has one): popping the purple crab needs a blowpipe

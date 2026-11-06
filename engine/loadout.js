@@ -171,6 +171,8 @@ export function applyToCfg(cfg, pl) {
   out.has3Tick = THREE_TO[t] || false;                      // Zorya's tome as a 3-tick weapon: not simulated yet
   out.mageGear = mageList(pl);
   out.hasShadow = (pl.weapons || []).includes("Tumeken's shadow");
+  out.hasTome = (pl.weapons || []).includes("Zorya's tome");
+  if (!out.hasTome) out.tomeReds = false;                   // no tome: Tome Reds doesn't apply
   if (!out.hasShadow) Object.assign(out, { shadow: false, shadow31: false, shadowLB: false, shadowCamp: false, deepProc: false });   // no shadow: its settings don't apply
   return out;
 }

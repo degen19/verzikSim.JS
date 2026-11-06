@@ -105,6 +105,21 @@ export function totals(names) {
 /** Tumeken's shadow: max floor(magic/3)+1; worn magic attack and magic damage x3 (x4 in ToA),
  * damage capped at +100%. Augury: accuracy x1.25, +4% damage (not multiplied).
  * Returns [attack_roll, max_hit] or [attack_roll, max_hit, hit_chance] when def_roll is given. */
+/** Zorya's tome (magic, 3 ticks; 2 while buffed by Zorya's Flow): [attack roll, max hit] (+ hit chance with def_roll)
+ *  at `magic_level` (112: boosted). Max hit floor(Magic / 3) - 9, raised by magic damage % (the tome's 15% with the
+ *  rest of their magic gear) and Augury. k: Zorya's Flow boosts on this attack - 0 an auto, 1 the spec or a buffed
+ *  auto (+150% accuracy, +60% damage), 2 a spec while buffed (+300%, +120%). */
+export function tome_attack(gear, magic_level = 112, opts = {}) {
+  const { prayer = 'Augury', def_roll = null, stance = 3, k = 0 } = opts;
+  const t = totals([...gear, "Zorya's tome"]);
+  const [pa, pdmg] = prayer === 'Augury' ? [1.25, 4] : [1.0, 0];
+  const eff = Math.floor(magic_level * pa) + 8 + stance;
+  const roll = Math.floor(eff * (t.atk[3] + 64) * (1 + 1.5 * k));
+  const base = floordiv(magic_level, 3) - 9;
+  const mx = Math.floor(floordiv(base * (100 + t.mdmg + pdmg), 100) * (1 + 0.6 * k));
+  if (def_roll == null) return [roll, mx];
+  return [roll, mx, hit_chance(roll, def_roll)];
+}
 export function shadow_attack(gear, magic_level, opts = {}) {
   const { prayer = 'Augury', in_toa = false, def_roll = null, stance = 3 } = opts;
   const t = totals([...gear, "Tumeken's shadow"]);
