@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.34.2 - 2026-11-06
+- `index.html`: room tabs in raid order; Maiden and Bloat placeholders (disabled).
+
 ## v1.34.1 - 2026-11-06
 - `raidview.js` / `img/icons`: Ascension crossbows (AX) and Dragon dart (DD) icons.
 

@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.34.1';
+export const VERSION = '1.34.2';
 export const CHANGES = [
+  { version: '1.34.2', date: '2026-11-06', items: [
+    'Room tabs in raid order: Maiden (soon), Bloat (soon), Nylocas, Sotetseg, Xarpus, Verzik, then Full raid.',
+  ] },
   { version: '1.34.1', date: '2026-11-06', items: [
     'Raid charts: Ascension crossbows and dragon dart icons.',
   ] },

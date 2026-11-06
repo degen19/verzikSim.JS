@@ -163,7 +163,8 @@
       table.mech td.inp { min-width: 120px; }
       .settabs button { padding: 7px 12px; }
     }
-  </style>
+    .rooms button[disabled]{opacity:.45;cursor:not-allowed}.rooms .soon{font-size:11px;font-weight:400}
+</style>
 </head>
 <body>
   <header>
@@ -184,11 +185,13 @@
   <main>
     <nav class="rooms" id="rooms">
       <button data-room="gear">Gear</button>
-      <button data-room="verzik" class="on">Verzik</button>
+      <button disabled title="Coming soon">Maiden <span class="soon">(soon)</span></button>
+      <button disabled title="Coming soon">Bloat <span class="soon">(soon)</span></button>
       <button data-room="nylo">Nylocas</button>
       <button data-room="sote">Sotetseg</button>
       <button data-room="xarpus">Xarpus</button>
-      <button data-room="full" title="Sotetseg, Xarpus and Verzik solved as one raid">Full raid</button>
+      <button data-room="verzik" class="on">Verzik</button>
+      <button data-room="full" title="Nylocas, Sotetseg, Xarpus and Verzik solved as one raid">Full raid</button>
       <label class="scale">Scale
         <select id="team"><option value="1">Solo</option><option value="2">2-man (duo)</option><option value="3">3-man</option><option value="4" selected>4-man</option><option value="5">5-man</option></select>
       </label>
