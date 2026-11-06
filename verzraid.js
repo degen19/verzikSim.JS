@@ -179,7 +179,7 @@ export function verzTrace(log, names, cfgs = null) {
       a.gear = armour(i, a.code, a.weapon);
     }
     a.stats = statText(i);
-    if (a.code === 'Zt') a.stats = a.stats.replace(/Magic \d+/, 'Magic 112');   // the tome: at 112 Magic
+    if (a.code === 'Zt' || a.code === 'Sh') a.stats = a.stats.replace(/Magic \d+/, 'Magic 112');   // the tome and the shadow: always boosted
     const lt = what.match(/lands t(\d+)/); if (lt) { a.due = +lt[1]; (due[i] ||= []).push(a); if (due[i].length > 6) due[i].shift(); }
     const crab = what.match(/on (?:their )?(\w+) crab/), purple = /purple crab/i.test(what);
     a.target = purple ? 'the purple crab' : crab ? `the ${crab[1]} red crab` : 'Verzik';

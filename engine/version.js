@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.26.2';
+export const VERSION = '1.26.3';
 export const CHANGES = [
+  { version: '1.26.3', date: '2026-11-05', items: [
+    'Verzik: a shadow attack is always worked out at 112 Magic (boosted), and its Show raid tooltip shows Magic 112, like the tome.',
+  ] },
   { version: '1.26.2', date: '2026-11-05', items: [
     'Tome Reds: a tome player bounced on r16 attacks from range next - the tome or a shadow, whichever is worth more (was always a shadow).',
     'Verzik Show raid tooltips: gear as the sim attacks in - tome and shadow in their magic set from the Gear tab; everything else in their melee armour, Infernal cape, Avernic treads, Ferocious gloves (Confliction gauntlets for magic weapons), amulet and ring. Tome attacks show 112 Magic, duo shadow players 112 from the start.',

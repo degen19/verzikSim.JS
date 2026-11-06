@@ -82,9 +82,10 @@ export function shadow_choice(p, hp, mx_hp) {
 
 export function shadow_numbers(p) {
   const ring = p.ring === 'Lightbearer' ? 'Lightbearer' : 'Ultor ring';
-  const key = JSON.stringify([[...p.mage_gear], ring, p.mag]);   // shadow uses their current Magic level (112 when boosted)
+  const mag = Math.max(p.mag, 112);                              // a shadow is always boosted (112 Magic)
+  const key = JSON.stringify([[...p.mage_gear], ring, mag]);
   if (!has(_shadow_cache, key)) {
-    const [, mx, ch] = shadow_attack([...p.mage_gear, ring], p.mag, { def_roll: P2_DEF[3] });
+    const [, mx, ch] = shadow_attack([...p.mage_gear, ring], mag, { def_roll: P2_DEF[3] });
     _shadow_cache[key] = [ch, mx];
   }
   return _shadow_cache[key];
