@@ -9,7 +9,7 @@ export const TEAM_HEADERS = ['Number of Purples', 'Death tick', 'Deep proc HP %'
 export const COMPUTED = ['End spec', 'Purple crab', 'Room Time', 'LB swings', 'West/East DC +', 'Spec used', 'Time of regen'];
 const BOOLS = new Set(['lightbearerOn', '1st Purple DC', '2nd Purple DC', 'PurpleDC', 'WestDC', 'EastDC', 'bouncedZCB', 'Shadow', 'Shadow camp',
   '3:1', 'Shadow while LB', 'Deep proc', 'Horn', 'P2 horn', 'P3 horn', 'East Boak', 'West Boak', 'Pneck on P1', 'Redemption flick',
-  'Pass green if death', 'Perfect 1st set', 'Ducktank', '4 Claw Priority', 'Has BP', 'Tome Reds']);
+  'Pass green if death', 'Perfect 1st set', 'Ducktank', '4 Claw Priority', 'Has BP', 'Tome Reds', 'Scythe first hit after tome']);
 const SELECTS = {
   meleePrayer: ['Piety', 'Zeal'], helm: ['Torva full helm', 'Oathplate helm'], body: ['Torva platebody', 'Oathplate chest'],
   legs: ['Torva platelegs', 'Oathplate legs'], amulet: ['Rancour', 'Blood fury', 'Both'], redCrab: ['West', 'East', 'None'],
@@ -113,6 +113,7 @@ export function describe(ws, team, block = 'A') {
   if (gr) for (const [h, c] of headers(gr)) { tables.gear.push(h); for (let k = 0; k < team; k++) add('gear', h, k, gr + 1 + k, c); }
   // Tome Reds sits at the end of the template's gear row: shown next to Shadow
   if (tables.gear.includes('Tome Reds') && tables.gear.includes('Shadow')) { tables.gear.splice(tables.gear.indexOf('Tome Reds'), 1); tables.gear.splice(tables.gear.indexOf('Shadow') + 1, 0, 'Tome Reds'); }
+  if (tables.gear.includes('Scythe first hit after tome')) { tables.gear.splice(tables.gear.indexOf('Scythe first hit after tome'), 1); tables.gear.splice(tables.gear.indexOf('Tome Reds') + 1, 0, 'Scythe first hit after tome'); }
   const mr = findRow('mage helm');
   if (mr) for (const [h, c] of headers(mr)) { tables.mage.push(h); for (let k = 0; k < team; k++) add('mage', h, k, mr + 1 + k, c); }
   const tr = findRow('Tick');

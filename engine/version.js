@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.29.0';
+export const VERSION = '1.30.0';
 export const CHANGES = [
+  { version: '1.30.0', date: '2026-11-06', items: [
+    'Verzik (sim, Optimizer, Solver, Full raid): new player setting \'Scythe first hit after tome\' (Player settings, next to Tome Reds; needs a tome). With it on, the shadow that would follow their last buffed tome attack becomes a scythe in their full melee gear (a full switch). Not after an r16 bounce (still from range). The solvers keep it as set.',
+  ] },
   { version: '1.29.0', date: '2026-11-06', items: [
     'Nylocas tab: duos and solos. Duos: Healer Tech (one player) - under him every ranged / magic form, Heal Others their teammate, then a locator orb + redemption and a restore, while restore doses last, and puts their veng on the teammate (Vengeance Other). Solos: under him on each form\'s ticks 1-4 and 6-9 after his first, attacking on 5 and 10 (scythe / Twisted bow / shadow), so he attacks once a form; a locator orb + redemption and a restore when too low for a prayed hit.',
     'Nylocas: Restore doses (duos / solos), Off pray veng if healthy (solos: off by default), Amulet of blood fury heals; his attack icons by form.',

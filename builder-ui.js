@@ -32,6 +32,7 @@ const HELP = {
   bloodFuryThreshold: 'With Rancour + Blood fury (Gear tab): below this HP they wear Blood fury, above it Rancour - in the parts picked under Blood fury in. Never in P1.',
   'Blood fury in': 'Where the Blood fury threshold is used: P2 red crabs, P2 Verzik and / or P3 (default all). Elsewhere they wear Rancour.',
   'Tome Reds': "Uses Zorya's tome in reds (needs one in the Gear set; at 112 Magic in their magic gear). Their reds attacks are planned for the most damage by r41: tome spec (3 buffed autos after a hit; a spec on a buffed hit adds 3 more), scythe, claw, shadow - a shadow after buffed autos (no melee switch). Out of the r16 bounce unless someone else is out anyway. Duos: set 2.",
+  'Scythe first hit after tome': "With Tome Reds: the shadow that would follow their last buffed tome attack becomes a scythe in their full melee gear (a full switch). The solver and optimizer keep it as set here.",
   'Has BP': 'Has a blowpipe (default). Unticked: no blowpipe in P1 or for tick fills, and they can\'t pop the purple crab (the purple DC must have one).',
   'East bounce tech': "East bounce tech (3-5 man): on the first N Verzik attacks in P2 before reds (0-3), the East Boak players attack on her attack tick instead of waiting a tick, chancing her bounce (50% one of them; certain if everyone is East). A bounced player's next attack is a ZCB with ruby bolts (melee gear + Blessed quiver, Necklace of rupture, Rigour), then scythes again. Stops after 2 bounces. 0 = off.",
   '4 Claw Priority': "If Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status prioritises 100% spec for reds (both claws by r36, taking over the purple DC); the others prioritise 50%. Off: rings follow the chart.", has3Tick: 'Weapon used by H in the P1 chart',
@@ -174,7 +175,7 @@ export function createBuilder(root, { onChange }) {
     if (!p) return '';
     const letter = linkOf(loadGear(), team, block);
     if ((f.header === 'Shadow' || SHADOW_MODES.includes(f.header)) && !p.hasShadow) return `No Tumeken's shadow in Gear set ${letter} (Gear tab)`;
-    if (f.header === 'Tome Reds' && !p.hasTome) return `No Zorya's tome in Gear set ${letter} (Gear tab)`;
+    if ((f.header === 'Tome Reds' || f.header === 'Scythe first hit after tome') && !p.hasTome) return `No Zorya's tome in Gear set ${letter} (Gear tab)`;
     if ((f.header === 'bloodFuryThreshold' || f.header === 'Blood fury in') && p.amulet !== 'Both') return `Needs Rancour + Blood fury in Gear set ${letter} (Gear tab)`;
     return '';
   }

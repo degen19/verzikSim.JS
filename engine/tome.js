@@ -5,7 +5,8 @@
 //   auto: 3 ticks.  Spec (50%): 3 ticks; a hit gives Zorya's Flow - the next 3 tome attacks are buffed (2 ticks each,
 //   +150% accuracy / +60% damage).  A spec on a buffed hit (spec while buffed: +300% / +120%) takes that buffed hit's
 //   place and, if it hits, adds 3 more (spec > spec(buffed) > 5 buffed hits).  While buffed they keep using the tome.
-//   After a buffed (2-tick) tome attack there's no time to switch to melee gear: their next attack is the tome or a shadow.
+//   After a buffed (2-tick) tome attack there's no time to switch to melee gear: their next attack is the tome or a shadow -
+//   unless 'Scythe first hit after tome' is on: then it can be a scythe in their full melee gear (a full switch).
 // Rolled against P2 Verzik's magic Defence, at 112 Magic in their magic gear (Augury).
 // Melee can't go on her attack ticks (r12 ... r36) - they'd be pushed a tick; on r16 (the bounce chance) they stay at a
 // distance (with them in range, everyone is and she always bounces someone) - unless someone else is out of range anyway
@@ -59,10 +60,11 @@ export function tome_plan(p, r, spec, timer, buff, ev = tome_values(p), lock = f
     }
     return [s, tm];
   };
-  // lk: their last attack was a buffed tome attack (magic gear on: no melee next)
+  // lk: their last attack was a buffed tome attack (magic gear on: no melee next) - true; 'range': bounced at r16 (from range next)
+  const sat = !!p.scythe_after_tome;
   const V = (r, s, tm, b, lk) => {
     if (r > TOME_LAST_R) return [0, null];
-    const key = `${r}|${s}|${tm}|${b}|${lk ? 1 : 0}`;
+    const key = `${r}|${s}|${tm}|${b}|${lk || 0}`;
     if (memo.has(key)) return memo.get(key);
     let best = [-1, null];
     const fut = (d, s2, b2, lk2 = false) => { const [a, c] = adv(s2, tm, r, r + d); return V(r + d, a, c, b2, lk2)[0]; };
@@ -81,7 +83,8 @@ export function tome_plan(p, r, spec, timer, buff, ev = tome_values(p), lock = f
       if (s >= 50) go2('Ts', ev.T2, 2, b - 1 + 3, b - 1);
     } else {
       const melee = (!NO_MELEE.has(r) || (m16 && r === 16)) && !(lk && ev.Sh != null);   // (no shadow: they swap to melee anyway)
-      if (melee) go('Sc', ev.Sc, 5);
+      // Scythe first hit after tome: the scythe (full switch) after a buffed tome attack - not after a bounce (from range)
+      if (melee || (sat && lk === true && !NO_MELEE.has(r))) go('Sc', ev.Sc, 5);
       // a claw's last two hitsplats land a tick after the first two: r39 is the last claw
       if (melee && ev.C != null && s >= 50 && r + 2 <= TOME_LAND_R) go('C', ev.C, 4, s - 50);
       if (ev.Sh != null) go('Sh', mag ? ev.Sh : 0, 5);

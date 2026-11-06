@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.30.0 - 2026-11-06
+- `verzik_chart_template.xlsx`: 'Scythe first hit after tome' column after Tome Reds (every tab, sets A and B); `chartform.js` / `sim.js` (`cfg.scytheAfterTome`, `p.scythe_after_tome`) / `loadout.js` / `optimize.js` / `builder-ui.js`.
+- `engine/tome.js`: with it on, `tome_plan` allows a scythe right after a buffed tome attack; a bounce at r16 sets `tome_lock = 'range'` (still from range next).
+
 ## v1.29.0 - 2026-11-06
 - `engine/nylo.js`: duos (`plan.healer`: Healer Tech - Heal Other, locator orb + redemption, restore doses, Vengeance Other) and solos (`SOLO_UNDER` / `SOLO_HITS`: under him on ticks 1-4 / 6-9, his one attack a form; orb + redemption when low; Tumeken's shadow under him); `restores` and `offPrayVeng` options; Amulet of blood fury heals; no tome in solos.
 - `nylo-ui.js`: solo - 5s; Healer Tech column (duos), Restore doses, Off pray veng if healthy; solos hide the backup BGS and thresholds.

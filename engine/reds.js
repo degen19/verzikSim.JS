@@ -495,7 +495,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           p.reds_n = n;
           if (r === BOUNCE_R && ga(p, 'was_bounced', false)) {
             // knocked back: their next attack is from range - the tome (or a shadow), whichever the plan says; no lost tick
-            p.tome_lock = true;
+            p.tome_lock = 'range';
             L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - tome / shadow from range next (t${p.next_attack})`);
           }
           if (p.thrall_next == null) p.thrall_next = t + rng.randint(1, 2);
