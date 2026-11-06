@@ -529,13 +529,13 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
     const RING = { melee: '#d9dde6', ranged: '#3fbf5a', magic: '#4f8dff' };
     for (const f of sched) {
       if (f.start > (kill ?? spawn + 600)) break;
-      if (f.form !== 'melee') for (let t = f.start; t <= f.end; t++) T.push({ t, shade: f.form === 'ranged' ? 'sg' : 'sb' });
+      const last = kill != null ? Math.min(f.end, roomEnd(kill, overkill, i1)) : f.end;
+      if (f.form !== 'melee') for (let t = f.start; t <= last; t++) T.push({ t, shade: f.form === 'ranged' ? 'sg' : 'sb' });
     }
     T.push({ t: i1, mark: 'Spawn (i1)' });
     if (kill != null) {
       const end = roomEnd(kill, overkill, i1), de = kill + (overkill ? DEATH_OVERKILL : DEATH_TICKS);
-      T.push({ t: kill, boss: 'Killed', short: '0', tip: `the killing hit lands (i${inst(kill, i1)})${overkill ? ' - overkill' : ''}: his death animation ${overkill ? DEATH_OVERKILL : DEATH_TICKS} ticks` }, { t: kill, mark: 'Dies' });
-      for (let t = kill + 1; t < de; t++) T.push({ t, boss: 'Death animation', short: '…', tip: 'his death animation' });
+      T.push({ t: kill, mark: `Dies (i${inst(kill, i1)}${overkill ? ', overkill' : ''}: ${de - kill}-tick death animation)` });
       T.push({ t: end, mark: `Room ends (boss time ${end - i1} ticks)` });
     }
   }

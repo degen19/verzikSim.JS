@@ -19,7 +19,7 @@ const pick = () => '<label class="pick" style="flex-direction:row;gap:6px;align-
 const fsec = (x) => { if (x == null || x >= 99999) return '-'; const s = x * 0.6; return s >= 60 ? `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}` : `${s.toFixed(1)}s`; };
 const fsB = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floor(b / 60)}:${r < 10 ? '0' : ''}${r}`; };
 const seqKey = (s) => s.join('+') || 'none';
-const LEGEND = "Grey: his melee form · green: ranged · blue: magic · orange tint: under him · his attacks: hover for the target, takeoff, accuracy, damage and veng · tome borders: pink spec hit, black missed, red buffed auto · zombie (bottom right): a melee thrall hit";
+const LEGEND = "Grey: his melee form · green: ranged · blue: magic · slightly lighter: under him · his attacks: hover for the target, takeoff, accuracy, damage and veng · tome borders: pink spec hit, black missed, red buffed auto · zombie (bottom right): a melee thrall hit";
 
 export function createNylo(host, { getTeam }) {
   let state = loadKey(STORE);

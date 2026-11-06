@@ -216,7 +216,7 @@ const CSS = `<style>
 .rv .sg{box-shadow:inset 0 0 0 30px rgba(70,200,100,.20)}.rv .sb{box-shadow:inset 0 0 0 30px rgba(80,140,255,.22)}
 .rv .c.ch{box-shadow:inset 0 0 0 30px rgba(150,110,255,.45)}
 .rv .c.mz{box-shadow:inset 0 0 0 30px rgba(150,110,255,.16)}
-.rv .c.ub{box-shadow:inset 0 0 0 30px rgba(255,160,40,.30)}
+.rv .c.ub{box-shadow:inset 0 0 0 30px rgba(255,255,255,.07)}.rv .c.sg.ub{box-shadow:inset 0 0 0 30px rgba(255,255,255,.07),inset 0 0 0 30px rgba(70,200,100,.20)}.rv .c.sb.ub{box-shadow:inset 0 0 0 30px rgba(255,255,255,.07),inset 0 0 0 30px rgba(80,140,255,.22)}
 .rv .tk.sh{border-radius:3px}
 .rv .c .th{position:absolute;right:0;bottom:0;line-height:0}
 .rv .c .th img{max-width:11px;max-height:11px}
