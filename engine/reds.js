@@ -128,6 +128,9 @@ export function shield_sips(p, t, r, L) {
   supplies.window(p, Math.max(1, floordiv(SHIELD - 1 - r, 3) + 1), L, t, `r${r} shield `, { sharks: true });
 }
 
+/** Count an attack on her in their reds line, and note it with its reds tick (the decision tree's timed line). */
+function rl(p, code, r, seqCode = code) { p.reds_line[code] = (p.reds_line[code] || 0) + 1; (p.reds_seq ||= []).push([r, seqCode]); }
+
 /** Tome Reds: can they scythe r16? Only when someone else is out of range anyway (a shadow from a distance, 100% for
  *  two claws, another tome player out) - the bounce is 50% either way. Before r16: from what the others will do. */
 function tome_m16(p, players, r) {
@@ -148,25 +151,25 @@ export function tome_turn(p, act, t, r, n, rng, vq, rank, st, L) {
       const d = ((k === 0 && buffed) || rng.random() < ch) ? Math.max(1, rng.randint(0, m)) : 0;
       splats.push(d); vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p, 'dmg']);
     });
-    p.next_attack = t + 5; p.reds_line.S = (p.reds_line.S || 0) + 1;
+    p.next_attack = t + 5; rl(p, 'S', r);
     if (buffed) { st['horn_hits'] = (st['horn_hits'] || 0) + 1; p.horn_buff = null; }
     L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe #${n} (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(scytheMV(ch, mx, { buffed: !!buffed }))}${buffed ? ', HORN: 1st hit guaranteed' : ''}) -> ${pylist(splats)}`);
   } else if (act === 'C') {
     p.reds_claws += 1; const old = p.spec; p.spec -= 50;
     const [hits, ch, mx] = claw_spec(p, rng);
-    st['claws'] += 1; p.reds_line.C = (p.reds_line.C || 0) + 1;
+    st['claws'] += 1; rl(p, 'C', r);
     hits.forEach((d, k) => vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']));
     p.next_attack = t + 4;
     L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, ${expText(clawMV(ch, mx))}, max ${mx}) -> ${pylist(hits)}`);
   } else if (act === 'Cs') {
     const [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], P2_DEF[1]), d = roll(ch, mx);   // one hitsplat
     vq.push([t + 1, rank.get(p), 0, 'Claw scratch', d, p, 'dmg']);
-    p.next_attack = t + 4; p.reds_line.Cs = (p.reds_line.Cs || 0) + 1;
+    p.next_attack = t + 4; rl(p, 'Cs', r);
     L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: claw scratch (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}) -> ${d}`);
   } else if (act === 'Sh') {
     const [ch, mx] = shadow_numbers(p), d = roll(ch, mx);
     vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
-    st['shadow'] = (st['shadow'] || 0) + 1; st['shadow_dmg'] = (st['shadow_dmg'] || 0) + d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
+    st['shadow'] = (st['shadow'] || 0) + 1; st['shadow_dmg'] = (st['shadow_dmg'] || 0) + d; rl(p, 'Sh', r);
     p.next_attack = t + 5;
     L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (tome reds plan, acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
   } else {
@@ -179,7 +182,7 @@ export function tome_turn(p, act, t, r, n, rng, vq, rank, st, L) {
     else if (act === 'Tb') p.tome_buff -= 1;
     p.next_attack = t + (act === 'T' || act === 'za' ? 3 : 2);
     vq.push([t + TOME_DELAY, rank.get(p), 0, spec ? 'Tome spec' : 'Tome auto', d, p, 'dmg']);
-    if (spec) { st['tome'] = dget(st, 'tome', 0) + 1; p.reds_line.T = (p.reds_line.T || 0) + 1; } else p.reds_line.Ta = (p.reds_line.Ta || 0) + 1;
+    if (spec) { st['tome'] = dget(st, 'tome', 0) + 1; rl(p, 'T', r, `${act}${d > 0 ? '' : 'm'}`); } else rl(p, 'Ta', r, act);
     const what = { T: 'TOME SPEC', Ts: 'TOME SPEC while buffed', Tb: 'TOME buffed auto', za: 'TOME auto' }[act];
     L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ${what} (${spec ? `spec ${fx(old)}% -> ${fx(p.spec)}%, ` : ''}acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + TOME_DELAY}`
       + `${spec ? (d > 0 ? `, HIT: ${p.tome_buff} buffed left` : ', MISS') : act === 'Tb' ? `, ${p.tome_buff} buffed left` : ''}) -> ${d}`);
@@ -215,7 +218,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     p.thrall_next = null;
     p.reds_dmg = 0;
     p.sh_plan = null;          // shadow player under 100% on r11: 'claw_first' (50%+) or 'shadow16' (under 50%)
-    p.reds_claws = 0; p.reds_line = {};   // what they hit Verzik with in reds (the Optimizer / Solver branch summaries)
+    p.reds_claws = 0; p.reds_line = {}; p.reds_seq = []; p.r16 = null;   // what they hit Verzik with in reds (the Optimizer / Solver branch summaries)
     p.sh_col_done = false;
     p.purple_pending = false;             // no purple to come once the reds start
     p.reds_bp = false;
@@ -342,8 +345,8 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             p.dist16 = true;
           }
         }
-        // Tome Reds: out of range when they're tomeing / shadowing from a distance on r16 (their r16 attack is planned
-        // now, from the spec they'll have after this tick's regen), or not attacking and their last attack was from range
+        // Tome Reds: in range only when they melee on r16 itself (their r16 attack is planned now, from the spec they'll
+        // have after this tick's regen); tomeing / shadowing from a distance or mid-swing (e.g. a scythe on r14), they're out
         for (const p of alive) {
           if (!p.tome_on) continue;
           let act = null;
@@ -352,12 +355,13 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             if (s < 100) { tm += 1; if (tm >= p.regen_period()) { tm = 0; s = Math.min(100, s + 10); } } else tm = 0;
             act = tome_plan(p, r, s, tm, p.tome_buff, undefined, p.tome_lock, tome_m16(p, alive, r)).act; p.tome_act16 = act;
           }
-          p.tome_out16 = act != null ? !['Sc', 'C', 'Cs'].includes(act) : !p.tome_melee;
+          p.tome_out16 = act != null ? !['Sc', 'C', 'Cs'].includes(act) : true;   // not swinging on r16: they step out (a scythe on r14 too)
         }
         const out16 = (p) => p.skip16 || p.dist16 || p.tome_out16;
         st['chancers'] = alive.filter((p) => !out16(p)).map((p) => p.name);
         st['skippers'] = alive.filter(out16).map((p) => p.name + (p.dist16 ? ' (shadow, distance)' : p.tome_out16 ? ' (tome / range, distance)' : ' (2 claws)'));
         const at_risk = alive.filter((p) => !out16(p));
+        for (const p of alive) p.r16 = out16(p) ? 'out' : 'chance';   // (the decision tree's timed line)
         if (at_risk.length && (at_risk.length === alive.length || rng.random() < 0.5)) {
           bounced = rng.choice(at_risk);
         }
@@ -474,7 +478,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           && !(p.reds_n + 1 >= 3 && p.spec >= 50)) {
         const nic = (q) => q.reds_n + 1 >= 3 && q.spec >= 50 && !q.zcb_due;
         if (horn.try_horn(p, players, rank, 'p2', team, nic, L, t, `r${r} `)) {
-          st['horns'] += 1; p.reds_line.Hn = (p.reds_line.Hn || 0) + 1;
+          st['horns'] += 1; rl(p, 'Hn', r);
         }
       }
       if (t < p.next_attack) {
@@ -510,7 +514,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const [ch, mx] = shadow_numbers(p);
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
-          st['shadow'] += 1; st['shadow_dmg'] += d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
+          st['shadow'] += 1; st['shadow_dmg'] += d; rl(p, 'Sh', r);
           p.next_attack = t + 5; p.reds_n = n;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow, acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))}) -> ${d}`);
           if (p.thrall_next == null) {
@@ -522,7 +526,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const old = p.spec; p.spec -= 30;                // no claws: halberd from range on the r36 collision (no push)
           const hits = halb_hits(p, rng);
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
-          p.next_attack = t + 7; p.reds_n = n; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
+          p.next_attack = t + 7; p.reds_n = n; st['halb'] = dget(st, 'halb', 0) + 1; rl(p, 'H', r);
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC from range on the r36 collision (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%, ${expText(halbMV(p3.melee(p, p3.HALB, P2_DEF[1])[0], p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0], p3.melee(p, p3.HALB, P2_DEF[1])[1]))}) -> ${pylist(hits)}`);
           continue;
         } else if (verz && !p.zcb_due) {
@@ -536,13 +540,13 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const [ch, mx] = shadow_numbers(p);
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
-          st['shadow'] += 1; st['shadow_dmg'] += d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
+          st['shadow'] += 1; st['shadow_dmg'] += d; rl(p, 'Sh', r);
           p.next_attack = t + 5; p.tome_melee = false;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (${why}, acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
         } else if (p.zcb_due) {
           const [ch, mx] = zcb_auto(p);
           p.zcb_due = false;
-          st['zcb'] += 1; p.reds_line.Z = (p.reds_line.Z || 0) + 1;
+          st['zcb'] += 1; rl(p, 'Z', r);
           if (rng.random() < 0.066) {
             st['ruby'] += 1;
             p.hp -= floordiv(p.hp, 10);
@@ -561,7 +565,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const old = p.spec; p.spec -= 30;
           const hits = halb_hits(p, rng);
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
-          p.next_attack = t + 7; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
+          p.next_attack = t + 7; st['halb'] = dget(st, 'halb', 0) + 1; rl(p, 'H', r);
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%, ${expText(halbMV(p3.melee(p, p3.HALB, P2_DEF[1])[0], p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0], p3.melee(p, p3.HALB, P2_DEF[1])[1]))}) -> ${pylist(hits)}`);
         } else if (p.spec >= 50 && p.has_dc !== false && r <= 39 && (   // r39 the last claw: its last two hits land r41
           (p.sh_plan == null && n >= 3)
@@ -571,7 +575,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const old = p.spec;
           p.spec -= 50;
           const [hits, ch, mx] = claw_spec(p, rng);
-          st['claws'] += 1; p.reds_line.C = (p.reds_line.C || 0) + 1;
+          st['claws'] += 1; rl(p, 'C', r);
           hits.forEach((d, k) => {
             vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
           });
@@ -586,7 +590,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']);
           });
           p.next_attack = t + 7;
-          st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
+          st['halb'] = dget(st, 'halb', 0) + 1; rl(p, 'H', r);
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch1 * 100, 1)}% / ${fx(ch2 * 100, 1)}%, ${expText(halbMV(ch1, ch2, m))}) -> ${pylist(hits)}`);
         } else {
           const [ch, mx] = scythe_roll(p);
@@ -597,7 +601,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             splats.push(d);
             vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p, 'dmg']);
           });
-          p.next_attack = t + 5; p.reds_line.S = (p.reds_line.S || 0) + 1;
+          p.next_attack = t + 5; rl(p, 'S', r);
           if (buffed) {
             st['horn_hits'] += 1; p.horn_buff = null;
           }

@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.26.3';
+export const VERSION = '1.27.0';
 export const CHANGES = [
+  { version: '1.27.0', date: '2026-11-06', items: [
+    'Decision tree (Optimizer / Solver / Full raid): reds lines are the spec ticks and whether they chance the r16 bounce (\'claw r21, halberd r40 // bounce chance r16\'); lines that read the same are one, late claws (r31+) that differ only in their tick are one range.',
+    'Decision tree: a player whose spec turns on when their 50% comes in (most raids into reds under 50%) gets rules by reds proc time - \'reds proc 1:37 or later: tome spec r11-r16 - no bounce chance r16\', \'reds proc 1:25-1:35: claw spec r21-r35 (their first swing after the regen)\' - when their regen lands on the same raid tick in 80%+ of raids (else by the reds tick their 50% comes in).',
+    'Tome Reds: a tome player is only in range for the r16 bounce when they melee on r16 itself (mid-swing, e.g. a scythe on r14 after a missed r11 tome, they step out).',
+  ] },
   { version: '1.26.3', date: '2026-11-05', items: [
     'Verzik: a shadow attack is always worked out at 112 Magic (boosted), and its Show raid tooltip shows Magic 112, like the tome.',
   ] },

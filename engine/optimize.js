@@ -53,6 +53,7 @@ function runAfterP1(r1, cfgs, team, rng, out = null) {
   const r2 = run_p2(r1, team, rng.fork('p2'));
   if (out) out.r2 = r2;
   if (r2.reds_tick == null || (team === 2 && r2.players.every((p) => p.dead))) return null;
+  if (out) out.proc = { P: r2.reds_tick, spec: r2.players.map((p) => [p.spec, p.regen_timer, p.regen_period()]) };   // (the decision tree)
   const r3 = team === 2 ? run_duo_reds(r2, cfgs, rng.fork('reds')) : run_reds(r2, cfgs, team, rng.fork('reds'));
   if (out) out.r3 = r3;
   if (!r3.success || (team === 2 && r3.players.every((p) => p.dead))) return null;
@@ -67,6 +68,13 @@ export function redsLineText(l) {
   const n = (k, one, many) => (l[k] ? `${l[k]} ${l[k] === 1 ? one : many}` : null);
   return [n('C', 'claw', 'claws'), n('Sh', 'shadow', 'shadows'), n('T', 'tome spec', 'tome specs'), n('Ta', 'tome auto', 'tome autos'), n('Cs', 'claw scratch', 'claw scratches'), n('Z', 'ZCB', 'ZCBs'), n('H', 'halberd', 'halberds'), n('BP', 'blowpipe', 'blowpipes'), n('S', 'scythe', 'scythes'), n('Hn', 'horn', 'horns')].filter(Boolean).join(', ') || 'no attacks';
 }
+/** Their reds specs with their reds ticks and whether they chance the r16 bounce: 'tome r11 // no bounce chance r16'. */
+export function redsTimedText(p) {
+  const NAME = { C: 'claw', T: 'tome', Tm: 'tome', Ts: 'tome', Tsm: 'tome', H: 'halberd' };
+  const parts = (p.reds_seq || []).filter(([, c]) => NAME[c]).map(([r, c]) => `${NAME[c]} r${r}`);
+  const r16 = p.reds_bounced || p.r16 === 'chance' ? 'bounce chance r16' : p.r16 === 'out' ? 'no bounce chance r16' : null;
+  return (parts.join(', ') || 'no spec') + (r16 ? ` // ${r16}` : '');
+}
 /**
  * Branch profile: raids [from, to) grouped by the Dawn specs the team used before P1 died. Per Dawn count: raids,
  * successes, room times, and per player how often each reds line came up - lines (not bounced) and blines (bounced).
@@ -74,7 +82,7 @@ export function redsLineText(l) {
 export function branchProfile(cfgs, team, from, to, seed, by = {}) {   // by: add to an earlier chunk's profile
   for (let i = from; i < to; i++) {
     const rng = raidRng(seed, i), r1 = run_p1(cfgs, team, rng), d = r1.dawns;
-    const b = by[d] ||= { n: 0, k: 0, totals: [], lines: cfgs.map(() => ({})), blines: cfgs.map(() => ({})), bounced: cfgs.map(() => 0), bp: cfgs.map(() => 0) };
+    const b = by[d] ||= { n: 0, k: 0, totals: [], lines: cfgs.map(() => ({})), blines: cfgs.map(() => ({})), timed: cfgs.map(() => ({})), btimed: cfgs.map(() => ({})), samp: cfgs.map(() => []), bounced: cfgs.map(() => 0), bp: cfgs.map(() => 0) };
     b.n++;
     const o = {}, end = runAfterP1(r1, cfgs, team, rng, o);
     if (end != null) { b.k++; b.totals.push(end); }
@@ -84,7 +92,13 @@ export function branchProfile(cfgs, team, from, to, seed, by = {}) {   // by: ad
       const { BP, ...atHer } = p.reds_line; if (BP) b.bp[k]++;
       const key = redsLineText(atHer), into = p.reds_bounced ? b.blines[k] : b.lines[k];   // bounced lines apart
       into[key] = (into[key] || 0) + 1;
+      const tk = p.reds_bounced ? 'btimed' : 'timed', tm = ((b[tk] ||= cfgs.map(() => ({})))[k][key] ||= {}), tt = redsTimedText(p); tm[tt] = (tm[tt] || 0) + 1;   // its timings
       if (p.reds_bounced) b.bounced[k]++;
+      else if (o.proc) {                                         // when their 50% comes in vs what they spec (the decision tree's rules)
+        const [sp, tm, per] = o.proc.spec[k], rs = sp >= 50 ? 0 : per - tm + (Math.ceil((50 - sp) / 10) - 1) * per;
+        const first = (p.reds_seq || []).find(([, c]) => /^(C|T|Tm|Ts|Tsm|H)$/.test(c));
+        (b.samp ||= cfgs.map(() => []))[k].push([rs, o.proc.P, first ? (first[1][0] === 'T' ? 'tome' : first[1] === 'H' ? 'halberd' : 'claw') : 'none', first ? first[0] : null, p.r16]);
+      }
     });
   }
   return by;

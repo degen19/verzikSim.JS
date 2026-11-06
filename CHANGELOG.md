@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.27.0 - 2026-11-06
+- `reds.js`: `rl()` counts a reds attack and notes it in `p.reds_seq` ([r, code]; tome specs `T`/`Tm`/`Ts`/`Tsm`, autos `Tb`/`za`); `p.r16` 'out' / 'chance' at the bounce check; `tome_out16` true unless their r16 attack is melee.
+- `optimize.js`: `redsTimedText` (spec ticks + r16); `runAfterP1` `out.proc` (proc tick, each player's spec / regen timer / period); `branchProfile` keeps `timed` / `btimed` (per counts line: its timed texts) and `samp` ([ticks to 50%, proc, first spec kind, its tick, r16]).
+- `vtree.js`: lines shown as their usual timings, folded when they read the same, late claws as a tick range; `specRules` - proc-time (or 50%-by-rN) rules for players whose spec turns on their regen.
+
 ## v1.26.3 - 2026-11-05
 - `p2.js` `shadow_numbers`: Magic `max(p.mag, 112)`; `verzTrace`: Sh stats at Magic 112.
 
