@@ -8,7 +8,8 @@
 //   After a buffed (2-tick) tome attack there's no time to switch to melee gear: their next attack is the tome or a shadow -
 //   unless 'Scythe first hit after tome' is on: then it can be a scythe in their full melee gear (a full switch).
 // With 'Scythe first hit after tome' on, the tome waits for r31 (TOME_SAT_R; r29+ off-cadence): tome r31, buffed r34 / 36 / 38,
-//   scythe r40. Until then they play like a scyther - scythe r16 (in range for the bounce; bounced: a ZCB auto), or with a
+//   scythe r40 - or on r16 when they have 50% by then (never r11 for one tome: that puts a shadow on r20).
+//   Until then they play like a scyther - scythe r16 (in range for the bounce; bounced: a ZCB auto), or with a
 //   shadow, a shadow on r16 from a distance (no bounce chance) - and only claw when the tome won't be there by r31 anyway (a claw that would leave them short of 50% by
 //   r31 is off).
 // Rolled against P2 Verzik's magic Defence, at 112 Magic in their magic gear (Augury).
@@ -88,17 +89,23 @@ export function tome_plan(p, r, spec, timer, buff, ev = tome_values(p), lock = f
       if (s >= 50) go2('Ts', ev.T2, 2, b - 1 + 3, b - 1);
     } else {
       const melee = (!NO_MELEE.has(r) || ((m16 || (sat && ev.Sh == null)) && r === 16)) && !(lk && ev.Sh != null);   // (no shadow: they swap to melee anyway)
-      const sat16 = sat && r === 16 && ev.Sh != null;   // Scythe first hit after tome with a shadow: shadow r16 from a distance
+      // Scythe first hit after tome: a one-tome sequence never starts on r11 (its 3rd buffed auto puts a shadow on r20 - a shadow
+      // hit is worse than a scythe hit): the first tome goes on r16 when they have 50% by then (r17-18 if mid-swing), else r31
+      // (r29+). Under 100% before r16, no tome; a two-tome sequence (100%) can still start early.
+      const tomeOk = !sat || (r >= 16 && r <= 18) || r >= TOME_SAT_FROM || s >= 100;
+      if (sat && r === 16 && s >= 50) { go2('T', ev.T1, 3, 3, 0); const out = [best[0], best[1]]; memo.set(key, out); return out; }
+      const sat16 = sat && r === 16 && ev.Sh != null;   // ... with a shadow and no tome yet: shadow r16 from a distance
       // Scythe first hit after tome: the scythe (full switch) after a buffed tome attack - not after a bounce (from range)
       if (melee || (sat && lk === true && !NO_MELEE.has(r))) go('Sc', ev.Sc, 5);
       // a claw's last two hitsplats land a tick after the first two: r39 is the last claw
-      // (Scythe first hit after tome: before r29, no claw that costs them the r31 tome)
-      const clawOk = !sat || r >= TOME_SAT_FROM || adv(s, tm, r, TOME_SAT_R)[0] < 50 || adv(s - 50, tm, r, TOME_SAT_R)[0] >= 50;
+      // (Scythe first hit after tome: no claw that costs them the r16 tome, or before r29 the r31 one)
+      const keeps = (to) => adv(s, tm, r, to)[0] < 50 || adv(s - 50, tm, r, to)[0] >= 50;
+      const clawOk = !sat || ((r >= 16 || keeps(16)) && (r >= TOME_SAT_FROM || keeps(TOME_SAT_R)));
       if (melee && clawOk && ev.C != null && s >= 50 && r + 2 <= TOME_LAND_R) go('C', ev.C, 4, s - 50);
       if (ev.Sh != null) go('Sh', mag ? ev.Sh : 0, 5);
       if (sat16) { const out = [best[0], best[1]]; memo.set(key, out); return out; }
       if (melee && ev.Cs != null) go('Cs', ev.Cs, 4);
-      if (s >= 50 && (!sat || r >= TOME_SAT_FROM)) go2('T', ev.T1, 3, 3, 0);
+      if (s >= 50 && tomeOk) go2('T', ev.T1, 3, 3, 0);
       go('za', mag ? ev.za : 0, 3);
       if (!(lk && ev.Sh != null)) go('wait', 0, 1);
     }
