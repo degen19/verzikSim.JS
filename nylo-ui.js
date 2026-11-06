@@ -4,6 +4,7 @@
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { blankPlayer } from './engine/loadout.js';
 import { parseBreakpoints } from './engine/optimize.js';
+import { histogramSvg, cumulativeSvg, chartBox } from './engine/report.js';
 import { runNylo, NYLO_HP, FAST } from './engine/nylo.js';
 import { solveNylo, rangedThresholds, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, better as scoreBetter } from './engine/nylosolve.js';
 import { NyloPool } from './nylo-solver-pool.js';
@@ -199,6 +200,9 @@ export function createNylo(host, { getTeam }) {
       <table><tr><th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
       <tr><td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
       <div class="small muted" style="margin-top:6px">Per raid: vengs ${per('veng')} (${per('vengDmg')} damage) · damage taken ${per('taken')} · thralls ${per('thrall')} · takeoffs ${per('takeoffs')} · under him ${per('under')} · Heal Others ${per('heals')} · redemptions ${per('redemptions')} · deaths ${per('deaths')}</div>
+      ${(() => { const series = [{ total: all.filter((z) => z.total != null).map((z) => z.total), runs: n }];
+        return `<h3>How often each boss time happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, ['Nylocas'], rg).replace('% of successful runs', '% of raids'))}</div>
+      <h3>Boss time this or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (boss time at that or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, ['Nylocas'], bps, rg).replace('% of successful runs finished by this time', '% of raids at this boss time or faster'))}</div>`; })()}
       <div class="small" style="margin-top:8px" data-nbar="${idx}"><button class="ghost sm" data-nraid="${idx}">Show raid</button> <span class="muted" data-nmsg="${idx}"></span></div><div style="width:0;min-width:100%"><div data-nout="${idx}"></div></div></div>`;
     status.textContent = `Done: ${n.toLocaleString()} raids (seed ${seed}).`;
   });
