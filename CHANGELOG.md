@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.35.0 - 2026-11-06
+- `engine/fullraid.js`: `fullRaid` plays any run of rooms (`ALL_ROOMS`, `roomsOf`); `planScore` for one room; `fullraid-ui.js`: room tickboxes (in a row), results / reports / entries per picked room.
+- `engine/nylosolve.js`: `canonPlan` (melee spec -> opener, claws 'gain'), `feasible` (spec costs vs start + surge + `REGEN_ALLOW`), no claw-rule search; `nylo-ui.js`: no claw rule in the solver.
+
 ## v1.34.2 - 2026-11-06
 - `index.html`: room tabs in raid order; Maiden and Bloat placeholders (disabled).
 

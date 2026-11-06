@@ -1,4 +1,4 @@
-// Nylocas tab (solo - 5s; duos: Healer Tech, solos: under him every form): per-player room settings (opening spec, damage specs, claw rule, start spec, surge, tome tick fix,
+// Nylocas tab (solo - 5s; duos: Healer Tech, solos: under him every form): per-player room settings (opening spec, damage specs, start spec, surge, tome tick fix,
 // Twisted-bows-only thresholds) and the team's backup BGS, saved in this browser; a Report (raids played, boss times,
 // Show raid) and the Solver (best spec setups, then each player's ranged tick fix thresholds). Gear from the Gear tab.
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
@@ -38,8 +38,8 @@ export function createNylo(host, { getTeam }) {
       <div data-rstatus class="muted" style="margin-top:8px"></div><div data-rerr class="err"></div><div data-rout style="margin-top:8px"></div>`)}
     ${pane('solve', 'data-solve', `
       <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's opening spec (none, BGS, claws, halberd), their second spec(s) in order (claws, tome, ZCB, halberd - one or two, either order),
-        the claw rule (only when it gains a usable tick, or as soon as they have 50%), start spec (95 / 100), surges (within the Surge potions limit) and the backup BGS (who, and at which Defence: ${BACKUP_ATS.join(', ')}+) -
-        within the gear each player has. Each round it tries every single change (with Role changes: a player's opener and damage specs together; with Swaps: two players' specs swapped, a surge moved) on a few raids,
+        start spec (95 / 100), surges (within the Surge potions limit) and the backup BGS (who, and at which Defence: ${BACKUP_ATS.join(', ')}+) -
+        within the gear each player has and the spec they can have (start + a surge + one regen). A player doing a melee spec (claws / halberd) opens with one; claws go when they gain a tick (or he's nearly dead). Each round it tries every single change (with Role changes: a player's opener and damage specs together; with Swaps: two players' specs swapped, a surge moved) on a few raids,
         then the best on more, and keeps the best if it beats the current setup, until nothing does. The top setups are then played on more raids and ranked: with breakpoints by the share at the fastest one (then the next), otherwise by the mean boss time.
         Then for the best setup: each player's ranged tick fix thresholds (the % of his HP to stop each green-form sequence at - 4bp tbow, tbow bp tbow, 3bp tbow - and play Twisted bows only; bp is their 2-tick hit).</p>
       <div class="row">
@@ -47,7 +47,7 @@ export function createNylo(host, { getTeam }) {
         <label>Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
         <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
       </div>
-      <div class="row" style="margin-top:6px">${[['open', 'Opening specs'], ['specs', 'Second specs'], ['clawMode', 'Claw rule'], ['start', 'Start spec'], ['surge', 'Surges'], ['backup', 'Backup BGS']]
+      <div class="row" style="margin-top:6px">${[['open', 'Opening specs'], ['specs', 'Second specs'], ['start', 'Start spec'], ['surge', 'Surges'], ['backup', 'Backup BGS']]
         .map(([k, l]) => `${pick()}><input type="checkbox" data-va="${k}">${l}</label>`).join('')}
         <span class="muted small">Search:</span>${pick()} title="Also swap two players' specs, and move a surge, in one step"><input type="checkbox" data-vs="swaps">Swaps</label>
         ${pick()} title="Also change a player's opener and damage specs together"><input type="checkbox" data-vs="roles">Role changes</label>
@@ -188,8 +188,8 @@ export function createNylo(host, { getTeam }) {
   host.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b) showRaid(Number(b.dataset.nraid)); });
 
   /** A setup laid out. */
-  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Claw rule</th><th>Max switches</th>${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
-    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${p.specs.includes('claw') ? (p.clawMode === 'gain' ? 'for a tick' : 'as soon as they can') : '-'}</td><td>${p.maxSwitches ?? 8}</td>${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
+  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Max switches</th>${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
+    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${p.maxSwitches ?? 8}</td>${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
     <div class="small">Backup BGS: ${c.backup ? `${esc(names[c.backup.p])} while his Defence is ${c.backup.at}+` : 'none'}</div>`;
   const statsRow = (totals, bps) => { const v = totals.slice().sort((a, b) => a - b), n = v.length, asc = [...bps].sort((a, b) => a - b);
     return { mean: v.reduce((a, b) => a + b, 0) / n, med: v[n >> 1], q10: v[Math.max(0, Math.floor(n * 0.1) - 1)], q25: v[Math.max(0, Math.floor(n * 0.25) - 1)], fast: v[0], bp: asc.map((b) => v.filter((x) => x * 0.6 <= b + 1e-9).length / n) }; };
@@ -240,7 +240,7 @@ export function createNylo(host, { getTeam }) {
   });
 
   // ---------------------------------------------------------------- solver
-  const ALLOW = ['open', 'specs', 'clawMode', 'start', 'surge', 'backup'];
+  const ALLOW = ['open', 'specs', 'start', 'surge', 'backup'];
   const EFFORT = { quick: { rounds: 4, stages: [[40, 0.15], [150, 3], [600, 1]], finalRaids: 1000, thrRaids: 800 },
     normal: { rounds: 8, stages: [[60, 0.2], [240, 4], [1000, 1]], finalRaids: 2000, thrRaids: 1500 },
     thorough: { rounds: 14, stages: [[100, 0.25], [400, 5], [2000, 1]], finalRaids: 5000, thrRaids: 3000 } };
@@ -286,7 +286,7 @@ export function createNylo(host, { getTeam }) {
       <div class="sub">Each played on the same ${items[0].totals.length.toLocaleString()} raids. Boss time: his spawn to the room's end.</div>
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>Setup</th><th></th></tr>
       ${items.map((r, i) => { const s = statsRow(r.totals, bps);
-        const short = r.cfg.players.map((p, k) => `${esc(names[k])}: ${p.startSpec === 95 ? '95% · ' : ''}${p.surge ? 'surge · ' : ''}${p.open === 'none' ? '' : `${SPEC_NAME[p.open]} → `}${seqName(p.specs)}${p.specs.includes('claw') && p.clawMode === 'gain' ? ' (claws only for a tick)' : ''}`).join('<br>') + (r.cfg.players.some((p) => p.healer) ? `<br>Healer Tech: ${esc(names[r.cfg.players.findIndex((p) => p.healer)])}` : '') + (r.cfg.backup ? `<br>backup BGS: ${esc(names[r.cfg.backup.p])} at ${r.cfg.backup.at}+` : '');
+        const short = r.cfg.players.map((p, k) => `${esc(names[k])}: ${p.startSpec === 95 ? '95% · ' : ''}${p.surge ? 'surge · ' : ''}${p.open === 'none' ? '' : `${SPEC_NAME[p.open]} → `}${seqName(p.specs)}`).join('<br>') + (r.cfg.players.some((p) => p.healer) ? `<br>Healer Tech: ${esc(names[r.cfg.players.findIndex((p) => p.healer)])}` : '') + (r.cfg.backup ? `<br>backup BGS: ${esc(names[r.cfg.backup.p])} at ${r.cfg.backup.at}+` : '');
         return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${fsec(s.med)}</td><td>${fsec(s.q25)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}
           <td class="small" style="text-align:left;font-weight:400">${short}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use</button></td></tr>
@@ -319,7 +319,7 @@ export function createNylo(host, { getTeam }) {
     const t = team(), st = cur(), all = playersNow(st), ef = EFFORT[v.effort] || EFFORT.normal;
     const base = all.map((p) => ({ name: p.name, gear: p.gear })), names = all.map((p) => p.name), gear = all.map((p) => p.gear);
     const opts = roomOpts(st);
-    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: p.clawMode, startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: Number(p.maxSwitches ?? 8), ...(p.predictFlip ? { predictFlip: { ...p.predictFlip } } : {}) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
+    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: 'gain', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: Number(p.maxSwitches ?? 8), ...(p.predictFlip ? { predictFlip: { ...p.predictFlip } } : {}) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
     const t1 = Date.now(), say = (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };

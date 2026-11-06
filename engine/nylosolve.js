@@ -1,6 +1,5 @@
 // Nylocas Solver (3s-5s): searches each player's opening spec (none / BGS / claws / halberd), their damage specs in order
-// (claws, tome, ZCB, halberd - one or two, either order), the claw rule for claws after the opener (only when it gains a
-// usable tick, or as soon as they have 50%), start spec (95 / 100) and surges (up to the room's limit), and a backup BGS
+// (claws, tome, ZCB, halberd - one or two, either order), start spec (95 / 100) and surges (up to the room's limit), and a backup BGS
 // (who, and the Defence it goes at or above: 10-50) - for the best boss times (his spawn to the room's end).
 // Search as the Xarpus Solver: each round every single change (with Role changes: a player's opener and damage specs
 // together; with Swaps: two players' openers / damage specs swapped, a surge moved) is played on a few raids, the best on
@@ -26,7 +25,21 @@ export const canSeq = (gear, seq) => seq.every((x) => has(gear, x));
 export const canOpen = (gear, v) => v === 'none' || has(gear, v);
 /** The default plan for a player: no opener, claws if they have them. */
 export const defaultPlan = (gear) => ({ open: 'none', specs: has(gear, 'claw') ? ['claw'] : [], clawMode: 'gain', startSpec: 100, surge: false, tomeTickFix: true });
-export const keyOf = (cfg) => JSON.stringify([cfg.players.map((p) => [p.open, p.specs, p.specs.includes('claw') ? p.clawMode : '', p.startSpec, !!p.surge]), cfg.backup || null]);
+export const keyOf = (cfg) => JSON.stringify([cfg.players.map((p) => [p.open, p.specs, p.startSpec, !!p.surge]), cfg.backup || null]);
+/** Spec each costs. */
+export const SPEC_COST = { bgs: 50, claw: 50, halb: 30, zcb: 75, tome: 50 };
+const MELEE_SPECS = new Set(['claw', 'halb']);
+/** A plan as players would do it: a melee spec (claws / halberd) in their damage specs with no opener is their opener (a
+ *  scythe, then the halberd later makes no sense: they'd halberd first); claws are always 'for a tick' (the default). */
+export function canonPlan(p) {
+  const out = { ...p, specs: [...(p.specs || [])], clawMode: 'gain' };
+  if (out.open === 'none') { const i = out.specs.findIndex((x) => MELEE_SPECS.has(x)); if (i >= 0) { out.open = out.specs[i]; out.specs.splice(i, 1); } }
+  return out;
+}
+/** Spec a raid can give them on top of their start: a surge, and one regen (his ~40-60s). */
+export const REGEN_ALLOW = 10;
+/** Can they have the spec for every spec in their plan (opener + damage specs)? */
+export const feasible = (p) => [p.open, ...(p.specs || [])].reduce((a, x) => a + (SPEC_COST[x] || 0), 0) <= (p.startSpec === 95 ? 95 : 100) + (p.surge ? 25 : 0) + REGEN_ALLOW;
 
 /** Play setups on raids [from, to) (seeds `<seed>#i`). base: [{name, gear}]. -> per setup {totals (boss time, ticks), kills}. */
 export function evalNylo(configs, base, team, from, to, seed, opts = {}) {
@@ -50,11 +63,12 @@ export function scoreOf(totals, bps = []) {
 }
 export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i] - 1e-9) return true; if (a[i] > b[i] + 1e-9) return false; } return false; };
 
-/** The single changes allowed. ctx: {gear: [gear], allow: {open, specs, clawMode, start, surge, backup}, surgeLimit, swaps, roles}. */
+/** The single changes allowed. ctx: {gear: [gear], allow: {open, specs, start, surge, backup}, surgeLimit, swaps, roles}. */
 export function neighbours(cfg, ctx) {
   const out = [], P = cfg.players, seen = new Set([keyOf(cfg)]);
   const add = (patches, setPatch, what) => {
-    const c = { ...cfg, ...setPatch, players: P.map((p, j) => (patches[j] ? { ...p, ...patches[j] } : p)), what };
+    const c = { ...cfg, ...setPatch, players: P.map((p, j) => (patches[j] ? canonPlan({ ...p, ...patches[j] }) : p)), what };
+    if (!c.players.every(feasible)) return;                       // a spec they'd never have the spec for
     const k = keyOf(c); if (!seen.has(k)) { seen.add(k); out.push(c); }
   };
   const g = ctx.gear, A = ctx.allow, surges = P.filter((p) => p.surge).length;
@@ -62,7 +76,6 @@ export function neighbours(cfg, ctx) {
     const N = `P${k + 1}`;
     if (A.open) for (const [v, l] of OPENS) if (v !== p.open && canOpen(g[k], v)) add({ [k]: { open: v } }, null, `${N} opens ${l}`);
     if (A.specs) for (const s of SEQS) if (JSON.stringify(s) !== JSON.stringify(p.specs) && canSeq(g[k], s)) add({ [k]: { specs: s } }, null, `${N} damage specs ${seqName(s)}`);
-    if (A.clawMode && p.specs.includes('claw')) add({ [k]: { clawMode: p.clawMode === 'gain' ? 'asap' : 'gain' } }, null, `${N} claws ${p.clawMode === 'gain' ? 'as soon as they can' : 'only for a tick'}`);
     if (A.start) add({ [k]: { startSpec: p.startSpec === 95 ? 100 : 95 } }, null, `${N} start ${p.startSpec === 95 ? 100 : 95}%`);
     if (A.surge && (p.surge || surges < ctx.surgeLimit)) add({ [k]: { surge: !p.surge } }, null, `${N} ${p.surge ? 'no surge' : 'surge'}`);
     if (A.backup && has(g[k], 'bgs')) for (const at of BACKUP_ATS) if (!cfg.backup || cfg.backup.p !== k || cfg.backup.at !== at) add({}, { backup: { p: k, at } }, `backup BGS: ${N} at Defence ${at}+`);
@@ -90,7 +103,9 @@ export async function solveNylo(ctx, run, progress = () => {}, stopped = () => f
   const bigN = stages[stages.length - 1][0];
   for (const [si0, st0] of [ctx.start, ...(ctx.restarts || [])].entries()) {
     if (stopped()) break;
-    let cur = st0;
+    let cur = { ...st0, players: st0.players.map(canonPlan) };
+    // a start they couldn't afford: trim its damage specs from the end until they can
+    cur.players = cur.players.map((p) => { const q = { ...p, specs: [...p.specs] }; while (!feasible(q) && q.specs.length) q.specs.pop(); if (!feasible(q)) q.open = 'none'; return q; });
     if (si0) progress(`Restart ${si0}: from another starting setup`, 0);
     for (let round = 1; round <= rounds && !stopped(); round++) {
       let pool = neighbours(cur, ctx);
