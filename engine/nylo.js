@@ -621,11 +621,13 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       const last = kill != null ? Math.min(f.end, roomEnd(kill, overkill, i1)) : f.end;
       if (f.form !== 'melee') for (let t = f.start; t <= last; t++) T.push({ t, shade: f.form === 'ranged' ? 'sg' : 'sb' });
     }
-    T.push({ t: i1, mark: `t${i1} spawn (i1)` });
+    const rt = (t) => { const x = roomTick(t) * 0.6, m = Math.floor(x / 60); return `${m}:${(x - m * 60).toFixed(1).padStart(4, '0')}`; };
+    const tipOf = (t, what) => `${what} - tick ${t} · room time ${rt(t)}${wave ? ` (waves ${rt(i1)})` : ''} · i${inst(t, i1)}`;
+    T.push({ t: i1, mark: 'Spawn', markTip: tipOf(i1, 'his spawn') });
     if (kill != null) {
       const end = roomEnd(kill, overkill, i1), de = kill + (overkill ? DEATH_OVERKILL : DEATH_TICKS);
-      T.push({ t: kill, mark: `t${kill} dies (i${inst(kill, i1)}${overkill ? ', overkill' : ''}) - death animation to t${de - 1} (i${inst(de - 1, i1)})` });
-      T.push({ t: end, mark: `t${end} room ends (i${inst(end, i1)}) - boss time ${end - i1} ticks` });
+      T.push({ t: kill, mark: 'Kill', markTip: `${tipOf(kill, `the killing hit${overkill ? ' (overkill)' : ''}`)} - his death animation to tick ${de - 1} (i${inst(de - 1, i1)})` });
+      T.push({ t: end, mark: 'End', markTip: `${tipOf(end, 'the room ends')} - boss time ${end - i1} ticks (${(0.6 * (end - i1)).toFixed(1)}s)` });
     }
   }
   const end = kill == null ? null : roomEnd(kill, overkill, i1);

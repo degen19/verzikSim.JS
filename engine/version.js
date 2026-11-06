@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.35.3';
+export const VERSION = '1.35.4';
 export const CHANGES = [
+  { version: '1.35.4', date: '2026-11-06', items: [
+    'Nylocas raid charts: markers read Spawn, Kill and End - hover the marker (or its tick) for the tick, room time and instance tick; the chart stops on the room\'s last tick.',
+  ] },
   { version: '1.35.3', date: '2026-11-06', items: [
     'Raid charts: markers start at their tick (a notch on the left edge) and go on separate lines when they would overlap; Nylocas markers give the ticks - \'t337 dies (i2, overkill) - death animation to t340 (i1)\', \'t344 room ends (i1) - boss time 60 ticks\'.',
   ] },

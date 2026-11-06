@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.35.4 - 2026-11-06
+- `raidview.js`: marks with tooltips (`markTip`, also in the tick's tooltip); `engine/nylo.js`: Spawn / Kill / End; `nylo-ui.js`: chart ends on `r.end`.
+
 ## v1.35.3 - 2026-11-06
 - `raidview.js`: mark lanes, left-aligned marks; `engine/nylo.js`: marks with ticks and instance ticks.
 

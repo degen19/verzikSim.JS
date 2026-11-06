@@ -175,7 +175,7 @@ export function createNylo(host, { getTeam }) {
   }
   const draw = (x, i, title) => {
     const trace = [], r = runNylo(x.run.players, team(), new Rng(`${x.seed}#${i}`), { ...x.run.opts, trace });
-    return timelineHtml({ trace, names: x.run.players.map((p) => p.name), bossName: 'Nylocas', end: r.end + 1, from: r.i1 - 1, title, legend: LEGEND });
+    return timelineHtml({ trace, names: x.run.players.map((p) => p.name), bossName: 'Nylocas', end: r.end, from: r.i1 - 1, title, legend: LEGEND });
   };
   async function showRaid(idx) {
     const x = flat[idx], box = document.querySelector(`[data-nout="${idx}"]`), msg = document.querySelector(`[data-nmsg="${idx}"]`);   // (in this tab or the Full raid's)

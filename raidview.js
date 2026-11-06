@@ -332,7 +332,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     else if (x.thrall) thr.set(`${x.i}:${x.t}`, x);
     else if (x.onMaze) onMaze.add(`${x.i}:${x.t}`);
     else if (x.under) under.add(`${x.i}:${x.t}`);           // under the boss (Nylocas)
-    else if (x.mark) marks.set(x.t, [...(marks.get(x.t) || []), x.mark]);
+    else if (x.mark) marks.set(x.t, [...(marks.get(x.t) || []), { m: x.mark, tip: x.markTip || '' }]);
     else if (x.boss) boss.set(x.t, [...(boss.get(x.t) || []), { kind: 'attack', ...x }]);
     else if (x.hp != null) hpAt.set(x.t, x);
     else if (x.regen) regen.set(`${x.i}:${x.t}`, x.regen);
@@ -345,7 +345,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   // hover: the tick - her phase and HP at the end of it, and what she did; an attack - what it did when it landed
   const evTip = (e) => e.tip || e.boss;
   const S = (t) => (shade.has(t) ? ` ${shade.get(t)}` : '');          // a tinted tick (healing shield, a form's colour)
-  const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t} · ${roomTime(t)}${tickInfo ? ` · ${tickInfo(t)}` : ''}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', shade.get(t) === 'sh' ? 'Healing shield up' : '', ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
+  const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t} · ${roomTime(t)}${tickInfo ? ` · ${tickInfo(t)}` : ''}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', shade.get(t) === 'sh' ? 'Healing shield up' : '', ...(marks.get(t) || []).map((m) => m.tip), ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
   const hitTip = (nm, x) => [`${nm} - tick ${x.t}: ${x.what || CODE_NAME[x.code] || x.code}${x.code === 'H' || x.code === 'R' ? '' : x.landed == null ? ' - never landed (a maze or the kill came first)' : x.dmg ? ` - ${x.dmg} damage${x.crab ? ' to a crab' : ''} (lands tick ${x.landed})` : ` - missed / 0 (tick ${x.landed})`}`,
     x.target ? `Target: ${x.target}` : '',
     x.gear ? `Gear: ${x.gear}` : '',
@@ -366,10 +366,10 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
     // separate lines
     const lanes = [];
     for (const t of ticks) for (const m of marks.get(t) || []) {
-      const span = Math.ceil((m.length * 6 + 16) / 26), lane = lanes.findIndex((l) => l.end < t);
+      const span = Math.ceil((m.m.length * 6 + 16) / 26), lane = lanes.findIndex((l) => l.end < t);
       if (lane >= 0) { lanes[lane].items.push([t, m]); lanes[lane].end = t + span; } else lanes.push({ end: t + span, items: [[t, m]] });
     }
-    const mk = lanes.map((l) => { const at = new Map(l.items); return `<div></div>${ticks.map((t) => `<div class="mk">${at.has(t) ? `<span>${esc(at.get(t))}</span>` : ''}</div>`).join('')}`; }).join('');
+    const mk = lanes.map((l) => { const at = new Map(l.items); return `<div></div>${ticks.map((t) => `<div class="mk">${at.has(t) ? `<span${at.get(t).tip ? ` data-tip="${esc(at.get(t).tip)}"` : ''}>${esc(at.get(t).m)}</span>` : ''}</div>`).join('')}`; }).join('');
     const attacks = (t) => (boss.get(t) || []).some((e) => BOSS_ATTACK.has(e.kind));
     const head = `<div></div>${ticks.map((t) => `<div class="tk${attacks(t) ? ' her' : ''}${S(t)}" data-tip="${esc(tickTip(t))}">${t}</div>`).join('')}`;
     const bossCell = (t) => {
