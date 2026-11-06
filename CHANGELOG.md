@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.30.2 - 2026-11-06
+- `engine/tome.js` / `reds.js`: Scythe first hit after tome with a shadow - a shadow on r16 from a distance (no bounce chance), not a scythe; bounced ZCB only without one.
+
 ## v1.30.1 - 2026-11-06
 - `engine/tome.js`: with Scythe first hit after tome, the tome spec only from r29 (`TOME_SAT_FROM`; r31 on cadence), melee on r16, and no claw before r29 that leaves them under 50% by r31; `reds.js`: bounced -> `zcb_due` (shadow / ZCB, like a scyther).
 

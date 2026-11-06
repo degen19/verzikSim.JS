@@ -495,10 +495,10 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           p.reds_n = n;
           if (r === BOUNCE_R && ga(p, 'was_bounced', false)) {
             // knocked back: their next attack is from range - the tome (or a shadow), whichever the plan says; no lost tick
-            // (Scythe first hit after tome: like a scyther - a shadow with Shadow ticked, else a ZCB auto with bounced ZCB)
-            if (p.scythe_after_tome && (ga(p, 'shadow', false) || p.bzcb)) { p.zcb_due = true; p.tome_lock = false; }
+            // (Scythe first hit after tome, no shadow: a ZCB auto with bounced ZCB, like a scyther)
+            if (p.scythe_after_tome && p.bzcb && !ga(p, 'shadow', false)) { p.zcb_due = true; p.tome_lock = false; }
             else p.tome_lock = 'range';
-            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - ${p.zcb_due ? (ga(p, 'shadow', false) ? 'shadow' : 'ZCB auto') : 'tome / shadow from range'} next (t${p.next_attack})`);
+            L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - ${p.zcb_due ? 'ZCB auto' : 'tome / shadow from range'} next (t${p.next_attack})`);
           }
           if (p.thrall_next == null) p.thrall_next = t + rng.randint(1, 2);
           continue;

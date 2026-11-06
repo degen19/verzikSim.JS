@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.30.1';
+export const VERSION = '1.30.2';
 export const CHANGES = [
+  { version: '1.30.2', date: '2026-11-06', items: [
+    'Scythe first hit after tome: a player with a shadow doesn\'t chance the r16 bounce - they shadow r16 from a distance, then scythe and tome on r31. Without a shadow: scythe r16, ZCB auto if bounced.',
+  ] },
   { version: '1.30.1', date: '2026-11-06', items: [
     'Scythe first hit after tome: the tome now waits for r31 (tome r31, buffed r34 / 36 / 38, scythe r40). Before that they play like a scyther - scythe r16 in range for the bounce (bounced: a shadow with Shadow ticked, else a ZCB auto) - and only claw when the tome won\'t be there by r31.',
   ] },
