@@ -21,14 +21,6 @@ export const TOME_DELAY = 3;   // queued [3, damage] at Verzik (Nylocas: [2, dam
 export const TOME_LAST_R = 40, TOME_LAND_R = 41;
 export const TOME_MAGIC = 112;
 
-/** A claw spec's first two hitsplats (they land a tick before the last two): their expected total. */
-function claw_first_two(ch, mx) {
-  const fl = Math.floor, avg = (a, b, f) => { if (b < a) return f(a); let t = 0; for (let x = a; x <= b; x++) t += f(x); return t / (b - a + 1); };
-  const q = 1 - ch;
-  return ch * avg(fl(mx / 2), mx - 1, (x) => x + fl(x / 2)) + q * ch * avg(fl(3 * mx / 8), fl(7 * mx / 8), (x) => x)
-    + q ** 4 * (2 / 3) * 2;                                        // all four miss: 1 + 1 two times in three
-}
-
 const _cache = new Map();
 /** Their tome numbers [hit chance, max] for k Flow boosts (0 auto, 1 spec / buffed auto, 2 spec while buffed). */
 export function tome_numbers(p, k) {
@@ -47,7 +39,7 @@ export function tome_values(p) {
   const landed = (mx) => hitMV(1, mx)[0];            // a hit's damage, given it hit
   return {
     Sc: scytheMV(sch, smx)[0], Sh: p.shadow ? hitMV(hch, hmx)[0] : null, C: p.has_dc !== false ? clawMV(cch, cmx)[0] : null,
-    Cs: p.has_dc !== false ? hitMV(cch, cmx)[0] + hitMV(cch, Math.floor(cmx / 2))[0] : null, C12: p.has_dc !== false ? claw_first_two(cch, cmx) : null,
+    Cs: p.has_dc !== false ? hitMV(cch, cmx)[0] : null,
     za: hitMV(t0[0], t0[1])[0], Tb: hitMV(t1[0], t1[1])[0],
     T1: [t1[0], landed(t1[1])], T2: [t2[0], landed(t2[1])],
   };
@@ -90,8 +82,8 @@ export function tome_plan(p, r, spec, timer, buff, ev = tome_values(p), lock = f
     } else {
       const melee = (!NO_MELEE.has(r) || (m16 && r === 16)) && !(lk && ev.Sh != null);   // (no shadow: they swap to melee anyway)
       if (melee) go('Sc', ev.Sc, 5);
-      // a claw's last two hitsplats land a tick after the first two: on r40 only the first two beat the heal
-      if (melee && ev.C != null && s >= 50) go('C', r + 2 <= TOME_LAND_R ? ev.C : ev.C12, 4, s - 50);
+      // a claw's last two hitsplats land a tick after the first two: r39 is the last claw
+      if (melee && ev.C != null && s >= 50 && r + 2 <= TOME_LAND_R) go('C', ev.C, 4, s - 50);
       if (ev.Sh != null) go('Sh', mag ? ev.Sh : 0, 5);
       if (melee && ev.Cs != null) go('Cs', ev.Cs, 4);
       if (s >= 50) go2('T', ev.T1, 3, 3, 0);

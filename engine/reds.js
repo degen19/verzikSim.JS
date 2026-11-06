@@ -159,10 +159,10 @@ export function tome_turn(p, act, t, r, n, rng, vq, rank, st, L) {
     p.next_attack = t + 4;
     L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, ${expText(clawMV(ch, mx))}, max ${mx}) -> ${pylist(hits)}`);
   } else if (act === 'Cs') {
-    const [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], P2_DEF[1]), ds = [roll(ch, mx), roll(ch, floordiv(mx, 2))];
-    ds.forEach((d, k) => vq.push([t + 1, rank.get(p), k, 'Claw scratch', d, p, 'dmg']));
+    const [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], P2_DEF[1]), d = roll(ch, mx);   // one hitsplat
+    vq.push([t + 1, rank.get(p), 0, 'Claw scratch', d, p, 'dmg']);
     p.next_attack = t + 4; p.reds_line.Cs = (p.reds_line.Cs || 0) + 1;
-    L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: claw scratch (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))}) -> ${pylist(ds)}`);
+    L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: claw scratch (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}) -> ${d}`);
   } else if (act === 'Sh') {
     const [ch, mx] = shadow_numbers(p), d = roll(ch, mx);
     vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
@@ -563,7 +563,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           hits.forEach((d, k) => vq.push([t + 1, rank.get(p), k, `Halberd spec hit ${k + 1}`, d, p, 'dmg']));
           p.next_attack = t + 7; st['halb'] = dget(st, 'halb', 0) + 1; p.reds_line.H = (p.reds_line.H || 0) + 1;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: no claws - HALBERD SPEC on r${r} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(p3.melee(p, p3.HALB, P2_DEF[1])[0] * 100, 1)}% / ${fx(p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0] * 100, 1)}%, ${expText(halbMV(p3.melee(p, p3.HALB, P2_DEF[1])[0], p3.melee(p, p3.HALB, P2_DEF[1], 0.75)[0], p3.melee(p, p3.HALB, P2_DEF[1])[1]))}) -> ${pylist(hits)}`);
-        } else if (p.spec >= 50 && p.has_dc !== false && (
+        } else if (p.spec >= 50 && p.has_dc !== false && r <= 39 && (   // r39 the last claw: its last two hits land r41
           (p.sh_plan == null && n >= 3)
           || (p.sh_plan === 'claw_first' && n === 1 && p.reds_claws === 0)
           || (p.sh_plan === 'shadow16' && n >= 3 && p.reds_claws === 0 && r <= 31))) {   // last claw r31 -> scythe r35 -> last hit r40

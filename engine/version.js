@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.26.0';
+export const VERSION = '1.26.1';
 export const CHANGES = [
+  { version: '1.26.1', date: '2026-11-05', items: [
+    'Claw scratch is one hitsplat again (Tome Reds and duo reds had it as two).',
+    'Reds: r39 is the last claw spec (its last two hitsplats land r41); on r40 they scythe instead. 3-5 man reds and duo set 2 (a set-1 r40 claw in duos is unchanged).',
+  ] },
   { version: '1.26.0', date: '2026-11-05', items: [
     'Zorya\'s tome in Verzik reds: tick Tome Reds (next to Shadow; the player needs a tome in their Gear set). In reds that player\'s attacks are planned for the most damage on her by r41 from their own numbers (112 Magic, their magic gear vs P2 Verzik\'s magic Defence): tome spec - a hit gives 3 buffed autos (2 ticks each), a spec on a buffed hit adds 3 more - scythes, claws, shadow. After buffed autos the next attack is a shadow (no time to switch to melee). They stay out of the r16 bounce unless someone else is out of range anyway (then they scythe r16). Duos: set 2. The latest a tome spec pays is about r29 - later than that they claw.',
     'Dragon claws: the last two hitsplats of a claw spec land a tick after the first two (claw on r40: only the first two land before the crab heal). Every claw spec in the sim.',

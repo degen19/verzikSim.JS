@@ -414,7 +414,7 @@ export function fill_numbers(p, kind, target) {
     const [ch, mx] = bp_vs(p, target === 'crab' ? CRAB_DEF_ROLL : P2_DEF[4]); return [ch, [mx], 2, 2];
   }
   const [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], target === 'crab' ? CRAB_DEF_ROLL : P2_DEF[1]);
-  return [ch, [mx, floordiv(mx, 2)], 1, 4];
+  return [ch, [mx], 1, 4];                                       // a claw scratch: one hitsplat
 }
 
 /** Crab or Verzik, whichever the fill is worth more on (crab hit must land by r41; no melee on Verzik on a
@@ -442,7 +442,7 @@ export function _fill(p, t, r, kind, target, vq, rank, rng, L, st) {
   } else if (kind === 'bp') {
     [ch, mx] = bp_vs(p, def_roll['bp']); spd = 2; dl = 2; maxes = [mx];
   } else {
-    [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], def_roll['scratch']); spd = 4; dl = 1; maxes = [mx, floordiv(mx, 2)];
+    [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], def_roll['scratch']); spd = 4; dl = 1; maxes = [mx];
   }
   const k_ = target === 'crab' ? 'crab:' + p.red_crab : 'dmg';
   const ds = [];
@@ -741,30 +741,30 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     if (p.reds_n === 0 && !p.scratch_done) {
       const [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], P2_DEF[1]);
       const ds = [];
-      [mx, floordiv(mx, 2)].forEach((m, k) => {
+      [mx].forEach((m, k) => {                              // a claw scratch: one hitsplat
         const d = roll(rng, ch, m); ds.push(d);
         vq.push([t + 1, rank.get(p), k, 'Claw scratch', d, p, 'dmg']);
       });
       p.next_attack = t + 4; p.reds_n = n; p.scratch_done = true; st['scratch'] += 1;
-      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch r11 (no claw yet, acc ${fx(ch * 100, 1)}%, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))}) -> ${plist(ds)}`);
+      L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch r11 (no claw yet, acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))}) -> ${plist(ds)}`);
       return;
     }
     _scythe_verzik(p, t, r, vq, rank, rng, L, 2);
     return;
   }
-  const want_claw = p.spec >= 50 && (                       // specs go first, from r11
+  const want_claw = p.spec >= 50 && r <= 39 && (            // specs go first, from r11 (r39 the last: its last two hits land r41)
     (p.plan === 'two_claws' && p.claws_done < 2)
     || ((p.plan === 'shadow_claw' || p.plan === 'scratch_claw') && p.claws_done < 1));
   if (p.plan === 'scratch_claw' && p.claws_done === 1 && !p.scratch_done) {
     const [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], P2_DEF[1]);
     const ds = [];
-    [mx, floordiv(mx, 2)].forEach((m, k) => {
+    [mx].forEach((m, k) => {                                // a claw scratch: one hitsplat
       const d = roll(rng, ch, m); ds.push(d);
       vq.push([t + 1, rank.get(p), k, 'Claw scratch', d, p, 'dmg']);
     });
     p.next_attack = t + 4; p.reds_n = n; p.scratch_done = true;
     st['scratch'] += 1;
-    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch (acc ${fx(ch * 100, 1)}%, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))}) -> ${plist(ds)}`);
+    L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: claw scratch (acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))}) -> ${plist(ds)}`);
     return;
   }
   if (want_claw) {
