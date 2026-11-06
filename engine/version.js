@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.31.0';
+export const VERSION = '1.31.1';
 export const CHANGES = [
+  { version: '1.31.1', date: '2026-11-06', items: [
+    'Decision tree: a tome spec on r16 and one held till r31 (Scythe first hit after tome) are separate rules by reds proc time - \'reds proc 1:37 or later: tome spec r16\', \'reds proc 1:28-1:35: tome spec r31\', \'reds proc 1:23-1:27: claw spec r35-r39\'.',
+  ] },
   { version: '1.31.0', date: '2026-11-06', items: [
     'Nylocas Report: boss time charts - how often each boss time happens (bars) and the % of raids at that boss time or faster (line, with your breakpoints).',
     'Scythe first hit after tome: a one-tome sequence never starts on r11 (its last buffed auto would put a shadow on r20) - the tome goes on r16 when they have 50% by then and are free on r16 (tome r16, buffed r19 / 21 / 23, scythe r25), else they hold it till r31. Two-tome sequences (100%) can still start early.',

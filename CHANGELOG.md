@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.31.1 - 2026-11-06
+- `engine/vtree.js`: `specRules` splits tome specs by tick cluster (a gap over 5 reds ticks).
+
 ## v1.31.0 - 2026-11-06
 - `nylo-ui.js`: Report charts (`histogramSvg`, `cumulativeSvg` with breakpoints).
 - `engine/tome.js`: Scythe first hit after tome - no one-tome sequence before r16 (under 100%); forced tome on r16 with 50%+; no tome r17-r28; no claw that costs the r16 tome.
