@@ -42,12 +42,21 @@ const mmss = (t) => { const s = Math.round(t * 0.6); return `${Math.floor(s / 60
  *  spec r, r16], ...] (non-bounced raids). */
 function specRules(samp) {
   if (samp.length < 50 || samp.filter((x) => x[0] > 0).length < samp.length * 0.5) return null;
+  // tome specs whose ticks fall in separate clusters (a gap over 5 reds ticks - a tome on r16 or held till r31) are a rule each
+  // (claws stay one rule: their first swing after the regen)
+  const cl = new Map();
+  for (const [, , kind, r] of samp) if (r != null && kind === 'tome') (cl.get(kind) || cl.set(kind, new Set()).get(kind)).add(r);
+  const part = new Map();
+  for (const [kind, set] of cl) { const v = [...set].sort((x, y) => x - y); let c = 0; v.forEach((r, i) => { if (i && r - v[i - 1] > 5) c++; part.set(`${kind}|${r}`, c); }); }
   const kinds = new Map();
-  for (const [rs, P, kind, r, r16] of samp) { const g = kinds.get(kind) || { n: 0, rs: [], r: [], out: 0 }; g.n++; g.rs.push(rs); if (r != null) g.r.push(r); if (r16 === 'out') g.out++; kinds.set(kind, g); }
+  for (const [rs, P, kind, r, r16] of samp) {
+    const key = r == null || kind !== 'tome' ? kind : `${kind}#${part.get(`${kind}|${r}`)}`;
+    const g = kinds.get(key) || { kind, n: 0, rs: [], r: [], out: 0 }; g.n++; g.rs.push(rs); if (r != null) g.r.push(r); if (r16 === 'out') g.out++; kinds.set(key, g);
+  }
   const main = [...kinds].filter(([, g]) => g.n >= samp.length * 0.02);
   if (main.length < 2) return null;
   const q = (a, f) => { const s = a.slice().sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(f * (s.length - 1)))]; };
-  const rows = main.map(([kind, g]) => ({ kind, n: g.n, lo: q(g.rs, 0.05), hi: q(g.rs, 0.95), rlo: g.r.length ? q(g.r, 0.05) : null, rhi: g.r.length ? q(g.r, 0.95) : null, out: g.out / g.n }))
+  const rows = main.map(([, g]) => ({ kind: g.kind, n: g.n, lo: q(g.rs, 0.05), hi: q(g.rs, 0.95), rlo: g.r.length ? q(g.r, 0.05) : null, rhi: g.r.length ? q(g.r, 0.95) : null, out: g.out / g.n }))
     .sort((a, b) => a.lo - b.lo || a.hi - b.hi);
   // the raid tick their 50% lands on: P + rs - the same one in 80%+ of raids?
   const abs = new Map(); for (const [rs, P] of samp) if (rs > 0) abs.set(P + rs, (abs.get(P + rs) || 0) + 1);
