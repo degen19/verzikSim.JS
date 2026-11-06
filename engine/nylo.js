@@ -256,7 +256,7 @@ function alignAct(t, f, ev, target) {
 // Cross praying: nobody knows his next form until it shows. Between forms they switch to the gear of the form they predict
 //   and pray for the other one (his attack and their offensive prayer): right, they only flick prayers; wrong, their prayers
 //   are already right and they get Max switches (plan.maxSwitches, 1-8) a tick before their first attack in the form -
-//   the weapon first, then the items that add the most to that attack. The rest of the form, their full set.
+//   the weapon first, then the items that add the most to that attack together (full void counts as a set). The rest of the form, their full set.
 //   Prediction: he's magic or melee -> ranged (the tick fixes); ranged -> melee; a tome spec planned (or buffed autos left) -> magic.
 export const MAX_SWITCHES = 8;
 const STYLE = { melee: 'melee', ranged: 'range', magic: 'mage' };
@@ -276,22 +276,31 @@ function attackScore(p, style, weapon, d) {
   return ch * mx;
 }
 /** The partial set after n switches from their predicted style's set toward their set for this attack: the weapon first
- *  (a two-handed weapon takes the shield off with it; ammo is always on), then the item adding the most each switch. */
+ *  (a two-handed weapon takes the shield off with it; ammo is always on), then the n-1 items that add the most together. */
 export function partialSet(p, predStyle, style, weapon, n, d) {
   const full = style === 'mage' ? bestWorn(p.gear, 'mage', weapon).set : worn(p.gear, style, weapon);
   const from = predStyle === 'mage' ? bestWorn(p.gear, 'mage', BASE_WEAPON.mage).set : worn(p.gear, predStyle, BASE_WEAPON[predStyle]);
   const cur = { ...from, weapon: full.weapon, ammo: full.ammo };
   if (full.shield === '' && ITEMS[weapon] && ITEMS[weapon].two_handed) cur.shield = '';
-  const left = () => Object.keys(full).filter((k) => k !== 'weapon' && k !== 'ammo' && (full[k] || '') !== (cur[k] || ''));
-  const keep = p.ovr; let used = 1;
+  const diff = Object.keys(full).filter((k) => k !== 'weapon' && k !== 'ammo' && (full[k] || '') !== (cur[k] || ''));
+  const m = Math.min(n - 1, diff.length);
+  if (m >= diff.length) return { set: full, missing: [], full: true };
+  // the best m of the differing items together (a set bonus - full void - only counts with every piece on)
+  const keep = p.ovr; let best = null;
   try {
-    while (used < n && left().length) {
-      let best = null;
-      for (const k of left()) { const c = { ...cur, [k]: full[k] }; p.ovr = () => c; const v = attackScore(p, style, weapon, d); if (!best || v > best[1]) best = [k, v]; }
-      cur[best[0]] = full[best[0]]; used++;
-    }
+    const pick = (from, chosen) => {
+      if (chosen.length === m) {
+        const c = { ...cur }; for (const k of chosen) c[k] = full[k];
+        p.ovr = () => c; const v = attackScore(p, style, weapon, d);
+        if (!best || v > best[1] + 1e-9) best = [chosen.slice(), v];
+        return;
+      }
+      for (let i = from; i <= diff.length - (m - chosen.length); i++) { chosen.push(diff[i]); pick(i + 1, chosen); chosen.pop(); }
+    };
+    pick(0, []);
   } finally { p.ovr = keep; }
-  return { set: cur, missing: left().map((k) => full[k]).filter(Boolean), full: !left().length };
+  for (const k of best[0]) cur[k] = full[k];
+  return { set: cur, missing: diff.filter((k) => !best[0].includes(k)).map((k) => full[k]).filter(Boolean), full: false };
 }
 export const SOLO_UNDER = new Set([0, 1, 2, 3, 5, 6, 7, 8]), SOLO_HITS = [4], HEAL_LOOP = 3;
 export const BOSS_MAX = 70, PRAYED_MAX = 17, VENG_CD = 50, HP_MAX = 99, REDEMPTION = 24;
@@ -606,3 +615,32 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
   const end = kill == null ? null : roomEnd(kill, overkill, i1);
   return { spawn, i1, kill, overkill, end, sched, def, st, hp: ps.map((p) => p.hp) };
 }
+
+/** Wave times (the Nylocas waves before the boss): rows [{time: 'm:ss.s' | seconds, freq: %}] -> {dist: [[ticks, share]],
+ *  mean (ticks)} or {error}. Each time a whole tick (0.6s), all on the same 4-tick cycle (2.4s apart), the frequencies
+ *  adding up to exactly 100%. Room time = wave time + boss time; the wave time also runs down surge cooldowns from the
+ *  rooms before (full raid). */
+export function parseWaveTimes(rows) {
+  const dist = [];
+  for (const [k, r] of (rows || []).entries()) {
+    const ts = String(r.time ?? '').trim(), fs = String(r.freq ?? '').trim();
+    if (!ts && !fs) continue;
+    const m = ts.match(/^(?:(\d+):)?(\d+(?:\.\d+)?)$/);
+    if (!m) return { error: `Row ${k + 1}: wave time '${ts}' - use m:ss.s (e.g. 2:30.0)` };
+    const sec = (m[1] ? Number(m[1]) * 60 : 0) + Number(m[2]), ticks = Math.round(sec / 0.6);
+    if (Math.abs(ticks * 0.6 - sec) > 0.05) return { error: `Row ${k + 1}: ${ts} isn't a whole tick (0.6s)` };
+    const f = Number(fs.replace('%', ''));
+    if (!fs || !Number.isFinite(f) || f <= 0) return { error: `Row ${k + 1}: frequency '${fs}' - a % above 0` };
+    if (dist.length && (ticks - dist[0][0]) % 4 !== 0) return { error: `Row ${k + 1}: ${ts} isn't a multiple of 2.4s (4 ticks) from ${fmtWave(dist[0][0])}` };
+    if (dist.some((x) => x[0] === ticks)) return { error: `Row ${k + 1}: ${ts} is listed twice` };
+    dist.push([ticks, f / 100]);
+  }
+  if (!dist.length) return { error: 'Add a wave time' };
+  const tot = dist.reduce((a, x) => a + x[1], 0);
+  if (Math.abs(tot - 1) > 1e-6) return { error: `The frequencies add up to ${+(tot * 100).toFixed(2)}% - they need to add up to 100%` };
+  return { dist, mean: dist.reduce((a, [t, f]) => a + t * f, 0) };
+}
+/** m:ss.s for a tick count. */
+export const fmtWave = (ticks) => { const s = ticks * 0.6, mm = Math.floor(s / 60); return `${mm}:${(s - mm * 60).toFixed(1).padStart(4, '0')}`; };
+/** A wave time (ticks) drawn from the distribution. */
+export function drawWave(dist, rng) { let x = rng.random(); for (const [t, f] of dist) { if ((x -= f) < 0) return t; } return dist[dist.length - 1][0]; }

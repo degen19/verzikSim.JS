@@ -5,7 +5,7 @@ import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/
 import { blankPlayer } from './engine/loadout.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { histogramSvg, cumulativeSvg, chartBox } from './engine/report.js';
-import { runNylo, NYLO_HP, FAST } from './engine/nylo.js';
+import { runNylo, NYLO_HP, FAST, parseWaveTimes, drawWave, fmtWave } from './engine/nylo.js';
 import { solveNylo, rangedThresholds, predictionThresholds, predictionText, PRED_FORMS, PRED_DEFAULT, PRED_OTHER, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, better as scoreBetter } from './engine/nylosolve.js';
 import { NyloPool } from './nylo-solver-pool.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
@@ -113,18 +113,27 @@ export function createNylo(host, { getTeam }) {
         <td><select data-p="${k}|maxSwitches">${opt([1, 2, 3, 4, 5, 6, 7, 8].map((x) => [x, x]), p.maxSwitches ?? 8)}</select></td>
         ${t === 2 ? `<td style="text-align:center"><input type="checkbox" data-p="${k}|healer" ${p.healer ? 'checked' : ''}></td>` : ''}
         ${t === 1 ? '' : `<td>${stopSel(k, 1)}</td><td>${stopSel(k, 2)}</td><td>${stopSel(k, 3)}</td>`}</tr>`; }).join('')}</table></div>
+      <div style="margin-top:10px">${pick()} title="Add the Nylocas waves before the boss: room time = wave time + boss time (the Report's numbers and charts). In a full raid it also runs down surge cooldowns from the rooms before"><input type="checkbox" data-s="waveOn" ${st.wave && st.wave.on ? 'checked' : ''}>Include wave time</label></div>
+      ${st.wave && st.wave.on ? (() => { const w = parseWaveTimes(st.wave.rows); return `<table class="bt" style="margin-top:4px"><tr><th>Wave time</th><th>Frequency</th><th></th></tr>
+        ${st.wave.rows.map((r, j) => `<tr><td><input data-wave="${j}|time" value="${esc(r.time ?? '')}" placeholder="m:ss.s" style="width:80px"></td><td><input data-wave="${j}|freq" value="${esc(r.freq ?? '')}" placeholder="%" style="width:60px"> %</td><td>${st.wave.rows.length > 1 ? `<button class="ghost sm" data-wavedel="${j}">Remove</button>` : ''}</td></tr>`).join('')}</table>
+        <button class="ghost sm" data-waveadd style="margin-top:4px">+ Add wave time</button>
+        <div class="small ${w.error ? 'warn' : 'muted'}" style="margin-top:4px">${w.error ? esc(w.error) : `Average wave time ${fmtWave(Math.round(w.mean))} (${(w.mean * 0.6).toFixed(2)}s) - times are a whole tick, 2.4s (4 ticks) apart; frequencies add up to 100%.`}</div>`; })() : ''}
       <div class="small muted" style="margin-top:6px">Cross praying (they predict his next form: its gear on, the other form's prayers):
         ${st.players.map((p, k) => `<div>${esc(names[k])}: ${esc(predictionText(p.predictFlip || {}))}${p.specs.includes('tome') ? ' (magic while a tome spec is planned)' : ''}${p.predictFlip && Object.keys(p.predictFlip).length ? ` <button class="ghost sm" data-resetpred="${k}">Default</button>` : ''}</div>`).join('')}</div>`;
   }
   cfg.addEventListener('click', (e) => {
-    const k = e.target.dataset.resetpred; if (k == null) return;
-    const st = cur(); delete st.players[Number(k)].predictFlip; persist(); render();
+    const st = cur(), d = e.target.dataset;
+    if (d.waveadd != null) { st.wave.rows.push({ time: '', freq: '' }); persist(); render(); return; }
+    if (d.wavedel != null) { st.wave.rows.splice(Number(d.wavedel), 1); persist(); render(); return; }
+    const k = d.resetpred; if (k == null) return;
+    delete st.players[Number(k)].predictFlip; persist(); render();
   });
   cfg.addEventListener('change', (e) => {
     const el = e.target, st = cur();
     if (el.dataset.s) {
       const k = el.dataset.s;
       if (k === 'takeoffs') st.takeoffs = el.checked;
+      else if (k === 'waveOn') { st.wave ||= { on: false, rows: [{ time: '', freq: '' }] }; st.wave.on = el.checked; }
       else if (k === 'offPrayVeng') st.offPrayVeng = el.checked;
       else if (k === 'restores') st.restores = Math.max(0, Math.min(40, Number(el.value) || 0));
       else if (k === 'gearSet') st.gearSet = el.value;
@@ -138,6 +147,8 @@ export function createNylo(host, { getTeam }) {
       else if (f === 'healer') { st.players.forEach((q) => { q.healer = false; }); p.healer = el.checked; }   // one Healer Tech at most
       else if (el.type === 'checkbox') p[f] = el.checked;
       else p[f] = el.value;
+    } else if (el.dataset.wave) {
+      const [j, fld] = el.dataset.wave.split('|'); st.wave.rows[Number(j)][fld] = el.value.trim();
     } else if (el.dataset.stop) {
       const [k, plan] = el.dataset.stop.split('|'), p = st.players[Number(k)];
       p.rangedStop ||= {}; if (el.value === '') delete p.rangedStop[plan]; else p.rangedStop[plan] = Number(el.value);
@@ -193,25 +204,31 @@ export function createNylo(host, { getTeam }) {
     err.textContent = '';
     let bps = []; try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
     const st = cur(), players = playersNow(st), n = Math.max(100, Number(r.raids) || 4000), seed = String(r.seed || '').trim() || `n${Date.now()}`;
+    const wave = st.wave && st.wave.on ? parseWaveTimes(st.wave.rows) : null;
+    if (wave && wave.error) { err.textContent = `Wave time: ${wave.error}`; return; }
     const run = { players, opts: { ...roomOpts(st), plans: { backup: team() === 1 ? null : st.backup } } };
     const x = { run, bps, seed, n }; flat.push(x);
     const all = []; const agg = {};
     for (let i = 0; i < n; i++) {
       const res = runNylo(players, team(), new Rng(`${seed}#${i}`), run.opts);
-      all.push({ i, total: res.end == null ? null : res.end - res.i1, key: String(res.end - res.i1) });
+      const w = wave ? drawWave(wave.dist, new Rng(`${seed}#wave${i}`)) : 0;
+      all.push({ i, boss: res.end == null ? null : res.end - res.i1, wave: w, total: res.end == null ? null : res.end - res.i1 + w, key: String(res.end - res.i1) });
       for (const [k, v] of Object.entries(res.st)) agg[k] = (agg[k] || 0) + v;
       if (i % 250 === 249) { status.textContent = `Running... ${i + 1} / ${n}`; await new Promise((z) => setTimeout(z, 0)); }
     }
     x.all = all;
-    const s = statsRow(all.map((z) => z.total ?? 99999), bps), idx = flat.length - 1, asc = [...bps].sort((a, b) => a - b);
+    const s = statsRow(all.map((z) => z.total ?? 99999), bps), sb = wave ? statsRow(all.map((z) => z.boss ?? 99999), []) : null, idx = flat.length - 1, asc = [...bps].sort((a, b) => a - b);
     const per = (k) => ((agg[k] || 0) / n).toFixed(2);
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${team()}-man Nylocas: ${n.toLocaleString()} raids</h3>
-      <table><tr><th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
-      <tr><td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
+      ${wave ? `<div class="small muted" style="margin-bottom:4px">Room time = wave time (average ${fmtWave(Math.round(wave.mean))}) + boss time. Breakpoints are room times.</div>` : ''}
+      <table><tr>${wave ? '<th></th>' : ''}<th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
+      ${sb ? `<tr><td class="rl">Boss time</td><td>${fsec(sb.mean)}</td><td>${fsec(sb.med)}</td><td>${fsec(sb.q10)}</td><td>${fsec(sb.fast)}</td>${asc.map(() => '<td>-</td>').join('')}</tr>` : ''}
+      <tr>${wave ? '<td class="rl">Room time</td>' : ''}<td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
       <div class="small muted" style="margin-top:6px">Per raid: vengs ${per('veng')} (${per('vengDmg')} damage) · damage taken ${per('taken')} · thralls ${per('thrall')} · takeoffs ${per('takeoffs')} · under him ${per('under')} · Heal Others ${per('heals')} · redemptions ${per('redemptions')} · deaths ${per('deaths')} · wrong predictions ${per('wrong')} (first attack short of their full set ${per('short')})</div>
       ${(() => { const series = [{ total: all.filter((z) => z.total != null).map((z) => z.total), runs: n }];
-        return `<h3>How often each boss time happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, ['Nylocas'], rg).replace('% of successful runs', '% of raids'))}</div>
-      <h3>Boss time this or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (boss time at that or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, ['Nylocas'], bps, rg).replace('% of successful runs finished by this time', '% of raids at this boss time or faster'))}</div>`; })()}
+        const what = wave ? 'room time' : 'boss time';
+        return `<h3>How often each ${what} happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, ['Nylocas'], rg).replace('% of successful runs', '% of raids'))}</div>
+      <h3>${wave ? 'Room' : 'Boss'} time this or faster - % of raids</h3><div class="sub">${bps.length ? `Vertical lines are your breakpoints (${what} at that or faster; times are rounded down to a tick).` : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, ['Nylocas'], bps, rg).replace('% of successful runs finished by this time', `% of raids at this ${what} or faster`))}</div>`; })()}
       <div class="small" style="margin-top:8px" data-nbar="${idx}"><button class="ghost sm" data-nraid="${idx}">Show raid</button> <span class="muted" data-nmsg="${idx}"></span></div><div style="width:0;min-width:100%"><div data-nout="${idx}"></div></div></div>`;
     status.textContent = `Done: ${n.toLocaleString()} raids (seed ${seed}).`;
   });

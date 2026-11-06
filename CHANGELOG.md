@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.32.0 - 2026-11-06
+- `engine/nylo.js`: cross praying - `predictForm`, `partialSet` (weapon, then the best n-1 items together), `W` gear lookups with `p.ovr`, `plan.maxSwitches`, `plan.predictFlip`; `parseWaveTimes` / `drawWave` / `fmtWave`.
+- `engine/nylosolve.js`: `predictionThresholds`, `predictionText`.
+- `nylo-ui.js`: Max switches column, predictions line, Include wave time table, room time in the Report, Predictions by HP in the Solver.
+
 ## v1.31.1 - 2026-11-06
 - `engine/vtree.js`: `specRules` splits tome specs by tick cluster (a gap over 5 reds ticks).
 

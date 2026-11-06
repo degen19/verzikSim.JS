@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.31.1';
+export const VERSION = '1.32.0';
 export const CHANGES = [
+  { version: '1.32.0', date: '2026-11-06', items: [
+    'Nylocas: cross praying. Between forms each player wears the gear of the form they predict (he\'s magic or melee -> ranged; ranged -> melee; a tome spec planned -> magic) and prays for the other. Guessed wrong: their first attack in the form is on Max switches on wrong prediction (1-8 a tick, per player) - the weapon first, then the items that add the most together (full void counts as a set). The Report counts wrong predictions.',
+    'Nylocas Solver: keeps each player\'s Max switches; Predictions by HP - what each player should predict from each of his forms by his HP, with a button to use them in the settings.',
+    'Nylocas: Include wave time - wave times (whole ticks, 2.4s apart) and how often each happens (adding up to 100%); the Report shows room time (wave + boss) with its charts and breakpoints.',
+  ] },
   { version: '1.31.1', date: '2026-11-06', items: [
     'Decision tree: a tome spec on r16 and one held till r31 (Scythe first hit after tome) are separate rules by reds proc time - \'reds proc 1:37 or later: tome spec r16\', \'reds proc 1:28-1:35: tome spec r31\', \'reds proc 1:23-1:27: claw spec r35-r39\'.',
   ] },
