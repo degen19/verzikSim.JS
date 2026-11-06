@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.34.1 - 2026-11-06
+- `raidview.js` / `img/icons`: Ascension crossbows (AX) and Dragon dart (DD) icons.
+
 ## v1.34.0 - 2026-11-06
 - `engine/fullraid.js`: rooms per setup (`roomsOf`: Nylocas first when the setup has one), `runNylo` with surge cooldowns / doses carried, `playRoom` / `surgersOf` / `withSurgers` for Nylocas, `planScore` for any number of rooms; `fullraid-pool.js` ends / entries per room.
 - `engine/nylo.js`: `surgeCd` (from the room's start - the waves run it down), `wave` / `waveDist`, `roomEnd`, players' `surgeAt`.

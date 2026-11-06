@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.34.0';
+export const VERSION = '1.34.1';
 export const CHANGES = [
+  { version: '1.34.1', date: '2026-11-06', items: [
+    'Raid charts: Ascension crossbows and dragon dart icons.',
+  ] },
   { version: '1.34.0', date: '2026-11-06', items: [
     'Full raid: Nylocas as the first room (waves + boss) - its own block (Max switches on wrong prediction, Healer Tech and restore doses in duos, wave times - required), solved like the other rooms, surge cooldowns running down through the waves and carried on; a Nylocas breakpoint (room time), report and procedure in the results. Untick Nylocas to start at Sotetseg.',
     'Nylocas Report and Solver: median, top 25%, top 10% and fastest (no mean).',
