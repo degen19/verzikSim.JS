@@ -2,7 +2,7 @@
 // Line-by-line port of verzik_sim/reds.py
 import { hitMV, sumMV, scytheMV, clawMV, halbMV, rubyAutoMV, expText } from './expdmg.js';
 import * as supplies from './supplies.js';
-import { CAMP, CLAW_BY_R, auto_surge, custom_surge, bf_swap, bf_heal, lb_swap_ok, swap_due, ARMOUR, FIXED, AMULETS, RINGS, PRAYERS, hit_chance, fmt } from './sim.js';
+import { CAMP, CLAW_BY_R, auto_surge, custom_surge, bf_swap, bf_heal, lb_swap_ok, swap_due, surge_owed, ARMOUR, FIXED, AMULETS, RINGS, PRAYERS, hit_chance, fmt } from './sim.js';
 import * as horn from './horn.js';
 import { scythe_roll, P2_DEF, P2_HP, shadow_numbers, SHADOW_DELAY_NEAR, blowpipe_chance, BP_DELAY } from './p2.js';
 import { bp_vs } from './duo_reds.js';
@@ -261,7 +261,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
   let kill = null;
   for (let r = 0; r < FAIL_R; r++) {
     const t = P + r;
-    CAMP.now = t; CAMP.claw_by = P + CLAW_BY_R[team];
+    CAMP.now = t; CAMP.claw_by = P + CLAW_BY_R[team]; CAMP.reds = P;
     // ---- Verzik step
     const landing = sorted(vq.filter((h) => h[0] === t), (h) => [h[1], h[2]]);
     vq = vq.filter((h) => h[0] !== t);
@@ -415,7 +415,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       custom_surge(p, t, L, `r${r} `); auto_surge(p, t, L, `r${r} `); bf_swap(p, 'P2 crabs', L, t, `r${r} `);
       if (swap_due(p)) {
         p.ring = 'Ultor'; p.regen_timer = 0; p.ring_swapped_at = t;
-        L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? '(4 Claw Priority goal still reachable on Ultor)' : '>= target') + ' -> swaps to Ultor');
+        L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? '(4 Claw Priority goal still reachable on Ultor)' : `>= target${surge_owed(p) ? ' (+25 surge to come)' : ''}`) + ' -> swaps to Ultor');
       }
       if (pc && p === pdc && ga(p, 'reds_bp', false)) {
         if (t >= p.next_attack) {

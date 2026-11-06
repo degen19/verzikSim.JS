@@ -171,7 +171,7 @@ export function run_p2(p1, team, rng, log = null) {
   let proc_tick = null, shield_tick = null;
   const shadow_stats = { casts: 0, dmg: 0, late_dmg: 0, deep_casts: 0 };
   let t = K;
-  Object.assign(_sim.CAMP, { duo: (team === 2), dc_paid: [] });
+  Object.assign(_sim.CAMP, { duo: (team === 2), dc_paid: [], reds: null });
 
   const pay_in_flight = () => {
     crab['spec_paid'] = true;                    // blowpipe hit still in flight at the shield: +15 now
@@ -208,7 +208,7 @@ export function run_p2(p1, team, rng, log = null) {
       // never assume slower than a typical P2: the first ticks deal little damage, and a late estimate would swap too early
       const rate = Math.max(_sim.P2_PACE0[team], (t - K >= 20 && done > 0) ? done / (t - K) : 0);
       const est_reds = t + Math.max(0, hp - reds_at) / Math.max(rate, 1.0) + 2;
-      _sim.CAMP.now = t; _sim.CAMP.claw_by = Math.trunc(est_reds) + _sim.CLAW_BY_R[team];
+      _sim.CAMP.now = t; _sim.CAMP.claw_by = Math.trunc(est_reds) + _sim.CLAW_BY_R[team]; _sim.CAMP.reds = Math.trunc(est_reds);
     }
     if (_sim.FLAGS.LB_CAMP && team === 2) {             // estimated set-2 r11 from the pace so far (camp-LB test mode)
       const done = mx_hp - hp;
@@ -410,7 +410,7 @@ export function run_p2(p1, team, rng, log = null) {
         p.ring = 'Ultor';
         p.regen_timer = 0;
         p.ring_swapped_at = t;
-        L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? `(4 Claw Priority: Ultor still makes ${p.claw_goal === 'two' ? (p.claw_fallback ? '80% by r40' : 'both claws by r36') : 'one claw by r36'})` : p.target_spec == null ? '(regen landed, default swap)' : `>= target ${fx(Number(p.target_spec))}%`) + ' -> swaps to Ultor ' +
+        L.on && L(`t${rjust(t, 4)} ${p.name}: spec ${fx(p.spec)}% ` + (p.claw_goal ? `(4 Claw Priority: Ultor still makes ${p.claw_goal === 'two' ? (p.claw_fallback ? '80% by r40' : 'both claws by r36') : 'one claw by r36'})` : p.target_spec == null ? '(regen landed, default swap)' : `>= target ${fx(Number(p.target_spec))}%${[ga(p, 'purple_pending', false) && ga(p, 'purple_early', false) ? '+15 purple' : '', _sim.surge_owed(p) ? '+25 surge' : ''].filter(Boolean).map((x) => ` (${x} to come)`).join('')}`) + ' -> swaps to Ultor ' +
           `(regen timer reset, now 50t)`);
       }
       custom_surge(p, t, L); auto_surge(p, t, L); bf_swap(p, 'P2 Verzik', L, t);

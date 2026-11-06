@@ -174,7 +174,8 @@ export function applyToCfg(cfg, pl) {
   out.mageGear = mageList(pl);
   out.hasShadow = (pl.weapons || []).includes("Tumeken's shadow");
   out.hasTome = (pl.weapons || []).includes("Zorya's tome");
-  if (!out.hasTome) { out.tomeReds = false; out.scytheAfterTome = false; }                   // no tome: Tome Reds doesn't apply
+  if (!out.hasTome) { out.tomeReds = false; out.scytheAfterTome = false; }
+  out.surgeInRing ??= true;                   // no tome: Tome Reds doesn't apply
   if (!out.hasShadow) Object.assign(out, { shadow: false, shadow31: false, shadowLB: false, shadowCamp: false, deepProc: false });   // no shadow: its settings don't apply
   return out;
 }

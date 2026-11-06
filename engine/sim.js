@@ -165,7 +165,7 @@ export const LB_CAMP = false;
 export const LB_RULE = 'ticks';
 export const LB_KEEP_TICKS = 10;
 
-export const CAMP = { duo: false, now: null, eta: null, dc_paid: [], claw_by: null };   // filled in by p2 / reds / duo_reds each tick
+export const CAMP = { duo: false, now: null, eta: null, dc_paid: [], claw_by: null, reds: null };   // reds: the reds tick (estimated in P2)   // filled in by p2 / reds / duo_reds each tick
 
 // Default ring swap guard: everyone needs at least one claw (50%) in reds. CAMP.claw_by = the tick that claw must be
 // ready by: reds r36 (duo: set-2 r11), estimated from the P2 pace until the reds actually start.
@@ -242,6 +242,12 @@ export function camp_projection(p) {
 
 
 /** Lightbearer -> Ultor check, used in P2, reds and duo reds. */
+/** Count surge in ring swap: their custom surge hasn't been drunk yet and lands by reds r35 (the reds tick: estimated from
+ *  the pace in P2, the real one in reds). */
+export const SURGE_OWED_R = 35;
+export function surge_owed(p) {
+  return p.surge_in_ring !== false && p.custom_tick != null && !p.custom_done && CAMP.reds != null && p.custom_tick <= CAMP.reds + SURGE_OWED_R;
+}
 export function swap_due(p) {
   if (p.ring !== 'Lightbearer') return false;
   if (p.claw_goal) return claw_goal_swap(p);
@@ -258,7 +264,10 @@ export function swap_due(p) {
     return p.gain_src === 'regen' && p.regen_timer === 0 && ultor_claw_ok(p, CAMP.now, CAMP.claw_by);
   }
   const tgt = Number(p.target_spec);
-  if (FLAGS.PURPLE_EARLY_SWAP && ga(p, 'purple_pending', false) && ga(p, 'purple_early', false)) return p.spec >= tgt - 15;
+  // Count surge in ring swap: a custom surge still to come by reds r35 is +25 they'll have (as a popped purple's +15)
+  const surge = surge_owed(p) ? 25 : 0;
+  if (FLAGS.PURPLE_EARLY_SWAP && ga(p, 'purple_pending', false) && ga(p, 'purple_early', false)) return p.spec >= tgt - 15 - surge;
+  if (surge) return p.spec >= tgt - surge;
   return p.spec >= tgt && (FLAGS.LB_RULE === 'ticks' ? lb_keep_ok(p) : lb_swap_ok(p));
 }
 
@@ -409,6 +418,7 @@ export class Player {
     this.surge_pending = null;
     this.gain_src = 'regen';                  // where their last spec gain came from: 'regen' or 'other'
     this.custom_tick = dget(cfg, 'customSurgeTick');
+    this.surge_in_ring = dget(cfg, 'surgeInRing', true) !== false;   // Count surge in ring swap: a custom surge still to come (by reds r35) counts toward the Ring switch %
     this.custom_done = false;
     this.next_attack = 0;      // weapon cooldown, for flagging only
     this.thrall_next = null;
@@ -624,7 +634,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
         ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
         ['horn', 'Horn'], ['hornP2', 'P2 horn'], ['hornP3', 'P3 horn'],
         ['eastBoak', 'East Boak'], ['westBoak', 'West Boak'], ['redemptionFlick', 'Redemption flick'], ['pneckP1', 'Pneck on P1'], ['passGreen', 'Pass green if death'],
-        ['hasBP', 'Has BP'], ['tomeReds', 'Tome Reds'], ['scytheAfterTome', 'Scythe first hit after tome']]) {
+        ['hasBP', 'Has BP'], ['tomeReds', 'Tome Reds'], ['scytheAfterTome', 'Scythe first hit after tome'], ['surgeInRing', 'Count surge in ring swap']]) {
         if (get(h) != null && pystr(get(h)).trim() !== '') cfgs[k][key] = yes(get(h));
       }
       // Has BP (blank / no column = has one): popping the purple crab needs a blowpipe
