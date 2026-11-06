@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.30.2';
+export const VERSION = '1.31.0';
 export const CHANGES = [
+  { version: '1.31.0', date: '2026-11-06', items: [
+    'Nylocas Report: boss time charts - how often each boss time happens (bars) and the % of raids at that boss time or faster (line, with your breakpoints).',
+    'Scythe first hit after tome: a one-tome sequence never starts on r11 (its last buffed auto would put a shadow on r20) - the tome goes on r16 when they have 50% by then and are free on r16 (tome r16, buffed r19 / 21 / 23, scythe r25), else they hold it till r31. Two-tome sequences (100%) can still start early.',
+  ] },
   { version: '1.30.2', date: '2026-11-06', items: [
     'Scythe first hit after tome: a player with a shadow doesn\'t chance the r16 bounce - they shadow r16 from a distance, then scythe and tome on r31. Without a shadow: scythe r16, ZCB auto if bounced.',
   ] },
