@@ -36,17 +36,17 @@ export function createNylo(host, { getTeam }) {
       </div>
       <div data-rstatus class="muted" style="margin-top:8px"></div><div data-rerr class="err"></div><div data-rout style="margin-top:8px"></div>`)}
     ${pane('solve', 'data-solve', `
-      <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's opening spec (none, BGS, claws, halberd), their damage specs in order (claws, tome, ZCB, halberd - one or two, either order),
+      <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's opening spec (none, BGS, claws, halberd), their second spec(s) in order (claws, tome, ZCB, halberd - one or two, either order),
         the claw rule (only when it gains a usable tick, or as soon as they have 50%), start spec (95 / 100), surges (within the Surge potions limit) and the backup BGS (who, and at which Defence: ${BACKUP_ATS.join(', ')}+) -
         within the gear each player has. Each round it tries every single change (with Role changes: a player's opener and damage specs together; with Swaps: two players' specs swapped, a surge moved) on a few raids,
         then the best on more, and keeps the best if it beats the current setup, until nothing does. The top setups are then played on more raids and ranked: with breakpoints by the share at the fastest one (then the next), otherwise by the mean boss time.
-        Then for the best setup: each player's ranged tick fix thresholds (below which % of his HP they should play Twisted bows only, per green-form plan).</p>
+        Then for the best setup: each player's ranged tick fix thresholds (the % of his HP to stop each green-form sequence at - 4bp tbow, tbow bp tbow, 3bp tbow - and play Twisted bows only; bp is their 2-tick hit).</p>
       <div class="row">
         <label title="Target boss times (m:ss)">Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label>Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
         <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
       </div>
-      <div class="row" style="margin-top:6px">${[['open', 'Opening specs'], ['specs', 'Damage specs'], ['clawMode', 'Claw rule'], ['start', 'Start spec'], ['surge', 'Surges'], ['backup', 'Backup BGS']]
+      <div class="row" style="margin-top:6px">${[['open', 'Opening specs'], ['specs', 'Second specs'], ['clawMode', 'Claw rule'], ['start', 'Start spec'], ['surge', 'Surges'], ['backup', 'Backup BGS']]
         .map(([k, l]) => `${pick()}><input type="checkbox" data-va="${k}">${l}</label>`).join('')}
         <span class="muted small">Search:</span>${pick()} title="Also swap two players' specs, and move a surge, in one step"><input type="checkbox" data-vs="swaps">Swaps</label>
         ${pick()} title="Also change a player's opener and damage specs together"><input type="checkbox" data-vs="roles">Role changes</label>
@@ -95,17 +95,13 @@ export function createNylo(host, { getTeam }) {
       </div>
       ${notes.map((x) => `<div class="warn small" style="margin-bottom:4px">${esc(x)}</div>`).join('')}
       <div class="scroll"><table class="bt"><tr><th></th><th title="95: their first regen comes the tick after their first spec">Start spec</th><th title="+25% straight after their first spec">Surge</th>
-        <th title="Their first attack (his melee form)">Opening spec</th><th title="In order, each when his form allows: claws / halberd (melee), tome (magic), ZCB (in place of a Twisted bow, ranged). Never their first attack">Damage specs</th>
-        <th title="Claws after their opener: only when it gains a usable tick (another attack this form, or into the next one sooner) - or he's likely to die this cycle or the next and the claw can't be the killing blow; or as soon as they have 50%">Claw rule</th>
-        <th title="While a tome hit is to come: in his ranged form, their 2-tick hits / bows leave room for the tome spec + 3 buffed autos in a magic form next">Tome tick fix</th>
-        ${[1, 2, 3].map((k) => `<th title="Below this % of his HP, this green-form plan becomes Twisted bows only (by where their first attack lands: 2nd tick 4 hits + bow, 3rd bow, hit, bow, 4th 3 hits + bow)">Bows only below:<br>${PLAN_NAMES[k]}</th>`).join('')}</tr>
+        <th title="Their first attack (his melee form)">Opening spec</th><th title="After their opener, in order, each when his form allows: claws / halberd (melee), tome (magic), ZCB (in place of a Twisted bow, ranged). Never their first attack">Second spec</th>
+        ${[1, 2, 3].map((k) => `<th title="Below this % of his HP they stop this green-form sequence and play Twisted bows only (bp: their 2-tick hit - blowpipe, crossbows or darts). Which sequence depends on their first attack in the form: its 2nd tick 4bp tbow, 3rd tbow bp tbow, 4th 3bp tbow">Stop sequence at HP:<br>${PLAN_NAMES[k]}</th>`).join('')}</tr>
       ${st.players.map((p, k) => { const gk = gearK(st, k); return `<tr><td class="rl">${esc(names[k])}</td>
         <td><select data-p="${k}|startSpec">${opt([[100, '100'], [95, '95']], p.startSpec)}</select></td>
         <td style="text-align:center"><input type="checkbox" data-p="${k}|surge" ${p.surge ? 'checked' : ''}></td>
         <td><select data-p="${k}|open">${OPENS.map(([v, l]) => `<option value="${v}" ${v === p.open ? 'selected' : ''} ${canOpen(gk, v) ? '' : 'disabled'}>${l}</option>`).join('')}</select></td>
         <td><select data-p="${k}|specs" style="width:150px">${SEQS.map((s) => `<option value="${seqKey(s)}" ${seqKey(s) === seqKey(p.specs) ? 'selected' : ''} ${canSeq(gk, s) ? '' : 'disabled'}>${seqName(s)}</option>`).join('')}</select></td>
-        <td><select data-p="${k}|clawMode" ${p.specs.includes('claw') ? '' : 'disabled'}>${opt([['gain', 'For a tick'], ['asap', 'As soon as they can']], p.clawMode)}</select></td>
-        <td style="text-align:center"><input type="checkbox" data-p="${k}|tomeTickFix" ${p.tomeTickFix !== false ? 'checked' : ''} ${p.specs.includes('tome') ? '' : 'disabled'}></td>
         <td>${stopSel(k, 1)}</td><td>${stopSel(k, 2)}</td><td>${stopSel(k, 3)}</td></tr>`; }).join('')}</table></div>`;
   }
   cfg.addEventListener('change', (e) => {
@@ -162,7 +158,7 @@ export function createNylo(host, { getTeam }) {
   host.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b) showRaid(Number(b.dataset.nraid)); });
 
   /** A setup laid out. */
-  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Damage specs</th><th>Claw rule</th></tr>
+  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Claw rule</th></tr>
     ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${p.specs.includes('claw') ? (p.clawMode === 'gain' ? 'for a tick' : 'as soon as they can') : '-'}</td></tr>`).join('')}</table>
     <div class="small">Backup BGS: ${c.backup ? `${esc(names[c.backup.p])} while his Defence is ${c.backup.at}+` : 'none'}</div>`;
   const statsRow = (totals, bps) => { const v = totals.slice().sort((a, b) => a - b), n = v.length, asc = [...bps].sort((a, b) => a - b);
@@ -221,9 +217,9 @@ export function createNylo(host, { getTeam }) {
     if (!thr.length) return '<p class="muted small">Nobody has a blowpipe, Ascension crossbows or dragon darts - Twisted bows only.</p>';
     const cell = (x, best) => `<td style="${x.pct === best ? 'font-weight:700;background:rgba(80,200,120,.15)' : ''}${x.d > x.ci ? ';color:var(--bad,#e66)' : ''}">${x.d >= 0 ? '+' : ''}${x.d.toFixed(2)}<span class="muted" style="font-size:10px"> ±${x.ci.toFixed(2)}</span></td>`;
     return `<h4 style="margin:12px 0 2px">Ranged tick fix thresholds (best setup)</h4>
-      <p class="muted small" style="margin:0 0 6px">Change in mean boss time (ticks; negative is faster, ± the 95% range) if that player plays Twisted bows only below each % of his HP, for each green-form plan - one player and plan at a time, on the same raids. Bold: their best, when it's clearly faster than never switching.</p>
-      ${thr.map((row) => `<div class="small" style="margin-top:6px"><b>${esc(names[row.p])}</b> <span class="muted">(${esc(row.weapon)})</span> - ${[1, 2, 3].map((k) => `${PLAN_NAMES[k]}: <b>${row.best[k] == null ? 'never switch' : `bows only below ${row.best[k]}%`}</b>`).join(' · ')}</div>
-        <div class="scroll"><table class="bt"><tr><th>Plan</th>${STOP_PCTS.map((p) => `<th>&lt; ${p}%</th>`).join('')}</tr>
+      <p class="muted small" style="margin:0 0 6px">Change in mean boss time (ticks; negative is faster, ± the 95% range) if that player stops each green-form sequence below each % of his HP and plays Twisted bows only (bp: their 2-tick hit) - one player and sequence at a time, on the same raids. Bold: their best, when it's clearly faster than never stopping.</p>
+      ${thr.map((row) => `<div class="small" style="margin-top:6px"><b>${esc(names[row.p])}</b> <span class="muted">(${esc(row.weapon)})</span> - ${[1, 2, 3].map((k) => `${PLAN_NAMES[k]}: <b>${row.best[k] == null ? 'never stop' : `stop at ${row.best[k]}%`}</b>`).join(' · ')}</div>
+        <div class="scroll"><table class="bt"><tr><th>Sequence</th>${STOP_PCTS.map((p) => `<th>&lt; ${p}%</th>`).join('')}</tr>
         ${[1, 2, 3].map((k) => `<tr><td class="rl">${PLAN_NAMES[k]}</td>${row.plans[k].map((x) => cell(x, row.best[k])).join('')}</tr>`).join('')}</table></div>`).join('')}
       <button class="ghost sm" data-usethr style="margin-top:6px">Use these thresholds in the settings</button>`;
   };
@@ -235,7 +231,7 @@ export function createNylo(host, { getTeam }) {
       <div class="sub">Each played on the same ${items[0].totals.length.toLocaleString()} raids. Boss time: his spawn to the room's end.</div>
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>Setup</th><th></th></tr>
       ${items.map((r, i) => { const s = statsRow(r.totals, bps);
-        const short = r.cfg.players.map((p, k) => `${esc(names[k])}: ${p.startSpec === 95 ? '95% · ' : ''}${p.surge ? 'surge · ' : ''}${p.open === 'none' ? '' : `${SPEC_NAME[p.open]} → `}${seqName(p.specs)}${p.specs.includes('claw') && p.clawMode === 'gain' ? ' (claws for a tick)' : ''}`).join('<br>') + (r.cfg.backup ? `<br>backup BGS: ${esc(names[r.cfg.backup.p])} at ${r.cfg.backup.at}+` : '');
+        const short = r.cfg.players.map((p, k) => `${esc(names[k])}: ${p.startSpec === 95 ? '95% · ' : ''}${p.surge ? 'surge · ' : ''}${p.open === 'none' ? '' : `${SPEC_NAME[p.open]} → `}${seqName(p.specs)}${p.specs.includes('claw') && p.clawMode === 'gain' ? ' (claws only for a tick)' : ''}`).join('<br>') + (r.cfg.backup ? `<br>backup BGS: ${esc(names[r.cfg.backup.p])} at ${r.cfg.backup.at}+` : '');
         return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}
           <td class="small" style="text-align:left;font-weight:400">${short}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use</button></td></tr>

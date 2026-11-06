@@ -19,7 +19,7 @@ export const SPEC_NAME = { claw: 'claws', tome: 'tome', zcb: 'ZCB', halb: 'halbe
 export const seqName = (s) => (s.length ? s.map((x) => SPEC_NAME[x]).join(' → ') : 'none');
 export const BACKUP_ATS = [10, 20, 30, 40, 50];
 export const STOP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-export const PLAN_NAMES = { 1: '4 hits + Twisted bow', 2: 'Twisted bow, hit, Twisted bow', 3: '3 hits + Twisted bow' };
+export const PLAN_NAMES = { 1: '4bp tbow', 2: 'tbow bp tbow', 3: '3bp tbow' };   // bp: their 2-tick hit (blowpipe, crossbows or darts)
 
 const has = (gear, x) => (gear.weapons || []).includes(NEEDS[x]);
 export const canSeq = (gear, seq) => seq.every((x) => has(gear, x));
