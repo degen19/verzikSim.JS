@@ -532,12 +532,15 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
         else { const [ch, mx, gear] = nyloTbow(p, def), d = roll(ch, mx); go('TB', 'Twisted bow (tome tick fix)', gear, `Ranged ${RANGED} (Rigour)`, ch, hitMV(ch, mx), [d], [TBOW_DELAY], 5); }
       } else if (f.form === 'melee') {
         const first = p.n === 0;
+        // their opener: on their first attack - the halberd on their second (a scythe first, then the halberd)
+        const opening = !p.opened && (pl.open === 'halb' ? p.n >= 1 : first);
         let act = 'scythe', why = '';
         const COST = { bgs: 50, claw: 50, halb: 30 };
-        if (first && COST[pl.open] && p.spec >= COST[pl.open]) act = pl.open;
+        let isOpen = false;
+        if (opening && COST[pl.open] && p.spec >= COST[pl.open]) { act = pl.open; isOpen = true; }
         else if (backup && backup.p === p.i && !backup.done && !openBgsLeft() && def >= backup.at && p.spec >= 50 && p.has.has('Bandos godsword')) { act = 'bgs'; backup.done = true; why = ` (backup: his Defence ${def} >= ${backup.at})`; }
-        else if (!first && nextSpec === 'halb' && p.spec >= 30) act = 'halb';                 // damage specs: never their first attack
-        else if (!first && nextSpec === 'claw' && p.spec >= 50) {
+        else if (!first && !(pl.open === 'halb' && !p.opened && p.spec >= 30) && nextSpec === 'halb' && p.spec >= 30) act = 'halb';                 // damage specs: never their first attack (nor before a halberd opener)
+        else if (!first && !(pl.open === 'halb' && !p.opened && p.spec >= 30) && nextSpec === 'claw' && p.spec >= 50) {
           if (pl.clawMode !== 'gain' || p.clawNow) act = 'claw';
           else {
             const [aC, eC] = ride(t + 4, f), [aS, eS] = ride(t + 5, f);
@@ -558,18 +561,19 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
         } else if (act === 'claw') {
           const sp = pay(50), [hits, ch, mx, gear] = clawSpec(p, def, rng);
           go('C', `Claw spec${why}`, gear, MEL, ch, clawMV(ch, mx), hits, [1, 1, 2, 2], 4, sp);
-          if (!first || pl.open !== 'claw') pl.specs.shift(); p.clawNow = false;
+          if (!isOpen) pl.specs.shift(); p.clawNow = false;
           surge();
         } else if (act === 'halb') {
           const sp = pay(30), [hits, ch, mx, gear] = halbSpec(p, def, rng);
           go('Ch', 'Crystal halberd spec', gear, MEL, ch[0], halbMV(ch[0], ch[1], mx), hits, [1, 1], 7, sp);
-          if (!first || pl.open !== 'halb') pl.specs.shift();
+          if (!isOpen) pl.specs.shift();
           surge();
         } else {
           const [ch, mx, gear] = nyloScythe(p, def), hits = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m) => roll(ch, m));
           go('S', 'Scythe', gear, MEL, ch, scytheMV(ch, mx), hits, [1, 1, 1], 5);
         }
         if (first) p.openDone = true;
+        if (isOpen || (first && pl.open !== 'halb')) p.opened = true;
       } else if (f.form === 'ranged') {
         if (p.planForm !== f.start) {
           p.planForm = f.start; const k = t - f.start, stop = pl.rangedStop || rangedStop;

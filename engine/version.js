@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.35.0';
+export const VERSION = '1.35.1';
 export const CHANGES = [
+  { version: '1.35.1', date: '2026-11-06', items: [
+    'Nylocas: a halberd opener goes on their second attack (a scythe first), not their first; no damage spec before it.',
+  ] },
   { version: '1.35.0', date: '2026-11-06', items: [
     'Full raid: a tickbox for each room (Nylocas, Sotetseg, Xarpus, Verzik) - run any of them in a row, no gaps.',
     'Nylocas Solver: a player doing a melee spec (claws / halberd) opens with one (no more scythe, then halberd later); only spec plans they can have the spec for (start + a surge + one regen); the claw rule is no longer searched (claws go when they gain a tick, as by default).',
