@@ -168,7 +168,7 @@ export function createNylo(host, { getTeam }) {
     const all = [];
     for (let i = 0; i < x.n; i++) {
       const r = runNylo(x.run.players, team(), new Rng(`${x.seed}#${i}`), x.run.opts);
-      all.push({ i, total: r.end == null ? null : r.end - r.i1, key: r.end == null ? '' : String(r.end - r.i1) });
+      all.push({ i, total: r.roomEnd, key: r.roomEnd == null ? '' : String(r.roomEnd) });
       if (i % 250 === 249) await new Promise((z) => setTimeout(z, 0));
     }
     return (x.all = all);
@@ -178,21 +178,49 @@ export function createNylo(host, { getTeam }) {
     return timelineHtml({ trace, names: x.run.players.map((p) => p.name), bossName: 'Nylocas', end: r.end + 1, from: r.i1 - 1, title, legend: LEGEND });
   };
   async function showRaid(idx) {
-    const x = flat[idx], box = host.querySelector(`[data-nout="${idx}"]`), msg = host.querySelector(`[data-nmsg="${idx}"]`);
+    const x = flat[idx], box = document.querySelector(`[data-nout="${idx}"]`), msg = document.querySelector(`[data-nmsg="${idx}"]`);   // (in this tab or the Full raid's)
     msg.textContent = `playing ${x.n.toLocaleString()} raids...`;
     const all = await playAll(x), ok = all.filter((z) => z.total != null);
     msg.textContent = '';
     const steps = successSteps(ok, all.length, all.length, x.bps);
-    raidNav(box, steps, Math.max(0, steps.findIndex((z) => /Median/.test(z.label))), (s2) => draw(x, s2.pick.i, `${s2.label} raid (Nylocas) - boss time ${fsec(s2.pick.total)} (${s2.pick.total} ticks) · ${s2.freq}`));
+    raidNav(box, steps, Math.max(0, steps.findIndex((z) => /Median/.test(z.label))), (s2) => draw(x, s2.pick.i, `${s2.label} raid (Nylocas) - ${x.run.opts && x.run.opts.waveDist ? 'room' : 'boss'} time ${fsec(s2.pick.total)} (${s2.pick.total} ticks) · ${s2.freq}`));
   }
   host.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b) showRaid(Number(b.dataset.nraid)); });
 
   /** A setup laid out. */
-  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Claw rule</th></tr>
-    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${p.specs.includes('claw') ? (p.clawMode === 'gain' ? 'for a tick' : 'as soon as they can') : '-'}</td></tr>`).join('')}</table>
+  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Claw rule</th><th>Max switches</th>${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
+    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${p.specs.includes('claw') ? (p.clawMode === 'gain' ? 'for a tick' : 'as soon as they can') : '-'}</td><td>${p.maxSwitches ?? 8}</td>${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
     <div class="small">Backup BGS: ${c.backup ? `${esc(names[c.backup.p])} while his Defence is ${c.backup.at}+` : 'none'}</div>`;
   const statsRow = (totals, bps) => { const v = totals.slice().sort((a, b) => a - b), n = v.length, asc = [...bps].sort((a, b) => a - b);
     return { mean: v.reduce((a, b) => a + b, 0) / n, med: v[n >> 1], q10: v[Math.max(0, Math.floor(n * 0.1) - 1)], fast: v[0], bp: asc.map((b) => v.filter((x) => x * 0.6 <= b + 1e-9).length / n) }; };
+
+  /** A setup's report (n raids): boss time - or room time (waves + boss) when its opts have a waveDist - stats, charts
+   *  and Show raid. */
+  async function reportHtml(run, { n = 4000, seed = `n${Date.now()}`, bps = [], prog = () => {}, title = null } = {}) {
+    const wave = run.opts && run.opts.waveDist ? { dist: run.opts.waveDist, mean: run.opts.waveDist.reduce((a, [t, f]) => a + t * f, 0) } : null;
+    const x = { run, bps, seed, n }; flat.push(x);
+    const all = []; const agg = {};
+    for (let i = 0; i < n; i++) {
+      const res = runNylo(run.players, team(), new Rng(`${seed}#${i}`), run.opts);
+      all.push({ i, boss: res.boss, wave: res.wave, total: res.roomEnd, key: String(res.boss) });
+      for (const [k, v] of Object.entries(res.st)) agg[k] = (agg[k] || 0) + v;
+      if (i % 250 === 249) { prog(i + 1); await new Promise((z) => setTimeout(z, 0)); }
+    }
+    x.all = all;
+    const s = statsRow(all.map((z) => z.total ?? 99999), bps), sb = wave ? statsRow(all.map((z) => z.boss ?? 99999), []) : null, idx = flat.length - 1, asc = [...bps].sort((a, b) => a - b);
+    const per = (k) => ((agg[k] || 0) / n).toFixed(2);
+    return `<div class="vz-report"><h3 style="margin-top:0">${title || `${team()}-man Nylocas: ${n.toLocaleString()} raids`}</h3>
+      ${wave ? `<div class="small muted" style="margin-bottom:4px">Room time = wave time (average ${fmtWave(Math.round(wave.mean))}) + boss time. Breakpoints are room times.</div>` : ''}
+      <table><tr>${wave ? '<th></th>' : ''}<th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
+      ${sb ? `<tr><td class="rl">Boss time</td><td>${fsec(sb.mean)}</td><td>${fsec(sb.med)}</td><td>${fsec(sb.q10)}</td><td>${fsec(sb.fast)}</td>${asc.map(() => '<td>-</td>').join('')}</tr>` : ''}
+      <tr>${wave ? '<td class="rl">Room time</td>' : ''}<td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
+      <div class="small muted" style="margin-top:6px">Per raid: vengs ${per('veng')} (${per('vengDmg')} damage) · damage taken ${per('taken')} · thralls ${per('thrall')} · takeoffs ${per('takeoffs')} · under him ${per('under')} · Heal Others ${per('heals')} · redemptions ${per('redemptions')} · deaths ${per('deaths')} · wrong predictions ${per('wrong')} (first attack short of their full set ${per('short')})</div>
+      ${(() => { const series = [{ total: all.filter((z) => z.total != null).map((z) => z.total), runs: n }];
+        const what = wave ? 'room time' : 'boss time';
+        return `<h3>How often each ${what} happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, ['Nylocas'], rg).replace('% of successful runs', '% of raids'))}</div>
+      <h3>${wave ? 'Room' : 'Boss'} time this or faster - % of raids</h3><div class="sub">${bps.length ? `Vertical lines are your breakpoints (${what} at that or faster; times are rounded down to a tick).` : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, ['Nylocas'], bps, rg).replace('% of successful runs finished by this time', `% of raids at this ${what} or faster`))}</div>`; })()}
+      <div class="small" style="margin-top:8px" data-nbar="${idx}"><button class="ghost sm" data-nraid="${idx}">Show raid</button> <span class="muted" data-nmsg="${idx}"></span></div><div style="width:0;min-width:100%"><div data-nout="${idx}"></div></div></div>`;
+  }
 
   // ---------------------------------------------------------------- report
   const repState = () => { const r = root(); r.report ||= { raids: 4000, seed: '', bps: '' }; return r.report; };
@@ -206,30 +234,8 @@ export function createNylo(host, { getTeam }) {
     const st = cur(), players = playersNow(st), n = Math.max(100, Number(r.raids) || 4000), seed = String(r.seed || '').trim() || `n${Date.now()}`;
     const wave = st.wave && st.wave.on ? parseWaveTimes(st.wave.rows) : null;
     if (wave && wave.error) { err.textContent = `Wave time: ${wave.error}`; return; }
-    const run = { players, opts: { ...roomOpts(st), plans: { backup: team() === 1 ? null : st.backup } } };
-    const x = { run, bps, seed, n }; flat.push(x);
-    const all = []; const agg = {};
-    for (let i = 0; i < n; i++) {
-      const res = runNylo(players, team(), new Rng(`${seed}#${i}`), run.opts);
-      const w = wave ? drawWave(wave.dist, new Rng(`${seed}#wave${i}`)) : 0;
-      all.push({ i, boss: res.end == null ? null : res.end - res.i1, wave: w, total: res.end == null ? null : res.end - res.i1 + w, key: String(res.end - res.i1) });
-      for (const [k, v] of Object.entries(res.st)) agg[k] = (agg[k] || 0) + v;
-      if (i % 250 === 249) { status.textContent = `Running... ${i + 1} / ${n}`; await new Promise((z) => setTimeout(z, 0)); }
-    }
-    x.all = all;
-    const s = statsRow(all.map((z) => z.total ?? 99999), bps), sb = wave ? statsRow(all.map((z) => z.boss ?? 99999), []) : null, idx = flat.length - 1, asc = [...bps].sort((a, b) => a - b);
-    const per = (k) => ((agg[k] || 0) / n).toFixed(2);
-    out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${team()}-man Nylocas: ${n.toLocaleString()} raids</h3>
-      ${wave ? `<div class="small muted" style="margin-bottom:4px">Room time = wave time (average ${fmtWave(Math.round(wave.mean))}) + boss time. Breakpoints are room times.</div>` : ''}
-      <table><tr>${wave ? '<th></th>' : ''}<th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
-      ${sb ? `<tr><td class="rl">Boss time</td><td>${fsec(sb.mean)}</td><td>${fsec(sb.med)}</td><td>${fsec(sb.q10)}</td><td>${fsec(sb.fast)}</td>${asc.map(() => '<td>-</td>').join('')}</tr>` : ''}
-      <tr>${wave ? '<td class="rl">Room time</td>' : ''}<td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
-      <div class="small muted" style="margin-top:6px">Per raid: vengs ${per('veng')} (${per('vengDmg')} damage) · damage taken ${per('taken')} · thralls ${per('thrall')} · takeoffs ${per('takeoffs')} · under him ${per('under')} · Heal Others ${per('heals')} · redemptions ${per('redemptions')} · deaths ${per('deaths')} · wrong predictions ${per('wrong')} (first attack short of their full set ${per('short')})</div>
-      ${(() => { const series = [{ total: all.filter((z) => z.total != null).map((z) => z.total), runs: n }];
-        const what = wave ? 'room time' : 'boss time';
-        return `<h3>How often each ${what} happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, ['Nylocas'], rg).replace('% of successful runs', '% of raids'))}</div>
-      <h3>${wave ? 'Room' : 'Boss'} time this or faster - % of raids</h3><div class="sub">${bps.length ? `Vertical lines are your breakpoints (${what} at that or faster; times are rounded down to a tick).` : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, ['Nylocas'], bps, rg).replace('% of successful runs finished by this time', `% of raids at this ${what} or faster`))}</div>`; })()}
-      <div class="small" style="margin-top:8px" data-nbar="${idx}"><button class="ghost sm" data-nraid="${idx}">Show raid</button> <span class="muted" data-nmsg="${idx}"></span></div><div style="width:0;min-width:100%"><div data-nout="${idx}"></div></div></div>`;
+    const run = { players, opts: { ...roomOpts(st), plans: { backup: team() === 1 ? null : st.backup }, ...(wave ? { waveDist: wave.dist } : {}) } };
+    out.innerHTML = await reportHtml(run, { n, seed, bps, prog: (d) => { status.textContent = `Running... ${d} / ${n}`; } });
     status.textContent = `Done: ${n.toLocaleString()} raids (seed ${seed}).`;
   });
 
@@ -336,6 +342,29 @@ export function createNylo(host, { getTeam }) {
     finally { if (me.pool) me.pool.stop(); vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
 
+  /** Full raid: the Nylocas Solver on the Full raid's gear, surge cooldowns carried in (ticks per player, from the room's
+   *  start: the waves run them down), Max switches, Healer Tech (duos), restore doses and wave times. -> ranked setups,
+   *  each with what a full raid plays ({players, opts}). */
+  async function fullRaidSolve({ gearSet: gs, surgeCd, maxSwitches = [], healer = null, restores = 8, waveDist, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
+    const t = team(), gp = gearOf(gs);
+    const base = Array.from({ length: t }, (_, k) => { const g = (gp && gp[k]) || blankPlayer(k); return { name: g.name || `Player ${k + 1}`, gear: g, surgeCd: surgeCd[k] || 0 }; });
+    const names = base.map((b) => b.name), gear = base.map((b) => b.gear);
+    const opts = { takeoffs: true, offPrayVeng: true, restores: Number(restores) || 0, waveDist };
+    const extra = (k) => ({ maxSwitches: Number(maxSwitches[k] ?? 8) || 8, healer: t === 2 && healer === k });
+    const start = { players: gear.map((g, k) => ({ ...defaultPlan(g), surge: false, ...extra(k) })), backup: null };
+    const pool = new NyloPool(base, t, opts); onPool(pool);
+    try {
+      const ef = EFFORT[effort] || EFFORT.normal;
+      const items = await solveNylo({ start, gear, allow: Object.fromEntries(ALLOW.map((k) => [k, true])), surgeLimit: t, swaps: true, roles: true, bps, ...ef, top: 10 }, (...a) => pool.run(...a), say, stopped);
+      return items.map((r) => ({ ...r, cfg: { ...r.cfg, players: r.cfg.players.map((p, k) => ({ ...p, ...extra(k) })) },
+        run: { players: base.map((b, k) => ({ ...b, plan: { ...r.cfg.players[k], ...extra(k) } })), opts: { ...opts, plans: { backup: r.cfg.backup } } } }));
+    } finally { pool.stop(); }
+  }
+  /** Full raid: show setups (best first) in this tab's Solver results. */
+  const fullRaidShow = (items, bps) => { vres = { items, bps, names: items[0] ? items[0].run.players.map((p) => p.name) : [], thr: null, pred: null }; showResults(); };
+  /** Full raid: a setup's procedure (its plan and Show raid) into `el`. */
+  const procedure = (el, { cfg, names, run }, bps = []) => { el.innerHTML = `${procHtml(cfg, names)}${raidBar(run, bps)}`; if (!el.dataset.wired) { el.dataset.wired = '1'; el.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b && !host.contains(b)) showRaid(Number(b.dataset.nraid)); }); } };
+
   function refreshAll() { render(); showRep(); showSol(); }
-  return { refresh: () => { state = loadKey(STORE); refreshAll(); } };
+  return { refresh: () => { state = loadKey(STORE); refreshAll(); }, api: { fullRaidSolve, fullRaidShow, procedure, reportHtml, team } };
 }

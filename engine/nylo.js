@@ -318,7 +318,10 @@ export function playerDef(p) {
 
 /** One room. players: [{ name, gear (Gear tab), plan? (TEST_PLAN shape) }]. trace (opt): the Show raid entries.
  *  -> { spawn, kill, sched, def } */
-export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTickFix = true, takeoffs = true, rangedStop = null, ayakSkip = null, plans = null, restores = 8, offPrayVeng = true } = {}) {
+export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTickFix = true, takeoffs = true, rangedStop = null, ayakSkip = null, plans = null, restores = 8, offPrayVeng = true, wave = null, waveDist = null } = {}) {
+  // wave / waveDist: the waves before him (ticks, or drawn from a parseWaveTimes distribution) - the room's clock starts
+  // there: room time = wave + boss time; players' surgeCd (ticks left on the surge cooldown at the room's start) runs
+  // down through the waves.
   // offPrayVeng: off prayer for his ranged / magic hits with a veng up and HP above his max (solos usually stay on prayer)
   // restores: restore doses for redemption (a duo's Healer Tech player / a solo)
   // plans: { backup: { p, at } } - a backup BGS by player p while his Defence is at or above `at` (after the opening BGSs)
@@ -326,11 +329,19 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
   // rangedStop: { 1: %, 2: %, 3: % } - below that share of his HP, a green form's plan (by its first attack's tick) is Twisted bows only
   const sched = formSchedule(spawn, rng, spawn + 600);
   let hp = NYLO_HP[team], kill = null, def = NYLO.def, overkill = false;
-  const i1 = spawn - SHOW_UP;                                  // his spawn on the instance cycle (i1); `spawn`: his first form (i3)
+  const i1 = spawn - SHOW_UP;
+  if (wave == null) wave = waveDist ? drawWave(waveDist, rng.fork('wave')) : 0;
+  const roomTick = (t) => wave + t - i1;                       // the room's clock (waves included)
+  /** A surge (after their first spec): once their cooldown from the rooms before is up and it won't waste spec. */
+  const drink = (p, t) => {
+    if (roomTick(t) < (p.surgeCd || 0) || p.spec > 100 - SURGE) return;
+    const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; p.surgePending = false; p.surgeAt = roomTick(t); st.surges = (st.surges || 0) + 1;
+    if (trace) trace.push({ t, i: p.i, supply: `spec surge (${o}% -> ${p.spec}%)` });
+  };                                  // his spawn on the instance cycle (i1); `spawn`: his first form (i3)
   const ps = players.map((p, i) => ({ ...p, i, next: 0, n: 0, plan: null, planForm: null, has: new Set(p.gear.weapons || []),
     spec: null, regen: 0, buff: 0, buffUntil: -1, pl: structuredClone(p.plan || TEST_PLAN[i] || {}),
     hp: HP_MAX, veng: true, vengReady: spawn - SHOW_UP, dead: false, underForm: null, healForm: null, thrallNext: null, pdef: playerDef(p),
-    restores, loopReady: 0, pred: null, mis: null, misUsed: false, ovr: null, bloodFury: /blood fury/i.test(String((p.gear.melee || {}).neck || '')) }));
+    restores, loopReady: 0, surgeAt: null, surgePending: false, pred: null, mis: null, misUsed: false, ovr: null, bloodFury: /blood fury/i.test(String((p.gear.melee || {}).neck || '')) }));
   const st = { veng: 0, vengDmg: 0, deaths: 0, under: 0, heals: 0, redemptions: 0, taken: 0, thrall: 0, takeoffs: 0 };
   const bq = [];                                              // his hits on the way: [lands, player, damage, entry]
   const alive = () => ps.filter((p) => !p.dead);
@@ -469,6 +480,7 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       if (p.hold) continue;
       if (p.spec < 100) { if (++p.regen >= SPEC_REGEN) { p.regen = 0; p.spec = Math.min(100, p.spec + 10); if (T) T.push({ t, i: p.i, regen: `spec regen -> ${p.spec}%` }); } } else p.regen = 0;
     }
+    for (const p of alive()) if (p.surgePending) drink(p, t);   // a surge waiting on the cooldown (from the rooms before)
     for (const p of alive()) {
       if (t < f.first || p.next > t) continue;
       if (isUnder(p, f, t)) continue;                          // under him: no attack on 2-4 / 6-8
@@ -498,7 +510,7 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       };
       const MEL = 'Attack 118 · Strength 118';
       const pl = p.pl, nextSpec = pl.specs[0];
-      const surge = () => { if (pl.surge && !p.surged) { const o = p.spec; p.spec = Math.min(100, p.spec + SURGE); p.surged = true; st.surges = (st.surges || 0) + 1; if (T) T.push({ t, i: p.i, supply: `spec surge (${o}% -> ${p.spec}%)` }); } };
+      const surge = () => { if (pl.surge && !p.surged) { p.surgePending = true; drink(p, t); } };
       // tome tick fixing: a tome hit to come and he's not magic -> blowpipes / bows that leave room for it in a magic form next
       let fix = null;
       const tomeDue = (p.buff > 0 && t <= p.buffUntil) || (nextSpec === 'tome' && p.spec >= 50);
@@ -613,7 +625,8 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
     }
   }
   const end = kill == null ? null : roomEnd(kill, overkill, i1);
-  return { spawn, i1, kill, overkill, end, sched, def, st, hp: ps.map((p) => p.hp) };
+  return { spawn, i1, kill, overkill, end, sched, def, st, hp: ps.map((p) => p.hp), wave, boss: end == null ? null : end - i1, roomEnd: end == null ? null : wave + end - i1,
+    players: ps.map((p) => ({ surgeAt: p.surgeAt })) };
 }
 
 /** Wave times (the Nylocas waves before the boss): rows [{time: 'm:ss.s' | seconds, freq: %}] -> {dist: [[ticks, share]],

@@ -162,7 +162,7 @@ const openSolver = (r) => {
   const host = $(`room-${r}`), b = host.querySelector('[data-subtabs] [data-t="solve"]'); if (b) b.click();
   const pane = host.querySelector('[data-pane="solve"]'); if (pane) pane.scrollIntoView({ block: 'start' });
 };
-const fullRaid = createFullRaid($('room-full'), { getTeam: team, rooms: { sote: sote.api, xarpus: xarpus.api, verzik: solver.api }, goTo: openSolver, getWorkbook: async () => (source === 'build' || !imported ? builder.workbook(team()) : imported), setLabel: (b) => ($(`lab${b}`) ? $(`lab${b}`).value.trim() : ''), runVerzik: (c, t, n, seed, onP) => runWorkers(c, t, n, seed, onP) });
+const fullRaid = createFullRaid($('room-full'), { getTeam: team, rooms: { nylo: nylo.api, sote: sote.api, xarpus: xarpus.api, verzik: solver.api }, goTo: openSolver, getWorkbook: async () => (source === 'build' || !imported ? builder.workbook(team()) : imported), setLabel: (b) => ($(`lab${b}`) ? $(`lab${b}`).value.trim() : ''), runVerzik: (c, t, n, seed, onP) => runWorkers(c, t, n, seed, onP) });
 // top-level tabs: Gear / Verzik (Sotetseg, Xarpus and Full raid come later). Remembered in the address (#gear) and this browser.
 const ROOM_KEY = 'verzikSim.room.v1';
 let room = 'verzik';

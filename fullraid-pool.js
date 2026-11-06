@@ -38,7 +38,7 @@ export class FullRaidPool {
     for (let a = from; a < to; a += chunk) parts.push(this.task({ combos, ctx: this.ctx, from: a, to: Math.min(to, a + chunk), seed }));
     const res = await Promise.all(parts);
     return combos.map((_, i) => {
-      const out = { totals: [], ends: [[], [], []], p3: [] };
+      const out = { totals: [], ends: res[0][i].ends.map(() => []), p3: [] };
       for (const r of res) { out.totals.push(...r[i].totals); r[i].ends.forEach((e, j) => out.ends[j].push(...e)); out.p3.push(...r[i].p3); }
       return out;
     });
@@ -67,7 +67,7 @@ export class FullRaidPool {
   /** What each player comes into each room with, over whole raids [from, to) of one combination. */
   async entries(setup, from, to, seed, onProgress) {
     const parts = await this.chunks({ entries: setup, ctx: this.ctx }, (a, b) => fullRaidReports(setup, this.ctx, a, b, seed).entry, from, to, seed, 100, onProgress);
-    return [0, 1, 2].map((j) => parts.flatMap((x) => x[j]));
+    return parts[0].map((_, j) => parts.flatMap((x) => x[j]));
   }
   stop() { this.stopped = true; for (const w of this.workers) w.terminate(); for (const j of this.jobs.values()) j.reject(new Error('Solver stopped.')); this.jobs.clear(); this.queue = []; }
 }
