@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.26.2 - 2026-11-05
+- `reds.js`: a bounced Tome Reds player sets `tome_lock` (next attack from range, by the plan) instead of `zcb_due`.
+- `verzraid.js` `verzTrace`: `armour` per style (Sh / Zt: `cfg.mageGear` or the chart's mage columns + ring; others: `Player.pieces` - melee armour, Infernal cape, Avernic treads, Ferocious gloves / Confliction for T, E, Ayak, amulet, ring); Zt stats at Magic 112, duo shadow players start at 112; damage lines go to the attack whose line said `lands tN` (same weapon code) before the last attack; `Lightning rebound` player lines are her event; `(queued before shield)` lines are parsed.
+
 ## v1.26.1 - 2026-11-05
 - Claw scratch: one hitsplat (`tome_turn`, `tome_values.Cs`, duo `fill_numbers` / `_fill` / set-2 scratches).
 - Claw specs only by r39 in `reds.js` (standard and Tome Reds plan) and duo `set2_attack`; dropped the plan's r40 first-two-hitsplats claw value.

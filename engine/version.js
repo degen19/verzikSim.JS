@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.26.1';
+export const VERSION = '1.26.2';
 export const CHANGES = [
+  { version: '1.26.2', date: '2026-11-05', items: [
+    'Tome Reds: a tome player bounced on r16 attacks from range next - the tome or a shadow, whichever is worth more (was always a shadow).',
+    'Verzik Show raid tooltips: gear as the sim attacks in - tome and shadow in their magic set from the Gear tab; everything else in their melee armour, Infernal cape, Avernic treads, Ferocious gloves (Confliction gauntlets for magic weapons), amulet and ring. Tome attacks show 112 Magic, duo shadow players 112 from the start.',
+    'Verzik Show raid: a hit is credited to the attack that lands it (a tome hit lands after the next buffed auto has gone off - it was going to the wrong cell). Lightning rebounds in reds no longer count as a player\'s damage, and a deep-proc shadow landing in the reds shield is credited to the shadow.',
+  ] },
   { version: '1.26.1', date: '2026-11-05', items: [
     'Claw scratch is one hitsplat again (Tome Reds and duo reds had it as two).',
     'Reds: r39 is the last claw spec (its last two hitsplats land r41); on r40 they scythe instead. 3-5 man reds and duo set 2 (a set-1 r40 claw in duos is unchanged).',

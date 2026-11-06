@@ -9,7 +9,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const fmt = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).padStart(4, '0')}`;
 
 // what a queued attack's text says -> its timeline code
-const WEAPONS = [[/^TOME/, 'Zt'], [/^Scythe/i, 'S'], [/^Dawn spec/i, 'D'], [/^Eye of ayak/i, 'E'], [/^Sulphur blades/i, 'SuB'], [/^Blowpipe/i, 'BP'],
+const WEAPONS = [[/^tome/i, 'Zt'], [/^Scythe/i, 'S'], [/^Dawn spec/i, 'D'], [/^Eye of ayak/i, 'E'], [/^Sulphur blades/i, 'SuB'], [/^Blowpipe/i, 'BP'],
   [/^Sang/i, 'T'], [/^(Dragon )?claws?|^CLAW SPEC/i, 'C'], [/^claw scratch/i, 'Cs'], [/^HALBERD|^Halberd/i, 'Ch'], [/^SHADOW|^Shadow/i, 'Sh'],
   [/^ZCB/i, 'Z'], [/^Elder maul/i, 'EM'], [/^Bandos/i, 'BGS'], [/^Obligator|^Swift blade|^3-tick/i, '3t'], [/^blowpipe at purple/i, 'BP'], [/^TICK FILL/i, 'F']];
 const codeOf = (txt) => { for (const [re, c] of WEAPONS) if (re.test(txt)) return c; return txt.split(/[\s(]/)[0].slice(0, 3); };
@@ -21,22 +21,36 @@ const WEAPON_OF = { S: 'Scythe of vitur', D: 'Dawnbringer', E: 'Eye of ayak', Su
 /** The timeline trace from a raid's log. names: the players; cfgs (optional): their setups - the tooltips' gear, ring
  *  and start spec. Spec is followed through the log's "X% -> Y%" changes; the next regen is the player's next regen line. */
 export function verzTrace(log, names, cfgs = null) {
-  const trace = [], last = new Map(), byName = new Map(names.map((n, i) => [n, i]));
+  const trace = [], last = new Map(), due = [], byName = new Map(names.map((n, i) => [n, i]));
   const spec = names.map((_, k) => (cfgs && cfgs[k] ? Number(cfgs[k].startSpec ?? 100) : null));
   const ring = names.map((_, k) => (cfgs && cfgs[k] && cfgs[k].lightbearerOn ? 'Lightbearer' : 'Ultor ring'));
   const regens = names.map(() => []);                                 // each player's regen ticks (for "next regen")
   // combat stats: boosted 118s / 99 Ranged and Magic at the start, then each supply / drain line's "Atk N Str N Def N"
-  const stats = names.map(() => ({ atk: 118, str: 118, def: 118, rng: 99, mag: 99 }));
+  // (duo shadow players: 112 Magic from the start, as the sim has them - no log line for it)
+  const stats = names.map((_, k) => ({ atk: 118, str: 118, def: 118, rng: 99, mag: cfgs && cfgs.length === 2 && cfgs[k] && cfgs[k].shadow ? 112 : 99 }));
   const statText = (k) => { const x = stats[k]; return `Attack ${x.atk} · Strength ${x.str} · Defence ${x.def} · Ranged ${x.rng} · Magic ${x.mag}`; };
   const SUPPLY = /brew|restore|super combat|shark|surge|heart|Magic boosted|phoenix|REDEMPTION|HEAL OTHER|catch-up|ranging|divine|saturated/i;
   for (const line of log) {
     const m = line.match(/^t\s*(\d+)\s+(?:s\d\s+)?(?:r\d+\s+)?(.+?): (?:(?:R forced |natural |Lightbearer )?regen |regen the tick after)/);
     if (m && byName.has(m[2])) regens[byName.get(m[2])].push(+m[1]);
   }
-  const armour = (k, code) => {
+  const MAGE_DEFAULT = ['Ancestral hat', 'Ancestral robe top', 'Ancestral robe bottom', 'Imbued saradomin cape', 'Occult necklace', 'Avernic treads (max)', 'Confliction gauntlets'];
+  const armour = (k, code, weapon = null) => {
     const c = cfgs && cfgs[k]; if (!c) return null;
+    // magic attacks (shadow, Zorya's tome): their magic set from the Gear tab
+    if (code === 'Sh' || code === 'Zt') {
+      let mg = Array.isArray(c.mageGear) && c.mageGear.length ? c.mageGear : null;
+      if (!mg) {                                              // the chart's mage columns, as the sim builds them
+        const m = c.mage || {}, h = m.helm || 'Ancestral hat';
+        mg = [h === 'off' ? null : h === 'melee' ? c.helm : h, m.body || MAGE_DEFAULT[1], m.legs || MAGE_DEFAULT[2], m.cape || MAGE_DEFAULT[3], ...MAGE_DEFAULT.slice(4)];
+      }
+      return [WEAPON_OF[code], ...mg, ring[k]].filter(Boolean).join(', ');
+    }
     const amulet = c.amulet ? (/fury/i.test(c.amulet) ? 'Amulet of blood fury' : `Amulet of ${String(c.amulet).toLowerCase()}`) : null;
-    return [WEAPON_OF[code], c.helm, c.body, c.legs, amulet, ring[k]].filter(Boolean).join(', ');
+    // everything else as the sim works it out (Player.pieces): their melee armour, Infernal cape, Avernic treads, Ferocious
+    // gloves (Confliction gauntlets for a magic weapon), amulet, ring - the ZCB and blowpipe too (no ranged switch)
+    const w = WEAPON_OF[code] || weapon, gloves = code === 'T' || code === 'E' || w === 'Eye of ayak' ? 'Confliction gauntlets' : 'Ferocious gloves';
+    return [w, c.helm, c.body, c.legs, 'Infernal cape', 'Avernic treads', gloves, amulet, ring[k]].filter(Boolean).join(', ');
   };
   let phase = 'P1', hp = null, lastT = 0;
   const lastPot = names.map(() => -99);                                // each player's last potion sip (3 ticks apart)
@@ -91,7 +105,7 @@ export function verzTrace(log, names, cfgs = null) {
     if (lr) { trace.push({ t, boss: 'Lightning rebound', kind: 'rebound', short: 'LR', icon: 'Lightning', ring: '#e5333f', prio: 2, tip: `lightning rebound - ${lr[1]} damage to her` }); continue; }
     const ps = rest.match(/-> (.+?)(?: DC)? spec (\d+(?:\.\d+)?)% -> (\d+(?:\.\d+)?)%/);
     if (ps && byName.has(ps[1])) spec[byName.get(ps[1])] = +ps[3];
-    const pm = rest.replace(/^(?:P\d->P\d|shield)\s+/, '').match(/^(.+?): (.*)$/); if (!pm || !byName.has(pm[1])) continue;   // (P1->P2 / reds shield sip windows)
+    const pm = rest.replace(/^(?:P\d->P\d|shield|\(queued before shield\))\s+/, '').match(/^(.+?): (.*)$/); if (!pm || !byName.has(pm[1])) continue;   // (P1->P2 / reds shield sip windows)
     const i = byName.get(pm[1]), what = pm[2];
     if (/swaps to Ultor/.test(what)) ring[i] = 'Ultor ring';
     const xf = what.match(/^spec transfer -> (.+?) \(/);
@@ -134,10 +148,14 @@ export function verzTrace(log, names, cfgs = null) {
       if (am && a) { a.rolled = (a.rolled ?? a.dmg ?? 0) + +am[1]; if (a.landed == null) a.landed = t; }
       continue;
     }
-    // a damage line: credit the player's last attack
+    // a lightning rebound on her (reds log it under the first player's name): her event, not that player's damage
+    const lr2 = what.match(/^Lightning rebound (\d+) ->/i);
+    if (lr2) { trace.push({ t, boss: 'Lightning rebound', kind: 'rebound', short: 'LR', icon: 'Lightning', ring: '#e5333f', prio: 2, tip: `lightning rebound - ${lr2[1]} damage to her` }); continue; }
+    // a damage line: credit the attack that lands this tick (one whose line said 'lands tN'), else the player's last attack
+    // (a tome hit lands after their next buffed auto has gone off)
     const dmg = what.match(/(?:hit \d+ (?:on \w+ crab )?|lands |spec lands |^\S.*? )(-?\d+)(?: \([^)]*\))? -> (Verzik|crab) -?\d+/);
     if (dmg && !/queued/.test(what)) {
-      const a = last.get(i);
+      const a = (due[i] || []).find((x) => x.due === t && x.code === codeOf(what)) || last.get(i);
       if (a) { a.dmg = (a.dmg || 0) + Math.max(0, +dmg[1]); a.landed = t; if (dmg[2] === 'crab') a.crab = true; }
       continue;
     }
@@ -158,9 +176,11 @@ export function verzTrace(log, names, cfgs = null) {
     if (spec[i] != null) {
       a.spec = sc ? +sc[1] : before; a.specAfter = spec[i];
       const nx = regens[i].find((x) => x > t); a.regenIn = a.spec >= 100 || nx == null ? null : nx - t;
-      a.gear = armour(i, a.code);
+      a.gear = armour(i, a.code, a.weapon);
     }
     a.stats = statText(i);
+    if (a.code === 'Zt') a.stats = a.stats.replace(/Magic \d+/, 'Magic 112');   // the tome: at 112 Magic
+    const lt = what.match(/lands t(\d+)/); if (lt) { a.due = +lt[1]; (due[i] ||= []).push(a); if (due[i].length > 6) due[i].shift(); }
     const crab = what.match(/on (?:their )?(\w+) crab/), purple = /purple crab/i.test(what);
     a.target = purple ? 'the purple crab' : crab ? `the ${crab[1]} red crab` : 'Verzik';
     if (/RUBY PROC/.test(what)) a.ruby = true;
