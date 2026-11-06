@@ -169,7 +169,9 @@ export async function predictionThresholds(cfg, run, n, progress = () => {}, sto
         const sd = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, n - 1));
         return { pct, d: m, ci: 1.96 * sd / Math.sqrt(n) };
       });
-      const b = row.forms[form].reduce((a, x) => (x.d < a.d ? x : a), { pct: null, d: 0, ci: 0 });
+      let b = row.forms[form].reduce((a, x) => (x.d < a.d ? x : a), { pct: null, d: 0, ci: 0 });
+      const all = row.forms[form][row.forms[form].length - 1];       // as good as switching always (100%): always
+      if (b.pct != null && all.d <= b.d + 0.01) b = all;
       row.best[form] = b.pct != null && b.d < -b.ci ? b.pct : null;
     }
     out.push(row);
