@@ -166,7 +166,7 @@ const CODE_NAME = { S: 'Scythe', TB: 'Twisted bow', Z: 'ZCB', ZCB: 'ZCB spec', S
 const ICONS = 'img/icons/';
 // (any icon whose file is missing shows its text code instead - the image fails to load and falls back)
 const CODE_ICON = { S: 'Scythe_of_vitur', TB: 'Twisted_bow', Z: 'Zaryte_crossbow', ZCB: 'Zaryte_crossbow', TS: 'Tumekens_shadow',
-  EM: 'Elder_maul', BGS: 'Bandos_godsword', C: 'Dragon_claws', Cs: 'Dragon_claws', Ch: 'Crystal_halberd', BP: 'Toxic_blowpipe',
+  EM: 'Elder_maul', BGS: 'Bandos_godsword', C: 'Dragon_claws', Cs: 'Dragon_claws', Ch: 'Crystal_halberd', BP: 'Toxic_blowpipe', AX: 'Ascension_crossbows', DD: 'Dragon_dart',
   D: 'Dawnbringer', SuB: 'Sulphur_blades', T: 'Sanguinesti_staff', Sh: 'Tumekens_shadow', Shark: 'Shark', Redemption: 'Redemption',
   H: 'Soulflame_horn', E: 'Eye_of_ayak', SB: 'Shadow_Barrage', V: 'Vengeance', Ra: 'Tonalztics_of_ralos', Zt: 'Zoryas_tome' };
 /** An icon by file name (nothing if the file isn't there). */
