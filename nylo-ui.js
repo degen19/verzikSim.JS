@@ -83,7 +83,7 @@ export function createNylo(host, { getTeam }) {
     const surgers = st.players.filter((p) => p.surge).length;
     if (surgers > Number(st.surgeLimit)) notes.push(`${surgers} players surge, but only ${st.surgeLimit} surge potion${Number(st.surgeLimit) === 1 ? '' : 's'} can be used here.`);
     const opt = (list, v) => list.map(([x, l]) => `<option value="${x}" ${String(x) === String(v) ? 'selected' : ''}>${l}</option>`).join('');
-    const stopSel = (k, plan) => `<select data-stop="${k}|${plan}" style="width:78px">${opt([['', 'never'], ...STOP_PCTS.map((x) => [x, `< ${x}%`])], (st.players[k].rangedStop || {})[plan] ?? '')}</select>`;
+    const stopSel = (k, plan) => `<select data-stop="${k}|${plan}" style="width:150px">${opt([['', 'continue till dead'], ...STOP_PCTS.map((x) => [x, `< ${x}%`])], (st.players[k].rangedStop || {})[plan] ?? '')}</select>`;
     cfg.innerHTML = `<h3 style="margin-top:0">Nylocas boss <span class="muted small">(${t}-man · ${NYLO_HP[t]} HP)</span></h3>
       <p class="muted small">He spawns melee for 9 ticks, then switches every 10 ticks to one of his other two forms; players use the matching style from each form's 2nd tick (scythe / Twisted bow + 2-tick hits / Eye of ayak). Boss time: his spawn (i1) to the room's end (the tick after the first i4 his death animation is done by). Gear comes from the Gear tab.</p>
       <div class="row wrap" style="gap:14px;align-items:end;margin-bottom:8px">
@@ -217,8 +217,8 @@ export function createNylo(host, { getTeam }) {
     if (!thr.length) return '<p class="muted small">Nobody has a blowpipe, Ascension crossbows or dragon darts - Twisted bows only.</p>';
     const cell = (x, best) => `<td style="${x.pct === best ? 'font-weight:700;background:rgba(80,200,120,.15)' : ''}${x.d > x.ci ? ';color:var(--bad,#e66)' : ''}">${x.d >= 0 ? '+' : ''}${x.d.toFixed(2)}<span class="muted" style="font-size:10px"> ±${x.ci.toFixed(2)}</span></td>`;
     return `<h4 style="margin:12px 0 2px">Ranged tick fix thresholds (best setup)</h4>
-      <p class="muted small" style="margin:0 0 6px">Change in mean boss time (ticks; negative is faster, ± the 95% range) if that player stops each green-form sequence below each % of his HP and plays Twisted bows only (bp: their 2-tick hit) - one player and sequence at a time, on the same raids. Bold: their best, when it's clearly faster than never stopping.</p>
-      ${thr.map((row) => `<div class="small" style="margin-top:6px"><b>${esc(names[row.p])}</b> <span class="muted">(${esc(row.weapon)})</span> - ${[1, 2, 3].map((k) => `${PLAN_NAMES[k]}: <b>${row.best[k] == null ? 'never stop' : `stop at ${row.best[k]}%`}</b>`).join(' · ')}</div>
+      <p class="muted small" style="margin:0 0 6px">Change in mean boss time (ticks; negative is faster, ± the 95% range) if that player stops each green-form sequence below each % of his HP and plays Twisted bows only (bp: their 2-tick hit) - one player and sequence at a time, on the same raids. Bold: their best, when it's clearly faster than continuing till he's dead.</p>
+      ${thr.map((row) => `<div class="small" style="margin-top:6px"><b>${esc(names[row.p])}</b> <span class="muted">(${esc(row.weapon)})</span> - ${[1, 2, 3].map((k) => `${PLAN_NAMES[k]}: <b>${row.best[k] == null ? 'continue till dead' : `stop at ${row.best[k]}%`}</b>`).join(' · ')}</div>
         <div class="scroll"><table class="bt"><tr><th>Sequence</th>${STOP_PCTS.map((p) => `<th>&lt; ${p}%</th>`).join('')}</tr>
         ${[1, 2, 3].map((k) => `<tr><td class="rl">${PLAN_NAMES[k]}</td>${row.plans[k].map((x) => cell(x, row.best[k])).join('')}</tr>`).join('')}</table></div>`).join('')}
       <button class="ghost sm" data-usethr style="margin-top:6px">Use these thresholds in the settings</button>`;
