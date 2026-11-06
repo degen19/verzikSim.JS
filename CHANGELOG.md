@@ -2,6 +2,13 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.28.0 - 2026-11-06
+- `engine/nylo.js`: Nylocas Vasilias - stats, forms (`formSchedule`), the instance cycle / boss time (`roomEnd`), players' attacks (scythe, Twisted bow + 2-tick hits by plan, Eye of ayak, claws, BGS, halberd, ZCB, tome with buffed autos and tome tick fix), his attacks with veng / prayer / takeoffs / under him / Heal Other / redemption, melee thralls; per-player plans (`normPlan`), backup BGS, Twisted-bows-only thresholds (`rangedStop`), late-Ayak skip option.
+- `engine/nylosolve.js` (+ `nylo-solver-pool.js`, `nylo-solver-worker.js`): the Nylocas Solver and `rangedThresholds`.
+- `nylo-ui.js`: the Nylocas tab; `app.js` / `index.html` wire it in.
+- `gear.js` / `loadout.js`: Ascension crossbows, Diamond ascension bolts (e), Dragon dart.
+- `raidview.js`: form tints (`sg` / `sb`), under-the-boss tint (`ub`), AX / DD names.
+
 ## v1.27.0 - 2026-11-06
 - `reds.js`: `rl()` counts a reds attack and notes it in `p.reds_seq` ([r, code]; tome specs `T`/`Tm`/`Ts`/`Tsm`, autos `Tb`/`za`); `p.r16` 'out' / 'chance' at the bounce check; `tome_out16` true unless their r16 attack is melee.
 - `optimize.js`: `redsTimedText` (spec ticks + r16); `runAfterP1` `out.proc` (proc tick, each player's spec / regen timer / period); `branchProfile` keeps `timed` / `btimed` (per counts line: its timed texts) and `samp` ([ticks to 50%, proc, first spec kind, its tick, r16]).

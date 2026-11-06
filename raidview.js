@@ -160,7 +160,7 @@ const CODE_COL = {
 };
 const CODE_NAME = { S: 'Scythe', TB: 'Twisted bow', Z: 'ZCB', ZCB: 'ZCB spec', SB: 'Shadow Barrage', TS: "Tumeken's shadow", EM: 'Elder maul spec',
   BGS: 'BGS spec', C: 'Claw spec', Ch: 'Crystal halberd spec', H: 'Soulflame horn', BP: 'Blowpipe', D: 'Dawnbringer spec', P: 'Surge pot', SH: 'Shadow',
-  E: 'Eye of ayak', SuB: 'Sulphur blades', T: 'Sang', Zt: "Zorya's tome", R: 'Forced spec regen', Cs: 'Claw scratch', Sh: 'Shadow', F: 'Tick fill', '3t': '3-tick weapon', Ra: 'Ralos spec' };
+  E: 'Eye of ayak', SuB: 'Sulphur blades', T: 'Sang', Zt: "Zorya's tome", AX: 'Ascension crossbows', DD: 'Dragon dart', R: 'Forced spec regen', Cs: 'Claw scratch', Sh: 'Shadow', F: 'Tick fill', '3t': '3-tick weapon', Ra: 'Ralos spec' };
 // weapon icons: the OSRS Wiki's item images, downloaded once into img/icons (tools/fetch-icons.mjs) and served from
 // the site - never loaded from the wiki. The text code shows for any icon that isn't there.
 const ICONS = 'img/icons/';
@@ -213,8 +213,10 @@ const CSS = `<style>
 .rv .mk span{display:inline-block;border:1px solid #6b74ff;color:#c8ccff;border-radius:4px;padding:2px 5px;background:#1f2140}
 /* her healing shield (Verzik reds): every cell in those ticks tinted pink */
 .rv .sh{box-shadow:inset 0 0 0 30px rgba(255,105,180,.16)}
+.rv .sg{box-shadow:inset 0 0 0 30px rgba(70,200,100,.20)}.rv .sb{box-shadow:inset 0 0 0 30px rgba(80,140,255,.22)}
 .rv .c.ch{box-shadow:inset 0 0 0 30px rgba(150,110,255,.45)}
 .rv .c.mz{box-shadow:inset 0 0 0 30px rgba(150,110,255,.16)}
+.rv .c.ub{box-shadow:inset 0 0 0 30px rgba(255,160,40,.30)}
 .rv .tk.sh{border-radius:3px}
 .rv .c .th{position:absolute;right:0;bottom:0;line-height:0}
 .rv .c .th img{max-width:11px;max-height:11px}
@@ -320,12 +322,13 @@ const accText = (a) => (Array.isArray(a) ? a.map((x) => `${(x * 100).toFixed(1)}
  *  her) | {t, boss, kind?, tip?, short?} her event (several a tick) | {t, hp, phase} her HP | {t, mark}]; names: player
  *  names; bossName; end: last tick; title; perRow: ticks per block (Blert: 55). */
 export function timelineHtml({ trace, names, bossName, end, title = '', perRow = 55, legend = '', tickInfo = null, from = 1 }) {   // from: the first tick shown
-  const xfer = new Map(), regen = new Map(), at = new Map(), horn = new Map(), thr = new Map(), slotN = new Map(), chosen = new Set(), onMaze = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Set();
+  const xfer = new Map(), regen = new Map(), at = new Map(), horn = new Map(), thr = new Map(), slotN = new Map(), chosen = new Set(), onMaze = new Set(), under = new Set(), veng = new Map(), sup = new Map(), boss = new Map(), marks = new Map(), hpAt = new Map(), shade = new Map();
   for (const x of trace) {
-    if (x.shade) shade.add(x.t);
+    if (x.shade) shade.set(x.t, typeof x.shade === 'string' ? x.shade : 'sh');   // a tint: 'sh' her healing shield; 'sg' / 'sb' a green / blue form
     else if (x.chosen) chosen.add(`${x.i}:${x.t}`);
     else if (x.thrall) thr.set(`${x.i}:${x.t}`, x);
     else if (x.onMaze) onMaze.add(`${x.i}:${x.t}`);
+    else if (x.under) under.add(`${x.i}:${x.t}`);           // under the boss (Nylocas)
     else if (x.mark) marks.set(x.t, [...(marks.get(x.t) || []), x.mark]);
     else if (x.boss) boss.set(x.t, [...(boss.get(x.t) || []), { kind: 'attack', ...x }]);
     else if (x.hp != null) hpAt.set(x.t, x);
@@ -338,8 +341,8 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   }
   // hover: the tick - her phase and HP at the end of it, and what she did; an attack - what it did when it landed
   const evTip = (e) => e.tip || e.boss;
-  const S = (t) => (shade.has(t) ? ' sh' : '');                      // a tinted (healing shield) tick
-  const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t} · ${roomTime(t)}${tickInfo ? ` · ${tickInfo(t)}` : ''}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', shade.has(t) ? 'Healing shield up' : '', ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
+  const S = (t) => (shade.has(t) ? ` ${shade.get(t)}` : '');          // a tinted tick (healing shield, a form's colour)
+  const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t} · ${roomTime(t)}${tickInfo ? ` · ${tickInfo(t)}` : ''}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', shade.get(t) === 'sh' ? 'Healing shield up' : '', ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
   const hitTip = (nm, x) => [`${nm} - tick ${x.t}: ${x.what || CODE_NAME[x.code] || x.code}${x.code === 'H' || x.code === 'R' ? '' : x.landed == null ? ' - never landed (a maze or the kill came first)' : x.dmg ? ` - ${x.dmg} damage${x.crab ? ' to a crab' : ''} (lands tick ${x.landed})` : ` - missed / 0 (tick ${x.landed})`}`,
     x.target ? `Target: ${x.target}` : '',
     x.gear ? `Gear: ${x.gear}` : '',
@@ -372,7 +375,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       return `<div class="c b${S(t)}" style="background:${bg}${ring ? `;outline:2px solid ${ring};outline-offset:-2px` : ''}" data-tip="${esc(tickTip(t))}">${ic ? img(ic.icon) : esc(short)}</div>`;
     };
     const bossRow = `<div class="lab boss">${esc(bossName)}</div>${ticks.map(bossCell).join('')}`;
-    const CH = (i, t) => (chosen.has(`${i}:${t}`) ? ' ch' : onMaze.has(`${i}:${t}`) ? ' mz' : '');   // the chosen player (under the maze); the others on it
+    const CH = (i, t) => (chosen.has(`${i}:${t}`) ? ' ch' : onMaze.has(`${i}:${t}`) ? ' mz' : under.has(`${i}:${t}`) ? ' ub' : '');   // the chosen player (under the maze); the others on it
     const rows = names.map((nm, i) => `<div class="lab">${esc(nm)}</div>${ticks.map((t) => {
       const key = `${i}:${t}`, xf = xfer.get(key), x = at.get(key), h = horn.get(key), v = veng.get(key), su = sup.get(key), rg = regen.get(key), tr = thr.get(key);
       // a thrall hit: its icon in the bottom-right corner (melee thrall in Verzik P1, mage thrall elsewhere)

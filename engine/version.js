@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.27.0';
+export const VERSION = '1.28.0';
 export const CHANGES = [
+  { version: '1.28.0', date: '2026-11-06', items: [
+    'New Nylocas tab (3s-5s, the boss): his forms (melee 9 ticks, then 10-tick ranged / magic / melee at random), his attacks (veng, prayer, takeoffs, going under him, Heal Other, redemption), melee thralls, the room ending on the 4-tick cycle; each player\'s opening spec (BGS, claws, halberd), damage specs in order (claws, tome, ZCB, halberd), claw rule, start spec, surge, tome tick fix and Twisted-bows-only thresholds, and a backup BGS. Report with Show raid; Solver for the best spec setup, then each player\'s ranged tick fix thresholds by his HP.',
+    'Gear tab: Ascension crossbows (diamond ascension bolts (e): 5.5% Armour Piercing) and thrown dragon darts, as 2-tick ranged hits like the blowpipe.',
+  ] },
   { version: '1.27.0', date: '2026-11-06', items: [
     'Decision tree (Optimizer / Solver / Full raid): reds lines are the spec ticks and whether they chance the r16 bounce (\'claw r21, halberd r40 // bounce chance r16\'); lines that read the same are one, late claws (r31+) that differ only in their tick are one range.',
     'Decision tree: a player whose spec turns on when their 50% comes in (most raids into reds under 50%) gets rules by reds proc time - \'reds proc 1:37 or later: tome spec r11-r16 - no bounce chance r16\', \'reds proc 1:25-1:35: claw spec r21-r35 (their first swing after the regen)\' - when their regen lands on the same raid tick in 80%+ of raids (else by the reds tick their 50% comes in).',

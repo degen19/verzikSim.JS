@@ -12,6 +12,7 @@ import { createSolver } from './solver-ui.js';
 import { createGear } from './gear-ui.js';
 import { createSote } from './sote-ui.js';
 import { createXarpus } from './xarpus-ui.js';
+import { createNylo } from './nylo-ui.js';
 import { createFullRaid } from './fullraid-ui.js';
 import { createSolo } from './solo-ui.js';
 import { withGear, importGear, absorbValues } from './engine/gearstore.js';
@@ -79,9 +80,10 @@ $('src').addEventListener('click', async (e) => {
 });
 $('team').addEventListener('change', async () => {
   soloMode();
-  if (team() === 1) { if (room === 'sote') sote.refresh(); if (room === 'xarpus') xarpus.refresh(); if (room === 'full') fullRaid.refresh(); if (room === 'gear') gear.refresh(); return; }   // solo Verzik: its own panel (no chart)
+  if (team() === 1) { if (room === 'sote') sote.refresh(); if (room === 'nylo') nylo.refresh(); if (room === 'xarpus') xarpus.refresh(); if (room === 'full') fullRaid.refresh(); if (room === 'gear') gear.refresh(); return; }   // solo Verzik: its own panel (no chart)
   if (room === 'sote') sote.refresh();
   if (room === 'xarpus') xarpus.refresh();
+  if (room === 'nylo') nylo.refresh();
   if (room === 'full') fullRaid.refresh();
   showRunBps();
   if (source === 'build') await builder.show(team());
@@ -151,6 +153,7 @@ for (const b of ['A', 'B', 'C']) $(`lab${b}`).addEventListener('change', () => {
 const gear = createGear($('room-gear'), { getTeam: team });
 const sote = createSote($('room-sote'), { getTeam: team });
 const xarpus = createXarpus($('room-xarpus'), { getTeam: team });
+const nylo = createNylo($('room-nylo'), { getTeam: team });
 const solo = createSolo($('room-solo'));
 /** Full raid: the room solvers' hooks, and opening a room's Solver results (a procedure from the Full raid). */
 const openSolver = (r) => {
@@ -171,9 +174,11 @@ function soloMode() {
   if (isSolo && room === 'verzik') solo.refresh();
 }
 function showRoom(r, push = true) {
-  room = r === 'gear' ? 'gear' : r === 'sote' ? 'sote' : r === 'xarpus' ? 'xarpus' : r === 'full' ? 'full' : 'verzik';
+  room = r === 'gear' ? 'gear' : r === 'nylo' ? 'nylo' : r === 'sote' ? 'sote' : r === 'xarpus' ? 'xarpus' : r === 'full' ? 'full' : 'verzik';
   [...$('rooms').querySelectorAll('[data-room]')].forEach((b) => b.classList.toggle('on', b.dataset.room === room));
   $('room-gear').hidden = room !== 'gear';
+  $('room-nylo').hidden = room !== 'nylo';
+  if (room === 'nylo') nylo.refresh();
   $('room-sote').hidden = room !== 'sote';
   if (room === 'sote') sote.refresh();
   $('room-xarpus').hidden = room !== 'xarpus';

@@ -60,6 +60,7 @@ export const ITEMS = {
   'Dragon arrow':         item('ammo', undefined, undefined, { rstr: 60, arrow: true }),
   'Seeking dragon arrow': item('ammo', [0, 0, 0, 0, 20], undefined, { rstr: 60, arrow: true, bowAtkOnly: true, minHit: 3 }),   // +20 ranged attack with bows only; min hit 3
   'Ruby dragon bolts (e)': item('ammo', undefined, undefined, { rstr: 122, bolt: true }),
+  'Diamond ascension bolts (e)': item('ammo', undefined, undefined, { rstr: 58, ascensionBolt: true }),   // Armour Piercing: 5.5% (Kandarin hard diary): can't miss, 0-115% of their max
   // ---- weapons
   "Tumeken's shadow":     item('weapon', [0, 0, 0, 35, 0], [0, 0, 0, 20, 0], { pray: 1, speed: 5, two_handed: true,
                                  spell: 'shadow' }),
@@ -71,6 +72,8 @@ export const ITEMS = {
   'Shadow Barrage':       { slot: 'spell', base: 28, speed: 5, aoe: 3, drainAtk: 0.15, level: 88 },   // Ancient Magicks, 3x3; -15% Attack if not already drained
   'Twisted bow':          item('weapon', [0, 0, 0, 0, 70], undefined, { rstr: 20, speed: 5, two_handed: true, bow: true }),
   'Toxic blowpipe':       item('weapon', [0, 0, 0, 0, 30], undefined, { rstr: 55, speed: 2, two_handed: true }),   // dragon darts included
+  'Dragon dart':          item('weapon', [0, 0, 0, 0, 0], undefined, { rstr: 35, speed: 2, thrown: true }),   // thrown, Rapid (2 ticks), one-handed
+  'Ascension crossbows':  item('weapon', [0, 0, 0, 3, 34], [-7, -5, 0, 10, 0], { speed: 2, two_handed: true, ascension: true }),   // Rapid (2 ticks); ascension bolts only
   'Tonalztics of Ralos':  item('weapon', [0, 0, 0, 0, 115], undefined, { rstr: 55, pray: 2, speed: 6, two_handed: true, thrown: true, twoHits: true, maxPct: 0.75, spec: 50 }),   // charged: two rolls, each 0-75% of their ranged max (6 ticks, Rapid). Ralos Spec: +50% accuracy, each hit (1+) drains Defence by 1/8 of Magic - the first hit's drain counts for the second roll
   'Zaryte crossbow':      item('weapon', [0, 0, 0, 0, 110], undefined, { speed: 5, crossbow: true }),
   'Scythe of vitur':      item('weapon', [70, 125, 30, -6, 0], undefined, { str: 75, speed: 5, two_handed: true }),   // attack stats as the sim uses them

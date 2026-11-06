@@ -39,7 +39,7 @@ export const CHOICES = {
 /** Weapons a player can bring, by style. Dawnbringer is the team's (passed around), not listed. */
 export const WEAPONS_OWNED = {
   melee: ['Scythe of vitur', 'Dragon claws', 'Crystal halberd', 'Elder maul', 'Bandos godsword', 'Sulphur blades', 'Obligator', 'Swift blade'],
-  range: ['Toxic blowpipe', 'Zaryte crossbow', 'Twisted bow', 'Tonalztics of Ralos'],
+  range: ['Toxic blowpipe', 'Dragon dart', 'Ascension crossbows', 'Zaryte crossbow', 'Twisted bow', 'Tonalztics of Ralos'],
   mage: ["Tumeken's shadow", "Zorya's tome", 'Eye of ayak', 'Sanguinesti staff', 'Shadow ancient sceptre'],
 };
 export const ARROWS = ['Dragon arrow', 'Seeking dragon arrow'];
@@ -85,6 +85,8 @@ export function worn(pl, style, weapon = null) {
   if (style === 'range' && weapon && ITEMS[weapon]) {
     if (ITEMS[weapon].bow) out.ammo = pl.arrows || 'Dragon arrow';
     else if (ITEMS[weapon].crossbow) out.ammo = pl.bolts || 'Ruby dragon bolts (e)';
+    else if (ITEMS[weapon].ascension) out.ammo = 'Diamond ascension bolts (e)';
+    else out.ammo = '';                                   // blowpipe / thrown darts: no arrows or bolts
   }
   return out;
 }
@@ -227,7 +229,7 @@ export function bestWorn(pl, style, weapon) {
   const set = { weapon };
   for (const [s] of SLOTS) set[s] = slotItem(pl, style, s);       // start from what they'd wear anyway
   if (two) set.shield = '';
-  if (style === 'range' && ITEMS[weapon]) { if (ITEMS[weapon].bow) set.ammo = pl.arrows || 'Dragon arrow'; else if (ITEMS[weapon].crossbow) set.ammo = pl.bolts || 'Ruby dragon bolts (e)'; }
+  if (style === 'range' && ITEMS[weapon]) { if (ITEMS[weapon].bow) set.ammo = pl.arrows || 'Dragon arrow'; else if (ITEMS[weapon].crossbow) set.ammo = pl.bolts || 'Ruby dragon bolts (e)'; else if (ITEMS[weapon].ascension) set.ammo = 'Diamond ascension bolts (e)'; }
   let best = setScore(set, style, weapon);
   for (let pass = 0; pass < 3; pass++) {
     let changed = false;
