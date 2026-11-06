@@ -90,9 +90,9 @@ export function tome_plan(p, r, spec, timer, buff, ev = tome_values(p), lock = f
     } else {
       const melee = (!NO_MELEE.has(r) || ((m16 || (sat && ev.Sh == null)) && r === 16)) && !(lk && ev.Sh != null);   // (no shadow: they swap to melee anyway)
       // Scythe first hit after tome: a one-tome sequence never starts on r11 (its 3rd buffed auto puts a shadow on r20 - a shadow
-      // hit is worse than a scythe hit): the first tome goes on r16 when they have 50% by then (r17-18 if mid-swing), else r31
+      // hit is worse than a scythe hit): the first tome goes on r16 when they have 50% by then and are free on r16, else r31
       // (r29+). Under 100% before r16, no tome; a two-tome sequence (100%) can still start early.
-      const tomeOk = !sat || (r >= 16 && r <= 18) || r >= TOME_SAT_FROM || s >= 100;
+      const tomeOk = !sat || r === 16 || r >= TOME_SAT_FROM || s >= 100;
       if (sat && r === 16 && s >= 50) { go2('T', ev.T1, 3, 3, 0); const out = [best[0], best[1]]; memo.set(key, out); return out; }
       const sat16 = sat && r === 16 && ev.Sh != null;   // ... with a shadow and no tome yet: shadow r16 from a distance
       // Scythe first hit after tome: the scythe (full switch) after a buffed tome attack - not after a bounce (from range)
