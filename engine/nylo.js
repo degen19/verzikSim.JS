@@ -326,32 +326,32 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
     for (const p of alive()) {
       if (p.pl.healer) {                                         // Healer Tech: their veng goes on their teammate
         const m = alive().find((q) => q !== p && !q.veng);
-        if (m && t >= p.vengReady) { m.veng = true; p.vengReady = t + VENG_CD; if (T) T.push({ t, i: p.i, supply: `casts Vengeance Other on ${m.name}` }); }
+        if (m && t >= p.vengReady) { m.veng = true; p.vengReady = t + VENG_CD; }
         continue;
       }
-      if (!p.veng && t >= p.vengReady) { p.veng = true; p.vengReady = t + VENG_CD; if (T) T.push({ t, i: p.i, supply: 'casts Vengeance' }); }
+      if (!p.veng && t >= p.vengReady) { p.veng = true; p.vengReady = t + VENG_CD; }
     }
     for (const h of alive().filter((q) => q.pl.healer)) {         // Healer Tech: Heal Other, locator orb -> redemption, restore
       const m = alive().find((q) => q !== h);
       if (!m || h.restores <= 0 || t < h.loopReady || HP_MAX - m.hp < REDEMPTION || h.hp < 12) continue;   // a dose for at least a redemption's worth
       const amt = Math.min(Math.floor(h.hp * 0.75), HP_MAX - m.hp); h.hp -= amt; m.hp += amt; st.heals++;
       const o = h.hp; h.hp = Math.min(h.hp, 9) + REDEMPTION; h.restores--; st.redemptions++; h.loopReady = t + HEAL_LOOP;
-      if (T) T.push({ t, i: h.i, supply: `heal other -> ${m.name} +${amt} (${m.name} ${m.hp} HP); ${o > 9 ? `locator orb ${o} -> 9, ` : ''}redemption -> ${h.hp} HP; restore (${h.restores} left)` });
+      if (T) T.push({ t, i: h.i, supply: `heals other ${m.name} (+${amt}) - ${m.name} ${m.hp} HP; ${o > 9 ? `locator orb ${o} -> 9 ` : ''}-> Redemption (${h.hp} HP); restore (${h.restores} left)` });
     }
     if (solo && t === f.start && f.start !== spawn) { st.under++; if (T) for (const k of SOLO_UNDER) T.push({ t: f.start + k, i: 0, under: true }); }
     if (solo && f.start !== spawn && f.form !== 'melee' && t - f.start === 3) {   // a solo too low for a prayed hit: orb + redemption
       const p = ps[0];
       if (!p.dead && p.hp <= PRAYED_MAX && p.restores > 0) {
         const o = p.hp; p.hp = Math.min(p.hp, 9) + REDEMPTION; p.restores--; st.redemptions++;
-        if (T) T.push({ t, i: p.i, supply: `locator orb ${o} -> ${Math.min(o, 9)}, redemption -> ${p.hp} HP; restore (${p.restores} left)` });
+        if (T) T.push({ t, i: p.i, supply: `locator orb ${o} -> ${Math.min(o, 9)} -> Redemption (${p.hp} HP); restore (${p.restores} left)` });
       }
     }
     if (f.form !== 'melee' && ft === 0) {                     // a ranged / magic form: Heal Others, then who goes under
       const heal = (c, g, why) => {
         const amt = Math.min(Math.floor(c.hp * 0.75), HP_MAX - g.hp); if (amt <= 0) return false;
         c.hp -= amt; g.hp += amt; st.heals++;
-        if (T) T.push({ t, i: c.i, supply: `heal other -> ${g.name} +${amt} (${g.name} ${g.hp} HP, ${c.name} ${c.hp})${why ? ` - ${why}` : ''}` });
-        if (c.hp <= 9 && c.underForm === f.start) { c.hp += REDEMPTION; st.redemptions++; if (T) T.push({ t, i: c.i, supply: `redemption procs -> ${c.hp} HP; restore - prayers back` }); }
+        if (T) T.push({ t, i: c.i, supply: `heals other ${g.name} (+${amt}) - ${g.name} ${g.hp} HP, ${c.name} ${c.hp}${why ? ` (${why})` : ''}` });
+        if (c.hp <= 9 && c.underForm === f.start) { c.hp += REDEMPTION; st.redemptions++; if (T) T.push({ t, i: c.i, supply: `-> Redemption (${c.hp} HP); restore - prayers back` }); }
         return true;
       };
       for (const g of alive().filter((q) => q.hp <= PRAYED_MAX)) {   // can't take a prayed hit: the one with the most HP heals them
@@ -377,8 +377,8 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
         if (!g) continue;
         c.healForm = f.start;
         const amt = give(g); c.hp -= amt; g.hp += amt; st.heals++;
-        if (T) T.push({ t, i: c.i, supply: `heal other (under him) -> ${g.name} +${amt} (${g.name} ${g.hp} HP, ${c.name} ${c.hp})` });
-        if (c.hp <= 9) { c.hp += REDEMPTION; st.redemptions++; if (T) T.push({ t, i: c.i, supply: `redemption procs -> ${c.hp} HP; restore - prayers back` }); }
+        if (T) T.push({ t, i: c.i, supply: `heals other ${g.name} (+${amt}) - under him; ${g.name} ${g.hp} HP, ${c.name} ${c.hp}` });
+        if (c.hp <= 9) { c.hp += REDEMPTION; st.redemptions++; if (T) T.push({ t, i: c.i, supply: `-> Redemption (${c.hp} HP); restore - prayers back` }); }
       }
     }
     // his attack
