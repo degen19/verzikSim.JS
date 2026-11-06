@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.33.0';
+export const VERSION = '1.34.0';
 export const CHANGES = [
+  { version: '1.34.0', date: '2026-11-06', items: [
+    'Full raid: Nylocas as the first room (waves + boss) - its own block (Max switches on wrong prediction, Healer Tech and restore doses in duos, wave times - required), solved like the other rooms, surge cooldowns running down through the waves and carried on; a Nylocas breakpoint (room time), report and procedure in the results. Untick Nylocas to start at Sotetseg.',
+    'Nylocas Report and Solver: median, top 25%, top 10% and fastest (no mean).',
+  ] },
   { version: '1.33.0', date: '2026-11-06', items: [
     'Verzik: new player setting \'Count surge in ring swap\' (on by default). A custom surge timing still to come (landing by reds r35) counts +25 toward their Ring switch %, as a purple DC\'s +15 does - set the % you want to end up at (e.g. 100% with a 1:20 surge and the purple DC: they swap at 60%). Surges on the P1 chart (a P) are drunk in P1, so nothing changes for them.',
   ] },

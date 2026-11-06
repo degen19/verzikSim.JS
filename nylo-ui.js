@@ -192,7 +192,7 @@ export function createNylo(host, { getTeam }) {
     ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${p.specs.includes('claw') ? (p.clawMode === 'gain' ? 'for a tick' : 'as soon as they can') : '-'}</td><td>${p.maxSwitches ?? 8}</td>${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
     <div class="small">Backup BGS: ${c.backup ? `${esc(names[c.backup.p])} while his Defence is ${c.backup.at}+` : 'none'}</div>`;
   const statsRow = (totals, bps) => { const v = totals.slice().sort((a, b) => a - b), n = v.length, asc = [...bps].sort((a, b) => a - b);
-    return { mean: v.reduce((a, b) => a + b, 0) / n, med: v[n >> 1], q10: v[Math.max(0, Math.floor(n * 0.1) - 1)], fast: v[0], bp: asc.map((b) => v.filter((x) => x * 0.6 <= b + 1e-9).length / n) }; };
+    return { mean: v.reduce((a, b) => a + b, 0) / n, med: v[n >> 1], q10: v[Math.max(0, Math.floor(n * 0.1) - 1)], q25: v[Math.max(0, Math.floor(n * 0.25) - 1)], fast: v[0], bp: asc.map((b) => v.filter((x) => x * 0.6 <= b + 1e-9).length / n) }; };
 
   /** A setup's report (n raids): boss time - or room time (waves + boss) when its opts have a waveDist - stats, charts
    *  and Show raid. */
@@ -211,9 +211,9 @@ export function createNylo(host, { getTeam }) {
     const per = (k) => ((agg[k] || 0) / n).toFixed(2);
     return `<div class="vz-report"><h3 style="margin-top:0">${title || `${team()}-man Nylocas: ${n.toLocaleString()} raids`}</h3>
       ${wave ? `<div class="small muted" style="margin-bottom:4px">Room time = wave time (average ${fmtWave(Math.round(wave.mean))}) + boss time. Breakpoints are room times.</div>` : ''}
-      <table><tr>${wave ? '<th></th>' : ''}<th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
-      ${sb ? `<tr><td class="rl">Boss time</td><td>${fsec(sb.mean)}</td><td>${fsec(sb.med)}</td><td>${fsec(sb.q10)}</td><td>${fsec(sb.fast)}</td>${asc.map(() => '<td>-</td>').join('')}</tr>` : ''}
-      <tr>${wave ? '<td class="rl">Room time</td>' : ''}<td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
+      <table><tr>${wave ? '<th></th>' : ''}<th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
+      ${sb ? `<tr><td class="rl">Boss time</td><td>${fsec(sb.med)}</td><td>${fsec(sb.q25)}</td><td>${fsec(sb.q10)}</td><td>${fsec(sb.fast)}</td>${asc.map(() => '<td>-</td>').join('')}</tr>` : ''}
+      <tr>${wave ? '<td class="rl">Room time</td>' : ''}<td>${fsec(s.med)}</td><td>${fsec(s.q25)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
       <div class="small muted" style="margin-top:6px">Per raid: vengs ${per('veng')} (${per('vengDmg')} damage) · damage taken ${per('taken')} · thralls ${per('thrall')} · takeoffs ${per('takeoffs')} · under him ${per('under')} · Heal Others ${per('heals')} · redemptions ${per('redemptions')} · deaths ${per('deaths')} · wrong predictions ${per('wrong')} (first attack short of their full set ${per('short')})</div>
       ${(() => { const series = [{ total: all.filter((z) => z.total != null).map((z) => z.total), runs: n }];
         const what = wave ? 'room time' : 'boss time';
@@ -284,10 +284,10 @@ export function createNylo(host, { getTeam }) {
     const { items, bps, names, thr, pred } = vres, asc = [...bps].sort((a, b) => a - b);
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${team()}-man Nylocas: solver</h3>
       <div class="sub">Each played on the same ${items[0].totals.length.toLocaleString()} raids. Boss time: his spawn to the room's end.</div>
-      <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>Setup</th><th></th></tr>
+      <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>Setup</th><th></th></tr>
       ${items.map((r, i) => { const s = statsRow(r.totals, bps);
         const short = r.cfg.players.map((p, k) => `${esc(names[k])}: ${p.startSpec === 95 ? '95% · ' : ''}${p.surge ? 'surge · ' : ''}${p.open === 'none' ? '' : `${SPEC_NAME[p.open]} → `}${seqName(p.specs)}${p.specs.includes('claw') && p.clawMode === 'gain' ? ' (claws only for a tick)' : ''}`).join('<br>') + (r.cfg.players.some((p) => p.healer) ? `<br>Healer Tech: ${esc(names[r.cfg.players.findIndex((p) => p.healer)])}` : '') + (r.cfg.backup ? `<br>backup BGS: ${esc(names[r.cfg.backup.p])} at ${r.cfg.backup.at}+` : '');
-        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}
+        return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${fsec(s.med)}</td><td>${fsec(s.q25)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}
           <td class="small" style="text-align:left;font-weight:400">${short}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use</button></td></tr>
           <tr class="sub-row" data-vproc="${i}" hidden><td colspan="${7 + asc.length}" style="text-align:left">${procHtml(r.cfg, names)}${raidBar(r.run, bps)}</td></tr>`; }).join('')}</table></div>

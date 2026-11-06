@@ -2,6 +2,12 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.34.0 - 2026-11-06
+- `engine/fullraid.js`: rooms per setup (`roomsOf`: Nylocas first when the setup has one), `runNylo` with surge cooldowns / doses carried, `playRoom` / `surgersOf` / `withSurgers` for Nylocas, `planScore` for any number of rooms; `fullraid-pool.js` ends / entries per room.
+- `engine/nylo.js`: `surgeCd` (from the room's start - the waves run it down), `wave` / `waveDist`, `roomEnd`, players' `surgeAt`.
+- `nylo-ui.js`: `api` (`fullRaidSolve`, `fullRaidShow`, `procedure`, `reportHtml`); report / solver tables without the mean.
+- `fullraid-ui.js`: Nylocas block, rooms generalised through the solve and the results.
+
 ## v1.33.0 - 2026-11-06
 - `engine/sim.js`: `surge_owed` / `swap_due` - Count surge in ring swap (`cfg.surgeInRing`, default on): a pending custom surge by reds r35 lowers the swap point by 25 (with the purple's 15); `CAMP.reds` (estimated in `p2.js`, real in `reds.js`); template column, builder, Optimizer write-back; swap log lines say what's to come.
 
