@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.32.0';
+export const VERSION = '1.33.0';
 export const CHANGES = [
+  { version: '1.33.0', date: '2026-11-06', items: [
+    'Verzik: new player setting \'Count surge in ring swap\' (on by default). A custom surge timing still to come (landing by reds r35) counts +25 toward their Ring switch %, as a purple DC\'s +15 does - set the % you want to end up at (e.g. 100% with a 1:20 surge and the purple DC: they swap at 60%). Surges on the P1 chart (a P) are drunk in P1, so nothing changes for them.',
+  ] },
   { version: '1.32.0', date: '2026-11-06', items: [
     'Nylocas: cross praying. Between forms each player wears the gear of the form they predict (he\'s magic or melee -> ranged; ranged -> melee; a tome spec planned -> magic) and prays for the other. Guessed wrong: their first attack in the form is on Max switches on wrong prediction (1-8 a tick, per player) - the weapon first, then the items that add the most together (full void counts as a set). The Report counts wrong predictions.',
     'Nylocas Solver: keeps each player\'s Max switches; Predictions by HP - what each player should predict from each of his forms by his HP, with a button to use them in the settings.',

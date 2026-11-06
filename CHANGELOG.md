@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.33.0 - 2026-11-06
+- `engine/sim.js`: `surge_owed` / `swap_due` - Count surge in ring swap (`cfg.surgeInRing`, default on): a pending custom surge by reds r35 lowers the swap point by 25 (with the purple's 15); `CAMP.reds` (estimated in `p2.js`, real in `reds.js`); template column, builder, Optimizer write-back; swap log lines say what's to come.
+
 ## v1.32.0 - 2026-11-06
 - `engine/nylo.js`: cross praying - `predictForm`, `partialSet` (weapon, then the best n-1 items together), `W` gear lookups with `p.ovr`, `plan.maxSwitches`, `plan.predictFlip`; `parseWaveTimes` / `drawWave` / `fmtWave`.
 - `engine/nylosolve.js`: `predictionThresholds`, `predictionText`.
