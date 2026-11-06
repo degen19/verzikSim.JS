@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.28.0';
+export const VERSION = '1.29.0';
 export const CHANGES = [
+  { version: '1.29.0', date: '2026-11-06', items: [
+    'Nylocas tab: duos and solos. Duos: Healer Tech (one player) - under him every ranged / magic form, Heal Others their teammate, then a locator orb + redemption and a restore, while restore doses last, and puts their veng on the teammate (Vengeance Other). Solos: under him on each form\'s ticks 1-4 and 6-9 after his first, attacking on 5 and 10 (scythe / Twisted bow / shadow), so he attacks once a form; a locator orb + redemption and a restore when too low for a prayed hit.',
+    'Nylocas: Restore doses (duos / solos), Off pray veng if healthy (solos: off by default), Amulet of blood fury heals; his attack icons by form.',
+  ] },
   { version: '1.28.0', date: '2026-11-06', items: [
     'New Nylocas tab (3s-5s, the boss): his forms (melee 9 ticks, then 10-tick ranged / magic / melee at random), his attacks (veng, prayer, takeoffs, going under him, Heal Other, redemption), melee thralls, the room ending on the 4-tick cycle; each player\'s opening spec (BGS, claws, halberd), damage specs in order (claws, tome, ZCB, halberd), claw rule, start spec, surge, tome tick fix and Twisted-bows-only thresholds, and a backup BGS. Report with Show raid; Solver for the best spec setup, then each player\'s ranged tick fix thresholds by his HP.',
     'Gear tab: Ascension crossbows (diamond ascension bolts (e): 5.5% Armour Piercing) and thrown dragon darts, as 2-tick ranged hits like the blowpipe.',

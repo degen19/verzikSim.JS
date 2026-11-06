@@ -1,4 +1,4 @@
-// Nylocas tab (3s-5s): per-player room settings (opening spec, damage specs, claw rule, start spec, surge, tome tick fix,
+// Nylocas tab (solo - 5s; duos: Healer Tech, solos: under him every form): per-player room settings (opening spec, damage specs, claw rule, start spec, surge, tome tick fix,
 // Twisted-bows-only thresholds) and the team's backup BGS, saved in this browser; a Report (raids played, boss times,
 // Show raid) and the Solver (best spec setups, then each player's ranged tick fix thresholds). Gear from the Gear tab.
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
@@ -66,11 +66,12 @@ export function createNylo(host, { getTeam }) {
     st.players.length = t;
     return st;
   };
+  // room options from the settings: takeoffs, off-prayer vengs (solos: off by default), restore doses (duos / solos)
+  const roomOpts = (st) => ({ takeoffs: st.takeoffs !== false, offPrayVeng: st.offPrayVeng ?? team() !== 1, restores: Number(st.restores ?? 8) });
   const playersNow = (st) => { const gp = gearOf(st.gearSet); return st.players.map((p, k) => ({ name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k), plan: p })); };
 
   function render() {
     const t = team(), small = host.querySelector('[data-small]'), main = host.querySelector('[data-main]');
-    if (t < 3) { small.innerHTML = '<div class="card"><p class="muted">The Nylocas boss sim is 3s-5s for now (no duos or solos yet).</p></div>'; main.hidden = true; return; }
     small.innerHTML = ''; main.hidden = false;
     const st = cur(), g = loadGear(), names = playersNow(st).map((p) => p.name);
     const notes = [];
@@ -90,25 +91,32 @@ export function createNylo(host, { getTeam }) {
         <label>Gear<select data-s="gearSet">${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>${esc(gearSetLabel(g, t, x))}${gearSet(g, t, x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         <label title="Surge potions the team can use in this room (the solver won't use more)">Surge potions<select data-s="surgeLimit">${Array.from({ length: t + 1 }, (_, n) => `<option value="${n}" ${n === Number(st.surgeLimit) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         ${pick()} title="A player taking his attack off prayer for veng, whose next attack is 2+ ticks away, wears their least defensive set for it"><input type="checkbox" data-s="takeoffs" ${st.takeoffs !== false ? 'checked' : ''}>Takeoffs</label>
-        <label title="A BGS by this player while his Defence is at or above the value (after the opening BGSs)">Backup BGS<select data-s="backupP"><option value="">None</option>${st.players.map((_, k) => `<option value="${k}" ${st.backup && st.backup.p === k ? 'selected' : ''} ${(gearK(st, k).weapons || []).includes('Bandos godsword') ? '' : 'disabled'}>${esc(names[k])}</option>`).join('')}</select></label>
-        <label>at Defence<select data-s="backupAt" ${st.backup ? '' : 'disabled'}>${opt(BACKUP_ATS.map((x) => [x, `${x}+`]), st.backup ? st.backup.at : 30)}</select></label>
+        ${pick()} title="With a veng up and HP above his max hit (70), take his ranged / magic attacks off prayer for the veng damage. Solos usually stay on prayer"><input type="checkbox" data-s="offPrayVeng" ${(st.offPrayVeng ?? t !== 1) ? 'checked' : ''}>Off pray veng if healthy</label>
+        ${t <= 2 ? `<label title="Restore doses for redemption: each locator orb + redemption takes one to get their prayers back (${t === 1 ? 'when too low for a prayed hit' : 'the Healer Tech player, each Heal Other loop'})">Restore doses<input type="number" min="0" max="40" data-s="restores" value="${Number(st.restores ?? 8)}" style="width:60px"></label>` : ''}
+        ${t === 1 ? '' : `<label title="A BGS by this player while his Defence is at or above the value (after the opening BGSs)">Backup BGS<select data-s="backupP"><option value="">None</option>${st.players.map((_, k) => `<option value="${k}" ${st.backup && st.backup.p === k ? 'selected' : ''} ${(gearK(st, k).weapons || []).includes('Bandos godsword') ? '' : 'disabled'}>${esc(names[k])}</option>`).join('')}</select></label>
+        <label>at Defence<select data-s="backupAt" ${st.backup ? '' : 'disabled'}>${opt(BACKUP_ATS.map((x) => [x, `${x}+`]), st.backup ? st.backup.at : 30)}</select></label>`}
       </div>
+      ${t === 1 ? '<p class="muted small">Solo: after his first form they step under him on each form\'s ticks 1-4 and 6-9 and attack on 5 and 10 (scythe / Twisted bow / shadow, else Ayak; no tome), so he attacks once a form. Too low for a prayed hit: a locator orb + redemption and a restore. Amulet of blood fury heals (20% of melee hits, 30% of the damage) count.</p>' : ''}
       ${notes.map((x) => `<div class="warn small" style="margin-bottom:4px">${esc(x)}</div>`).join('')}
       <div class="scroll"><table class="bt"><tr><th></th><th title="95: their first regen comes the tick after their first spec">Start spec</th><th title="+25% straight after their first spec">Surge</th>
         <th title="Their first attack (his melee form)">Opening spec</th><th title="After their opener, in order, each when his form allows: claws / halberd (melee), tome (magic), ZCB (in place of a Twisted bow, ranged). Never their first attack">Second spec</th>
-        ${[1, 2, 3].map((k) => `<th title="Below this % of his HP they stop this green-form sequence and play Twisted bows only (bp: their 2-tick hit - blowpipe, crossbows or darts). Which sequence depends on their first attack in the form: its 2nd tick 4bp tbow, 3rd tbow bp tbow, 4th 3bp tbow">Stop sequence at HP:<br>${PLAN_NAMES[k]}</th>`).join('')}</tr>
+        ${t === 2 ? '<th title="Feeds HP and Vengs to other player with redemption - requires locator orb and restore doses">Healer Tech</th>' : ''}
+        ${t === 1 ? '' : [1, 2, 3].map((k) => `<th title="Below this % of his HP they stop this green-form sequence and play Twisted bows only (bp: their 2-tick hit - blowpipe, crossbows or darts). Which sequence depends on their first attack in the form: its 2nd tick 4bp tbow, 3rd tbow bp tbow, 4th 3bp tbow">Stop sequence at HP:<br>${PLAN_NAMES[k]}</th>`).join('')}</tr>
       ${st.players.map((p, k) => { const gk = gearK(st, k); return `<tr><td class="rl">${esc(names[k])}</td>
         <td><select data-p="${k}|startSpec">${opt([[100, '100'], [95, '95']], p.startSpec)}</select></td>
         <td style="text-align:center"><input type="checkbox" data-p="${k}|surge" ${p.surge ? 'checked' : ''}></td>
         <td><select data-p="${k}|open">${OPENS.map(([v, l]) => `<option value="${v}" ${v === p.open ? 'selected' : ''} ${canOpen(gk, v) ? '' : 'disabled'}>${l}</option>`).join('')}</select></td>
-        <td><select data-p="${k}|specs" style="width:150px">${SEQS.map((s) => `<option value="${seqKey(s)}" ${seqKey(s) === seqKey(p.specs) ? 'selected' : ''} ${canSeq(gk, s) ? '' : 'disabled'}>${seqName(s)}</option>`).join('')}</select></td>
-        <td>${stopSel(k, 1)}</td><td>${stopSel(k, 2)}</td><td>${stopSel(k, 3)}</td></tr>`; }).join('')}</table></div>`;
+        <td><select data-p="${k}|specs" style="width:150px">${SEQS.map((s) => `<option value="${seqKey(s)}" ${seqKey(s) === seqKey(p.specs) ? 'selected' : ''} ${canSeq(gk, s) && !(t === 1 && s.includes('tome')) ? '' : 'disabled'}>${seqName(s)}</option>`).join('')}</select></td>
+        ${t === 2 ? `<td style="text-align:center"><input type="checkbox" data-p="${k}|healer" ${p.healer ? 'checked' : ''}></td>` : ''}
+        ${t === 1 ? '' : `<td>${stopSel(k, 1)}</td><td>${stopSel(k, 2)}</td><td>${stopSel(k, 3)}</td>`}</tr>`; }).join('')}</table></div>`;
   }
   cfg.addEventListener('change', (e) => {
     const el = e.target, st = cur();
     if (el.dataset.s) {
       const k = el.dataset.s;
       if (k === 'takeoffs') st.takeoffs = el.checked;
+      else if (k === 'offPrayVeng') st.offPrayVeng = el.checked;
+      else if (k === 'restores') st.restores = Math.max(0, Math.min(40, Number(el.value) || 0));
       else if (k === 'gearSet') st.gearSet = el.value;
       else if (k === 'surgeLimit') st.surgeLimit = Number(el.value);
       else if (k === 'backupP') st.backup = el.value === '' ? null : { p: Number(el.value), at: st.backup ? st.backup.at : 30 };
@@ -117,6 +125,7 @@ export function createNylo(host, { getTeam }) {
       const [k, f] = el.dataset.p.split('|'), p = st.players[Number(k)];
       if (f === 'specs') p.specs = el.value === 'none' ? [] : el.value.split('+');
       else if (f === 'startSpec') p.startSpec = Number(el.value);
+      else if (f === 'healer') { st.players.forEach((q) => { q.healer = false; }); p.healer = el.checked; }   // one Healer Tech at most
       else if (el.type === 'checkbox') p[f] = el.checked;
       else p[f] = el.value;
     } else if (el.dataset.stop) {
@@ -174,7 +183,7 @@ export function createNylo(host, { getTeam }) {
     err.textContent = '';
     let bps = []; try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
     const st = cur(), players = playersNow(st), n = Math.max(100, Number(r.raids) || 4000), seed = String(r.seed || '').trim() || `n${Date.now()}`;
-    const run = { players, opts: { takeoffs: st.takeoffs !== false, plans: { backup: st.backup } } };
+    const run = { players, opts: { ...roomOpts(st), plans: { backup: team() === 1 ? null : st.backup } } };
     const x = { run, bps, seed, n }; flat.push(x);
     const all = []; const agg = {};
     for (let i = 0; i < n; i++) {
@@ -231,7 +240,7 @@ export function createNylo(host, { getTeam }) {
       <div class="sub">Each played on the same ${items[0].totals.length.toLocaleString()} raids. Boss time: his spawn to the room's end.</div>
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>Setup</th><th></th></tr>
       ${items.map((r, i) => { const s = statsRow(r.totals, bps);
-        const short = r.cfg.players.map((p, k) => `${esc(names[k])}: ${p.startSpec === 95 ? '95% · ' : ''}${p.surge ? 'surge · ' : ''}${p.open === 'none' ? '' : `${SPEC_NAME[p.open]} → `}${seqName(p.specs)}${p.specs.includes('claw') && p.clawMode === 'gain' ? ' (claws only for a tick)' : ''}`).join('<br>') + (r.cfg.backup ? `<br>backup BGS: ${esc(names[r.cfg.backup.p])} at ${r.cfg.backup.at}+` : '');
+        const short = r.cfg.players.map((p, k) => `${esc(names[k])}: ${p.startSpec === 95 ? '95% · ' : ''}${p.surge ? 'surge · ' : ''}${p.open === 'none' ? '' : `${SPEC_NAME[p.open]} → `}${seqName(p.specs)}${p.specs.includes('claw') && p.clawMode === 'gain' ? ' (claws only for a tick)' : ''}`).join('<br>') + (r.cfg.players.some((p) => p.healer) ? `<br>Healer Tech: ${esc(names[r.cfg.players.findIndex((p) => p.healer)])}` : '') + (r.cfg.backup ? `<br>backup BGS: ${esc(names[r.cfg.backup.p])} at ${r.cfg.backup.at}+` : '');
         return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}
           <td class="small" style="text-align:left;font-weight:400">${short}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use</button></td></tr>
@@ -258,18 +267,18 @@ export function createNylo(host, { getTeam }) {
     let bps = []; try { bps = String(v.bps || '').trim() ? parseBreakpoints(v.bps) : []; } catch (x) { err.textContent = x.message; return; }
     const t = team(), st = cur(), all = playersNow(st), ef = EFFORT[v.effort] || EFFORT.normal;
     const base = all.map((p) => ({ name: p.name, gear: p.gear })), names = all.map((p) => p.name), gear = all.map((p) => p.gear);
-    const opts = { takeoffs: st.takeoffs !== false };
-    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: p.clawMode, startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false })), backup: st.backup ? { ...st.backup } : null };
+    const opts = roomOpts(st);
+    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: p.clawMode, startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer })), backup: st.backup && t > 1 ? { ...st.backup } : null };
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
     const t1 = Date.now(), say = (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };
     try {
       me.pool = new NyloPool(base, t, opts);
       const run = (...args) => me.pool.run(...args);
-      const items = await solveNylo({ start, gear, allow: { ...v.allow }, surgeLimit: Number(st.surgeLimit) || 0, swaps: !!v.search.swaps, roles: !!v.search.roles, bps, ...ef, top: 10 }, run, say, () => me.stopped);
+      const items = await solveNylo({ start, gear, allow: { ...v.allow, ...(t === 1 ? { backup: false } : {}) }, surgeLimit: Number(st.surgeLimit) || 0, swaps: !!v.search.swaps, roles: !!v.search.roles, bps, ...ef, top: 10 }, run, say, () => me.stopped);
       const mk = (cfg) => ({ players: base.map((b, k) => ({ ...b, plan: cfg.players[k] })), opts: { ...opts, plans: { backup: cfg.backup } } });
       vres = { items: items.map((r) => ({ ...r, run: mk(r.cfg) })), bps, names, thr: null }; showResults();
-      if (v.search.thr && items.length && !me.stopped) {
+      if (v.search.thr && t > 1 && items.length && !me.stopped) {
         vres.thr = await rangedThresholds(items[0].cfg, gear, run, ef.thrRaids, say, () => me.stopped);
         showResults();
       }
@@ -278,6 +287,6 @@ export function createNylo(host, { getTeam }) {
     finally { if (me.pool) me.pool.stop(); vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
 
-  function refreshAll() { render(); if (team() >= 3) { showRep(); showSol(); } }
+  function refreshAll() { render(); showRep(); showSol(); }
   return { refresh: () => { state = loadKey(STORE); refreshAll(); } };
 }

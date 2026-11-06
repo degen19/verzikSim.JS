@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.29.0 - 2026-11-06
+- `engine/nylo.js`: duos (`plan.healer`: Healer Tech - Heal Other, locator orb + redemption, restore doses, Vengeance Other) and solos (`SOLO_UNDER` / `SOLO_HITS`: under him on ticks 1-4 / 6-9, his one attack a form; orb + redemption when low; Tumeken's shadow under him); `restores` and `offPrayVeng` options; Amulet of blood fury heals; no tome in solos.
+- `nylo-ui.js`: solo - 5s; Healer Tech column (duos), Restore doses, Off pray veng if healthy; solos hide the backup BGS and thresholds.
+- `img/icons/Nylo_boss_{melee,ranged,magic}.png`: his attack icons by form.
+
 ## v1.28.0 - 2026-11-06
 - `engine/nylo.js`: Nylocas Vasilias - stats, forms (`formSchedule`), the instance cycle / boss time (`roomEnd`), players' attacks (scythe, Twisted bow + 2-tick hits by plan, Eye of ayak, claws, BGS, halberd, ZCB, tome with buffed autos and tome tick fix), his attacks with veng / prayer / takeoffs / under him / Heal Other / redemption, melee thralls; per-player plans (`normPlan`), backup BGS, Twisted-bows-only thresholds (`rangedStop`), late-Ayak skip option.
 - `engine/nylosolve.js` (+ `nylo-solver-pool.js`, `nylo-solver-worker.js`): the Nylocas Solver and `rangedThresholds`.

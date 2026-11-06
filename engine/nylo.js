@@ -64,7 +64,7 @@ import { hit_chance } from './sim.js';
 import { worn, bonuses, bestWorn } from './loadout.js';
 import { tbowMult } from './sote.js';
 import { hitMV, scytheMV, clawMV, halbMV, constMV } from './expdmg.js';
-import { ITEMS, tome_attack } from './gear.js';
+import { ITEMS, tome_attack, shadow_attack } from './gear.js';
 
 export const SCYTHE_DELAY = 1, TBOW_DELAY = 2, AYAK_DELAY = 2, TOME_DELAY = 2, SHADOW_DELAY = 3, BP_DELAY = 2, ZCB_DELAY = 2;
 export const BOSS_HITS = [2, 6], SPAWN_HITS = [1, 5];       // his attacks: ticks into a form (spawn form: one earlier)
@@ -102,6 +102,13 @@ function zcbChance(p, d) {
 export const nyloTbow = (p, d = NYLO.def) => ranged(p, 'Twisted bow', d);
 /** Their blowpipe (dragon darts, 2 ticks): [chance, max, gear text]. */
 export const nyloBp = (p, d = NYLO.def) => ranged(p, 'Toxic blowpipe', d);
+const MELEE_CODES = new Set(['S', 'C', 'Ch', 'BGS', 'Cs']);
+/** Their Tumeken's shadow (5 ticks) at 112 Magic: [chance, max, gear text]. */
+export function nyloShadow(p) {
+  const set = bestWorn(p.gear, 'mage', "Tumeken's shadow").set, gear = Object.entries(set).filter(([s2, v]) => s2 !== 'weapon' && v && v !== 'none').map(([, v]) => v);
+  const [, mx, ch] = shadow_attack(gear, MAGIC, { def_roll: defRoll('magic') });
+  return [ch, mx, setText(set)];
+}
 /** Their Eye of ayak (3 ticks): [chance, max, gear text]. */
 export function nyloAyak(p) {
   const set = bestWorn(p.gear, 'mage', 'Eye of ayak').set, b = bonuses(set);
@@ -164,9 +171,10 @@ export const TEST_PLAN = [
  *  the claw can't be the killing blow) | 'asap', startSpec: 95 | 100, surge (after their first spec), tomeTickFix,
  *  rangedStop: { 1: %, 2: %, 3: % } (their own Twisted-bows-only thresholds) }. Specs they've no weapon for are dropped. */
 export const NEEDS = { bgs: 'Bandos godsword', claw: 'Dragon claws', halb: 'Crystal halberd', tome: "Zorya's tome", zcb: 'Zaryte crossbow' };
-export function normPlan(pl, has) {
-  const out = { open: 'none', specs: [], clawMode: 'asap', startSpec: 100, surge: false, tomeTickFix: true, ...pl };
-  out.specs = (out.specs || []).filter((x) => has.has(NEEDS[x]));
+export function normPlan(pl, has, team = 4) {
+  const out = { open: 'none', specs: [], clawMode: 'asap', startSpec: 100, surge: false, tomeTickFix: true, healer: false, ...pl };
+  out.specs = (out.specs || []).filter((x) => has.has(NEEDS[x]) && !(team === 1 && x === 'tome'));   // solos: no tome (only ticks 5 and 10)
+  if (team !== 2) out.healer = false;
   if (out.open !== 'none' && !has.has(NEEDS[out.open])) out.open = 'none';
   return out;
 }
@@ -216,7 +224,7 @@ function alignAct(t, f, ev, target) {
   return V(t)[1];
 }
 
-// ---------------------------------------------------------------- his attacks, veng (3s-5s)
+// ---------------------------------------------------------------- his attacks, veng
 //  - On each form's 3rd and 7th ticks (2nd and 6th as he spawns) at a random player (not one under him), in his form's
 //    style: max 70, accuracy - melee (400 + 9) x 64 (crush - to confirm), ranged (350 + 9) x 64, magic (50 + 9) x (600 + 64)
 //    - against their Defence 118 / Magic 112 on their prayer (+25%), in the gear they have on for his form. Prayed against:
@@ -233,6 +241,15 @@ function alignAct(t, f, ev, target) {
 //    with veng up who'd then take it off prayer safely, else one who'd have veng by his attack and could, else the lowest at
 //    30 or less - on redemption: a proc (9 or less) +24, then a restore for their prayers.
 //  - Melee thralls (one each, from their first attack, 0-3 every 4 ticks, can't miss): damage only in his melee form.
+//  - Amulet of blood fury (their melee neck): 20% of melee hits heal them 30% of the damage.
+// Duos: Healer Tech (one player, plan.healer): under him every ranged / magic form; they Heal Other their teammate whenever
+//   they're down 24+ (every 3 ticks at most), then a locator orb takes them to 9 or less for redemption (+24) and a restore
+//   puts their prayers back - while restore doses last; their veng goes on their teammate (Vengeance Other) whenever the
+//   teammate's is down.
+// Solos: after his first form, under him on each form's ticks 1-4 and 6-9, attacking only on 5 and 10 (scythe / Twisted
+//   bow / shadow, else Ayak, or a spec); he attacks once a form, on its 5th tick. Too low for a prayed hit: a locator orb +
+//   redemption (+24) and a restore, while restore doses last.
+export const SOLO_UNDER = new Set([0, 1, 2, 3, 5, 6, 7, 8]), SOLO_HITS = [4], HEAL_LOOP = 3;
 export const BOSS_MAX = 70, PRAYED_MAX = 17, VENG_CD = 50, HP_MAX = 99, REDEMPTION = 24;
 export const BOSS_ATK = { melee: (400 + 9) * 64, ranged: (350 + 9) * 64, magic: (50 + 9) * (600 + 64) };
 export const BOSS_DELAY = { melee: 1, ranged: 2, magic: 2 };
@@ -248,7 +265,9 @@ export function playerDef(p) {
 
 /** One room. players: [{ name, gear (Gear tab), plan? (TEST_PLAN shape) }]. trace (opt): the Show raid entries.
  *  -> { spawn, kill, sched, def } */
-export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTickFix = true, takeoffs = true, rangedStop = null, ayakSkip = null, plans = null } = {}) {
+export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTickFix = true, takeoffs = true, rangedStop = null, ayakSkip = null, plans = null, restores = 8, offPrayVeng = true } = {}) {
+  // offPrayVeng: off prayer for his ranged / magic hits with a veng up and HP above his max (solos usually stay on prayer)
+  // restores: restore doses for redemption (a duo's Healer Tech player / a solo)
   // plans: { backup: { p, at } } - a backup BGS by player p while his Defence is at or above `at` (after the opening BGSs)
   // ayakSkip: (his HP %) => true to skip an Ayak that would push their next attack past the next form's first tick
   // rangedStop: { 1: %, 2: %, 3: % } - below that share of his HP, a green form's plan (by its first attack's tick) is Twisted bows only
@@ -257,13 +276,15 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
   const i1 = spawn - SHOW_UP;                                  // his spawn on the instance cycle (i1); `spawn`: his first form (i3)
   const ps = players.map((p, i) => ({ ...p, i, next: 0, n: 0, plan: null, planForm: null, has: new Set(p.gear.weapons || []),
     spec: null, regen: 0, buff: 0, buffUntil: -1, pl: structuredClone(p.plan || TEST_PLAN[i] || {}),
-    hp: HP_MAX, veng: true, vengReady: spawn - SHOW_UP, dead: false, underForm: null, healForm: null, thrallNext: null, pdef: playerDef(p) }));
+    hp: HP_MAX, veng: true, vengReady: spawn - SHOW_UP, dead: false, underForm: null, healForm: null, thrallNext: null, pdef: playerDef(p),
+    restores, loopReady: 0, bloodFury: /blood fury/i.test(String((p.gear.melee || {}).neck || '')) }));
   const st = { veng: 0, vengDmg: 0, deaths: 0, under: 0, heals: 0, redemptions: 0, taken: 0, thrall: 0, takeoffs: 0 };
   const bq = [];                                              // his hits on the way: [lands, player, damage, entry]
   const alive = () => ps.filter((p) => !p.dead);
-  const isUnder = (p, f, t) => p.underForm === f.start && UNDER_TICKS.has(t - f.start);
+  const solo = team === 1;
+  const isUnder = (p, f, t) => (solo ? f.start !== spawn && SOLO_UNDER.has(t - f.start) : p.underForm === f.start && UNDER_TICKS.has(t - f.start));
   for (const p of ps) {
-    p.pl = normPlan(p.pl, p.has);
+    p.pl = normPlan(p.pl, p.has, team);
     p.spec = p.startSpec ?? p.pl.startSpec ?? 100; p.hold = p.spec < 100;
     p.fastW = fastWeapon(p);
   }
@@ -283,6 +304,8 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       let amt = h[2];
       if (amt == null) { amt = Math.min(110, Math.floor(hp * 0.22)); if (h[3]) { h[3].ruby = true; h[3].rolledAll = amt; } }   // ZCB ruby
       hp -= amt; h[3] && (h[3].dmg = (h[3].dmg || 0) + amt, h[3].landed = t);
+      const a = h[4] && ps[h[1]];                                  // a melee hit: Amulet of blood fury
+      if (a && a.bloodFury && !a.dead && amt > 0 && rng.random() < 0.2) { const o = a.hp; a.hp = Math.min(HP_MAX, a.hp + Math.floor(amt * 0.3)); st.bloodFury = (st.bloodFury || 0) + a.hp - o; }
       if (hp <= 0) { overkill = hp < 0; hp = 0; kill = t; break; }
     }
     for (const h of bq.filter((h) => h[0] === t)) {           // his hits landing (veng on any damage)
@@ -300,7 +323,29 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
     }
     if (kill != null) break;
     const f = formAt(sched, t), ft = t - f.start;             // ft: ticks into his form (0 = its first)
-    for (const p of alive()) if (!p.veng && t >= p.vengReady) { p.veng = true; p.vengReady = t + VENG_CD; if (T) T.push({ t, i: p.i, supply: 'casts Vengeance' }); }
+    for (const p of alive()) {
+      if (p.pl.healer) {                                         // Healer Tech: their veng goes on their teammate
+        const m = alive().find((q) => q !== p && !q.veng);
+        if (m && t >= p.vengReady) { m.veng = true; p.vengReady = t + VENG_CD; if (T) T.push({ t, i: p.i, supply: `casts Vengeance Other on ${m.name}` }); }
+        continue;
+      }
+      if (!p.veng && t >= p.vengReady) { p.veng = true; p.vengReady = t + VENG_CD; if (T) T.push({ t, i: p.i, supply: 'casts Vengeance' }); }
+    }
+    for (const h of alive().filter((q) => q.pl.healer)) {         // Healer Tech: Heal Other, locator orb -> redemption, restore
+      const m = alive().find((q) => q !== h);
+      if (!m || h.restores <= 0 || t < h.loopReady || HP_MAX - m.hp < REDEMPTION || h.hp < 12) continue;   // a dose for at least a redemption's worth
+      const amt = Math.min(Math.floor(h.hp * 0.75), HP_MAX - m.hp); h.hp -= amt; m.hp += amt; st.heals++;
+      const o = h.hp; h.hp = Math.min(h.hp, 9) + REDEMPTION; h.restores--; st.redemptions++; h.loopReady = t + HEAL_LOOP;
+      if (T) T.push({ t, i: h.i, supply: `heal other -> ${m.name} +${amt} (${m.name} ${m.hp} HP); ${o > 9 ? `locator orb ${o} -> 9, ` : ''}redemption -> ${h.hp} HP; restore (${h.restores} left)` });
+    }
+    if (solo && t === f.start && f.start !== spawn) { st.under++; if (T) for (const k of SOLO_UNDER) T.push({ t: f.start + k, i: 0, under: true }); }
+    if (solo && f.start !== spawn && f.form !== 'melee' && t - f.start === 3) {   // a solo too low for a prayed hit: orb + redemption
+      const p = ps[0];
+      if (!p.dead && p.hp <= PRAYED_MAX && p.restores > 0) {
+        const o = p.hp; p.hp = Math.min(p.hp, 9) + REDEMPTION; p.restores--; st.redemptions++;
+        if (T) T.push({ t, i: p.i, supply: `locator orb ${o} -> ${Math.min(o, 9)}, redemption -> ${p.hp} HP; restore (${p.restores} left)` });
+      }
+    }
     if (f.form !== 'melee' && ft === 0) {                     // a ranged / magic form: Heal Others, then who goes under
       const heal = (c, g, why) => {
         const amt = Math.min(Math.floor(c.hp * 0.75), HP_MAX - g.hp); if (amt <= 0) return false;
@@ -313,10 +358,10 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
         const c = alive().filter((q) => q !== g && q.hp > PRAYED_MAX).sort((a, b) => b.hp - a.hp)[0];
         if (c && c.hp - Math.min(Math.floor(c.hp * 0.75), HP_MAX - g.hp) > PRAYED_MAX) heal(c, g, `${g.name} couldn't take a prayed hit`);
       }
-      for (const p of alive()) {
-        const free = (f.form === 'ranged' ? (p.next === f.start + 4) : false) || p.next >= f.start + 9;   // their attacks on 5 and 10 anyway
+      for (const p of solo ? [] : alive()) {
+        const free = (f.form === 'ranged' ? (p.next === f.start + 4) : false) || p.next >= f.start + 9 || p.pl.healer;   // their attacks on 5 and 10 anyway (Healer Tech: always)
         const noVeng = !p.veng && p.vengReady > f.start + 2;
-        if (p.hp <= PRAYED_MAX || (noVeng && free)) {
+        if (p.hp <= PRAYED_MAX || (noVeng && free) || p.pl.healer) {
           p.underForm = f.start; st.under++;
           if (p.next < f.start + 4) p.next = f.start + 4;
           if (T) for (const k of UNDER_TICKS) T.push({ t: f.start + k, i: p.i, under: true });
@@ -337,16 +382,16 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       }
     }
     // his attack
-    const hits = f.start === spawn ? SPAWN_HITS : BOSS_HITS;
+    const hits = f.start === spawn ? SPAWN_HITS : solo ? SOLO_HITS : BOSS_HITS;
     if (hits.includes(ft)) {
       const pool = alive().filter((p) => !isUnder(p, f, t));
       if (pool.length) {
-        const p = pool[rng.randint(0, pool.length - 1)], off = p.veng && p.hp > BOSS_MAX;
+        const p = pool[rng.randint(0, pool.length - 1)], off = offPrayVeng && p.veng && p.hp > BOSS_MAX;
         const tk = takeoffs && off && p.next >= t + 2;            // a takeoff: their least defensive set for it
         const mx = off ? BOSS_MAX : f.form === 'melee' ? 0 : PRAYED_MAX, ch = hit_chance(BOSS_ATK[f.form], tk ? p.pdef.off[f.form] : p.pdef[f.form]);
         const d = rng.random() < ch ? rng.randint(0, mx) : 0;
         if (tk) st.takeoffs++;
-        const e = T && { t, boss: 'Attack', icon: 'Nylocas_athanatos', ring: { melee: '#d9dde6', ranged: '#3fbf5a', magic: '#4f8dff' }[f.form],
+        const e = T && { t, boss: 'Attack', icon: `Nylo_boss_${f.form}`, ring: { melee: '#d9dde6', ranged: '#3fbf5a', magic: '#4f8dff' }[f.form],
           tip: `${f.form} attack -> ${p.name}${off ? ` (off prayer, veng${tk ? `, takeoff: their ${f.form === 'magic' ? 'melee' : 'mage'} gear` : ''})` : ' (prayed)'} - his accuracy ${(ch * 100).toFixed(1)}%: ${d}${mx === 0 ? ' (blocked)' : ''}` };
         bq.push([t + BOSS_DELAY[f.form], p, d, e]);
         if (T) T.push(e);
@@ -368,13 +413,13 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       if (t < f.first || p.next > t) continue;
       if (isUnder(p, f, t)) continue;                          // under him: no attack on 2-4 / 6-8
       if (p.thrallNext == null) p.thrallNext = t + rng.randint(1, 2);
-      const under = p.underForm === f.start && f.form !== 'melee';
+      const under = (solo && f.start !== spawn) || (p.underForm === f.start && f.form !== 'melee');
       const base = { t, i: p.i, target: `Nylocas Vasilias (${f.form}) - Defence ${def}` };
       let e = null;
       const pay = (c) => { const o = p.spec; p.spec -= c; if (p.hold) { p.hold = false; p.regen = SPEC_REGEN - 1; } return [o, p.spec]; };
       const go = (code, what, gear, stats, ch, exp, hits, delays, speed, sp = null) => {
         e = T && { ...base, code, what, gear, stats, acc: ch, exp, rolledAll: hits.reduce((a, b) => a + (b || 0), 0), ...(sp ? { spec: sp[0], specAfter: sp[1] } : {}) };
-        hits.forEach((d, k) => q.push([t + delays[k], p.i, d, e]));
+        hits.forEach((d, k) => q.push([t + delays[k], p.i, d, e, MELEE_CODES.has(code)]));
         p.next = t + speed; p.n++;
         if (e) T.push(e);
       };
@@ -456,7 +501,10 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       } else if (f.form === 'magic') {
         const MAG = `Magic ${MAGIC} (Augury)`;
         if (p.buff > 0 && t > p.buffUntil) p.buff = 0;             // the Flow lasts 30s (50 ticks) from their last tome spec
-        if (under) {                                              // under him: the Ayak on 5 and 10
+        if (under && p.has.has("Tumeken's shadow")) {             // under him: their strongest - the shadow on 5 and 10
+          const [ch, mx, gear] = nyloShadow(p), d = roll(ch, mx);
+          go('Sh', "Tumeken's shadow (under him)", gear, MAG, ch, hitMV(ch, mx), [d], [SHADOW_DELAY], 5);
+        } else if (under) {                                       // under him: the Ayak on 5 and 10
           const [ch, mx, gear] = nyloAyak(p), d = roll(ch, mx);
           go('E', 'Eye of ayak (under him)', gear, MAG, ch, hitMV(ch, mx), [d], [AYAK_DELAY], 3);
         } else if (p.buff > 0) {                                  // a buffed tome auto (2 ticks) - carried over between his magic forms
