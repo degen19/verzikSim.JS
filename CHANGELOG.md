@@ -2,6 +2,12 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.26.0 - 2026-11-05
+- New `engine/tome.js`: `tome_numbers` (`tome_attack` at 112 Magic, their mage gear + ring, vs `P2_DEF[3]`; k 0 auto / 1 spec or buffed / 2 spec while buffed), `tome_values` (expected damage per attack), `tome_plan` (memoized DP over reds tick, spec, regen timer, buffed attacks left and the magic-gear lock: scythe, claw spec (first two splats only when the last two would land after r41), claw scratch, shadow, tome spec, tome auto, buffed auto, spec while buffed, wait; an attack counts if it goes off by r40 and lands by r41; ties go to the earlier damage). Tome queued [3, damage]; spec / auto 3 ticks, buffed 2.
+- `reds.js`: Tome Reds players (`p.tome_reds` from cfg `tomeReds` and `hasTome`) skip the shadow plan / two-claw skip and play `tome_turn` from the plan; out of the r16 bounce (`tome_out16`) unless `tome_m16` (someone else skips / shadows from a distance / tomes). `duo_reds.js` set 2: the same, after the r40 halberd rule.
+- Claw specs: hitsplats 3-4 land at t+2 (reds, duo reds, P3, solo).
+- `verzraid.js` / `raidview.js`: TOME lines -> code `Zt` (icon img/icons/Zoryas_tome.png), `tl` S / M / A / a as cell borders; reds lines list tome specs / autos and claw scratches.
+
 ## v1.25.14 - 2026-11-05
 - Sotetseg: spec `onlyIfNone` (backups only): counts as 'enough' once a maul landed that phase (`maulHits[ph] > 0`), event `backupNone:k:ph`. Spec planner checkbox "Only if 0 mauls landed" (with Backup), procedure text and decision-tree line; Solver neighbour toggles it (and swaps / pruning carry it).
 

@@ -65,7 +65,7 @@ function runAfterP1(r1, cfgs, team, rng, out = null) {
 /** Each player's reds line as text: '2 claws, 1 shadow, 5 scythes'. */
 export function redsLineText(l) {
   const n = (k, one, many) => (l[k] ? `${l[k]} ${l[k] === 1 ? one : many}` : null);
-  return [n('C', 'claw', 'claws'), n('Sh', 'shadow', 'shadows'), n('Z', 'ZCB', 'ZCBs'), n('H', 'halberd', 'halberds'), n('BP', 'blowpipe', 'blowpipes'), n('S', 'scythe', 'scythes'), n('Hn', 'horn', 'horns')].filter(Boolean).join(', ') || 'no attacks';
+  return [n('C', 'claw', 'claws'), n('Sh', 'shadow', 'shadows'), n('T', 'tome spec', 'tome specs'), n('Ta', 'tome auto', 'tome autos'), n('Cs', 'claw scratch', 'claw scratches'), n('Z', 'ZCB', 'ZCBs'), n('H', 'halberd', 'halberds'), n('BP', 'blowpipe', 'blowpipes'), n('S', 'scythe', 'scythes'), n('Hn', 'horn', 'horns')].filter(Boolean).join(', ') || 'no attacks';
 }
 /**
  * Branch profile: raids [from, to) grouped by the Dawn specs the team used before P1 died. Per Dawn count: raids,

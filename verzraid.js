@@ -9,14 +9,14 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const fmt = (t) => `${Math.floor(t * 0.6 / 60)}:${(t * 0.6 % 60).toFixed(1).padStart(4, '0')}`;
 
 // what a queued attack's text says -> its timeline code
-const WEAPONS = [[/^Scythe/i, 'S'], [/^Dawn spec/i, 'D'], [/^Eye of ayak/i, 'E'], [/^Sulphur blades/i, 'SuB'], [/^Blowpipe/i, 'BP'],
+const WEAPONS = [[/^TOME/, 'Zt'], [/^Scythe/i, 'S'], [/^Dawn spec/i, 'D'], [/^Eye of ayak/i, 'E'], [/^Sulphur blades/i, 'SuB'], [/^Blowpipe/i, 'BP'],
   [/^Sang/i, 'T'], [/^(Dragon )?claws?|^CLAW SPEC/i, 'C'], [/^claw scratch/i, 'Cs'], [/^HALBERD|^Halberd/i, 'Ch'], [/^SHADOW|^Shadow/i, 'Sh'],
   [/^ZCB/i, 'Z'], [/^Elder maul/i, 'EM'], [/^Bandos/i, 'BGS'], [/^Obligator|^Swift blade|^3-tick/i, '3t'], [/^blowpipe at purple/i, 'BP'], [/^TICK FILL/i, 'F']];
 const codeOf = (txt) => { for (const [re, c] of WEAPONS) if (re.test(txt)) return c; return txt.split(/[\s(]/)[0].slice(0, 3); };
 
 // the weapon each attack code is made with (the tooltip's gear line)
 const WEAPON_OF = { S: 'Scythe of vitur', D: 'Dawnbringer', E: 'Eye of ayak', SuB: 'Sulphur blades', BP: 'Toxic blowpipe', T: 'Sanguinesti staff',
-  C: 'Dragon claws', Cs: 'Dragon claws', Ch: 'Crystal halberd', Sh: "Tumeken's shadow", Z: 'Zaryte crossbow', EM: 'Elder maul', BGS: 'Bandos godsword', H: 'Soulflame horn' };
+  C: 'Dragon claws', Cs: 'Dragon claws', Ch: 'Crystal halberd', Sh: "Tumeken's shadow", Z: 'Zaryte crossbow', EM: 'Elder maul', BGS: 'Bandos godsword', H: 'Soulflame horn', Zt: "Zorya's tome" };
 
 /** The timeline trace from a raid's log. names: the players; cfgs (optional): their setups - the tooltips' gear, ring
  *  and start spec. Spec is followed through the log's "X% -> Y%" changes; the next regen is the player's next regen line. */
@@ -128,7 +128,7 @@ export function verzTrace(log, names, cfgs = null) {
     if (vg) { trace.push({ t, i, veng: +vg[1] }); continue; }
     if (/^SOULFLAME HORN/.test(what)) { const fr = what.match(/guaranteed first hit for (.*)$/); trace.push({ t, i, code: 'H', what: `Soulflame horn${fr ? ` - guaranteed first hit for ${fr[1]}` : ''}` }); continue; }
     if (/^Thrall|^regen|^spec |^surge|swaps to|boak, can't|lines up with|bounced|^last scythe before|skips the bounce|has spec for|no claws on|off the team|back on the team|\(tank\)/.test(what) && !/ZCB/.test(what)
-        && !/^(SHADOW|Scythe|CLAW SPEC|HALBERD SPEC|claw scratch|Blowpipe on|3-TICK)\b/.test(what)) continue;   // (an attack line that mentions a bounce - a shadow from a distance - is still an attack)
+        && !/^(SHADOW|Scythe|CLAW SPEC|HALBERD SPEC|claw scratch|Blowpipe on|3-TICK|TOME)\b/.test(what)) continue;   // (an attack line that mentions a bounce - a shadow from a distance - is still an attack)
     if (/lands after (the )?kill/.test(what)) {                       // past the kill: still counts as rolled (a 50 on 10 HP rolled 50)
       const am = what.match(/ (\d+) lands after the kill/) || what.match(/rolled (\d+)/), a = last.get(i);
       if (am && a) { a.rolled = (a.rolled ?? a.dmg ?? 0) + +am[1]; if (a.landed == null) a.landed = t; }
@@ -144,10 +144,16 @@ export function verzTrace(log, names, cfgs = null) {
     // an attack queued this tick
     const q = what.match(/^(.*?) queued/) || what.match(/^last swing before the shield - (\w+)/);
     const txt = q ? q[1] : what;
-    if (!q && !/^(Scythe|SHADOW|ZCB|CLAW SPEC|HALBERD SPEC|claw scratch|blowpipe at purple|Blowpipe on|TICK FILL|no claws - HALBERD|3-TICK)/.test(what)) continue;
+    if (!q && !/^(Scythe|SHADOW|ZCB|CLAW SPEC|HALBERD SPEC|claw scratch|blowpipe at purple|Blowpipe on|TICK FILL|no claws - HALBERD|3-TICK|TOME)/.test(what)) continue;
     const a = { t, i, code: codeOf(txt.replace(/^no claws - /, '')), what: txt.split(' (')[0] };
     const rl = what.match(/-> \[([^\]]*)\]\s*$/) || what.match(/-> (\d+)\s*$/);   // the attack's hitsplats as rolled (they count even past the kill)
     if (rl) a.rolledAll = rl[1].split(',').reduce((s, x) => s + (Number(x) || 0), 0);
+    if (a.code === 'Zt') {   // Zorya's tome: S spec hit, M spec miss, A buffed auto, a auto (its cell's border)
+      const sp = /^TOME SPEC/.test(what), hit = (a.rolledAll || 0) > 0;
+      a.tl = sp ? (hit ? 'S' : 'M') : /buffed/.test(what) ? 'A' : 'a';
+      a.weapon = sp ? "Zorya's tome spec" : /buffed/.test(what) ? "Zorya's tome (buffed)" : "Zorya's tome";
+      a.what = { S: 'Tome spec - hit (Zorya\'s Flow: 3 buffed)', M: 'Tome spec - missed', A: 'Tome buffed auto', a: 'Tome auto' }[a.tl] + (/while buffed/.test(what) ? ' (spec while buffed)' : '');
+    }
     if (a.code === '3t') { const wm = txt.match(/^3-TICK \(([^)]+)\)/); a.weapon = { Ayak: 'Eye of ayak' }[wm ? wm[1] : ''] || (wm ? wm[1] : a.what); }   // the actual 3-tick weapon
     if (spec[i] != null) {
       a.spec = sc ? +sc[1] : before; a.specAfter = spec[i];
@@ -173,7 +179,7 @@ export function verzTrace(log, names, cfgs = null) {
   return out;
 }
 
-const LEGEND = 'her row: her phase icon, purple crab when she sends one (pink border: blood heal; P3 green border: ranged, blue: magic) · thrall icon (bottom right): a thrall hit · pink-tinted ticks: her healing shield (reds) · white outline: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · potion icons: brew, restore, super combat, surge; grey dot: anything else · heart redemption proc · lightning icon: she throws lightning (red border: it bounces back and hits her) · purple crab icon: she sends one out (green border: it heals her; red border: its explosion hits her) · GB green ball - hover any cell for details';
+const LEGEND = 'her row: her phase icon, purple crab when she sends one (pink border: blood heal; P3 green border: ranged, blue: magic) · thrall icon (bottom right): a thrall hit · pink-tinted ticks: her healing shield (reds) · white outline: a spec regen (forced ones included) · F tick fill · skull: vengeance · supplies: shark icon · potion icons: brew, restore, super combat, surge; grey dot: anything else · heart redemption proc · Zorya\'s tome border: pink spec hit, black spec missed, red buffed auto, dashed red auto · lightning icon: she throws lightning (red border: it bounces back and hits her) · purple crab icon: she sends one out (green border: it heals her; red border: its explosion hits her) · GB green ball - hover any cell for details';
 const store = new Map();
 /** The Show raid buttons for a setup (key: unique on the page): successful raids, failed raids, and an example raid
  *  for each Dawn count P1 died in (the decision tree's branches). */

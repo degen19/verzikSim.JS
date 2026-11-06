@@ -156,11 +156,11 @@ export function raidNav(box, steps, start, draw) {
 const CODE_COL = {
   S: '#9aa3b5', TB: '#7bd88f', Z: '#e8d27a', ZCB: '#ffd54a', SB: '#6fd3e8', TS: '#6fd3e8', EM: '#c79bff', BGS: '#5fd0c0',
   C: '#ff9f5a', Ch: '#ff7ab8', H: '#ff6b6b', BP: '#b9e07a', R: '#ff9f9f', D: '#c79bff', P: '#ff66cc', SH: '#6fd3e8',
-  E: '#8fb8ff', SuB: '#ffcf70', T: '#ff8a8a', Cs: '#d9a37a', Sh: '#6fd3e8', F: '#c0c4d0', '3t': '#c0c4d0',
+  E: '#8fb8ff', SuB: '#ffcf70', T: '#ff8a8a', Cs: '#d9a37a', Sh: '#6fd3e8', F: '#c0c4d0', '3t': '#c0c4d0', Zt: '#c9b98f',
 };
 const CODE_NAME = { S: 'Scythe', TB: 'Twisted bow', Z: 'ZCB', ZCB: 'ZCB spec', SB: 'Shadow Barrage', TS: "Tumeken's shadow", EM: 'Elder maul spec',
   BGS: 'BGS spec', C: 'Claw spec', Ch: 'Crystal halberd spec', H: 'Soulflame horn', BP: 'Blowpipe', D: 'Dawnbringer spec', P: 'Surge pot', SH: 'Shadow',
-  E: 'Eye of ayak', SuB: 'Sulphur blades', T: 'Sang', R: 'Forced spec regen', Cs: 'Claw scratch', Sh: 'Shadow', F: 'Tick fill', '3t': '3-tick weapon', Ra: 'Ralos spec' };
+  E: 'Eye of ayak', SuB: 'Sulphur blades', T: 'Sang', Zt: "Zorya's tome", R: 'Forced spec regen', Cs: 'Claw scratch', Sh: 'Shadow', F: 'Tick fill', '3t': '3-tick weapon', Ra: 'Ralos spec' };
 // weapon icons: the OSRS Wiki's item images, downloaded once into img/icons (tools/fetch-icons.mjs) and served from
 // the site - never loaded from the wiki. The text code shows for any icon that isn't there.
 const ICONS = 'img/icons/';
@@ -168,7 +168,7 @@ const ICONS = 'img/icons/';
 const CODE_ICON = { S: 'Scythe_of_vitur', TB: 'Twisted_bow', Z: 'Zaryte_crossbow', ZCB: 'Zaryte_crossbow', TS: 'Tumekens_shadow',
   EM: 'Elder_maul', BGS: 'Bandos_godsword', C: 'Dragon_claws', Cs: 'Dragon_claws', Ch: 'Crystal_halberd', BP: 'Toxic_blowpipe',
   D: 'Dawnbringer', SuB: 'Sulphur_blades', T: 'Sanguinesti_staff', Sh: 'Tumekens_shadow', Shark: 'Shark', Redemption: 'Redemption',
-  H: 'Soulflame_horn', E: 'Eye_of_ayak', SB: 'Shadow_Barrage', V: 'Vengeance', Ra: 'Tonalztics_of_ralos' };
+  H: 'Soulflame_horn', E: 'Eye_of_ayak', SB: 'Shadow_Barrage', V: 'Vengeance', Ra: 'Tonalztics_of_ralos', Zt: 'Zoryas_tome' };
 /** An icon by file name (nothing if the file isn't there). */
 const img = (name) => `<img src="${ICONS}${name}.png" alt="" onerror="this.remove()">`;
 // potions: their icons (sharing the cell like the shark); anything else stays a grey dot
@@ -225,6 +225,7 @@ const CSS = `<style>
 .rv.hide-th .th,.rv.hide-vg .vg,.rv.hide-sp .sk,.rv.hide-sp .pt,.rv.hide-sp .dots,.rv.hide-sp .rd{display:none}
 .rv.hide-rg .c.rgo{outline:none}
 .rv.hide-vg .c.v{background:#22242f;border:0}
+.rv .c.a.tS{border:2px solid #ff6ec7}.rv .c.a.tM{border:2px solid #000}.rv .c.a.tA{border:2px solid #e5333f}.rv .c.a.ta{border:2px dashed #e5333f}
 .rv .c .rg{position:absolute;right:2px;bottom:0;font-size:9px;font-weight:700;color:#9fd8ff;line-height:1}
 .rv .legend{color:#9aa0b0;font-size:11px;margin-top:4px}
 </style>`;
@@ -390,7 +391,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
       const n = (x ? 1 : 0) + (h ? 1 : 0) + (xf ? 1 : 0) + (shark ? 1 : 0) + (v != null ? 1 : 0) + pots.length, dots = kinds.has('other');
       const fit = `${n >= 3 ? ' trio' : n === 2 ? ' duo' : ''}${dots && n ? ' hd' : ''}${rg ? ' rgo' : ''}${S(t)}${CH(i, t)}`;   // hd: icons nudged right of the dot
       const body = `${xfImg}${hornImg}${vengImg}${sharkImg}${potImg}${marks}${thrMark}`;
-      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${fit}" style="color:${CODE_COL[x.code] || '#fff'}"${xTip(x) ? ` data-xtip="${esc(xTip(x))}"` : ''} data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, xt, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${body}</div>`;
+      if (x) return `<div class="c a${x.ruby ? ' rb' : ''}${x.tl ? ` t${x.tl}` : ''}${fit}" style="color:${CODE_COL[x.code] || '#fff'}"${xTip(x) ? ` data-xtip="${esc(xTip(x))}"` : ''} data-tip="${esc([hitTip(nm, x), x.ruby ? 'Ruby bolt (e) proc - 22% of her HP (max 110)' : '', ht, xt, vt, st, trt, rt].filter(Boolean).join('\n'))}">${icon(x.code)}${body}</div>`;
       if (h) return `<div class="c a${fit}" style="color:${CODE_COL.H}" data-tip="${esc([ht, xt, vt, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
       if (v != null) return `<div class="c v${fit}" data-tip="${esc([`${nm} - tick ${t}: ${vt}`, xt, st, trt, rt].filter(Boolean).join('\n'))}">${body}</div>`;
       if (su || rg || tr || xf) return `<div class="c${fit}" data-tip="${esc(xf ? [xt, st, trt, rt].filter(Boolean).join('\n') : `${nm} - tick ${t}: ${[st, trt, rt].filter(Boolean).join('\n')}`)}">${body}</div>`;

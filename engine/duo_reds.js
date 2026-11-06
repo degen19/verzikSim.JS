@@ -8,8 +8,9 @@ import { auto_surge, custom_surge, bf_swap, bf_heal, lb_swap_ok, swap_due, ARMOU
 import { scythe_roll, P2_DEF, P2_HP, shadow_numbers, SHADOW_DELAY_NEAR, blowpipe_chance, BP_DELAY } from './p2.js';
 import {
   CRAB_BASE_HP, CRAB_DEF_ROLL, CLAW, SHIELD, VERZ_ATTACKS, CRAB_HEAL_R, melee_max_acc, claw_spec,
-  project_two_claws,
+  project_two_claws, tome_turn,
 } from './reds.js';
+import { tome_plan } from './tome.js';
 import * as p3 from './p3.js';
 
 export const LAST_CRAB_R = 40;            // last tick an attack on a crab can be queued (lands before the r41 heal)
@@ -509,7 +510,7 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
         const old = p.spec; p.spec -= 50;
         const [hits, cch, cmx] = claw_spec(p, rng);
         hits.forEach((dd, k) => {
-          vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, dd, p, 'dmg']);
+          vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, dd, p, 'dmg']);
         });
         p.next_attack = t + 4; p.reds_n += 1; p.set1_r40_claw = true;
         st['set1_r40_claw'] = dget(st, 'set1_r40_claw', 0) + 1;
@@ -570,7 +571,7 @@ export function set1_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     p.spec -= 50;
     const [hits, cch, cmx] = claw_spec(p, rng);
     hits.forEach((dd, k) => {
-      vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, dd, p, 'dmg']);
+      vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, dd, p, 'dmg']);
     });
     p.next_attack = t + 4; p.reds_n += 1; p.set1_claw = true;
     st['set1_claws'] = dget(st, 'set1_claws', 0) + 1;
@@ -656,6 +657,20 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     p.next_attack = P_of(t, r) + SHIELD;
     return;
   }
+  if (ga(p, 'tome_reds', false)) {
+    // Tome Reds in set 2 (as 3-5 man reds; nobody is in range for a bounce): their best attack now (tome.js). The r40
+    // halberd rule still goes first unless they're mid tome chain.
+    if (p.tome_on == null) { p.tome_on = true; p.tome_buff = 0; p.tome_lock = false; p.tome_melee = false; p.reds_line = {}; p.reds_claws = 0; }
+    const halb40 = r === 40 && p.spec >= 30 && p.has_halb !== false && !(dget(st, 'hp_now', 10 ** 6) < P2_HP[2] * LAST_HIT_THR / 100);
+    if (!(halb40 && !p.tome_buff && !p.tome_lock)) {
+      const act = tome_plan(p, r, p.spec, p.regen_timer, p.tome_buff, undefined, p.tome_lock).act;
+      if (act === 'wait' || act == null) { p.next_attack = t + 1; return; }
+      const n0 = p.reds_n + 1;
+      tome_turn(p, act, t, r, n0, rng, vq, rank, st, L);
+      p.reds_n = n0;
+      return;
+    }
+  }
   if (p.plan == null) {                                     // decide the set-2 spec plan when the shield drops
     const per = p.regen_period(), first = p.regen_period() - p.regen_timer;
     const regens = first > 20 ? 0 : 1 + floordiv(20 - first, per);   // regens by r31
@@ -717,7 +732,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
       const old = p.spec; p.spec -= 50;
       const [hits, cch, cmx] = claw_spec(p, rng);
       hits.forEach((d, k) => {
-        vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
+        vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
       });
       p.next_attack = t + 4; p.reds_n = n; p.claws_done += 1; st['claws'] += 1;
       L.on && L(`t${rjust(t, 4)} s2 r${r} ${p.name}: CLAW SPEC (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%, ${expText(clawMV(cch, cmx))}) -> ${plist(hits)}`);
@@ -757,7 +772,7 @@ export function set2_attack(p, r, t, verz, crabs, vq, rank, rng, L, st) {
     p.spec -= 50;
     const [hits, cch, cmx] = claw_spec(p, rng);
     hits.forEach((d, k) => {
-      vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
+      vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
     });
     p.next_attack = t + 4; p.reds_n = n; p.claws_done += 1;
     st['claws'] += 1;

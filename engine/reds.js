@@ -6,6 +6,7 @@ import { CAMP, CLAW_BY_R, auto_surge, custom_surge, bf_swap, bf_heal, lb_swap_ok
 import * as horn from './horn.js';
 import { scythe_roll, P2_DEF, P2_HP, shadow_numbers, SHADOW_DELAY_NEAR, blowpipe_chance, BP_DELAY } from './p2.js';
 import { bp_vs } from './duo_reds.js';
+import { tome_plan, tome_numbers, TOME_DELAY } from './tome.js';
 import * as p3 from './p3.js';
 import { floordiv, pymod, truthy, ga, dget, sum, sorted, rjust, fx } from './util.js';
 
@@ -127,6 +128,64 @@ export function shield_sips(p, t, r, L) {
   supplies.window(p, Math.max(1, floordiv(SHIELD - 1 - r, 3) + 1), L, t, `r${r} shield `, { sharks: true });
 }
 
+/** Tome Reds: can they scythe r16? Only when someone else is out of range anyway (a shadow from a distance, 100% for
+ *  two claws, another tome player out) - the bounce is 50% either way. Before r16: from what the others will do. */
+function tome_m16(p, players, r) {
+  if (r > BOUNCE_R) return false;
+  const others = players.filter((q) => q !== p && !q.dead);
+  if (r === BOUNCE_R) return others.some((q) => q.skip16 || q.dist16 || q.tome_out16);
+  return others.some((q) => !q.tome_on && (ga(q, 'shadow', false) || (q.has_dc !== false && project_two_claws(q, r, BOUNCE_R + 5))));
+}
+
+/** A Tome Reds player's attack on reds tick r (act from tome_plan): scythe, claw spec / scratch, shadow, or the tome. */
+export function tome_turn(p, act, t, r, n, rng, vq, rank, st, L) {
+  const roll = (ch, mx) => (rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0);
+  p.tome_melee = ['Sc', 'C', 'Cs'].includes(act);
+  p.tome_lock = act === 'Tb' || act === 'Ts';   // a buffed tome attack: magic gear on, no melee next
+  if (act === 'Sc') {
+    const [ch, mx] = scythe_roll(p), buffed = horn.active(p, t), splats = [];
+    [mx, floordiv(mx, 2), floordiv(mx, 4)].forEach((m, k) => {
+      const d = ((k === 0 && buffed) || rng.random() < ch) ? Math.max(1, rng.randint(0, m)) : 0;
+      splats.push(d); vq.push([t + 1, rank.get(p), k, `Scythe hit ${k + 1}`, d, p, 'dmg']);
+    });
+    p.next_attack = t + 5; p.reds_line.S = (p.reds_line.S || 0) + 1;
+    if (buffed) { st['horn_hits'] = (st['horn_hits'] || 0) + 1; p.horn_buff = null; }
+    L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: Scythe #${n} (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(scytheMV(ch, mx, { buffed: !!buffed }))}${buffed ? ', HORN: 1st hit guaranteed' : ''}) -> ${pylist(splats)}`);
+  } else if (act === 'C') {
+    p.reds_claws += 1; const old = p.spec; p.spec -= 50;
+    const [hits, ch, mx] = claw_spec(p, rng);
+    st['claws'] += 1; p.reds_line.C = (p.reds_line.C || 0) + 1;
+    hits.forEach((d, k) => vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']));
+    p.next_attack = t + 4;
+    L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, ${expText(clawMV(ch, mx))}, max ${mx}) -> ${pylist(hits)}`);
+  } else if (act === 'Cs') {
+    const [ch, mx] = melee_max_acc(p, CLAW['atk'], CLAW['str'], P2_DEF[1]), ds = [roll(ch, mx), roll(ch, floordiv(mx, 2))];
+    ds.forEach((d, k) => vq.push([t + 1, rank.get(p), k, 'Claw scratch', d, p, 'dmg']));
+    p.next_attack = t + 4; p.reds_line.Cs = (p.reds_line.Cs || 0) + 1;
+    L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: claw scratch (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(sumMV(hitMV(ch, mx), hitMV(ch, floordiv(mx, 2))))}) -> ${pylist(ds)}`);
+  } else if (act === 'Sh') {
+    const [ch, mx] = shadow_numbers(p), d = roll(ch, mx);
+    vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
+    st['shadow'] = (st['shadow'] || 0) + 1; st['shadow_dmg'] = (st['shadow_dmg'] || 0) + d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
+    p.next_attack = t + 5;
+    L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (tome reds plan, acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
+  } else {
+    // the tome: T spec, Ts spec while buffed, Tb buffed auto, za auto
+    const spec = act === 'T' || act === 'Ts', k = act === 'Ts' ? 2 : act === 'za' ? 0 : 1;
+    const [ch, mx] = tome_numbers(p, k), d = roll(ch, mx), old = p.spec;
+    if (spec) p.spec -= 50;
+    if (act === 'T') p.tome_buff = d > 0 ? 3 : 0;
+    else if (act === 'Ts') p.tome_buff = p.tome_buff - 1 + (d > 0 ? 3 : 0);
+    else if (act === 'Tb') p.tome_buff -= 1;
+    p.next_attack = t + (act === 'T' || act === 'za' ? 3 : 2);
+    vq.push([t + TOME_DELAY, rank.get(p), 0, spec ? 'Tome spec' : 'Tome auto', d, p, 'dmg']);
+    if (spec) { st['tome'] = dget(st, 'tome', 0) + 1; p.reds_line.T = (p.reds_line.T || 0) + 1; } else p.reds_line.Ta = (p.reds_line.Ta || 0) + 1;
+    const what = { T: 'TOME SPEC', Ts: 'TOME SPEC while buffed', Tb: 'TOME buffed auto', za: 'TOME auto' }[act];
+    L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: ${what} (${spec ? `spec ${fx(old)}% -> ${fx(p.spec)}%, ` : ''}acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + TOME_DELAY}`
+      + `${spec ? (d > 0 ? `, HIT: ${p.tome_buff} buffed left` : ', MISS') : act === 'Tb' ? `, ${p.tome_buff} buffed left` : ''}) -> ${d}`);
+  }
+}
+
 export function run_reds(p2, cfgs, team, rng, log = null) {
   for (const _p of p2['players']) {
     _p.pool.phase = 'reds'; _p.pool.scb_res = 0; _p.sc_at = null;
@@ -160,6 +219,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     p.sh_col_done = false;
     p.purple_pending = false;             // no purple to come once the reds start
     p.reds_bp = false;
+    p.tome_on = !!ga(p, 'tome_reds', false); p.tome_buff = 0; p.tome_lock = false; p.tome_melee = false; p.tome_out16 = false; p.tome_act16 = null;   // Tome Reds (tome.js)
     if (p.next_attack < P) {
       p.next_attack = P;
     }
@@ -269,7 +329,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
       if (r === BOUNCE_R) {
         const alive = players.filter((p) => !p.dead);
         for (const p of alive) {
-          if (p.reds_n === 1 && p.next_attack <= t && !(ga(p, 'shadow', false) && p.sh_plan != null) && p.has_dc !== false
+          if (!p.tome_on && p.reds_n === 1 && p.next_attack <= t && !(ga(p, 'shadow', false) && p.sh_plan != null) && p.has_dc !== false
               && project_two_claws(p, r, r + 5)) {     // a shadow player on a shadow plan is never the two-claw skipper
             p.skip16 = true;
           }
@@ -277,14 +337,27 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
         for (const p of alive) {
           // nobody has 100% for two claws: shadow players hit from a distance instead of chancing it;
           // a shadow player under 50% on r11 always does (scythe > shadow > scythe ...)
-          if (ga(p, 'shadow', false) && !p.skip16 && p.reds_n === 1 && p.next_attack <= t
+          if (!p.tome_on && ga(p, 'shadow', false) && !p.skip16 && p.reds_n === 1 && p.next_attack <= t
               && (p.sh_plan === 'shadow16' || !alive.some((q) => q.skip16))) {
             p.dist16 = true;
           }
         }
-        st['chancers'] = alive.filter((p) => !(p.skip16 || p.dist16)).map((p) => p.name);
-        st['skippers'] = alive.filter((p) => p.skip16 || p.dist16).map((p) => p.name + (p.dist16 ? ' (shadow, distance)' : ' (2 claws)'));
-        const at_risk = alive.filter((p) => !(p.skip16 || p.dist16));
+        // Tome Reds: out of range when they're tomeing / shadowing from a distance on r16 (their r16 attack is planned
+        // now, from the spec they'll have after this tick's regen), or not attacking and their last attack was from range
+        for (const p of alive) {
+          if (!p.tome_on) continue;
+          let act = null;
+          if (p.next_attack <= t) {
+            let s = p.spec, tm = p.regen_timer;
+            if (s < 100) { tm += 1; if (tm >= p.regen_period()) { tm = 0; s = Math.min(100, s + 10); } } else tm = 0;
+            act = tome_plan(p, r, s, tm, p.tome_buff, undefined, p.tome_lock, tome_m16(p, alive, r)).act; p.tome_act16 = act;
+          }
+          p.tome_out16 = act != null ? !['Sc', 'C', 'Cs'].includes(act) : !p.tome_melee;
+        }
+        const out16 = (p) => p.skip16 || p.dist16 || p.tome_out16;
+        st['chancers'] = alive.filter((p) => !out16(p)).map((p) => p.name);
+        st['skippers'] = alive.filter(out16).map((p) => p.name + (p.dist16 ? ' (shadow, distance)' : p.tome_out16 ? ' (tome / range, distance)' : ' (2 claws)'));
+        const at_risk = alive.filter((p) => !out16(p));
         if (at_risk.length && (at_risk.length === alive.length || rng.random() < 0.5)) {
           bounced = rng.choice(at_risk);
         }
@@ -389,9 +462,9 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
         // a shadow sequence only when they don't have (and won't have) 100% for two claws AND nobody else (no shadow
         // plan of their own) has or will have it either - a two-claw player already makes the bounce 50%, and a
         // scythe beats a shadow hit
-        const twoClaws = (q) => !q.dead && q.has_dc !== false && project_two_claws(q, r, r + 10);
+        const twoClaws = (q) => !q.dead && !q.tome_on && q.has_dc !== false && project_two_claws(q, r, r + 10);   // (a Tome Reds player plans their own)
         const otherTwo = players.some((q) => q !== p && !(ga(q, 'shadow', false) && q.spec < 100 && !twoClaws(q)) && twoClaws(q));
-        if (ga(p, 'shadow', false) && p.spec < 100 && !twoClaws(p) && !otherTwo) {
+        if (!p.tome_on && ga(p, 'shadow', false) && p.spec < 100 && !twoClaws(p) && !otherTwo) {
           p.sh_plan = p.spec >= 50 && p.has_dc !== false ? 'claw_first' : 'shadow16';
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: shadow player on ${fx(p.spec)}% -> `
             + (p.sh_plan === 'claw_first' ? 'claw > scythe > shadow > scythes' : 'scythe > shadow (r16) > scythes, one claw by r31'));
@@ -410,6 +483,20 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
         // the last swing is on r40 (its damage goes off on r41)
       } else {
         const n = p.reds_n + 1;
+        if (p.tome_on && !p.zcb_due) {
+          // Tome Reds: their best attack now (tome.js)
+          const act = r === BOUNCE_R && p.tome_act16 ? p.tome_act16 : tome_plan(p, r, p.spec, p.regen_timer, p.tome_buff, undefined, p.tome_lock, tome_m16(p, players, r)).act;
+          if (act === 'wait' || act == null) { p.next_attack = t + 1; continue; }
+          tome_turn(p, act, t, r, n, rng, vq, rank, st, L);
+          p.reds_n = n;
+          if (r === BOUNCE_R && ga(p, 'was_bounced', false)) {
+            if (ga(p, 'shadow', false)) { p.zcb_due = true; L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - shadow next (t${p.next_attack})`); }
+            else if (p.bzcb && p.has_dc !== false) { p.zcb_due = true; L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - ZCB auto next (t${p.next_attack})`); }
+            else { p.next_attack += 4; L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - +4t, back on t${p.next_attack}`); }
+          }
+          if (p.thrall_next == null) p.thrall_next = t + rng.randint(1, 2);
+          continue;
+        }
         if (r === BOUNCE_R && n === 2 && p.dist16) {
           // shadow from a distance, no bounce risk, no lost tick
         } else if (r === BOUNCE_R && n === 2) {
@@ -450,7 +537,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const d = rng.random() < ch ? Math.max(1, rng.randint(0, mx)) : 0;
           vq.push([t + SHADOW_DELAY_NEAR, rank.get(p), 0, 'Shadow', d, p, 'dmg']);
           st['shadow'] += 1; st['shadow_dmg'] += d; p.reds_line.Sh = (p.reds_line.Sh || 0) + 1;
-          p.next_attack = t + 5;
+          p.next_attack = t + 5; p.tome_melee = false;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW (${why}, acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
         } else if (p.zcb_due) {
           const [ch, mx] = zcb_auto(p);
@@ -486,7 +573,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           const [hits, ch, mx] = claw_spec(p, rng);
           st['claws'] += 1; p.reds_line.C = (p.reds_line.C || 0) + 1;
           hits.forEach((d, k) => {
-            vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
+            vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, d, p, 'dmg']);
           });
           p.next_attack = t + 4;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: CLAW SPEC #${n} (spec ${fx(old)}% -> ${fx(p.spec)}%, acc ${fx(ch * 100, 1)}%, ${expText(clawMV(ch, mx))}, `

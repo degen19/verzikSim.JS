@@ -189,7 +189,7 @@ export function run_solo(cfg, rng, log = null, scope = 'full') {
   const claw = (t, tag = '') => {
     const o = p.spec; p.spec -= 50; st.claws += 1;
     const [hits, cch] = claw_spec(p, rng);
-    hits.forEach((d, k) => vq.push([t + 1, k, `Claw spec hit ${k + 1}`, d, 'v']));
+    hits.forEach((d, k) => vq.push([t + (k < 2 ? 1 : 2), k, `Claw spec hit ${k + 1}`, d, 'v']));
     p.next_attack = t + 4; p.in_mage = false;
     L.on && L(`t${rjust(t, 4)} ${tag}CLAW SPEC (${fx(o)}% -> ${fx(p.spec)}%, acc ${fx(cch * 100, 1)}%) -> [${hits.join(', ')}]`);
   };

@@ -841,7 +841,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         const [ch, m] = melee(p, CLAW, P3_DEF[1]);
         const hits = claw_hits(ch, m, rng);
         hits.forEach((d, k) => {
-          vq.push([t + 1, rank.get(p), k, `Claw spec hit ${k + 1}`, d, p]);
+          vq.push([t + (k < 2 ? 1 : 2), rank.get(p), k, `Claw spec hit ${k + 1}`, d, p]);
         });
         p.next_attack = t + 4;
         L.on && L(`t${rjust(t, 4)} ${p.name}: CLAW SPEC #${n} (chart ${tick(t)}, acc ${fx(ch * 100, 1)}%, ${expText(clawMV(ch, m))}) -> [${hits.join(', ')}]`);
