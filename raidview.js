@@ -114,9 +114,12 @@ const SUCC = [['fast', 'Fastest'], ['q10', 'Top 10%'], ['q25', 'Top 25%'], ['med
 export function successSteps(raids, rankN, attempts, bps = []) {
   const out = [];
   for (const [which, label] of [...SUCC, ...[...bps].sort((a, b) => a - b).map((b) => [`bp:${b}`, `${fmtSec(b)} breakpoint`])]) {
-    const pick = pickRaid(raids, rankN, which); if (!pick) continue;
-    const same = out.find((x) => x.pick.i === pick.i);
-    if (same) { same.label += ` = ${label}`; continue; }
+    let pick = pickRaid(raids, rankN, which); if (!pick) continue;
+    // each its own chart: the same time as an earlier step (e.g. Top 25% and Median on one tick) -> another raid with it
+    if (out.some((x) => x.pick.i === pick.i)) {
+      const other = raids.find((r) => r.total === pick.total && !out.some((x) => x.pick.i === r.i));
+      if (other) pick = { ...pick, i: other.i };
+    }
     // finished by this time (what the chart's line shows), then the share that ended exactly on it
     const k = raids.filter((r) => r.total === pick.total).length, by = raids.filter((r) => r.total <= pick.total).length;
     out.push({ label, pick, freq: `${pct(by / Math.max(1, attempts))} of attempts finish by this time (${pct(by / Math.max(1, raids.length))} of successful raids); ${pct(k / Math.max(1, attempts))} end exactly on it` });

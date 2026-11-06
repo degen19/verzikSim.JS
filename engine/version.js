@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.35.1';
+export const VERSION = '1.35.2';
 export const CHANGES = [
+  { version: '1.35.2', date: '2026-11-06', items: [
+    'Show raid: Fastest, Top 10%, Top 25%, Median (and Slowest) are each their own raid - two on the same time (e.g. Top 25% and Median on one tick) are two raids with that time, not one step labelled "Top 25% = Median".',
+  ] },
   { version: '1.35.1', date: '2026-11-06', items: [
     'Nylocas: a halberd opener goes on their second attack (a scythe first), not their first; no damage spec before it.',
   ] },
