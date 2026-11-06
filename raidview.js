@@ -212,8 +212,8 @@ const CSS = `<style>
 .rv .c.a{background:#2f3242;border:1px solid #474b60}
 .rv .c.a.rb{border-color:#e5333f}
 .rv .c.b{background:#7a2433;color:#fff}
-.rv .mk{font-size:10px;text-align:center;align-self:end;white-space:nowrap}
-.rv .mk span{display:inline-block;border:1px solid #6b74ff;color:#c8ccff;border-radius:4px;padding:2px 5px;background:#1f2140}
+.rv .mk{font-size:10px;text-align:left;align-self:end;white-space:nowrap;overflow:visible}
+.rv .mk span{display:inline-block;border:1px solid #6b74ff;border-left:3px solid #9aa2ff;color:#c8ccff;border-radius:4px;padding:2px 5px;background:#1f2140}
 /* her healing shield (Verzik reds): every cell in those ticks tinted pink */
 .rv .sh{box-shadow:inset 0 0 0 30px rgba(255,105,180,.16)}
 .rv .sg{box-shadow:inset 0 0 0 30px rgba(70,200,100,.20)}.rv .sb{box-shadow:inset 0 0 0 30px rgba(80,140,255,.22)}
@@ -362,7 +362,14 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   for (let a = Math.max(1, from); a <= last; a += perRow) {
     const b = Math.min(last, a + perRow - 1), ticks = Array.from({ length: b - a + 1 }, (_, k) => a + k);
     const cols = `grid-template-columns:auto repeat(${ticks.length},24px)`;
-    const mk = ticks.some((t) => marks.has(t)) ? `<div></div>${ticks.map((t) => `<div class="mk">${marks.has(t) ? marks.get(t).map((m) => `<span>${esc(m)}</span>`).join('<br>') : ''}</div>`).join('')}` : '';
+    // marks: each label starts at its tick (a notch on its left edge); labels that would run into one another go on
+    // separate lines
+    const lanes = [];
+    for (const t of ticks) for (const m of marks.get(t) || []) {
+      const span = Math.ceil((m.length * 6 + 16) / 26), lane = lanes.findIndex((l) => l.end < t);
+      if (lane >= 0) { lanes[lane].items.push([t, m]); lanes[lane].end = t + span; } else lanes.push({ end: t + span, items: [[t, m]] });
+    }
+    const mk = lanes.map((l) => { const at = new Map(l.items); return `<div></div>${ticks.map((t) => `<div class="mk">${at.has(t) ? `<span>${esc(at.get(t))}</span>` : ''}</div>`).join('')}`; }).join('');
     const attacks = (t) => (boss.get(t) || []).some((e) => BOSS_ATTACK.has(e.kind));
     const head = `<div></div>${ticks.map((t) => `<div class="tk${attacks(t) ? ' her' : ''}${S(t)}" data-tip="${esc(tickTip(t))}">${t}</div>`).join('')}`;
     const bossCell = (t) => {

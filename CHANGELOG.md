@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.35.3 - 2026-11-06
+- `raidview.js`: mark lanes, left-aligned marks; `engine/nylo.js`: marks with ticks and instance ticks.
+
 ## v1.35.2 - 2026-11-06
 - `raidview.js` `successSteps`: no merged steps; a repeated time picks another raid with it.
 

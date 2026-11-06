@@ -621,11 +621,11 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       const last = kill != null ? Math.min(f.end, roomEnd(kill, overkill, i1)) : f.end;
       if (f.form !== 'melee') for (let t = f.start; t <= last; t++) T.push({ t, shade: f.form === 'ranged' ? 'sg' : 'sb' });
     }
-    T.push({ t: i1, mark: 'Spawn (i1)' });
+    T.push({ t: i1, mark: `t${i1} spawn (i1)` });
     if (kill != null) {
       const end = roomEnd(kill, overkill, i1), de = kill + (overkill ? DEATH_OVERKILL : DEATH_TICKS);
-      T.push({ t: kill, mark: `Dies (i${inst(kill, i1)}${overkill ? ', overkill' : ''}: ${de - kill}-tick death animation)` });
-      T.push({ t: end, mark: `Room ends (boss time ${end - i1} ticks)` });
+      T.push({ t: kill, mark: `t${kill} dies (i${inst(kill, i1)}${overkill ? ', overkill' : ''}) - death animation to t${de - 1} (i${inst(de - 1, i1)})` });
+      T.push({ t: end, mark: `t${end} room ends (i${inst(end, i1)}) - boss time ${end - i1} ticks` });
     }
   }
   const end = kill == null ? null : roomEnd(kill, overkill, i1);
