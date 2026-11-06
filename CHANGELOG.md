@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.30.1 - 2026-11-06
+- `engine/tome.js`: with Scythe first hit after tome, the tome spec only from r29 (`TOME_SAT_FROM`; r31 on cadence), melee on r16, and no claw before r29 that leaves them under 50% by r31; `reds.js`: bounced -> `zcb_due` (shadow / ZCB, like a scyther).
+
 ## v1.30.0 - 2026-11-06
 - `verzik_chart_template.xlsx`: 'Scythe first hit after tome' column after Tome Reds (every tab, sets A and B); `chartform.js` / `sim.js` (`cfg.scytheAfterTome`, `p.scythe_after_tome`) / `loadout.js` / `optimize.js` / `builder-ui.js`.
 - `engine/tome.js`: with it on, `tome_plan` allows a scythe right after a buffed tome attack; a bounce at r16 sets `tome_lock = 'range'` (still from range next).

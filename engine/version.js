@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.30.0';
+export const VERSION = '1.30.1';
 export const CHANGES = [
+  { version: '1.30.1', date: '2026-11-06', items: [
+    'Scythe first hit after tome: the tome now waits for r31 (tome r31, buffed r34 / 36 / 38, scythe r40). Before that they play like a scyther - scythe r16 in range for the bounce (bounced: a shadow with Shadow ticked, else a ZCB auto) - and only claw when the tome won\'t be there by r31.',
+  ] },
   { version: '1.30.0', date: '2026-11-06', items: [
     'Verzik (sim, Optimizer, Solver, Full raid): new player setting \'Scythe first hit after tome\' (Player settings, next to Tome Reds; needs a tome). With it on, the shadow that would follow their last buffed tome attack becomes a scythe in their full melee gear (a full switch). Not after an r16 bounce (still from range). The solvers keep it as set.',
   ] },
