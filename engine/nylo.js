@@ -71,13 +71,16 @@ export const BOSS_HITS = [2, 6], SPAWN_HITS = [1, 5];       // his attacks: tick
 const PRAY = { Piety: [1.20, 1.23], Zeal: [1.25, 1.28] };
 const RANGED = 112, MAGIC = 112, DEF = 118;
 const TBOW_MAGIC = 380;                                      // his magic attack bonus (the Twisted bow uses the higher)
+/** The set they wear for this attack: their usual set for the style / weapon, or (a wrong prediction's first attack) the
+ *  partial switch p.ovr builds. */
+const W = (p, style, weapon) => (p.ovr && p.ovr(style, weapon)) || (style === 'mage' ? bestWorn(p.gear, 'mage', weapon).set : worn(p.gear, style, weapon));
 const setText = (set) => Object.entries(set).filter(([k, v]) => v && v !== 'none' && k !== 'ammo').map(([, v]) => v).concat(set.ammo ? [set.ammo] : []).join(', ');
 /** His defence roll at Defence level d (a BGS lowers it; magic rolls against his Magic level, which it doesn't touch). */
 const dRoll = (style, d) => (style === 'magic' ? defRoll('magic') : (d + 9) * ((NYLO.dfn[style] ?? 0) + 64));
 
 /** Melee with a weapon (slash) in their melee gear: [chance, max, gear text]. accMult: a spec's accuracy. */
 function melee(p, weapon, d, accMult = 1) {
-  const set = worn(p.gear, 'melee', weapon), b = bonuses(set);
+  const set = W(p, 'melee', weapon), b = bonuses(set);
   const [pa, ps] = PRAY[p.gear.prayer || 'Zeal'] || PRAY.Zeal;
   const ea = Math.floor(118 * pa) + 8, es = Math.floor(118 * ps) + 3 + 8;
   return [hit_chance(Math.floor(ea * (b.atk[1] + 64) * accMult), dRoll('slash', d)), Math.floor((es * (b.str + 64) + 320) / 640), setText(set)];
@@ -86,7 +89,7 @@ function melee(p, weapon, d, accMult = 1) {
 export const nyloScythe = (p, d = NYLO.def) => melee(p, 'Scythe of vitur', d);
 /** Ranged in their ranged gear on Rigour: [chance, max, gear text]. */
 function ranged(p, weapon, d) {
-  const set = worn(p.gear, 'range', weapon), b = bonuses(set), v = b.eliteVoid ? [1.10, 1.125] : [1, 1];
+  const set = W(p, 'range', weapon), b = bonuses(set), v = b.eliteVoid ? [1.10, 1.125] : [1, 1];
   const ea = Math.floor((Math.floor(RANGED * 1.20) + 8) * v[0]), es = Math.floor((Math.floor(RANGED * 1.23) + 8) * v[1]);
   let roll = ea * (b.atk[4] + 64), mx = Math.floor(0.5 + es * (b.rstr + 64) / 640);
   if (weapon === 'Twisted bow') { const [ma, md] = tbowMult(Math.max(NYLO.magic, TBOW_MAGIC)); roll = Math.floor(roll * ma); mx = Math.floor(mx * md); }
@@ -94,7 +97,7 @@ function ranged(p, weapon, d) {
 }
 /** ZCB spec: double accuracy -> its chance (a hit is the ruby: 22% of his HP, max 110). */
 function zcbChance(p, d) {
-  const set = worn(p.gear, 'range', 'Zaryte crossbow'), b = bonuses(set), v = b.eliteVoid ? 1.10 : 1;
+  const set = W(p, 'range', 'Zaryte crossbow'), b = bonuses(set), v = b.eliteVoid ? 1.10 : 1;
   const ea = Math.floor((Math.floor(RANGED * 1.20) + 8) * v);
   return hit_chance(ea * (b.atk[4] + 64) * 2, dRoll('ranged', d));
 }
@@ -105,13 +108,13 @@ export const nyloBp = (p, d = NYLO.def) => ranged(p, 'Toxic blowpipe', d);
 const MELEE_CODES = new Set(['S', 'C', 'Ch', 'BGS', 'Cs']);
 /** Their Tumeken's shadow (5 ticks) at 112 Magic: [chance, max, gear text]. */
 export function nyloShadow(p) {
-  const set = bestWorn(p.gear, 'mage', "Tumeken's shadow").set, gear = Object.entries(set).filter(([s2, v]) => s2 !== 'weapon' && v && v !== 'none').map(([, v]) => v);
+  const set = W(p, 'mage', "Tumeken's shadow"), gear = Object.entries(set).filter(([s2, v]) => s2 !== 'weapon' && v && v !== 'none').map(([, v]) => v);
   const [, mx, ch] = shadow_attack(gear, MAGIC, { def_roll: defRoll('magic') });
   return [ch, mx, setText(set)];
 }
 /** Their Eye of ayak (3 ticks): [chance, max, gear text]. */
 export function nyloAyak(p) {
-  const set = bestWorn(p.gear, 'mage', 'Eye of ayak').set, b = bonuses(set);
+  const set = W(p, 'mage', 'Eye of ayak'), b = bonuses(set);
   const mx = Math.floor((Math.floor(MAGIC / 3) - 6) * (100 + b.mdmg + 4) / 100);
   return [hit_chance((Math.floor(MAGIC * 1.25) + 9) * (b.atk[3] + 64), defRoll('magic')), mx, setText(set)];
 }
@@ -135,7 +138,7 @@ function bgsNums(p, d) { const [ch, mx0, gear] = melee(p, 'Bandos godsword', d, 
  *  Its stats in place of the scythe's. -> [hits[2], [ch1, ch2], max, gear]. */
 const HALB = { atk: 110, str: 118 };
 function halbSpec(p, d, rng) {
-  const scy = ITEMS['Scythe of vitur'], set = worn(p.gear, 'melee', 'Scythe of vitur'), b = bonuses(set);
+  const scy = ITEMS['Scythe of vitur'], set = W(p, 'melee', 'Scythe of vitur'), b = bonuses(set);
   const [pa, ps] = PRAY[p.gear.prayer || 'Zeal'] || PRAY.Zeal;
   const ea = Math.floor(118 * pa) + 8, es = Math.floor(118 * ps) + 3 + 8;
   const atk = b.atk[1] - scy.atk[1] + HALB.atk, mx = Math.floor((es * (b.str - (scy.str || 0) + HALB.str + 64) + 320) / 640);
@@ -145,7 +148,7 @@ function halbSpec(p, d, rng) {
 }
 /** Zorya's tome in their best magic gear at 112 Magic: [chance, max, gear] for k Flow boosts (0 auto, 1 spec / buffed). */
 function tomeNums(p, k) {
-  const set = bestWorn(p.gear, 'mage', "Zorya's tome").set, gear = Object.entries(set).filter(([s2, v]) => s2 !== 'weapon' && v && v !== 'none').map(([, v]) => v);
+  const set = W(p, 'mage', "Zorya's tome"), gear = Object.entries(set).filter(([s2, v]) => s2 !== 'weapon' && v && v !== 'none').map(([, v]) => v);
   const [, mx, ch] = tome_attack(gear, MAGIC, { def_roll: defRoll('magic'), k });
   return [ch, mx, setText(set)];
 }
@@ -172,7 +175,8 @@ export const TEST_PLAN = [
  *  rangedStop: { 1: %, 2: %, 3: % } (their own Twisted-bows-only thresholds) }. Specs they've no weapon for are dropped. */
 export const NEEDS = { bgs: 'Bandos godsword', claw: 'Dragon claws', halb: 'Crystal halberd', tome: "Zorya's tome", zcb: 'Zaryte crossbow' };
 export function normPlan(pl, has, team = 4) {
-  const out = { open: 'none', specs: [], clawMode: 'asap', startSpec: 100, surge: false, tomeTickFix: true, healer: false, ...pl };
+  const out = { open: 'none', specs: [], clawMode: 'asap', startSpec: 100, surge: false, tomeTickFix: true, healer: false, maxSwitches: MAX_SWITCHES, ...pl };
+  out.maxSwitches = Math.max(1, Math.min(MAX_SWITCHES, Number(out.maxSwitches) || MAX_SWITCHES));
   out.specs = (out.specs || []).filter((x) => has.has(NEEDS[x]) && !(team === 1 && x === 'tome'));   // solos: no tome (only ticks 5 and 10)
   if (team !== 2) out.healer = false;
   if (out.open !== 'none' && !has.has(NEEDS[out.open])) out.open = 'none';
@@ -249,6 +253,46 @@ function alignAct(t, f, ev, target) {
 // Solos: after his first form, under him on each form's ticks 1-4 and 6-9, attacking only on 5 and 10 (scythe / Twisted
 //   bow / shadow, else Ayak, or a spec); he attacks once a form, on its 5th tick. Too low for a prayed hit: a locator orb +
 //   redemption (+24) and a restore, while restore doses last.
+// Cross praying: nobody knows his next form until it shows. Between forms they switch to the gear of the form they predict
+//   and pray for the other one (his attack and their offensive prayer): right, they only flick prayers; wrong, their prayers
+//   are already right and they get Max switches (plan.maxSwitches, 1-8) a tick before their first attack in the form -
+//   the weapon first, then the items that add the most to that attack. The rest of the form, their full set.
+//   Prediction: he's magic or melee -> ranged (the tick fixes); ranged -> melee; a tome spec planned (or buffed autos left) -> magic.
+export const MAX_SWITCHES = 8;
+const STYLE = { melee: 'melee', ranged: 'range', magic: 'mage' };
+const BASE_WEAPON = { melee: 'Scythe of vitur', range: 'Twisted bow', mage: 'Eye of ayak' };
+//   plan.predictFlip {form: pct}: below pct of his HP, from that form they predict the other one instead.
+export const OTHER_PRED = { melee: 'magic', magic: 'melee', ranged: 'magic' };
+/** Their prediction for his next form, from his current form, their plan and his HP share (0-1). */
+export function predictForm(p, form, share = 1) {
+  if (p.buff > 0 || (p.pl.specs[0] === 'tome' && p.spec >= 50)) return 'magic';
+  const def = form === 'ranged' ? 'melee' : 'ranged', fl = (p.pl.predictFlip || {})[form];
+  return fl != null && share * 100 < fl ? (def === 'ranged' ? OTHER_PRED[form] : 'magic') : def;
+}
+/** Rough per-attack damage of a set for ranking switches: chance x max. */
+function attackScore(p, style, weapon, d) {
+  const [ch, mx] = style === 'melee' ? melee(p, weapon, d) : style === 'range' ? ranged(p, weapon, d)
+    : weapon === "Tumeken's shadow" ? nyloShadow(p) : weapon === "Zorya's tome" ? tomeNums(p, 0) : nyloAyak(p);
+  return ch * mx;
+}
+/** The partial set after n switches from their predicted style's set toward their set for this attack: the weapon first
+ *  (a two-handed weapon takes the shield off with it; ammo is always on), then the item adding the most each switch. */
+export function partialSet(p, predStyle, style, weapon, n, d) {
+  const full = style === 'mage' ? bestWorn(p.gear, 'mage', weapon).set : worn(p.gear, style, weapon);
+  const from = predStyle === 'mage' ? bestWorn(p.gear, 'mage', BASE_WEAPON.mage).set : worn(p.gear, predStyle, BASE_WEAPON[predStyle]);
+  const cur = { ...from, weapon: full.weapon, ammo: full.ammo };
+  if (full.shield === '' && ITEMS[weapon] && ITEMS[weapon].two_handed) cur.shield = '';
+  const left = () => Object.keys(full).filter((k) => k !== 'weapon' && k !== 'ammo' && (full[k] || '') !== (cur[k] || ''));
+  const keep = p.ovr; let used = 1;
+  try {
+    while (used < n && left().length) {
+      let best = null;
+      for (const k of left()) { const c = { ...cur, [k]: full[k] }; p.ovr = () => c; const v = attackScore(p, style, weapon, d); if (!best || v > best[1]) best = [k, v]; }
+      cur[best[0]] = full[best[0]]; used++;
+    }
+  } finally { p.ovr = keep; }
+  return { set: cur, missing: left().map((k) => full[k]).filter(Boolean), full: !left().length };
+}
 export const SOLO_UNDER = new Set([0, 1, 2, 3, 5, 6, 7, 8]), SOLO_HITS = [4], HEAL_LOOP = 3;
 export const BOSS_MAX = 70, PRAYED_MAX = 17, VENG_CD = 50, HP_MAX = 99, REDEMPTION = 24;
 export const BOSS_ATK = { melee: (400 + 9) * 64, ranged: (350 + 9) * 64, magic: (50 + 9) * (600 + 64) };
@@ -277,7 +321,7 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
   const ps = players.map((p, i) => ({ ...p, i, next: 0, n: 0, plan: null, planForm: null, has: new Set(p.gear.weapons || []),
     spec: null, regen: 0, buff: 0, buffUntil: -1, pl: structuredClone(p.plan || TEST_PLAN[i] || {}),
     hp: HP_MAX, veng: true, vengReady: spawn - SHOW_UP, dead: false, underForm: null, healForm: null, thrallNext: null, pdef: playerDef(p),
-    restores, loopReady: 0, bloodFury: /blood fury/i.test(String((p.gear.melee || {}).neck || '')) }));
+    restores, loopReady: 0, pred: null, mis: null, misUsed: false, ovr: null, bloodFury: /blood fury/i.test(String((p.gear.melee || {}).neck || '')) }));
   const st = { veng: 0, vengDmg: 0, deaths: 0, under: 0, heals: 0, redemptions: 0, taken: 0, thrall: 0, takeoffs: 0 };
   const bq = [];                                              // his hits on the way: [lands, player, damage, entry]
   const alive = () => ps.filter((p) => !p.dead);
@@ -323,6 +367,13 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
     }
     if (kill != null) break;
     const f = formAt(sched, t), ft = t - f.start;             // ft: ticks into his form (0 = its first)
+    if (ft === 0 && f.start !== spawn) {                         // cross praying: what they predicted for this form
+      const pf = sched[sched.indexOf(f) - 1];
+      for (const p of alive()) {
+        p.pred = predictForm(p, pf.form, hp / NYLO_HP[team]); p.mis = p.pred === f.form ? null : f.start; p.misUsed = false;
+        if (p.mis != null) st.wrong = (st.wrong || 0) + 1;
+      }
+    }
     for (const p of alive()) {
       if (p.pl.healer) {                                         // Healer Tech: their veng goes on their teammate
         const m = alive().find((q) => q !== p && !q.veng);
@@ -415,12 +466,25 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       if (p.thrallNext == null) p.thrallNext = t + rng.randint(1, 2);
       const under = (solo && f.start !== spawn) || (p.underForm === f.start && f.form !== 'melee');
       const base = { t, i: p.i, target: `Nylocas Vasilias (${f.form}) - Defence ${def}` };
+      p.ovr = null; let ovrNote = null;
+      if (p.mis === f.start && !p.misUsed) {                     // a wrong prediction: their first attack on Max switches
+        const n = p.pl.maxSwitches * (t - f.start), ps0 = STYLE[p.pred], memo = new Map();
+        p.ovr = (style, weapon) => {
+          if (!memo.has(weapon)) { const r = partialSet(p, ps0, style, weapon, n, def); memo.set(weapon, r); if (!ovrNote) ovrNote = r; }
+          return memo.get(weapon).set;
+        };
+      }
       let e = null;
       const pay = (c) => { const o = p.spec; p.spec -= c; if (p.hold) { p.hold = false; p.regen = SPEC_REGEN - 1; } return [o, p.spec]; };
       const go = (code, what, gear, stats, ch, exp, hits, delays, speed, sp = null) => {
         e = T && { ...base, code, what, gear, stats, acc: ch, exp, rolledAll: hits.reduce((a, b) => a + (b || 0), 0), ...(sp ? { spec: sp[0], specAfter: sp[1] } : {}) };
         hits.forEach((d, k) => q.push([t + delays[k], p.i, d, e, MELEE_CODES.has(code)]));
         p.next = t + speed; p.n++;
+        if (p.ovr) {
+          p.ovr = null; p.misUsed = true;
+          if (ovrNote && !ovrNote.full) st.short = (st.short || 0) + 1;
+          if (e) e.what += ` (predicted ${p.pred}: ${p.pl.maxSwitches * (t - f.start)} switch${p.pl.maxSwitches * (t - f.start) === 1 ? '' : 'es'}${ovrNote ? (ovrNote.full ? ' - full set' : ` - not on: ${ovrNote.missing.join(', ')}`) : ''})`;
+        }
         if (e) T.push(e);
       };
       const MEL = 'Attack 118 · Strength 118';

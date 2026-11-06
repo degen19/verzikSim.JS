@@ -149,3 +149,38 @@ export async function rangedThresholds(cfg, gear, run, n, progress = () => {}, s
   }
   return out;
 }
+
+/** Cross praying: each player's prediction by his HP for a setup. For each form he's in (melee, magic, ranged) and each
+ *  threshold (STOP_PCTS: below that % of his HP they predict the other form - from melee or ranged: magic; from magic:
+ *  melee), the change in mean boss time against the default prediction, on the same raids. Tome spec plans predict magic
+ *  either way. -> [{p, forms: {form: [{pct, d, ci}]}, best: {form: pct | null}}]. */
+export const PRED_FORMS = ['melee', 'magic', 'ranged'];
+export const PRED_DEFAULT = { melee: 'ranged', magic: 'ranged', ranged: 'melee' }, PRED_OTHER = { melee: 'magic', magic: 'melee', ranged: 'magic' };
+export async function predictionThresholds(cfg, run, n, progress = () => {}, stopped = () => false) {
+  const seed = 'npred', [base] = await run([cfg], 0, n, seed), bt = base.totals, out = [];
+  for (let k = 0; k < cfg.players.length && !stopped(); k++) {
+    const row = { p: k, forms: {}, best: {} };
+    for (const [fi, form] of PRED_FORMS.entries()) {
+      progress(`Predictions: P${k + 1}, from his ${form} form`, (k * 3 + fi) / (cfg.players.length * 3));
+      const cfgs = STOP_PCTS.map((pct) => ({ ...cfg, players: cfg.players.map((p, j) => (j === k ? { ...p, predictFlip: { ...(p.predictFlip || {}), [form]: pct } } : p)) }));
+      const res = await run(cfgs, 0, n, seed);
+      row.forms[form] = STOP_PCTS.map((pct, i) => {
+        const d = res[i].totals.map((x, r) => x - bt[r]), m = d.reduce((a, b) => a + b, 0) / n;
+        const sd = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, n - 1));
+        return { pct, d: m, ci: 1.96 * sd / Math.sqrt(n) };
+      });
+      const b = row.forms[form].reduce((a, x) => (x.d < a.d ? x : a), { pct: null, d: 0, ci: 0 });
+      row.best[form] = b.pct != null && b.d < -b.ci ? b.pct : null;
+    }
+    out.push(row);
+  }
+  return out;
+}
+/** A player's predictions as text: 'he's magic: predict melee below 60% of his HP (ranged above)'. */
+export function predictionText(flip = {}) {
+  return PRED_FORMS.map((f) => {
+    const x = flip[f];
+    if (x == null) return `he's ${f}: predict ${PRED_DEFAULT[f]}`;
+    return x >= 100 ? `he's ${f}: predict ${PRED_OTHER[f]}` : `he's ${f}: predict ${PRED_DEFAULT[f]}, ${PRED_OTHER[f]} below ${x}% of his HP`;
+  }).join(' · ');
+}

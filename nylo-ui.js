@@ -6,7 +6,7 @@ import { blankPlayer } from './engine/loadout.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { histogramSvg, cumulativeSvg, chartBox } from './engine/report.js';
 import { runNylo, NYLO_HP, FAST } from './engine/nylo.js';
-import { solveNylo, rangedThresholds, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, better as scoreBetter } from './engine/nylosolve.js';
+import { solveNylo, rangedThresholds, predictionThresholds, predictionText, PRED_FORMS, PRED_DEFAULT, PRED_OTHER, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, better as scoreBetter } from './engine/nylosolve.js';
 import { NyloPool } from './nylo-solver-pool.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { Rng } from './engine/rng.js';
@@ -51,7 +51,8 @@ export function createNylo(host, { getTeam }) {
         .map(([k, l]) => `${pick()}><input type="checkbox" data-va="${k}">${l}</label>`).join('')}
         <span class="muted small">Search:</span>${pick()} title="Also swap two players' specs, and move a surge, in one step"><input type="checkbox" data-vs="swaps">Swaps</label>
         ${pick()} title="Also change a player's opener and damage specs together"><input type="checkbox" data-vs="roles">Role changes</label>
-        ${pick()} title="After the search: each player's Twisted-bows-only thresholds for the best setup"><input type="checkbox" data-vs="thr">Ranged thresholds</label></div>
+        ${pick()} title="After the search: each player's Twisted-bows-only thresholds for the best setup"><input type="checkbox" data-vs="thr">Ranged thresholds</label>
+        ${pick()} title="After the search: what each player should predict between forms (cross praying), by his HP, for the best setup - kept at the default when changing it isn't clearly faster"><input type="checkbox" data-vs="pred">Predictions by HP</label></div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>`)}</div>`;
   wireSubtabs(host, 'verzikSim.nyloTabs.v1');
   const cfg = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), sol = host.querySelector('[data-solve]');
@@ -101,6 +102,7 @@ export function createNylo(host, { getTeam }) {
       ${notes.map((x) => `<div class="warn small" style="margin-bottom:4px">${esc(x)}</div>`).join('')}
       <div class="scroll"><table class="bt"><tr><th></th><th title="95: their first regen comes the tick after their first spec">Start spec</th><th title="+25% straight after their first spec">Surge</th>
         <th title="Their first attack (his melee form)">Opening spec</th><th title="After their opener, in order, each when his form allows: claws / halberd (melee), tome (magic), ZCB (in place of a Twisted bow, ranged). Never their first attack">Second spec</th>
+        <th title="Cross praying: between forms they wear the gear of the form they predict (he's magic or melee -> ranged; ranged -> melee; a tome spec planned -> magic) and pray for the other. Guessed wrong: this many item switches a tick before their first attack (the weapon first, then what adds the most damage)">Max switches on<br>wrong prediction</th>
         ${t === 2 ? '<th title="Feeds HP and Vengs to other player with redemption - requires locator orb and restore doses">Healer Tech</th>' : ''}
         ${t === 1 ? '' : [1, 2, 3].map((k) => `<th title="Below this % of his HP they stop this green-form sequence and play Twisted bows only (bp: their 2-tick hit - blowpipe, crossbows or darts). Which sequence depends on their first attack in the form: its 2nd tick 4bp tbow, 3rd tbow bp tbow, 4th 3bp tbow">Stop sequence at HP:<br>${PLAN_NAMES[k]}</th>`).join('')}</tr>
       ${st.players.map((p, k) => { const gk = gearK(st, k); return `<tr><td class="rl">${esc(names[k])}</td>
@@ -108,9 +110,16 @@ export function createNylo(host, { getTeam }) {
         <td style="text-align:center"><input type="checkbox" data-p="${k}|surge" ${p.surge ? 'checked' : ''}></td>
         <td><select data-p="${k}|open">${OPENS.map(([v, l]) => `<option value="${v}" ${v === p.open ? 'selected' : ''} ${canOpen(gk, v) ? '' : 'disabled'}>${l}</option>`).join('')}</select></td>
         <td><select data-p="${k}|specs" style="width:150px">${SEQS.map((s) => `<option value="${seqKey(s)}" ${seqKey(s) === seqKey(p.specs) ? 'selected' : ''} ${canSeq(gk, s) && !(t === 1 && s.includes('tome')) ? '' : 'disabled'}>${seqName(s)}</option>`).join('')}</select></td>
+        <td><select data-p="${k}|maxSwitches">${opt([1, 2, 3, 4, 5, 6, 7, 8].map((x) => [x, x]), p.maxSwitches ?? 8)}</select></td>
         ${t === 2 ? `<td style="text-align:center"><input type="checkbox" data-p="${k}|healer" ${p.healer ? 'checked' : ''}></td>` : ''}
-        ${t === 1 ? '' : `<td>${stopSel(k, 1)}</td><td>${stopSel(k, 2)}</td><td>${stopSel(k, 3)}</td>`}</tr>`; }).join('')}</table></div>`;
+        ${t === 1 ? '' : `<td>${stopSel(k, 1)}</td><td>${stopSel(k, 2)}</td><td>${stopSel(k, 3)}</td>`}</tr>`; }).join('')}</table></div>
+      <div class="small muted" style="margin-top:6px">Cross praying (they predict his next form: its gear on, the other form's prayers):
+        ${st.players.map((p, k) => `<div>${esc(names[k])}: ${esc(predictionText(p.predictFlip || {}))}${p.specs.includes('tome') ? ' (magic while a tome spec is planned)' : ''}${p.predictFlip && Object.keys(p.predictFlip).length ? ` <button class="ghost sm" data-resetpred="${k}">Default</button>` : ''}</div>`).join('')}</div>`;
   }
+  cfg.addEventListener('click', (e) => {
+    const k = e.target.dataset.resetpred; if (k == null) return;
+    const st = cur(); delete st.players[Number(k)].predictFlip; persist(); render();
+  });
   cfg.addEventListener('change', (e) => {
     const el = e.target, st = cur();
     if (el.dataset.s) {
@@ -125,7 +134,7 @@ export function createNylo(host, { getTeam }) {
     } else if (el.dataset.p) {
       const [k, f] = el.dataset.p.split('|'), p = st.players[Number(k)];
       if (f === 'specs') p.specs = el.value === 'none' ? [] : el.value.split('+');
-      else if (f === 'startSpec') p.startSpec = Number(el.value);
+      else if (f === 'startSpec' || f === 'maxSwitches') p[f] = Number(el.value);
       else if (f === 'healer') { st.players.forEach((q) => { q.healer = false; }); p.healer = el.checked; }   // one Healer Tech at most
       else if (el.type === 'checkbox') p[f] = el.checked;
       else p[f] = el.value;
@@ -195,11 +204,11 @@ export function createNylo(host, { getTeam }) {
     }
     x.all = all;
     const s = statsRow(all.map((z) => z.total ?? 99999), bps), idx = flat.length - 1, asc = [...bps].sort((a, b) => a - b);
-    const per = (k) => (agg[k] / n).toFixed(2);
+    const per = (k) => ((agg[k] || 0) / n).toFixed(2);
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${team()}-man Nylocas: ${n.toLocaleString()} raids</h3>
       <table><tr><th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
       <tr><td>${fsec(s.mean)}</td><td>${fsec(s.med)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
-      <div class="small muted" style="margin-top:6px">Per raid: vengs ${per('veng')} (${per('vengDmg')} damage) · damage taken ${per('taken')} · thralls ${per('thrall')} · takeoffs ${per('takeoffs')} · under him ${per('under')} · Heal Others ${per('heals')} · redemptions ${per('redemptions')} · deaths ${per('deaths')}</div>
+      <div class="small muted" style="margin-top:6px">Per raid: vengs ${per('veng')} (${per('vengDmg')} damage) · damage taken ${per('taken')} · thralls ${per('thrall')} · takeoffs ${per('takeoffs')} · under him ${per('under')} · Heal Others ${per('heals')} · redemptions ${per('redemptions')} · deaths ${per('deaths')} · wrong predictions ${per('wrong')} (first attack short of their full set ${per('short')})</div>
       ${(() => { const series = [{ total: all.filter((z) => z.total != null).map((z) => z.total), runs: n }];
         return `<h3>How often each boss time happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, ['Nylocas'], rg).replace('% of successful runs', '% of raids'))}</div>
       <h3>Boss time this or faster - % of raids</h3><div class="sub">${bps.length ? 'Vertical lines are your breakpoints (boss time at that or faster; times are rounded down to a tick).' : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, ['Nylocas'], bps, rg).replace('% of successful runs finished by this time', '% of raids at this boss time or faster'))}</div>`; })()}
@@ -212,12 +221,12 @@ export function createNylo(host, { getTeam }) {
   const EFFORT = { quick: { rounds: 4, stages: [[40, 0.15], [150, 3], [600, 1]], finalRaids: 1000, thrRaids: 800 },
     normal: { rounds: 8, stages: [[60, 0.2], [240, 4], [1000, 1]], finalRaids: 2000, thrRaids: 1500 },
     thorough: { rounds: 14, stages: [[100, 0.25], [400, 5], [2000, 1]], finalRaids: 5000, thrRaids: 3000 } };
-  const solState = () => { const r = root(); r.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])), search: { swaps: true, roles: false, thr: true } }; return r.solve; };
+  const solState = () => { const r = root(); r.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])), search: { swaps: true, roles: false, thr: true, pred: true } }; return r.solve; };
   const showSol = () => {
     const v = solState();
     sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="effort"]').value = v.effort;
     for (const k of ALLOW) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
-    for (const k of ['swaps', 'roles', 'thr']) sol.querySelector(`[data-vs="${k}"]`).checked = !!v.search[k];
+    for (const k of ['swaps', 'roles', 'thr', 'pred']) sol.querySelector(`[data-vs="${k}"]`).checked = !!v.search[k];
   };
   sol.addEventListener('change', (e) => {
     const v = solState(), el = e.target;
@@ -236,10 +245,20 @@ export function createNylo(host, { getTeam }) {
         ${[1, 2, 3].map((k) => `<tr><td class="rl">${PLAN_NAMES[k]}</td>${row.plans[k].map((x) => cell(x, row.best[k])).join('')}</tr>`).join('')}</table></div>`).join('')}
       <button class="ghost sm" data-usethr style="margin-top:6px">Use these thresholds in the settings</button>`;
   };
+  const predHtml = (pred, names) => {
+    if (!pred) return '';
+    const cell = (x, best) => `<td style="${x.pct === best ? 'font-weight:700;background:rgba(80,200,120,.15)' : ''}${x.d > x.ci ? ';color:var(--bad,#e66)' : ''}">${x.d >= 0 ? '+' : ''}${x.d.toFixed(2)}<span class="muted" style="font-size:10px"> ±${x.ci.toFixed(2)}</span></td>`;
+    return `<h4 style="margin:12px 0 2px">Cross praying: predictions by his HP (best setup)</h4>
+      <p class="muted small" style="margin:0 0 6px">Change in mean boss time (ticks; negative is faster) if that player predicts the other form below each % of his HP (he's melee: magic instead of ranged · magic: melee instead of ranged · ranged: magic instead of melee) - one player and form at a time, on the same raids, with their Max switches. Bold: their best, when it's clearly faster than the default.</p>
+      ${pred.map((row) => `<div class="small" style="margin-top:6px"><b>${esc(names[row.p])}</b> - ${esc(predictionText(row.best))}</div>
+        <div class="scroll"><table class="bt"><tr><th>He's</th>${STOP_PCTS.map((p) => `<th>&lt; ${p}%</th>`).join('')}</tr>
+        ${PRED_FORMS.map((fm) => `<tr><td class="rl">${fm} (${PRED_DEFAULT[fm]} → ${PRED_OTHER[fm]})</td>${row.forms[fm].map((x) => cell(x, row.best[fm])).join('')}</tr>`).join('')}</table></div>`).join('')}
+      <button class="ghost sm" data-usepred style="margin-top:6px">Use these predictions in the settings</button>`;
+  };
   const showResults = () => {
     const out = sol.querySelector('[data-vout]');
     if (!vres || !vres.items.length) { out.innerHTML = ''; return; }
-    const { items, bps, names, thr } = vres, asc = [...bps].sort((a, b) => a - b);
+    const { items, bps, names, thr, pred } = vres, asc = [...bps].sort((a, b) => a - b);
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${team()}-man Nylocas: solver</h3>
       <div class="sub">Each played on the same ${items[0].totals.length.toLocaleString()} raids. Boss time: his spawn to the room's end.</div>
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Mean</th><th>Median</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>Setup</th><th></th></tr>
@@ -249,7 +268,7 @@ export function createNylo(host, { getTeam }) {
           <td class="small" style="text-align:left;font-weight:400">${short}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use</button></td></tr>
           <tr class="sub-row" data-vproc="${i}" hidden><td colspan="${7 + asc.length}" style="text-align:left">${procHtml(r.cfg, names)}${raidBar(r.run, bps)}</td></tr>`; }).join('')}</table></div>
-      ${thrHtml(thr, names)}</div>`;
+      ${thrHtml(thr, names)}${predHtml(pred, names)}</div>`;
   };
   sol.addEventListener('click', async (e) => {
     const el = e.target, status = sol.querySelector('[data-vstatus]'), err = sol.querySelector('[data-verr]'), vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
@@ -258,6 +277,11 @@ export function createNylo(host, { getTeam }) {
       const r = vres.items[Number(el.dataset.vuse)], st = cur();
       r.cfg.players.forEach((p, k) => { st.players[k] = { ...st.players[k], ...structuredClone(p) }; });
       st.backup = r.cfg.backup ? { ...r.cfg.backup } : null; persist(); render(); status.textContent = 'Setup copied into the settings.'; return;
+    }
+    if (el.dataset.usepred != null && vres && vres.pred) {
+      const st = cur();
+      for (const row of vres.pred) { const pf = {}; for (const fm of PRED_FORMS) if (row.best[fm] != null) pf[fm] = row.best[fm]; st.players[row.p].predictFlip = pf; }
+      persist(); render(); status.textContent = 'Predictions copied into the settings.'; return;
     }
     if (el.dataset.usethr != null && vres && vres.thr) {
       const st = cur();
@@ -272,7 +296,7 @@ export function createNylo(host, { getTeam }) {
     const t = team(), st = cur(), all = playersNow(st), ef = EFFORT[v.effort] || EFFORT.normal;
     const base = all.map((p) => ({ name: p.name, gear: p.gear })), names = all.map((p) => p.name), gear = all.map((p) => p.gear);
     const opts = roomOpts(st);
-    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: p.clawMode, startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer })), backup: st.backup && t > 1 ? { ...st.backup } : null };
+    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: p.clawMode, startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: Number(p.maxSwitches ?? 8), ...(p.predictFlip ? { predictFlip: { ...p.predictFlip } } : {}) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
     const t1 = Date.now(), say = (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };
@@ -281,9 +305,13 @@ export function createNylo(host, { getTeam }) {
       const run = (...args) => me.pool.run(...args);
       const items = await solveNylo({ start, gear, allow: { ...v.allow, ...(t === 1 ? { backup: false } : {}) }, surgeLimit: Number(st.surgeLimit) || 0, swaps: !!v.search.swaps, roles: !!v.search.roles, bps, ...ef, top: 10 }, run, say, () => me.stopped);
       const mk = (cfg) => ({ players: base.map((b, k) => ({ ...b, plan: cfg.players[k] })), opts: { ...opts, plans: { backup: cfg.backup } } });
-      vres = { items: items.map((r) => ({ ...r, run: mk(r.cfg) })), bps, names, thr: null }; showResults();
+      vres = { items: items.map((r) => ({ ...r, run: mk(r.cfg) })), bps, names, thr: null, pred: null }; showResults();
       if (v.search.thr && t > 1 && items.length && !me.stopped) {
         vres.thr = await rangedThresholds(items[0].cfg, gear, run, ef.thrRaids, say, () => me.stopped);
+        showResults();
+      }
+      if (v.search.pred && items.length && !me.stopped) {
+        vres.pred = await predictionThresholds(items[0].cfg, run, ef.thrRaids, say, () => me.stopped);
         showResults();
       }
       status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
