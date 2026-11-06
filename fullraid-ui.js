@@ -15,7 +15,7 @@ import { gearOfLetter } from './engine/gearstore.js';
 import { runXarpus } from './engine/xarpus.js';
 import { runNylo, parseWaveTimes, fmtWave, MAX_SWITCHES } from './engine/nylo.js';
 import { Rng } from './engine/rng.js';
-import { fullScore, fullBetter, SURGE_CD, surgersOf, withSurgers, subsets, distOf, convolve, planScore } from './engine/fullraid.js';
+import { ALL_ROOMS, fullScore, fullBetter, SURGE_CD, surgersOf, withSurgers, subsets, distOf, convolve, planScore } from './engine/fullraid.js';
 import { FullRaidPool } from './fullraid-pool.js';
 import { histogramSvg, cumulativeSvg, chartBox, reportHtml as verzReportHtml } from './engine/report.js';
 import { commonEntry, verzikCfgs } from './engine/fullraid.js';
@@ -82,7 +82,9 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     s.verzik ||= {}; s.verzik.pnecks ||= []; for (let k = 0; k < t; k++) s.verzik.pnecks[k] ??= 0; s.verzik.pnecks.length = t;
     s.verzik.team ||= { Sharks: '', 'Brew sips': '', 'Restore sips': '', 'SCB sips': '' };
     s.trades ??= false;
-    s.nylo ||= {}; s.nylo.on ??= true; s.nylo.maxSwitches ||= []; s.nylo.healer ??= null; s.nylo.restores ??= 8; s.nylo.bp ??= '';
+    s.nylo ||= {};
+    s.on ||= { nylo: s.nylo.on ?? true, sote: true, xarpus: true, verzik: true };   // the rooms to run (in a row)
+    s.nylo.maxSwitches ||= []; s.nylo.healer ??= null; s.nylo.restores ??= 8; s.nylo.bp ??= '';
     s.nylo.wave ||= [{ time: '', freq: '' }];
     for (let k = 0; k < t; k++) s.nylo.maxSwitches[k] ??= MAX_SWITCHES;
     s.nylo.maxSwitches.length = t; if (s.nylo.healer != null && (t !== 2 || s.nylo.healer >= t)) s.nylo.healer = null;
@@ -92,23 +94,27 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
   const mazes = (sp, k, gp) => (Array.isArray(sp.mazes) ? sp.mazes : defaultMazes(Number(sp.pnecks || 0), !!(gp && gp[k] && gp[k].locator), team()));
   const gearPlayers = (s) => { const set = gearSet(loadGear(), team(), s.gearSet); return set ? playersOf(set, team()) : null; };
 
+  /** The rooms ticked, in raid order, and whether they're in a row (no gaps). */
+  const picked = (s) => { const ks = ALL_ROOMS.filter((k) => s.on[k]), ix = ks.map((k) => ALL_ROOMS.indexOf(k)); return { ks, ok: ks.length > 0 && ix.every((x, i) => !i || x === ix[i - 1] + 1) }; };
+  const tick = (s, k) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center;display:inline-flex"><input type="checkbox" data-on="${k}" ${s.on[k] ? 'checked' : ''}>${KIND_NAME[k]}</label>`;
   function render() {
-    const s = st(), t = team(), g = loadGear(), gp = gearPlayers(s), lb = gp ? gp.filter((p) => p.lightbearer).length : 0, horns = gp ? gp.filter((p) => p.horn).length : 0;
+    const s = st(), t = team(), pk = picked(s), g = loadGear(), gp = gearPlayers(s), lb = gp ? gp.filter((p) => p.lightbearer).length : 0, horns = gp ? gp.filter((p) => p.horn).length : 0;
     const name = (k) => esc((gp && gp[k] && gp[k].name) || `Player ${k + 1}`);
-    host.innerHTML = `<div class="card"><h3 style="margin-top:0">Full raid <span class="muted small">(${t}-man: ${s.nylo.on ? 'Nylocas → ' : ''}Sotetseg → Xarpus → Verzik)</span></h3>
+    host.innerHTML = `<div class="card"><h3 style="margin-top:0">Full raid <span class="muted small">(${t}-man: ${pk.ks.map((k) => KIND_NAME[k]).join(' → ') || 'no rooms ticked'})</span></h3>
+      <div class="small ${pk.ok ? 'muted' : 'warn'}">${pk.ok ? 'Tick the rooms to run below - any run of them in a row.' : pk.ks.length ? "The rooms need to be in a row - no gaps (e.g. Nylocas + Sotetseg + Xarpus, not Nylocas + Xarpus + Verzik)." : 'Tick at least one room.'}</div>
       <p class="muted small">Solves the rooms as one raid - the solver decides each room's procedure (specs, surges, Lightbearer cycles, maze entry, Verzik's P1 chart unless you use yours). Everything it needs is on this tab; gear comes from the Gear tab. Spec resets each room (95 or 100 to start); the surge cooldown and doses carry over.</p>
       <div class="row wrap" style="gap:14px;align-items:end;margin-bottom:10px">
         <label>Gear<select data-f="gearSet">${GEAR_SETS.map((x) => `<option value="${x}" ${x === s.gearSet ? 'selected' : ''}>${esc(gearSetLabel(g, t, x))}${gearSet(g, t, x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
         <div class="muted small" style="padding-bottom:8px">${lb} Lightbearer${lb === 1 ? '' : 's'} and ${horns} horn${horns === 1 ? '' : 's'} (ticked in the Gear tab)</div>
       </div>
-      <div class="scroll"><table class="bt"><tr><th></th><th title="Time left on their surge potion cooldown at the start of the first room (m:ss), rounded up to a tick - 1:04 means it's up after 1:04.2. Blank: ready">Surge cooldown into ${s.nylo.on ? 'Nylocas' : 'Sote'}</th><th title="Surge potion doses they bring for the three rooms">Surge doses</th></tr>
+      <div class="scroll"><table class="bt"><tr><th></th><th title="Time left on their surge potion cooldown at the start of the first room (m:ss), rounded up to a tick - 1:04 means it's up after 1:04.2. Blank: ready">Surge cooldown into ${KIND_NAME[pk.ks[0]] || 'the first room'}</th><th title="Surge potion doses they bring for the three rooms">Surge doses</th></tr>
         ${Array.from({ length: t }, (_, k) => `<tr><td class="rl">${name(k)}</td><td><input data-cd="${k}" value="${esc(s.cd[k])}" placeholder="ready" style="width:80px"></td>
           <td><select data-dose="${k}">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}" ${n === Number(s.doses[k]) ? 'selected' : ''}>${n}</option>`).join('')}</select></td></tr>`).join('')}</table></div>
       <label class="pick" style="flex-direction:row;gap:6px;align-items:center;margin-top:8px" title="On: the solver decides who holds each Lightbearer and horn in each room (they're traded between rooms - before a room, never during one). Off: they stay with whoever has them ticked in the Gear tab."><input type="checkbox" data-f="trades" ${s.trades ? 'checked' : ''}>Enable trades</label>
       <div class="muted small">On: the solver decides who holds each Lightbearer (${lb}) and horn (${horns}) in each room - traded before a room, never during one. It takes longer to run. Off: they stay with whoever has them ticked in the Gear tab.</div>
       <style>.frblk{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}.frblk h4{margin:0 0 6px}</style>
-      <div class="frblk"><h4><label class="pick" style="flex-direction:row;gap:6px;align-items:center;display:inline-flex"><input type="checkbox" data-ny="on" ${s.nylo.on ? 'checked' : ''}>Nylocas</label></h4>
-        ${s.nylo.on ? (() => { const w = parseWaveTimes(s.nylo.wave); return `<div class="muted small">The waves and the boss: room time = wave time + boss time (the waves run down surge cooldowns too). The solver decides the specs and surges; cross praying with each player's Max switches.</div>
+      <div class="frblk"><h4>${tick(s, 'nylo')}</h4>
+        ${s.on.nylo ? (() => { const w = parseWaveTimes(s.nylo.wave); return `<div class="muted small">The waves and the boss: room time = wave time + boss time (the waves run down surge cooldowns too). The solver decides the specs and surges; cross praying with each player's Max switches.</div>
         <div class="row wrap" style="gap:14px;align-items:flex-start;margin-top:6px">
           <div class="scroll"><table class="bt"><tr><th></th><th title="Cross praying: a wrong prediction leaves this many item switches a tick before their first attack in the form (the weapon first)">Max switches on wrong prediction</th>${t === 2 ? '<th title="Feeds HP and Vengs to other player with redemption - requires locator orb and restore doses">Healer Tech</th>' : ''}</tr>
             ${Array.from({ length: t }, (_, k) => `<tr><td class="rl">${name(k)}</td><td><select data-nyms="${k}">${[1, 2, 3, 4, 5, 6, 7, 8].map((x) => `<option ${x === Number(s.nylo.maxSwitches[k]) ? 'selected' : ''}>${x}</option>`).join('')}</select></td>${t === 2 ? `<td style="text-align:center"><input type="checkbox" data-nyh="${k}" ${s.nylo.healer === k ? 'checked' : ''}></td>` : ''}</tr>`).join('')}</table></div>
@@ -117,16 +123,16 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
             ${s.nylo.wave.map((r, j) => `<tr><td><input data-nyw="${j}|time" value="${esc(r.time)}" placeholder="m:ss.s" style="width:80px"></td><td><input data-nyw="${j}|freq" value="${esc(r.freq)}" placeholder="%" style="width:60px"> %</td><td>${s.nylo.wave.length > 1 ? `<button class="ghost sm" data-nywdel="${j}">Remove</button>` : ''}</td></tr>`).join('')}</table>
             <button class="ghost sm" data-nywadd style="margin-top:4px">+ Add wave time</button>
             <div class="small ${w.error ? 'warn' : 'muted'}" data-nywmsg style="margin-top:4px">${w.error ? esc(w.error) : `Average wave time ${fmtWave(Math.round(w.mean))} - times a whole tick, 2.4s (4 ticks) apart; frequencies add up to 100%.`}</div></div>
-        </div>`; })() : '<div class="muted small">Off: the raid starts at Sotetseg.</div>'}</div>
-      <div class="frblk"><h4>Sotetseg</h4><div class="scroll"><table class="bt"><tr><th></th><th>Phoenix necklaces</th><th>Sharks</th><th title="Guthix rest sips (a 4 dose = 4 sips)">Guthix rest sips</th><th>Restore sips</th><th title="How they cross the first maze (Redemption needs a locator orb, 1-4s; Shark: one player)">First maze</th><th>Second maze</th></tr>
+        </div>`; })() : '<div class="muted small">Not run.</div>'}</div>
+      <div class="frblk"><h4>${tick(s, 'sote')}</h4>${s.on.sote ? '' : '<div class="muted small">Not run.</div>'}<div ${s.on.sote ? '' : 'hidden'}><div class="scroll"><table class="bt"><tr><th></th><th>Phoenix necklaces</th><th>Sharks</th><th title="Guthix rest sips (a 4 dose = 4 sips)">Guthix rest sips</th><th>Restore sips</th><th title="How they cross the first maze (Redemption needs a locator orb, 1-4s; Shark: one player)">First maze</th><th>Second maze</th></tr>
         ${Array.from({ length: t }, (_, k) => { const sp = s.sote.players[k], m = mazes(sp, k, gp);
           return `<tr><td class="rl">${name(k)}</td>${['pnecks', 'sharks', 'rests', 'restores'].map((f) => `<td><input type="number" min="0" data-sote="${k}|${f}" value="${esc(sp[f])}" style="width:60px"></td>`).join('')}
           ${[0, 1].map((i) => `<td><select data-maze="${k}|${i}">${MAZE_HOW.map(([v, l]) => `<option value="${v}" ${v === m[i] ? 'selected' : ''} ${v === 'redemption' && t >= 5 ? 'disabled' : ''}>${l}</option>`).join('')}</select></td>`).join('')}</tr>`; }).join('')}</table></div>
-        <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Only setups where every surge is drunk in P1"><input type="checkbox" data-f="soteNoLate" ${s.sote.noLateSurge ? 'checked' : ''}>No P2 / P3 surges</label></div>
-      <div class="frblk"><h4>Xarpus</h4><div class="row" style="gap:14px;align-items:end">
+        <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Only setups where every surge is drunk in P1"><input type="checkbox" data-f="soteNoLate" ${s.sote.noLateSurge ? 'checked' : ''}>No P2 / P3 surges</label></div></div>
+      <div class="frblk"><h4>${tick(s, 'xarpus')}</h4>${s.on.xarpus ? '' : '<div class="muted small">Not run.</div>'}<div class="row" style="gap:14px;align-items:end" ${s.on.xarpus ? '' : 'hidden'}>
         <label title="Exhumed heals (missed ticks): each one is HP on top of his base">Number of heals<input type="number" min="0" data-xh value="${esc(s.xarpus.heals)}" style="width:70px"></label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-xe ${s.xarpus.exactHeals ? 'checked' : ''}>Exact heals (no ±2)</label></div></div>
-      <div class="frblk"><h4>Verzik</h4><div class="row" style="gap:14px;align-items:end;flex-wrap:wrap">
+      <div class="frblk"><h4>${tick(s, 'verzik')}</h4>${s.on.verzik ? '' : '<div class="muted small">Not run.</div>'}<div ${s.on.verzik ? '' : 'hidden'}><div class="row" style="gap:14px;align-items:end;flex-wrap:wrap">
         ${Object.keys(s.verzik.team).map((h) => `<label title="The whole team's (blank: the chart template's default)">${h === 'SCB sips' ? 'Super combat sips' : h} (team)<input type="number" min="0" data-vt="${esc(h)}" value="${esc(s.verzik.team[h])}" placeholder="default" style="width:80px"></label>`).join('')}</div>
         <div class="scroll"><table class="bt"><tr><th></th>${Array.from({ length: t }, (_, k) => `<th>${name(k)}</th>`).join('')}</tr>
           <tr><td class="rl">Phoenix necklaces</td>${Array.from({ length: t }, (_, k) => `<td><input type="number" min="0" data-vp="${k}" value="${esc(s.verzik.pnecks[k])}" style="width:60px"></td>`).join('')}</tr></table></div>
@@ -134,15 +140,15 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       <div class="row wrap" style="gap:14px;align-items:center;margin:10px 0 0">
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Keep your Verzik chart's P1 rotation (much faster) - ring swaps, DCs, horns and the rest are still searched"><input type="checkbox" data-f="useChart" ${s.useChart ? 'checked' : ''}>Use my Verzik P1 chart</label>
       </div>
-      ${s.useChart ? chartEditor(s, t, gp) : ''}</div>
+      ${s.useChart ? chartEditor(s, t, gp) : ''}</div></div>
       <div class="row wrap" style="gap:14px;align-items:end">
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="radio" name="frmode" data-f="mode" value="total" ${s.mode === 'total' ? 'checked' : ''}>Search for under TOTAL TIME</label>
         <label>Total time (m:ss, comma-separated)<input data-f="total" value="${esc(s.total)}" placeholder="e.g. 6:00" style="width:150px" ${s.mode === 'total' ? '' : 'disabled'}></label>
       </div>
       <div class="row wrap" style="gap:14px;align-items:end;margin-top:6px">
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="radio" name="frmode" data-f="mode" value="rooms" ${s.mode === 'rooms' ? 'checked' : ''}>Use these specific breakpoints</label>
-        ${s.nylo.on ? `<label title="Room time: waves + boss">Nylocas<input data-ny="bp" value="${esc(s.nylo.bp)}" placeholder="m:ss" style="width:80px" ${s.mode === 'rooms' ? '' : 'disabled'}></label>` : ''}
-        ${ROOM_NAMES.map((r, j) => `<label>${r}<input data-room="${j}" value="${esc(s.rooms[j])}" placeholder="m:ss" style="width:80px" ${s.mode === 'rooms' ? '' : 'disabled'}></label>`).join('')}
+        ${s.on.nylo ? `<label title="Room time: waves + boss">Nylocas<input data-ny="bp" value="${esc(s.nylo.bp)}" placeholder="m:ss" style="width:80px" ${s.mode === 'rooms' ? '' : 'disabled'}></label>` : ''}
+        ${ROOM_NAMES.map((r, j) => (s.on[ALL_ROOMS[j + 1]] ? `<label>${r}<input data-room="${j}" value="${esc(s.rooms[j])}" placeholder="m:ss" style="width:80px" ${s.mode === 'rooms' ? '' : 'disabled'}></label>` : '')).join('')}
       </div>
       <div class="row wrap" style="gap:14px;align-items:end;margin-top:10px">
         <label title="Goal time: the share of attempts under your time(s) - the first total time, or every room under its own breakpoint. Success rate: the share of attempts that finish (then the median).">Rank by<select data-f="rankBy"><option value="goal" ${s.rankBy !== 'success' ? 'selected' : ''}>Goal time</option><option value="success" ${s.rankBy === 'success' ? 'selected' : ''}>Success rate</option></select></label>
@@ -156,7 +162,8 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
 
   host.addEventListener('change', (e) => {
     const el = e.target, s = st();
-    if (el.dataset.ny) { const k = el.dataset.ny; s.nylo[k] = k === 'on' ? el.checked : k === 'restores' ? Math.max(0, Math.trunc(Number(el.value) || 0)) : el.value; save(state); if (k === 'on') render(); return; }
+    if (el.dataset.on) { s.on[el.dataset.on] = el.checked; save(state); render(); return; }
+    if (el.dataset.ny) { const k = el.dataset.ny; s.nylo[k] = k === 'restores' ? Math.max(0, Math.trunc(Number(el.value) || 0)) : el.value; save(state); return; }
     if (el.dataset.nyms != null) { s.nylo.maxSwitches[Number(el.dataset.nyms)] = Number(el.value); save(state); return; }
     if (el.dataset.nyh != null) { s.nylo.healer = el.checked ? Number(el.dataset.nyh) : null; save(state); render(); return; }
     if (el.dataset.nyw) { const [j, f] = el.dataset.nyw.split('|'); s.nylo.wave[Number(j)][f] = el.value.trim(); save(state); render(); return; }
@@ -225,16 +232,17 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     err.textContent = '';
     const s = st(), t = team(), ef = EFFORTS[s.effort] || EFFORTS.normal, gp = gearPlayers(s);
     if (!gp) { err.textContent = `Gear set ${s.gearSet} is empty - set the team's gear in the Gear tab.`; return; }
-    if (s.useChart && !chartOf(s, t).acts.some((a) => Object.keys(a).length)) { err.textContent = 'Use my Verzik P1 chart: the P1 chart is empty - build it or load one of your Verzik sets.'; return; }
+    if (s.on.verzik && s.useChart && !chartOf(s, t).acts.some((a) => Object.keys(a).length)) { err.textContent = 'Use my Verzik P1 chart: the P1 chart is empty - build it or load one of your Verzik sets.'; return; }
     if (t === 1) { err.textContent = 'The Full raid solver is for 2-5 man raids.'; return; }
-    const nyOn = !!s.nylo.on, KINDS = nyOn ? ['nylo', 'sote', 'xarpus', 'verzik'] : ['sote', 'xarpus', 'verzik'];
+    const pk = picked(s), KINDS = pk.ks, nyOn = !!s.on.nylo;
+    if (!pk.ok) { err.textContent = KINDS.length ? 'Pick rooms in a row - no gaps between them.' : 'Tick at least one room.'; return; }
     const wave = nyOn ? parseWaveTimes(s.nylo.wave) : null;
     if (wave && wave.error) { err.textContent = `Nylocas wave times: ${wave.error}`; return; }
     let cd0, total = [], roomBps = KINDS.map(() => null);
     try {
       cd0 = s.cd.map(toTicks);
       const bp1 = (x) => (String(x || '').trim() ? parseBreakpoints(x)[0] : null);
-      if (s.mode === 'rooms') roomBps = [...(nyOn ? [bp1(s.nylo.bp)] : []), ...s.rooms.map(bp1)];
+      if (s.mode === 'rooms') roomBps = KINDS.map((k) => (k === 'nylo' ? bp1(s.nylo.bp) : bp1(s.rooms[ALL_ROOMS.indexOf(k) - 1])));
       else total = String(s.total || '').trim() ? parseBreakpoints(s.total) : [];
     } catch (x) { err.textContent = x.message; return; }
     const doses0 = s.doses.map(Number), lbRings = gp.filter((p) => p.lightbearer).length, hornLimit = gp.filter((p) => p.horn).length;
@@ -420,11 +428,11 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     const roomsCol = how.mode === 'rooms' && how.rooms.some((b) => b != null), RNs = namesR(), R = RNs.length;
     out.innerHTML = `<div class="card"><div class="vz-report"><h3 style="margin-top:0">${results.t}-man Full raid: solver</h3>
       <div class="sub">Each room solved with surges allowed and with none (and re-solved for the best plan's surgers); every surge plan - the rooms each player surges in, any combination within their doses (a later surge waits for the cooldown) - scored from the rooms' own times (${results.plans.toLocaleString()} plans, ${results.nVariants} room setups and surge choices); the best ${ranked.length} played as ${raids.toLocaleString()} whole raids each (the same raids for each), surge cooldowns and doses carried room to room. Breakpoint columns and Finished are of every attempt (a raid that fails anywhere, or finishes slower, counts against them); Verzik success is the raids that got to P3 (P2 down in reds), of the raids that reached Verzik; times (median, top 25% / 10%, fastest) are of the raids that finished, however slow. Each room's button opens its procedure, decision tree and example raids in that room's Solver (* played here without some of that setup's surges - hover for whose).</div>
-      <div class="scroll"><table class="sortlist"><tr><th>#</th><th title="Median total of the raids that finished">Total</th><th title="Of the raids that finished">Top 25%</th><th title="Of the raids that finished">Top 10%</th><th>Fastest</th>${roomsCol ? `<th>Every room at its breakpoint (${how.rooms.map((b) => (b == null ? '-' : fsB(b))).join(' / ')})</th>${how.rooms.map((b, j) => (b == null ? '' : `<th>${RNs[j]} ${fsB(b)} or faster</th>`)).join('')}` : total.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th title="Raids that finished every room, of every attempt">Finished</th><th title="Raids that got to P3 (P2 down in reds), of the raids that reached Verzik">Verzik success</th>${RNs.map((x) => `<th>${x}</th>`).join('')}<th title="Who has a surge planned in each room (doses permitting: a player out of doses doesn't surge)">Surges</th><th>Rooms</th></tr>
+      <div class="scroll"><table class="sortlist"><tr><th>#</th><th title="Median total of the raids that finished">Total</th><th title="Of the raids that finished">Top 25%</th><th title="Of the raids that finished">Top 10%</th><th>Fastest</th>${roomsCol ? `<th>Every room at its breakpoint (${how.rooms.map((b) => (b == null ? '-' : fsB(b))).join(' / ')})</th>${how.rooms.map((b, j) => (b == null ? '' : `<th>${RNs[j]} ${fsB(b)} or faster</th>`)).join('')}` : total.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th title="Raids that finished every room, of every attempt">Finished</th>${kindsR().includes('verzik') ? '<th title="Raids that got to P3 (P2 down in reds), of the raids that reached Verzik">Verzik success</th>' : ''}${RNs.map((x) => `<th>${x}</th>`).join('')}<th title="Who has a surge planned in each room (doses permitting: a player out of doses doesn't surge)">Surges</th><th>Rooms</th></tr>
       ${ranked.slice(0, 10).map((r, ci) => { const v = okOf(r.totals).sort((a, b) => a - b), n = r.totals.length;
         return `<tr${ci === 0 ? ' style="font-weight:700"' : ''}><td>${ci + 1}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.25) - 1)])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>
           ${roomsCol ? `<td>${(r.score[0] * 100).toFixed(1)}%</td>${how.rooms.map((b, j) => (b == null ? '' : `<td>${(r.ends[j].filter((x) => x * 0.6 <= b + 1e-9).length / n * 100).toFixed(1)}%</td>`)).join('')}` : total.map((_, j) => `<td>${(r.score[j] * 100).toFixed(1)}%</td>`).join('')}
-          <td>${(v.length / n * 100).toFixed(1)}%</td><td>${(() => { const reached = r.ends[R - 2].filter((x) => x < 99999).length; return reached ? `${((r.p3 || []).reduce((a, x) => a + x, 0) / reached * 100).toFixed(1)}%` : '-'; })()}</td>${r.ends.map((e) => `<td>${ft(med(e))}</td>`).join('')}<td class="small" style="text-align:left;white-space:nowrap">${surgesOf(r)}</td>
+          <td>${(v.length / n * 100).toFixed(1)}%</td>${(() => { const vi = kindsR().indexOf('verzik'); if (vi < 0) return ''; const reached = vi ? r.ends[vi - 1].filter((x) => x < 99999).length : n; return `<td>${reached ? `${((r.p3 || []).reduce((a, x) => a + x, 0) / reached * 100).toFixed(1)}%` : '-'}</td>`; })()}${r.ends.map((e) => `<td>${ft(med(e))}</td>`).join('')}<td class="small" style="text-align:left;white-space:nowrap">${surgesOf(r)}</td>
           <td style="white-space:nowrap"><button class="${ci === charted ? '' : 'ghost '}sm" data-chart="${ci}" title="Show this combination below: each room's report and procedure, and the charts">${ci === charted ? 'Shown below' : 'Show'}</button></td></tr>`; }).join('')}
       </table></div>
       ${roomsHtml(charted)}
@@ -450,7 +458,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
   async function entriesOf(ci, msg) {
     const r = results.ranked[ci];
     if (!r.entries) {
-      const setup = { ...r.setup, verzik: { cfgs: r.setup.verzik.cfgs } };
+      const setup = r.setup.verzik ? { ...r.setup, verzik: { cfgs: r.setup.verzik.cfgs } } : r.setup;
       r.entries = reportPool().entries(setup, 0, ENTRY_RAIDS, `ent-${results.seed}`, (d) => { msg.textContent = `Playing whole raids for what each player comes into the room with... ${d.toLocaleString()} / ${ENTRY_RAIDS.toLocaleString()}`; })
         .catch((x) => { r.entries = null; throw x; });
     }
@@ -472,7 +480,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     if (kind === 'nylo') return { e, players: r.setup.nylo.players.map((p, k) => ({ ...p, name: names[k], surgeCd: cdK(k), plan: { ...p.plan, surge: !!p.plan.surge && doseK(k) > 0 } })) };
     if (kind === 'sote') return { e, players: r.setup.sote.players.map((p, k) => ({ ...p, name: names[k], surgeCd: cdK(k), surge: !!p.surge && doseK(k) > 0 })) };
     if (kind === 'xarpus') return { e, players: r.setup.xarpus.players.map((p, k) => ({ ...p, name: names[k], surgeCd: e ? e.cd[k] : 0, surge: !!p.surge && (!e || e.doses[k] > 0) })) };
-    return { e, cfgs: (e ? verzikCfgs(r.setup.verzik.cfgs, e.cd, e.doses) : r.setup.verzik.cfgs).map((c, k) => ({ ...c, name: names[k] ?? c.name })) };
+    return { e, cfgs: verzikCfgs(r.setup.verzik.cfgs, names.map((_, k) => cdK(k)), names.map((_, k) => doseK(k))).map((c, k) => ({ ...c, name: names[k] ?? c.name })) };
   }
   /** Show report: the room's standard report (as its Run report gives it), 20,000 raids of this procedure. */
   /** A status line under a boss (looked up each time: the results may have been redrawn since). */

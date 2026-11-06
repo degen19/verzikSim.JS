@@ -16,8 +16,9 @@ import { newXarpusResult, addXarpusRun, addXarpusRaids } from './xarpusreport.js
 
 export const SURGE_CD = 500;
 export const ROOMS = ['sote', 'xarpus', 'verzik'];
-/** The rooms a setup plays, in order (Nylocas first when it has one). */
-export const roomsOf = (setup) => (setup.nylo ? ['nylo', ...ROOMS] : ROOMS);
+/** The rooms a setup plays, in order (any run of them in a row: Nylocas, Sotetseg, Xarpus, Verzik). */
+export const ALL_ROOMS = ['nylo', 'sote', 'xarpus', 'verzik'];
+export const roomsOf = (setup) => ALL_ROOMS.filter((k) => setup[k]);
 /** Nylocas players for a room: their plan's surge only with a dose left; surgeCd carried in. */
 const nyloPlayers = (players, cd, doses) => players.map((p, k) => ({ ...p, surgeCd: cd[k], plan: { ...(p.plan || {}), surge: !!(p.plan && p.plan.surge) && doses[k] > 0 } }));
 
@@ -46,50 +47,49 @@ function verzikCfgs(cfgs, cd, doses) {
  * or not reached), total (null = failed), failAt}.
  */
 export function fullRaid(setup, ctx, i, seed = 'full', acc = null) {
-  const { team } = ctx, rng = new Rng(`${seed}#${i}`);
+  const { team } = ctx, rng = new Rng(`${seed}#${i}`), kinds = roomsOf(setup);
   let cd = ctx.surgeCd.map((x) => Math.max(0, Number(x) || 0)), doses = ctx.doses.map((x) => Math.max(0, Number(x) || 0));
-  const N = setup.nylo ? 1 : 0, ends = roomsOf(setup).map(() => null);
-  // ---- Nylocas (waves + boss)
-  if (N) {
-    const np = nyloPlayers(setup.nylo.players, cd, doses);
-    if (acc) acc.entry[0].push({ cd: [...cd], doses: [...doses] });
-    const rn = runNylo(np, team, rng.fork('nylo'), setup.nylo.opts || {});
-    if (rn.roomEnd == null) return { ends, total: null, failAt: 'nylo' };
-    ends[0] = rn.roomEnd;
-    rn.players.forEach((p, k) => { if (p.surgeAt != null) doses[k]--; cd[k] = cdAfter(cd[k], p.surgeAt, rn.roomEnd); });
+  const ends = kinds.map(() => null);
+  let p3 = false;
+  for (const [j, kind] of kinds.entries()) {
+    if (acc) acc.entry[j].push({ cd: [...cd], doses: [...doses] });
+    if (kind === 'nylo') {                                       // ---- Nylocas (waves + boss)
+      const rn = runNylo(nyloPlayers(setup.nylo.players, cd, doses), team, rng.fork('nylo'), setup.nylo.opts || {});
+      if (rn.roomEnd == null) return { ends, total: null, failAt: 'nylo' };
+      ends[j] = rn.roomEnd;
+      rn.players.forEach((p, k) => { if (p.surgeAt != null) doses[k]--; cd[k] = cdAfter(cd[k], p.surgeAt, rn.roomEnd); });
+    } else if (kind === 'sote') {                                // ---- Sotetseg
+      const sp = setup.sote.players.map((p, k) => ({ ...p, surgeCd: cd[k], surge: !!p.surge && doses[k] > 0 }));
+      const rs = runSote(sp, team, rng.fork('sote'), null, { ...setup.sote.opts, entry: setup.sote.entry });
+      if (acc) addSoteRun(acc.sote, rs, i, sp);
+      if (rs.end == null || !rs.split) return { ends, total: null, failAt: 'sote' };
+      ends[j] = rs.end;
+      rs.players.forEach((p, k) => { if (p.surgeAt != null) doses[k]--; cd[k] = cdAfter(cd[k], p.surgeAt, rs.end); });
+    } else if (kind === 'xarpus') {                              // ---- Xarpus
+      const xp = setup.xarpus.players.map((p, k) => ({ ...p, surgeCd: cd[k], surge: !!p.surge && doses[k] > 0 }));
+      const rx = runXarpus(xp, team, rng.fork('xarpus'), null, setup.xarpus.opts);
+      if (acc) addXarpusRun(acc.xarpus, rx, team);
+      if (rx.end == null) return { ends, total: null, failAt: 'xarpus' };
+      ends[j] = rx.end;
+      rx.players.forEach((p, k) => { if (p.surgeAt != null) doses[k]--; cd[k] = p.surgeCd; });
+    } else {                                                     // ---- Verzik
+      const cfgs = verzikCfgs(setup.verzik.cfgs, cd, doses), vr = rng.fork('verzik');
+      const x = toRedsEnd(cfgs, team, vr), va = acc && acc.verzik;
+      if (va) { va.runs++; if (x.r1 && x.r1.players.some((p) => p.dead)) va.die_p1++; if (x.r2) { va.depth.push(x.r2.hp / x.r2.max_hp * 100); va.reds.push(x.r2.reds_tick); } }
+      if (x.fail || !x.r3.success || (team === 2 && x.r3.players.every((p) => p.dead))) return { ends, total: null, failAt: 'verzik' };
+      p3 = true;
+      const r4 = run_p3({ ...x.r3, pid: x.r2.pid }, cfgs, team, vr.fork('p3'));
+      if (r4.kill == null) return { ends, total: null, failAt: 'verzik', p3 };
+      ends[j] = r4.end;
+      if (va) {
+        const { r1, r2, r3 } = x;
+        va.total.push(r4.end); va.p1.push(r1.end); va.p2.push(r3.kill - r1.end); va.p3.push(r4.end - r3.kill);
+        va.splits.sp1.push(r1.end); va.splits.sproc.push(r2.proc_tick); va.splits.sp2.push(r3.kill); va.splits.sp3.push(r4.end);
+        if (r4.below20) va.p20.push(r4.below20 - (r3.kill + 4));
+      }
+    }
   }
-  // ---- Sotetseg
-  const sp = setup.sote.players.map((p, k) => ({ ...p, surgeCd: cd[k], surge: !!p.surge && doses[k] > 0 }));
-  if (acc) acc.entry[N].push({ cd: [...cd], doses: [...doses] });
-  const rs = runSote(sp, team, rng.fork('sote'), null, { ...setup.sote.opts, entry: setup.sote.entry });
-  if (acc) addSoteRun(acc.sote, rs, i, sp);
-  if (rs.end == null || !rs.split) return { ends, total: null, failAt: 'sote' };
-  ends[N] = rs.end;
-  rs.players.forEach((p, k) => { if (p.surgeAt != null) doses[k]--; cd[k] = cdAfter(cd[k], p.surgeAt, rs.end); });
-  // ---- Xarpus
-  const xp = setup.xarpus.players.map((p, k) => ({ ...p, surgeCd: cd[k], surge: !!p.surge && doses[k] > 0 }));
-  if (acc) acc.entry[N + 1].push({ cd: [...cd], doses: [...doses] });
-  const rx = runXarpus(xp, team, rng.fork('xarpus'), null, setup.xarpus.opts);
-  if (acc) addXarpusRun(acc.xarpus, rx, team);
-  if (rx.end == null) return { ends, total: null, failAt: 'xarpus' };
-  ends[N + 1] = rx.end;
-  rx.players.forEach((p, k) => { if (p.surgeAt != null) doses[k]--; cd[k] = p.surgeCd; });
-  // ---- Verzik
-  const cfgs = verzikCfgs(setup.verzik.cfgs, cd, doses), vr = rng.fork('verzik');
-  if (acc) acc.entry[N + 2].push({ cd: [...cd], doses: [...doses] });
-  const x = toRedsEnd(cfgs, team, vr), va = acc && acc.verzik;
-  if (va) { va.runs++; if (x.r1 && x.r1.players.some((p) => p.dead)) va.die_p1++; if (x.r2) { va.depth.push(x.r2.hp / x.r2.max_hp * 100); va.reds.push(x.r2.reds_tick); } }
-  if (x.fail || !x.r3.success || (team === 2 && x.r3.players.every((p) => p.dead))) return { ends, total: null, failAt: 'verzik' };
-  const r4 = run_p3({ ...x.r3, pid: x.r2.pid }, cfgs, team, vr.fork('p3'));
-  if (r4.kill == null) return { ends, total: null, failAt: 'verzik', p3: true };
-  ends[N + 2] = r4.end;
-  if (va) {
-    const { r1, r2, r3 } = x;
-    va.total.push(r4.end); va.p1.push(r1.end); va.p2.push(r3.kill - r1.end); va.p3.push(r4.end - r3.kill);
-    va.splits.sp1.push(r1.end); va.splits.sproc.push(r2.proc_tick); va.splits.sp2.push(r3.kill); va.splits.sp3.push(r4.end);
-    if (r4.below20) va.p20.push(r4.below20 - (r3.kill + 4));
-  }
-  return { ends, total: ends.reduce((a, x) => a + x, 0), failAt: null, p3: true };
+  return { ends, total: ends.reduce((a, x) => a + x, 0), failAt: null, p3 };
 }
 
 /** Each room's own report, from whole raids of one combination: raids [from, to) played as fullRaid plays them, each
@@ -226,7 +226,7 @@ const cdf = (d, ticks) => {
  *  total breakpoints / every room at its own, or success), then the median total (of the finished). Higher is better.
  *  sx: every room but the last already added together. */
 export function planScore(ds, { mode, total = [], rooms = [], rankBy = 'goal' }, sx = null) {
-  const L = ds.length - 1, ab = sx || ds.slice(1, L).reduce((a, d) => convolve(a, d), ds[0]), v = ds[L];
+  const L = ds.length - 1, ab = sx || (L ? ds.slice(1, L).reduce((a, d) => convolve(a, d), ds[0]) : { lo: 0, p: new Float64Array([1]), ok: 1 }), v = ds[L];
   const F = (tk) => { let s2 = 0; for (let i = 0; i < v.p.length; i++) if (v.p[i]) s2 += v.p[i] * cdf(ab, tk - v.lo - i); return s2; };
   const ok = ab.ok * v.ok;
   let lo = ab.lo + v.lo, hi = ab.lo + ab.p.length + v.lo + v.p.length;
