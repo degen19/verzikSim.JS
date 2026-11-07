@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.37.0 - 2026-11-06
+- `fullraid-ui.js`: exhaustive mode (plans, cached room solves per surgers / cooldowns, bounds with the every-surge-ready Verzik setup played on each plan's cooldowns, dropped list); Min. success %.
+- `engine/fullraid.js`: `forceSurgers`; `verzikCfgs` / `surgersOf` / `withSurgers` know `forceSurge`; `engine/sim.js`: `cfg.forceSurge` (3-5 man: one surge once the cooldown's up and it won't waste spec).
+
 ## v1.36.0 - 2026-11-06
 - `nylo-ui.js`: Optimizer tab (`backupThresholds`, `rangedThresholds`, `pairedChange` / `withThresholds` for the combined total); Solver's combined threshold total; predictions by HP removed from the Solver / settings (a saved `predictFlip` is ignored).
 - `engine/nylosolve.js`: `backupThresholds`, `pairedChange`, `withThresholds`.
