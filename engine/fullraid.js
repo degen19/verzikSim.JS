@@ -31,7 +31,7 @@ function verzikCfgs(cfgs, cd, doses) {
   return cfgs.map((c, k) => {
     const acts = { ...(c.actions || {}) }, pTicks = Object.keys(acts).filter((t) => acts[t] === 'P').map(Number);
     let custom = c.customSurgeTick ?? null;
-    if (doses[k] <= 0) { for (const t of pTicks) delete acts[t]; custom = null; }
+    if (doses[k] <= 0) { for (const t of pTicks) delete acts[t]; custom = null; return { ...c, actions: acts, customSurgeTick: null, forceSurge: false, surgeCdTicks: cd[k] }; }
     else if (cd[k] > 0) {
       const early = pTicks.filter((t) => t < cd[k]);
       if (early.length) { for (const t of early) delete acts[t]; custom = cd[k]; }
@@ -168,16 +168,25 @@ export const fullBetter = (a, b) => { for (let i = 0; i < a.length; i++) { if (a
 
 /** The players with a surge planned in a room setup (Verzik: a P on the chart or a custom surge timing). */
 export function surgersOf(kind, setup) {
-  if (kind === 'verzik') return setup.cfgs.map((c, k) => (Object.values(c.actions || {}).includes('P') || c.customSurgeTick != null ? k : -1)).filter((k) => k >= 0);
+  if (kind === 'verzik') return setup.cfgs.map((c, k) => (Object.values(c.actions || {}).includes('P') || c.customSurgeTick != null || c.forceSurge ? k : -1)).filter((k) => k >= 0);
   if (kind === 'nylo') return setup.players.map((p, k) => (p.plan && p.plan.surge ? k : -1)).filter((k) => k >= 0);
   return setup.players.map((p, k) => (p.surge ? k : -1)).filter((k) => k >= 0);
 }
 /** The setup with only `keep` (player indexes) of its surgers still surging. */
 export function withSurgers(kind, setup, keep) {
   const on = new Set(keep);
-  if (kind === 'verzik') return { ...setup, cfgs: setup.cfgs.map((c, k) => (on.has(k) ? c : { ...c, actions: Object.fromEntries(Object.entries(c.actions || {}).filter(([, a]) => a !== 'P')), customSurgeTick: null })) };
+  if (kind === 'verzik') return { ...setup, cfgs: setup.cfgs.map((c, k) => (on.has(k) ? c : { ...c, actions: Object.fromEntries(Object.entries(c.actions || {}).filter(([, a]) => a !== 'P')), customSurgeTick: null, forceSurge: false })) };
   if (kind === 'nylo') return { ...setup, players: setup.players.map((p, k) => (on.has(k) ? p : { ...p, plan: { ...(p.plan || {}), surge: false } })) };
   return { ...setup, players: setup.players.map((p, k) => (on.has(k) ? p : { ...p, surge: false })) };
+}
+/** The setup with exactly `set` (player indexes) surging: the others' surges taken out, and a surge put in for any in
+ *  the set without one (Nylocas / Sotetseg / Xarpus: their surge on - the room plays it; Verzik: once the cooldown is up
+ *  and it won't waste spec). */
+export function forceSurgers(kind, setup, set) {
+  const s0 = withSurgers(kind, setup, set), on = new Set(set);
+  if (kind === 'verzik') return { ...s0, cfgs: s0.cfgs.map((c, k) => (on.has(k) && !Object.values(c.actions || {}).includes('P') && c.customSurgeTick == null ? { ...c, forceSurge: true } : c)) };
+  if (kind === 'nylo') return { ...s0, players: s0.players.map((p, k) => (on.has(k) ? { ...p, plan: { ...(p.plan || {}), surge: true } } : p)) };
+  return { ...s0, players: s0.players.map((p, k) => (on.has(k) ? { ...p, surge: true } : p)) };
 }
 /** Every subset of a list. */
 export const subsets = (a) => a.reduce((out, x) => out.concat(out.map((s) => [...s, x])), [[]]);

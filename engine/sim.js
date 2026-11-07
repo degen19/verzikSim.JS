@@ -758,6 +758,7 @@ export function run_p1(cfgs, team, rng, log = null) {
     p.last_atk_t = null;
     p.actions = c.actions;
     p.auto_surge_on = team <= 2;           // surge re-use after its cooldown: duos/solos only
+    if (c.forceSurge && team > 2 && !Object.values(p.actions).includes('P') && p.custom_tick == null) { p.auto_surge_on = true; p.surge_left = 1; }   // full raid: a surge planned for them (once its cooldown's up and it won't waste spec)
     if (Object.values(p.actions).includes('P')) p.custom_tick = null;   // a P on the chart takes priority over the custom timing
     // 95% start, a Dawn spec on the chart and no R: no regen before their first spec, then a forced regen the tick after it
     const acts = Object.values(p.actions);
