@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.38.0 - 2026-11-06
+- `nylo-ui.js`: sets (`root().sets`, `cur`, `setOf`, set tabs / copy / clear), `reportMulti` (several sets on the same raids); the old single set becomes set A.
+- `engine/nylo.js`: `TOME_FALLBACK` - melee form at 25% or less: tome specs -> claw specs.
+
 ## v1.37.0 - 2026-11-06
 - `fullraid-ui.js`: exhaustive mode (plans, cached room solves per surgers / cooldowns, bounds with the every-surge-ready Verzik setup played on each plan's cooldowns, dropped list); Min. success %.
 - `engine/fullraid.js`: `forceSurgers`; `verzikCfgs` / `surgersOf` / `withSurgers` know `forceSurge`; `engine/sim.js`: `cfg.forceSurge` (3-5 man: one surge once the cooldown's up and it won't waste spec).

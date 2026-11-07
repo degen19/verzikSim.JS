@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.37.0';
+export const VERSION = '1.38.0';
 export const CHANGES = [
+  { version: '1.38.0', date: '2026-11-06', items: [
+    'Nylocas: sets A / B / C like the other rooms (copy, clear); the Report compares the ticked sets on the same raids - a row each, a line / bars each in the charts, Show raid each. Your settings so far are set A.',
+    'Nylocas: tome fallback - when he\'s melee at 25% of his HP or less, a player\'s scheduled tome specs become claw specs (straight away, if they have claws): no magic form may come, nor time for the buffed autos.',
+  ] },
   { version: '1.37.0', date: '2026-11-06', items: [
     'Full raid: Exhaustive surge plans (slow) - every surge plan (who surges in which room, within their doses; everyone with a dose surges in Verzik, on cooldown after an earlier surge), played literally: each room solved for exactly that plan\'s surgers and the cooldowns they bring (each case solved once). Plans that can\'t win are dropped before their own Verzik solve (and listed with what each could get); the rest are played as whole raids and ranked.',
     'Full raid: Min. success % - plans that finish less often go to the bottom, however fast (risk tolerance).',
