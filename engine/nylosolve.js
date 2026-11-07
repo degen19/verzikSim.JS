@@ -222,3 +222,14 @@ export async function backupThresholds(cfg, gear, run, n, progress = () => {}, s
   }
   return { rows, best };
 }
+
+/** Two setups on the same raids: the change in mean boss time from `base` to `cfg` (ticks; negative is faster) ± the
+ *  95% range. */
+export async function pairedChange(base, cfg, run, n, seed = 'ncomb') {
+  const [a, b] = await run([base, cfg], 0, n, seed);
+  const d = b.totals.map((x, i) => x - a.totals[i]), m = d.reduce((x, y) => x + y, 0) / n;
+  const sd = Math.sqrt(d.reduce((x, y) => x + (y - m) ** 2, 0) / Math.max(1, n - 1));
+  return { d: m, ci: 1.96 * sd / Math.sqrt(n) };
+}
+/** A setup with each player's best thresholds (rangedThresholds rows) in place of theirs. */
+export const withThresholds = (cfg, thr) => ({ ...cfg, players: cfg.players.map((p, k) => { const row = (thr || []).find((r) => r.p === k); if (!row) return p; const rs = {}; for (const x of [1, 2, 3]) if (row.best[x] != null) rs[x] = row.best[x]; return { ...p, rangedStop: rs }; }) });

@@ -2,6 +2,11 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.36.0 - 2026-11-06
+- `nylo-ui.js`: Optimizer tab (`backupThresholds`, `rangedThresholds`, `pairedChange` / `withThresholds` for the combined total); Solver's combined threshold total; predictions by HP removed from the Solver / settings (a saved `predictFlip` is ignored).
+- `engine/nylosolve.js`: `backupThresholds`, `pairedChange`, `withThresholds`.
+- `fullraid-ui.js`: Verzik surge for everyone with a dose; earlier surges only when clearly better (paired, 2 standard errors); Surges column wraps.
+
 ## v1.35.4 - 2026-11-06
 - `raidview.js`: marks with tooltips (`markTip`, also in the tick's tooltip); `engine/nylo.js`: Spawn / Kill / End; `nylo-ui.js`: chart ends on `r.end`.
 

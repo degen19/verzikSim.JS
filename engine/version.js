@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.35.4';
+export const VERSION = '1.36.0';
 export const CHANGES = [
+  { version: '1.36.0', date: '2026-11-06', items: [
+    'Nylocas Optimizer (next to the Solver): your setup as it is - when to backup BGS (who, at which Defence, or not at all) and each player\'s ranged tick fix thresholds, each one change at a time, then all of it played together for the real total.',
+    'Nylocas Solver: the ranged thresholds also played all together for the real total; predictions by HP retired (no real effect) - the default prediction is used.',
+    'Full raid: everyone with a dose surges in Verzik (on cooldown after an earlier surge); a surge in an earlier room is kept only when the plan is clearly better with it (played both ways on the same raids); the Surges column wraps.',
+  ] },
   { version: '1.35.4', date: '2026-11-06', items: [
     'Nylocas raid charts: markers read Spawn, Kill and End - hover the marker (or its tick) for the tick, room time and instance tick; the chart stops on the room\'s last tick.',
   ] },

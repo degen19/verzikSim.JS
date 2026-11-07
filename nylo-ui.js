@@ -6,7 +6,7 @@ import { blankPlayer } from './engine/loadout.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { histogramSvg, cumulativeSvg, chartBox } from './engine/report.js';
 import { runNylo, NYLO_HP, FAST, parseWaveTimes, drawWave, fmtWave } from './engine/nylo.js';
-import { solveNylo, rangedThresholds, predictionThresholds, backupThresholds, predictionText, PRED_FORMS, PRED_DEFAULT, PRED_OTHER, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, better as scoreBetter } from './engine/nylosolve.js';
+import { solveNylo, rangedThresholds, backupThresholds, pairedChange, withThresholds, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, better as scoreBetter } from './engine/nylosolve.js';
 import { NyloPool } from './nylo-solver-pool.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { Rng } from './engine/rng.js';
@@ -38,13 +38,12 @@ export function createNylo(host, { getTeam }) {
       <div data-rstatus class="muted" style="margin-top:8px"></div><div data-rerr class="err"></div><div data-rout style="margin-top:8px"></div>`)}
     ${pane('opt', 'data-opt', `
       <p class="muted small" style="margin-top:8px">Your setup as it is above (specs, surges, gear, Max switches) - and, for your gear and your team's, what changes help against his HP:
-        when to backup BGS (who, at which Defence - or not at all), when each player should stop each ranged tick fix sequence (Twisted bows only below a % of his HP), and what to predict between forms by his HP.
+        when to backup BGS (who, at which Defence - or not at all), and when each player should stop each ranged tick fix sequence (Twisted bows only below a % of his HP).
         Each is played against your setup on the same raids (one change at a time) and kept only when it's clearly faster.</p>
       <div class="row">
         <label>Effort<select data-o="effort"><option value="quick">Quick (800 raids)</option><option value="normal">Normal (1,500)</option><option value="thorough">Thorough (3,000)</option></select></label>
         ${pick()}><input type="checkbox" data-oc="bgs" checked>Backup BGS</label>
         ${pick()}><input type="checkbox" data-oc="thr" checked>Tick fix thresholds</label>
-        ${pick()}><input type="checkbox" data-oc="pred" checked>Predictions by HP</label>
         <button data-oact="run">Optimize</button><button data-oact="stop" class="ghost" disabled>Stop</button>
       </div>
       <div data-ostatus class="muted" style="margin-top:8px"></div><div data-oerr class="err"></div><div data-oout style="margin-top:8px"></div>`)}
@@ -63,8 +62,7 @@ export function createNylo(host, { getTeam }) {
         .map(([k, l]) => `${pick()}><input type="checkbox" data-va="${k}">${l}</label>`).join('')}
         <span class="muted small">Search:</span>${pick()} title="Also swap two players' specs, and move a surge, in one step"><input type="checkbox" data-vs="swaps">Swaps</label>
         ${pick()} title="Also change a player's opener and damage specs together"><input type="checkbox" data-vs="roles">Role changes</label>
-        ${pick()} title="After the search: each player's Twisted-bows-only thresholds for the best setup"><input type="checkbox" data-vs="thr">Ranged thresholds</label>
-        ${pick()} title="After the search: what each player should predict between forms (cross praying), by his HP, for the best setup - kept at the default when changing it isn't clearly faster"><input type="checkbox" data-vs="pred">Predictions by HP</label></div>
+        ${pick()} title="After the search: each player's Twisted-bows-only thresholds for the best setup"><input type="checkbox" data-vs="thr">Ranged thresholds</label></div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>`)}</div>`;
   wireSubtabs(host, 'verzikSim.nyloTabs.v1');
   const cfg = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), sol = host.querySelector('[data-solve]'), opt = host.querySelector('[data-opt]');
@@ -82,7 +80,7 @@ export function createNylo(host, { getTeam }) {
   };
   // room options from the settings: takeoffs, off-prayer vengs (solos: off by default), restore doses (duos / solos)
   const roomOpts = (st) => ({ takeoffs: st.takeoffs !== false, offPrayVeng: st.offPrayVeng ?? team() !== 1, restores: Number(st.restores ?? 8) });
-  const playersNow = (st) => { const gp = gearOf(st.gearSet); return st.players.map((p, k) => ({ name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k), plan: p })); };
+  const playersNow = (st) => { const gp = gearOf(st.gearSet); return st.players.map((p, k) => { const { predictFlip, ...plan } = p; return { name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k), plan }; }); };   // (predictions by HP: retired - the default prediction)
 
   function render() {
     const t = team(), small = host.querySelector('[data-small]'), main = host.querySelector('[data-main]');
@@ -129,16 +127,13 @@ export function createNylo(host, { getTeam }) {
       ${st.wave && st.wave.on ? (() => { const w = parseWaveTimes(st.wave.rows); return `<table class="bt" style="margin-top:4px"><tr><th>Wave time</th><th>Frequency</th><th></th></tr>
         ${st.wave.rows.map((r, j) => `<tr><td><input data-wave="${j}|time" value="${esc(r.time ?? '')}" placeholder="m:ss.s" style="width:80px"></td><td><input data-wave="${j}|freq" value="${esc(r.freq ?? '')}" placeholder="%" style="width:60px"> %</td><td>${st.wave.rows.length > 1 ? `<button class="ghost sm" data-wavedel="${j}">Remove</button>` : ''}</td></tr>`).join('')}</table>
         <button class="ghost sm" data-waveadd style="margin-top:4px">+ Add wave time</button>
-        <div class="small ${w.error ? 'warn' : 'muted'}" style="margin-top:4px">${w.error ? esc(w.error) : `Average wave time ${fmtWave(Math.round(w.mean))} (${(w.mean * 0.6).toFixed(2)}s) - times are a whole tick, 2.4s (4 ticks) apart; frequencies add up to 100%.`}</div>`; })() : ''}
-      <div class="small muted" style="margin-top:6px">Cross praying (they predict his next form: its gear on, the other form's prayers):
-        ${st.players.map((p, k) => `<div>${esc(names[k])}: ${esc(predictionText(p.predictFlip || {}))}${p.specs.includes('tome') ? ' (magic while a tome spec is planned)' : ''}${p.predictFlip && Object.keys(p.predictFlip).length ? ` <button class="ghost sm" data-resetpred="${k}">Default</button>` : ''}</div>`).join('')}</div>`;
+        <div class="small ${w.error ? 'warn' : 'muted'}" style="margin-top:4px">${w.error ? esc(w.error) : `Average wave time ${fmtWave(Math.round(w.mean))} (${(w.mean * 0.6).toFixed(2)}s) - times are a whole tick, 2.4s (4 ticks) apart; frequencies add up to 100%.`}</div>`; })() : ''}`;
   }
   cfg.addEventListener('click', (e) => {
     const st = cur(), d = e.target.dataset;
     if (d.waveadd != null) { st.wave.rows.push({ time: '', freq: '' }); persist(); render(); return; }
     if (d.wavedel != null) { st.wave.rows.splice(Number(d.wavedel), 1); persist(); render(); return; }
-    const k = d.resetpred; if (k == null) return;
-    delete st.players[Number(k)].predictFlip; persist(); render();
+
   });
   cfg.addEventListener('change', (e) => {
     const el = e.target, st = cur();
@@ -256,12 +251,12 @@ export function createNylo(host, { getTeam }) {
   const EFFORT = { quick: { rounds: 4, stages: [[40, 0.15], [150, 3], [600, 1]], finalRaids: 1000, thrRaids: 800 },
     normal: { rounds: 8, stages: [[60, 0.2], [240, 4], [1000, 1]], finalRaids: 2000, thrRaids: 1500 },
     thorough: { rounds: 14, stages: [[100, 0.25], [400, 5], [2000, 1]], finalRaids: 5000, thrRaids: 3000 } };
-  const solState = () => { const r = root(); r.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])), search: { swaps: true, roles: false, thr: true, pred: true } }; return r.solve; };
+  const solState = () => { const r = root(); r.solve ||= { bps: '', effort: 'normal', allow: Object.fromEntries(ALLOW.map((k) => [k, true])), search: { swaps: true, roles: false, thr: true } }; return r.solve; };
   const showSol = () => {
     const v = solState();
     sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="effort"]').value = v.effort;
     for (const k of ALLOW) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
-    for (const k of ['swaps', 'roles', 'thr', 'pred']) sol.querySelector(`[data-vs="${k}"]`).checked = !!v.search[k];
+    for (const k of ['swaps', 'roles', 'thr']) sol.querySelector(`[data-vs="${k}"]`).checked = !!v.search[k];
   };
   sol.addEventListener('change', (e) => {
     const v = solState(), el = e.target;
@@ -280,20 +275,12 @@ export function createNylo(host, { getTeam }) {
         ${[1, 2, 3].map((k) => `<tr><td class="rl">${PLAN_NAMES[k]}</td>${row.plans[k].map((x) => cell(x, row.best[k])).join('')}</tr>`).join('')}</table></div>`).join('')}
       <button class="ghost sm" data-usethr style="margin-top:6px">Use these thresholds in the settings</button>`;
   };
-  const predHtml = (pred, names, whose = 'best setup') => {
-    if (!pred) return '';
-    const cell = (x, best) => `<td style="${x.pct === best ? 'font-weight:700;background:rgba(80,200,120,.15)' : ''}${x.d > x.ci ? ';color:var(--bad,#e66)' : ''}">${x.d >= 0 ? '+' : ''}${x.d.toFixed(2)}<span class="muted" style="font-size:10px"> ±${x.ci.toFixed(2)}</span></td>`;
-    return `<h4 style="margin:12px 0 2px">Cross praying: predictions by his HP (${whose})</h4>
-      <p class="muted small" style="margin:0 0 6px">Change in mean boss time (ticks; negative is faster) if that player predicts the other form below each % of his HP (he's melee: magic instead of ranged · magic: melee instead of ranged · ranged: magic instead of melee) - one player and form at a time, on the same raids, with their Max switches. Bold: their best, when it's clearly faster than the default.</p>
-      ${pred.map((row) => `<div class="small" style="margin-top:6px"><b>${esc(names[row.p])}</b> - ${esc(predictionText(row.best))}</div>
-        <div class="scroll"><table class="bt"><tr><th>He's</th>${STOP_PCTS.map((p) => `<th>&lt; ${p}%</th>`).join('')}</tr>
-        ${PRED_FORMS.map((fm) => `<tr><td class="rl">${fm} (${PRED_DEFAULT[fm]} → ${PRED_OTHER[fm]})</td>${row.forms[fm].map((x) => cell(x, row.best[fm])).join('')}</tr>`).join('')}</table></div>`).join('')}
-      <button class="ghost sm" data-usepred style="margin-top:6px">Use these predictions in the settings</button>`;
-  };
+  /** The recommendations played together against the setup they came from (they don't simply add up: they overlap). */
+  const combHtml = (c, what) => (c ? `<div class="small" style="margin:10px 0 4px;padding:6px 8px;border:1px solid var(--line);border-radius:8px"><b>All together</b> (${esc(what)}): <b>${c.d >= 0 ? '+' : ''}${c.d.toFixed(2)}</b> ticks mean boss time <span class="muted">±${c.ci.toFixed(2)} (${(c.d * 0.6).toFixed(2)}s) - played together on the same raids, against the setup without them. Each player's and sequence's own number below is one change at a time; they overlap, so they don't add up.</span></div>` : '');
   const showResults = () => {
     const out = sol.querySelector('[data-vout]');
     if (!vres || !vres.items.length) { out.innerHTML = ''; return; }
-    const { items, bps, names, thr, pred } = vres, asc = [...bps].sort((a, b) => a - b);
+    const { items, bps, names, thr } = vres, asc = [...bps].sort((a, b) => a - b);
     out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${team()}-man Nylocas: solver</h3>
       <div class="sub">Each played on the same ${items[0].totals.length.toLocaleString()} raids. Boss time: his spawn to the room's end.</div>
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th>Setup</th><th></th></tr>
@@ -303,7 +290,7 @@ export function createNylo(host, { getTeam }) {
           <td class="small" style="text-align:left;font-weight:400">${short}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use</button></td></tr>
           <tr class="sub-row" data-vproc="${i}" hidden><td colspan="${7 + asc.length}" style="text-align:left">${procHtml(r.cfg, names)}${raidBar(r.run, bps)}</td></tr>`; }).join('')}</table></div>
-      ${thrHtml(thr, names)}${predHtml(pred, names)}</div>`;
+      ${combHtml(vres.comb, 'every player\'s thresholds below')}${thrHtml(thr, names)}</div>`;
   };
   sol.addEventListener('click', async (e) => {
     const el = e.target, status = sol.querySelector('[data-vstatus]'), err = sol.querySelector('[data-verr]'), vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
@@ -312,11 +299,6 @@ export function createNylo(host, { getTeam }) {
       const r = vres.items[Number(el.dataset.vuse)], st = cur();
       r.cfg.players.forEach((p, k) => { st.players[k] = { ...st.players[k], ...structuredClone(p) }; });
       st.backup = r.cfg.backup ? { ...r.cfg.backup } : null; persist(); render(); status.textContent = 'Setup copied into the settings.'; return;
-    }
-    if (el.dataset.usepred != null && vres && vres.pred) {
-      const st = cur();
-      for (const row of vres.pred) { const pf = {}; for (const fm of PRED_FORMS) if (row.best[fm] != null) pf[fm] = row.best[fm]; st.players[row.p].predictFlip = pf; }
-      persist(); render(); status.textContent = 'Predictions copied into the settings.'; return;
     }
     if (el.dataset.usethr != null && vres && vres.thr) {
       const st = cur();
@@ -331,7 +313,7 @@ export function createNylo(host, { getTeam }) {
     const t = team(), st = cur(), all = playersNow(st), ef = EFFORT[v.effort] || EFFORT.normal;
     const base = all.map((p) => ({ name: p.name, gear: p.gear })), names = all.map((p) => p.name), gear = all.map((p) => p.gear);
     const opts = roomOpts(st);
-    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: 'gain', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: Number(p.maxSwitches ?? 8), ...(p.predictFlip ? { predictFlip: { ...p.predictFlip } } : {}) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
+    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: 'gain', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: Number(p.maxSwitches ?? 8) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
     const t1 = Date.now(), say = (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };
@@ -340,14 +322,14 @@ export function createNylo(host, { getTeam }) {
       const run = (...args) => me.pool.run(...args);
       const items = await solveNylo({ start, gear, allow: { ...v.allow, ...(t === 1 ? { backup: false } : {}) }, surgeLimit: Number(st.surgeLimit) || 0, swaps: !!v.search.swaps, roles: !!v.search.roles, bps, ...ef, top: 10 }, run, say, () => me.stopped);
       const mk = (cfg) => ({ players: base.map((b, k) => ({ ...b, plan: cfg.players[k] })), opts: { ...opts, plans: { backup: cfg.backup } } });
-      vres = { items: items.map((r) => ({ ...r, run: mk(r.cfg) })), bps, names, thr: null, pred: null }; showResults();
+      vres = { items: items.map((r) => ({ ...r, run: mk(r.cfg) })), bps, names, thr: null }; showResults();
       if (v.search.thr && t > 1 && items.length && !me.stopped) {
         vres.thr = await rangedThresholds(items[0].cfg, gear, run, ef.thrRaids, say, () => me.stopped);
         showResults();
-      }
-      if (v.search.pred && items.length && !me.stopped) {
-        vres.pred = await predictionThresholds(items[0].cfg, run, ef.thrRaids, say, () => me.stopped);
-        showResults();
+        if (vres.thr.some((r) => Object.values(r.best).some((x) => x != null)) && !me.stopped) {
+          say('All the thresholds together'); vres.comb = await pairedChange(items[0].cfg, withThresholds(items[0].cfg, vres.thr), run, ef.thrRaids);
+          showResults();
+        }
       }
       status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
     } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
@@ -368,12 +350,11 @@ export function createNylo(host, { getTeam }) {
       <button class="ghost sm" data-usebgs style="margin-top:6px">Use this in the settings</button>`;
   };
   const showOpt = () => { const out = opt.querySelector('[data-oout]'); if (!ores) { out.innerHTML = ''; return; }
-    out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${team()}-man Nylocas: optimizer</h3><div class="sub">Your setup, ${ores.n.toLocaleString()} raids for each change.</div>${bgsHtml(ores.bgs, ores.names)}${thrHtml(ores.thr, ores.names, 'your setup')}${predHtml(ores.pred, ores.names, 'your setup')}</div>`; };
+    out.innerHTML = `<div class="vz-report"><h3 style="margin-top:0">${team()}-man Nylocas: optimizer</h3><div class="sub">Your setup, ${ores.n.toLocaleString()} raids for each change.</div>${combHtml(ores.comb, ores.combWhat)}${bgsHtml(ores.bgs, ores.names)}${thrHtml(ores.thr, ores.names, 'your setup')}</div>`; };
   opt.addEventListener('click', async (e) => {
     const el = e.target, status = opt.querySelector('[data-ostatus]'), err = opt.querySelector('[data-oerr]'), obtn = (a) => opt.querySelector(`[data-oact="${a}"]`);
     if (el.dataset.usebgs != null && ores && ores.bgs) { const st = cur(); st.backup = ores.bgs.best ? { p: ores.bgs.best.p, at: ores.bgs.best.at } : null; persist(); render(); status.textContent = 'Backup BGS set in the settings.'; return; }
     if (el.dataset.usethr != null && ores && ores.thr) { const st = cur(); for (const row of ores.thr) { const rs = {}; for (const k of [1, 2, 3]) if (row.best[k] != null) rs[k] = row.best[k]; st.players[row.p].rangedStop = rs; } persist(); render(); status.textContent = 'Thresholds set in the settings.'; return; }
-    if (el.dataset.usepred != null && ores && ores.pred) { const st = cur(); for (const row of ores.pred) { const pf = {}; for (const fm of PRED_FORMS) if (row.best[fm] != null) pf[fm] = row.best[fm]; st.players[row.p].predictFlip = pf; } persist(); render(); status.textContent = 'Predictions set in the settings.'; return; }
     const a = el.dataset.oact; if (!a) return;
     if (a === 'stop') { if (ojob) { ojob.stopped = true; if (ojob.pool) ojob.pool.stop(); } return; }
     if (a !== 'run' || ojob) return;
@@ -385,13 +366,22 @@ export function createNylo(host, { getTeam }) {
     ojob = { stopped: false, pool: null }; const me = ojob;
     obtn('run').disabled = true; obtn('stop').disabled = false;
     const t1 = Date.now(), say = (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };
-    ores = { n, names, bgs: null, thr: null, pred: null }; showOpt();
+    ores = { n, names, bgs: null, thr: null }; showOpt();
     try {
       me.pool = new NyloPool(base, t, roomOpts(st));
       const run = (...x) => me.pool.run(...x);
       if (want('bgs') && t > 1 && !me.stopped) { ores.bgs = await backupThresholds(cfgNow, gear, run, n, say, () => me.stopped); showOpt(); }
       if (want('thr') && t > 1 && !me.stopped) { ores.thr = await rangedThresholds(cfgNow, gear, run, n, say, () => me.stopped); showOpt(); }
-      if (want('pred') && !me.stopped) { ores.pred = await predictionThresholds(cfgNow, run, n, say, () => me.stopped); showOpt(); }
+      // everything it recommends, played together against your setup
+      const bb = ores.bgs && ores.bgs.best, anyThr = ores.thr && ores.thr.some((r) => Object.values(r.best).some((x) => x != null));
+      if ((bb || anyThr) && !me.stopped) {
+        say('All the recommendations together');
+        let all = anyThr ? withThresholds(cfgNow, ores.thr) : cfgNow;
+        if (bb) all = { ...all, backup: { p: bb.p, at: bb.at } };
+        ores.comb = await pairedChange(cfgNow, all, run, n);
+        ores.combWhat = [bb ? `backup BGS: ${names[bb.p]} at Defence ${bb.at}+` : '', anyThr ? 'every player\'s thresholds below' : ''].filter(Boolean).join(' + ');
+        showOpt();
+      }
       status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
     } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't optimize: ${x.message}`; }
     finally { if (me.pool) me.pool.stop(); ojob = null; obtn('run').disabled = false; obtn('stop').disabled = true; }
@@ -416,7 +406,7 @@ export function createNylo(host, { getTeam }) {
     } finally { pool.stop(); }
   }
   /** Full raid: show setups (best first) in this tab's Solver results. */
-  const fullRaidShow = (items, bps) => { vres = { items, bps, names: items[0] ? items[0].run.players.map((p) => p.name) : [], thr: null, pred: null }; showResults(); };
+  const fullRaidShow = (items, bps) => { vres = { items, bps, names: items[0] ? items[0].run.players.map((p) => p.name) : [], thr: null }; showResults(); };
   /** Full raid: a setup's procedure (its plan and Show raid) into `el`. */
   const procedure = (el, { cfg, names, run }, bps = []) => { el.innerHTML = `${procHtml(cfg, names)}${raidBar(run, bps)}`; if (!el.dataset.wired) { el.dataset.wired = '1'; el.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b && !host.contains(b)) showRaid(Number(b.dataset.nraid)); }); } };
 
