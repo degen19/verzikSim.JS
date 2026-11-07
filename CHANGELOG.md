@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.38.1 - 2026-11-07
+- `fullraid-ui.js`: dropped plans list - the closest 20.
+
 ## v1.38.0 - 2026-11-06
 - `nylo-ui.js`: sets (`root().sets`, `cur`, `setOf`, set tabs / copy / clear), `reportMulti` (several sets on the same raids); the old single set becomes set A.
 - `engine/nylo.js`: `TOME_FALLBACK` - melee form at 25% or less: tome specs -> claw specs.

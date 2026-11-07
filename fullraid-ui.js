@@ -585,9 +585,10 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       ${results.exhaustive && results.exhaustive.dropped.length ? (() => { const nm = (k) => esc(results.names[k] || `Player ${k + 1}`), RNs = namesR();
         const planText = (pl) => RNs.map((rn, r) => `${rn}: ${pl.map((x, k) => (x.includes(r) ? nm(k) : null)).filter(Boolean).join(', ') || 'nobody'}`).join('<br>');
         const val = (sc, share) => (share ? `${(sc[0] * 100).toFixed(1)}%` : fsec(-sc[0]));
-        return `<details style="margin-top:8px"><summary class="small" style="cursor:pointer">${results.exhaustive.dropped.length} plans dropped before their own Verzik solve (couldn't win) - what each could get</summary>
+        const all = results.exhaustive.dropped, shown = all.slice().sort((a, b) => (fullBetter(a.lo, b.lo) ? -1 : fullBetter(b.lo, a.lo) ? 1 : 0)).slice(0, 20);
+        return `<details style="margin-top:8px"><summary class="small" style="cursor:pointer">${all.length} plans dropped before their own Verzik solve (couldn't win) - ${all.length > 20 ? 'the closest 20, and ' : ''}what each could get</summary>
           <div class="sub" style="margin-top:4px">Each with its rooms before Verzik solved exactly and Verzik's every-surge-ready setup played with its cooldowns (at least this) - up to Verzik with every surge ready (at most this); on ${how.mode === 'rooms' ? 'every room at its breakpoint' : how.rankBy === 'success' ? 'success rate' : how.total.length ? `${fsB([...how.total].sort((a, b) => a - b)[0])} or faster` : 'median total'}.</div>
-          <div class="scroll"><table class="sortlist"><tr><th>Surges</th><th>At least</th><th>At most</th></tr>${results.exhaustive.dropped.map((d) => `<tr><td class="small" style="text-align:left">${planText(d.plan)}</td><td>${val(d.lo, d.share)}</td><td>${val(d.hi, d.share)}</td></tr>`).join('')}</table></div></details>`; })() : ''}
+          <div class="scroll"><table class="sortlist"><tr><th>Surges</th><th>At least</th><th>At most</th></tr>${shown.map((d) => `<tr><td class="small" style="text-align:left">${planText(d.plan)}</td><td>${val(d.lo, d.share)}</td><td>${val(d.hi, d.share)}</td></tr>`).join('')}</table></div></details>`; })() : ''}
       ${roomsHtml(charted)}
       ${chartsHtml(ranked[charted] || ranked[0], charted)}</div></div>`;
   }

@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.38.0';
+export const VERSION = '1.38.1';
 export const CHANGES = [
+  { version: '1.38.1', date: '2026-11-07', items: [
+    'Full raid (exhaustive): the dropped-plans list shows the closest 20 (by what each could at least get) - display only, every plan is still checked.',
+  ] },
   { version: '1.38.0', date: '2026-11-06', items: [
     'Nylocas: sets A / B / C like the other rooms (copy, clear); the Report compares the ticked sets on the same raids - a row each, a line / bars each in the charts, Show raid each. Your settings so far are set A.',
     'Nylocas: tome fallback - when he\'s melee at 25% of his HP or less, a player\'s scheduled tome specs become claw specs (straight away, if they have claws): no magic form may come, nor time for the buffed autos.',
