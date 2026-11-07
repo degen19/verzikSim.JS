@@ -156,10 +156,10 @@ function tomeNums(p, k) {
 /** Their ranged plan for a green form,from how many ticks into it their first attack goes (the form's 2nd tick is 1):
  *  1: 4 blowpipes, Twisted bow · 2: Twisted bow, blowpipe, Twisted bow · 3: 3 blowpipes, Twisted bow · later: Twisted bows.
  *  No blowpipe: Twisted bows. Thrown dragon darts only (no blowpipe / Ascension crossbows): tbow dart tbow from the
- *  3rd tick (k 2), Twisted bows otherwise - three dart hits are worth less than a Twisted bow hit. */
+ *  2nd or 3rd tick (k 1-2), Twisted bows otherwise - three dart hits are worth less than a Twisted bow hit. */
 export function rangedPlan(k, hasBp = true, fastW = null) {
   if (!hasBp) return [];
-  if (fastW === 'Dragon dart') return k === 2 ? ['tb', 'bp', 'tb'] : [];   // darts only: tbow dart tbow from N3, else Twisted bows
+  if (fastW === 'Dragon dart') return k === 1 || k === 2 ? ['tb', 'bp', 'tb'] : [];   // darts only: tbow dart tbow from N2 / N3, else Twisted bows
   return k === 1 ? ['bp', 'bp', 'bp', 'bp', 'tb'] : k === 2 ? ['tb', 'bp', 'tb'] : k === 3 ? ['bp', 'bp', 'bp', 'tb'] : ['tb', 'tb'];
 }
 export const SPEC_REGEN = 50, SURGE = 25, ZCB_SPEC = 75;

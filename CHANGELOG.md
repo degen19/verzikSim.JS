@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.39.2 - 2026-11-07
+- `engine/nylo.js`: `rangedPlan` - darts only: `tb bp tb` from k 1 too.
+
 ## v1.39.1 - 2026-11-07
 - `engine/nylo.js`: `rangedPlan(k, hasBp, fastW)` - darts only: `tb bp tb` from k 2, else Twisted bows.
 
