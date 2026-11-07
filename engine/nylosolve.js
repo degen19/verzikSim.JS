@@ -201,3 +201,24 @@ export function predictionText(flip = {}) {
     return x >= 100 ? `he's ${f}: predict ${PRED_OTHER[f]}` : `he's ${f}: predict ${PRED_DEFAULT[f]}, ${PRED_OTHER[f]} below ${x}% of his HP`;
   }).join(' · ');
 }
+
+/** Backup BGS for a setup: for each player with a Bandos godsword and each Defence (BACKUP_ATS: a BGS while his Defence
+ *  is at or above it, after the opening BGSs), the change in mean boss time against no backup BGS, on the same raids.
+ *  -> {rows: [{p, ats: [{at, d, ci}]}], best: {p, at} | null (only when clearly faster)}. */
+export async function backupThresholds(cfg, gear, run, n, progress = () => {}, stopped = () => false) {
+  const seed = 'nbgs', none = { ...cfg, backup: null }, [base] = await run([none], 0, n, seed), bt = base.totals, rows = [];
+  let best = null;
+  for (let k = 0; k < cfg.players.length && !stopped(); k++) {
+    if (!has(gear[k], 'bgs')) continue;
+    progress(`Backup BGS: P${k + 1}`, k / cfg.players.length);
+    const res = await run(BACKUP_ATS.map((at) => ({ ...cfg, backup: { p: k, at } })), 0, n, seed);
+    const ats = BACKUP_ATS.map((at, i) => {
+      const d = res[i].totals.map((x, r) => x - bt[r]), m = d.reduce((a, b) => a + b, 0) / n;
+      const sd = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, n - 1));
+      return { at, d: m, ci: 1.96 * sd / Math.sqrt(n) };
+    });
+    rows.push({ p: k, ats });
+    for (const x of ats) if (x.d < -x.ci && (!best || x.d < best.d)) best = { p: k, at: x.at, d: x.d };
+  }
+  return { rows, best };
+}

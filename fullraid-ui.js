@@ -389,9 +389,36 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       for (const x of scored) { const k = x.vars.map((v) => variants.indexOf(v)).join(); if (seen.has(k)) continue; seen.add(k); top.push(x); if (top.length >= ef.full) break; }
       say('Full raids')(`the best ${top.length} surge plans as whole raids: ${ef.raids.toLocaleString()} each`);
       const setupOf = (x) => Object.fromEntries(KINDS.map((kind, r) => [kind, kind === 'verzik' ? { cfgs: x.vars[r].setup.cfgs } : x.vars[r].setup]));
-      let res;
-      try { res = await pool.run(top.map(setupOf), 0, ef.raids, seed); } finally { pool.stop(); }
-      const ranked = top.map((x, i) => ({ ...x, setup: setupOf(x), ...res[i], score: fullScore(res[i], how) }))
+      // ---- 6. surges before Verzik only when they clearly help: a plan with some is also played without them (its Verzik
+      // surges kept, then early), on the same raids; it keeps them only if that's clearly better (beyond the noise)
+      const early = (x) => VI > 0 && x.vars.slice(0, VI).some((v) => v.surgers.length);
+      const reducedOf = (x) => ({ ...x, vars: x.vars.map((v, r) => (r < VI && v.surgers.length ? { ...v, setup: withSurgers(v.kind, v.setup, []), surgers: [], dropped: [...v.dropped, ...v.surgers] } : v)), plan: x.plan.map((rs) => rs.filter((r) => r >= VI)) });
+      let res; const resR = [];
+      try {
+        res = await pool.run(top.map(setupOf), 0, ef.raids, seed);
+        const red = top.map((x, i) => (early(x) ? i : -1)).filter((i) => i >= 0);
+        if (red.length && !me.stopped) {
+          say('Full raids')(`surges before Verzik: ${red.length} plan${red.length === 1 ? '' : 's'} played again without them`);
+          const rr = await pool.run(red.map((i) => setupOf(reducedOf(top[i]))), 0, ef.raids, seed);
+          red.forEach((i, j) => { resR[i] = rr[j]; });
+        }
+      } finally { pool.stop(); }
+      /** Is result a clearly better than b, raid for raid? The goal share (fastest total breakpoint / every room at its own;
+       *  success rate), then - when that's level - the time of the raids both finished; by more than 2 standard errors. */
+      const clearly = (a, b) => {
+        const n = a.totals.length, bp = [...how.total].sort((x, y) => x - y)[0];
+        const goal = (r, i) => (how.mode === 'rooms' && how.rooms.some((x) => x != null) ? r.ends.every((e, j) => how.rooms[j] == null || e[i] * 0.6 <= how.rooms[j] + 1e-9)
+          : how.rankBy !== 'success' && bp != null ? r.totals[i] * 0.6 <= bp + 1e-9 : r.totals[i] < 99999) ? 1 : 0;
+        const test = (d) => { const m = d.reduce((x, y) => x + y, 0) / d.length, sd = Math.sqrt(d.reduce((x, y) => x + (y - m) ** 2, 0) / Math.max(1, d.length - 1)); return d.length ? m / (sd / Math.sqrt(d.length) || 1e-9) : 0; };
+        const z1 = test(Array.from({ length: n }, (_, i) => goal(a, i) - goal(b, i)));
+        if (Math.abs(z1) > 2) return z1 > 2;
+        const both = []; for (let i = 0; i < n; i++) if (a.totals[i] < 99999 && b.totals[i] < 99999) both.push(b.totals[i] - a.totals[i]);
+        return test(both) > 2;
+      };
+      const kept = top.map((x, i) => (resR[i] && !clearly(res[i], resR[i]) ? { x: reducedOf(x), r: resR[i] } : { x, r: res[i] }));
+      const seenSet = new Set();
+      const ranked = kept.filter(({ x }) => { const k = JSON.stringify(setupOf(x)); if (seenSet.has(k)) return false; seenSet.add(k); return true; })
+        .map(({ x, r }) => ({ ...x, setup: setupOf(x), ...r, score: fullScore(r, how) }))
         .sort((x, y) => (fullBetter(x.score, y.score) ? -1 : fullBetter(y.score, x.score) ? 1 : 0));
       results = { ranked, vBps, how, t, kinds: KINDS, wave, ctx: { team: t, surgeCd: cd0, doses: doses0 }, seed, names: gp.map((p, k) => p.name || `Player ${k + 1}`), raids: ef.raids, plans: scored.length, nVariants: variants.length }; charted = 0; autoReports(0);
       status.textContent = `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
@@ -430,7 +457,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     const ft = (x) => (x == null ? '-' : fsec(x));
     const roomsCol = how.mode === 'rooms' && how.rooms.some((b) => b != null), RNs = namesR(), R = RNs.length;
     out.innerHTML = `<div class="card"><div class="vz-report"><h3 style="margin-top:0">${results.t}-man Full raid: solver</h3>
-      <div class="sub">Each room solved with surges allowed and with none (and re-solved for the best plan's surgers); every surge plan - the rooms each player surges in, any combination within their doses (a later surge waits for the cooldown) - scored from the rooms' own times (${results.plans.toLocaleString()} plans, ${results.nVariants} room setups and surge choices); the best ${ranked.length} played as ${raids.toLocaleString()} whole raids each (the same raids for each), surge cooldowns and doses carried room to room. Breakpoint columns and Finished are of every attempt (a raid that fails anywhere, or finishes slower, counts against them); Verzik success is the raids that got to P3 (P2 down in reds), of the raids that reached Verzik; times (median, top 25% / 10%, fastest) are of the raids that finished, however slow. Each room's button opens its procedure, decision tree and example raids in that room's Solver (* played here without some of that setup's surges - hover for whose).</div>
+      <div class="sub">Each room solved with surges allowed and with none (and re-solved for the best plan's surgers); every surge plan - the rooms each player surges in, any combination within their doses (a later surge waits for the cooldown) - scored from the rooms' own times (${results.plans.toLocaleString()} plans, ${results.nVariants} room setups and surge choices); the best ${ranked.length} played as ${raids.toLocaleString()} whole raids each (the same raids for each), surge cooldowns and doses carried room to room. Everyone with a dose surges in Verzik; a surge in an earlier room is kept only if the plan is clearly better with it than without it (both played on the same raids). Breakpoint columns and Finished are of every attempt (a raid that fails anywhere, or finishes slower, counts against them); Verzik success is the raids that got to P3 (P2 down in reds), of the raids that reached Verzik; times (median, top 25% / 10%, fastest) are of the raids that finished, however slow. Each room's button opens its procedure, decision tree and example raids in that room's Solver (* played here without some of that setup's surges - hover for whose).</div>
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th title="Median total of the raids that finished">Total</th><th title="Of the raids that finished">Top 25%</th><th title="Of the raids that finished">Top 10%</th><th>Fastest</th>${roomsCol ? `<th>Every room at its breakpoint (${how.rooms.map((b) => (b == null ? '-' : fsB(b))).join(' / ')})</th>${how.rooms.map((b, j) => (b == null ? '' : `<th>${RNs[j]} ${fsB(b)} or faster</th>`)).join('')}` : total.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th title="Raids that finished every room, of every attempt">Finished</th>${kindsR().includes('verzik') ? '<th title="Raids that got to P3 (P2 down in reds), of the raids that reached Verzik">Verzik success</th>' : ''}${RNs.map((x) => `<th>${x}</th>`).join('')}<th title="Who has a surge planned in each room (doses permitting: a player out of doses doesn't surge)">Surges</th><th>Rooms</th></tr>
       ${ranked.slice(0, 10).map((r, ci) => { const v = okOf(r.totals).sort((a, b) => a - b), n = r.totals.length;
         return `<tr${ci === 0 ? ' style="font-weight:700"' : ''}><td>${ci + 1}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.25) - 1)])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>
