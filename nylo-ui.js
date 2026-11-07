@@ -29,6 +29,7 @@ export function createNylo(host, { getTeam }) {
   host.innerHTML = `<div data-small></div><div data-main>${settingsCard('Nylocas settings', '<div data-cfg></div>')}
     ${tabsHtml([['rep', 'Report'], ['opt', 'Optimizer'], ['solve', 'Solver']])}
     ${pane('rep', 'data-rep', `
+      <div data-rsets style="margin-top:10px"></div>
       <div class="row" style="margin-top:10px">
         <label>Raids<input data-r="raids" type="number" min="100" step="1000" style="width:90px"></label>
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
@@ -67,17 +68,26 @@ export function createNylo(host, { getTeam }) {
   wireSubtabs(host, 'verzikSim.nyloTabs.v1');
   const cfg = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]'), sol = host.querySelector('[data-solve]'), opt = host.querySelector('[data-opt]');
 
-  const root = () => { const t = team(); state[t] ||= {}; return state[t]; };
+  const SETS = ['A', 'B', 'C'];
+  // per team: sets A / B / C (each a full setup: gear set, specs, surges, ...), the one being edited (cur), the report / solver
+  const root = () => {
+    const t = team(); state[t] ||= {}; const r = state[t];
+    if (r.set && !r.sets) { r.sets = { A: r.set }; delete r.set; }      // (one set before sets came in: set A)
+    r.sets ||= {}; r.cur ||= 'A'; if (!SETS.includes(r.cur)) r.cur = 'A';
+    return r;
+  };
+  const blankSet = () => ({ gearSet: 'A', surgeLimit: 0, takeoffs: true, backup: null, players: [] });
   const gearOf = (gs) => { const set = gearSet(loadGear(), team(), gs); return set ? playersOf(set, team()) : null; };
   const gearK = (st, k) => { const gp = gearOf(st.gearSet); return (gp && gp[k]) || blankPlayer(k); };
-  const cur = () => {
-    const r = root(), t = team();
-    r.set ||= { gearSet: 'A', surgeLimit: 0, takeoffs: true, backup: null, players: [] };
-    const st = r.set;
+  const fixSet = (st) => {
+    const t = team();
     for (let k = 0; k < t; k++) st.players[k] = { ...defaultPlan(gearK(st, k)), rangedStop: {}, ...(st.players[k] || {}) };
     st.players.length = t;
     return st;
   };
+  const cur = () => { const r = root(); return fixSet(r.sets[r.cur] ||= blankSet()); };
+  const setOf = (k) => { const r = root(); return r.sets[k] ? fixSet(r.sets[k]) : null; };
+  const setLabel = (k) => { const l = String((repState().labels || {})[k] || '').trim(); return l ? `Set ${k}: ${l}` : `Set ${k}`; };
   // room options from the settings: takeoffs, off-prayer vengs (solos: off by default), restore doses (duos / solos)
   const roomOpts = (st) => ({ takeoffs: st.takeoffs !== false, offPrayVeng: st.offPrayVeng ?? team() !== 1, restores: Number(st.restores ?? 8) });
   const playersNow = (st) => { const gp = gearOf(st.gearSet); return st.players.map((p, k) => { const { predictFlip, ...plan } = p; return { name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k), plan }; }); };   // (predictions by HP: retired - the default prediction)
@@ -97,7 +107,11 @@ export function createNylo(host, { getTeam }) {
     if (surgers > Number(st.surgeLimit)) notes.push(`${surgers} players surge, but only ${st.surgeLimit} surge potion${Number(st.surgeLimit) === 1 ? '' : 's'} can be used here.`);
     const opt = (list, v) => list.map(([x, l]) => `<option value="${x}" ${String(x) === String(v) ? 'selected' : ''}>${l}</option>`).join('');
     const stopSel = (k, plan) => `<select data-stop="${k}|${plan}" style="width:150px">${opt([['', 'continue till dead'], ...STOP_PCTS.map((x) => [x, `< ${x}%`])], (st.players[k].rangedStop || {})[plan] ?? '')}</select>`;
-    cfg.innerHTML = `<h3 style="margin-top:0">Nylocas boss <span class="muted small">(${t}-man · ${NYLO_HP[t]} HP)</span></h3>
+    const r0 = root();
+    cfg.innerHTML = `<div class="row wrap" style="gap:6px;align-items:center;margin-bottom:8px"><span class="seg">${SETS.map((k) => `<button data-nset="${k}" class="${k === r0.cur ? 'on' : ''}" title="${r0.sets[k] ? `Set ${k}` : 'Empty - opens a new set'}">Set ${k}${r0.sets[k] ? '' : ' <span class="muted">(empty)</span>'}</button>`).join('')}</span>
+        <span class="muted small" style="margin-left:8px">Copy set ${r0.cur} to</span>${SETS.filter((k) => k !== r0.cur).map((k) => `<button class="ghost sm" data-ncopy="${k}" title="Replace set ${k} with a copy of set ${r0.cur}">Set ${k}</button>`).join('')}
+        <button class="ghost sm" data-nclear title="Set ${r0.cur} back to the defaults">Clear set ${r0.cur}</button><span class="muted small" data-nsetmsg></span></div>
+      <h3 style="margin-top:0">Nylocas boss <span class="muted small">(${t}-man · ${NYLO_HP[t]} HP)</span></h3>
       <p class="muted small">He spawns melee for 9 ticks, then switches every 10 ticks to one of his other two forms; players use the matching style from each form's 2nd tick (scythe / Twisted bow + 2-tick hits / Eye of ayak). Boss time: his spawn (i1) to the room's end (the tick after the first i4 his death animation is done by). Gear comes from the Gear tab.</p>
       <div class="row wrap" style="gap:14px;align-items:end;margin-bottom:8px">
         <label>Gear<select data-s="gearSet">${GEAR_SETS.map((x) => `<option value="${x}" ${x === st.gearSet ? 'selected' : ''}>${esc(gearSetLabel(g, t, x))}${gearSet(g, t, x) ? '' : ' (empty)'}</option>`).join('')}</select></label>
@@ -130,7 +144,10 @@ export function createNylo(host, { getTeam }) {
         <div class="small ${w.error ? 'warn' : 'muted'}" style="margin-top:4px">${w.error ? esc(w.error) : `Average wave time ${fmtWave(Math.round(w.mean))} (${(w.mean * 0.6).toFixed(2)}s) - times are a whole tick, 2.4s (4 ticks) apart; frequencies add up to 100%.`}</div>`; })() : ''}`;
   }
   cfg.addEventListener('click', (e) => {
-    const st = cur(), d = e.target.dataset;
+    const st = cur(), d = e.target.closest('button') ? e.target.closest('button').dataset : e.target.dataset, r = root();
+    if (d.nset) { r.cur = d.nset; r.sets[r.cur] ||= { ...blankSet(), gearSet: st.gearSet }; persist(); refreshAll(); return; }
+    if (d.ncopy) { const k = d.ncopy; r.sets[k] = structuredClone(st); const rp = repState(); if (!rp.sets.includes(k)) rp.sets = SETS.filter((x) => x === k || rp.sets.includes(x)); persist(); refreshAll(); cfg.querySelector('[data-nsetmsg]').textContent = `Copied set ${r.cur} to set ${k}.`; return; }
+    if (d.nclear != null) { r.sets[r.cur] = { ...blankSet(), gearSet: st.gearSet }; persist(); refreshAll(); return; }
     if (d.waveadd != null) { st.wave.rows.push({ time: '', freq: '' }); persist(); render(); return; }
     if (d.wavedel != null) { st.wave.rows.splice(Number(d.wavedel), 1); persist(); render(); return; }
 
@@ -203,46 +220,66 @@ export function createNylo(host, { getTeam }) {
 
   /** A setup's report (n raids): boss time - or room time (waves + boss) when its opts have a waveDist - stats, charts
    *  and Show raid. */
-  async function reportHtml(run, { n = 4000, seed = `n${Date.now()}`, bps = [], prog = () => {}, title = null } = {}) {
-    const wave = run.opts && run.opts.waveDist ? { dist: run.opts.waveDist, mean: run.opts.waveDist.reduce((a, [t, f]) => a + t * f, 0) } : null;
-    const x = { run, bps, seed, n }; flat.push(x);
-    const all = []; const agg = {};
-    for (let i = 0; i < n; i++) {
-      const res = runNylo(run.players, team(), new Rng(`${seed}#${i}`), run.opts);
-      all.push({ i, boss: res.boss, wave: res.wave, total: res.roomEnd, key: String(res.boss) });
-      for (const [k, v] of Object.entries(res.st)) agg[k] = (agg[k] || 0) + v;
-      if (i % 250 === 249) { prog(i + 1); await new Promise((z) => setTimeout(z, 0)); }
+  const reportHtml = (run, o = {}) => reportMulti([{ k: 'A', label: 'Nylocas', run }], o);
+  /** Several setups (sets) on the same raids: each one's stats, the charts with a line / bars each, Show raid each.
+   *  list: [{k, label, run}]. */
+  async function reportMulti(list, { n = 4000, seed = `n${Date.now()}`, bps = [], prog = () => {}, title = null } = {}) {
+    const asc = [...bps].sort((a, b) => a - b), multi = list.length > 1, rows = [];
+    for (const x of list) {
+      const run = x.run, wave = run.opts && run.opts.waveDist ? { dist: run.opts.waveDist, mean: run.opts.waveDist.reduce((a, [t, f]) => a + t * f, 0) } : null;
+      const fx = { run, bps, seed, n }; flat.push(fx);
+      const all = [], agg = {};
+      for (let i = 0; i < n; i++) {
+        const res = runNylo(run.players, team(), new Rng(`${seed}#${i}`), run.opts);
+        all.push({ i, boss: res.boss, wave: res.wave, total: res.roomEnd, key: String(res.boss) });
+        for (const [k, v] of Object.entries(res.st)) agg[k] = (agg[k] || 0) + v;
+        if (i % 250 === 249) { prog(i + 1, x.k); await new Promise((z) => setTimeout(z, 0)); }
+      }
+      fx.all = all;
+      rows.push({ ...x, wave, all, agg, idx: flat.length - 1, s: statsRow(all.map((z) => z.total ?? 99999), bps), sb: wave ? statsRow(all.map((z) => z.boss ?? 99999), []) : null });
     }
-    x.all = all;
-    const s = statsRow(all.map((z) => z.total ?? 99999), bps), sb = wave ? statsRow(all.map((z) => z.boss ?? 99999), []) : null, idx = flat.length - 1, asc = [...bps].sort((a, b) => a - b);
-    const per = (k) => ((agg[k] || 0) / n).toFixed(2);
-    return `<div class="vz-report"><h3 style="margin-top:0">${title || `${team()}-man Nylocas: ${n.toLocaleString()} raids`}</h3>
-      ${wave ? `<div class="small muted" style="margin-bottom:4px">Room time = wave time (average ${fmtWave(Math.round(wave.mean))}) + boss time. Breakpoints are room times.</div>` : ''}
-      <table><tr>${wave ? '<th></th>' : ''}<th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
-      ${sb ? `<tr><td class="rl">Boss time</td><td>${fsec(sb.med)}</td><td>${fsec(sb.q25)}</td><td>${fsec(sb.q10)}</td><td>${fsec(sb.fast)}</td>${asc.map(() => '<td>-</td>').join('')}</tr>` : ''}
-      <tr>${wave ? '<td class="rl">Room time</td>' : ''}<td>${fsec(s.med)}</td><td>${fsec(s.q25)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}</tr></table>
-      <div class="small muted" style="margin-top:6px">Per raid: vengs ${per('veng')} (${per('vengDmg')} damage) · damage taken ${per('taken')} · thralls ${per('thrall')} · takeoffs ${per('takeoffs')} · under him ${per('under')} · Heal Others ${per('heals')} · redemptions ${per('redemptions')} · deaths ${per('deaths')} · wrong predictions ${per('wrong')} (first attack short of their full set ${per('short')})</div>
-      ${(() => { const series = [{ total: all.filter((z) => z.total != null).map((z) => z.total), runs: n }];
-        const what = wave ? 'room time' : 'boss time';
-        return `<h3>How often each ${what} happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, ['Nylocas'], rg).replace('% of successful runs', '% of raids'))}</div>
-      <h3>${wave ? 'Room' : 'Boss'} time this or faster - % of raids</h3><div class="sub">${bps.length ? `Vertical lines are your breakpoints (${what} at that or faster; times are rounded down to a tick).` : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, ['Nylocas'], bps, rg).replace('% of successful runs finished by this time', `% of raids at this ${what} or faster`))}</div>`; })()}
-      <div class="small" style="margin-top:8px" data-nbar="${idx}"><button class="ghost sm" data-nraid="${idx}">Show raid</button> <span class="muted" data-nmsg="${idx}"></span></div><div style="width:0;min-width:100%"><div data-nout="${idx}"></div></div></div>`;
+    const anyWave = rows.some((x) => x.wave), what = anyWave ? 'room time' : 'boss time';
+    const lab = (x) => `<td class="rl" data-setcol="${x.k}" style="color:${multi ? 'var(--c)' : 'inherit'};font-weight:${multi ? 700 : 400}">${esc(x.label)}</td>`;
+    const tr = (x, st, name, bp) => `<tr>${multi ? lab(x) : ''}${anyWave ? `<td class="rl">${name}</td>` : ''}<td>${fsec(st.med)}</td><td>${fsec(st.q25)}</td><td>${fsec(st.q10)}</td><td>${fsec(st.fast)}</td>${bp ? st.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('') : asc.map(() => '<td>-</td>').join('')}</tr>`;
+    const per = (x, k) => ((x.agg[k] || 0) / n).toFixed(2);
+    const series = rows.map((x) => ({ total: x.all.filter((z) => z.total != null).map((z) => z.total), runs: n })), labels = rows.map((x) => x.label);
+    return `<div class="vz-report"><h3 style="margin-top:0">${title || `${team()}-man Nylocas: ${n.toLocaleString()} raids${multi ? ` - ${rows.length} sets compared (the same raids for each)` : ''}`}</h3>
+      ${anyWave ? `<div class="small muted" style="margin-bottom:4px">Room time = wave time (${rows.filter((x) => x.wave).map((x) => `${multi ? `${esc(x.label)}: ` : ''}average ${fmtWave(Math.round(x.wave.mean))}`).join(' · ')}) + boss time. Breakpoints are room times.</div>` : ''}
+      <table><tr>${multi ? '<th>Set</th>' : ''}${anyWave ? '<th></th>' : ''}<th>Median</th><th>Top 25%</th><th>Top 10%</th><th>Fastest</th>${asc.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}</tr>
+      ${rows.map((x) => `${x.sb ? tr(x, x.sb, 'Boss time', false) : ''}${tr(x, x.s, x.wave ? 'Room time' : anyWave ? 'Boss time' : '', true)}`).join('')}</table>
+      ${rows.map((x) => `<div class="small muted" style="margin-top:6px">${multi ? `<b>${esc(x.label)}</b> - ` : ''}Per raid: vengs ${per(x, 'veng')} (${per(x, 'vengDmg')} damage) · damage taken ${per(x, 'taken')} · thralls ${per(x, 'thrall')} · takeoffs ${per(x, 'takeoffs')} · under him ${per(x, 'under')} · Heal Others ${per(x, 'heals')} · redemptions ${per(x, 'redemptions')} · deaths ${per(x, 'deaths')} · wrong predictions ${per(x, 'wrong')} (first attack short of their full set ${per(x, 'short')})</div>`).join('')}
+      <h3>How often each ${what} happens (per second, % of raids)</h3><div class="scroll">${chartBox((rg) => histogramSvg(series, labels, rg).replace('% of successful runs', '% of raids'))}</div>
+      <h3>${anyWave ? 'Room' : 'Boss'} time this or faster - % of raids</h3><div class="sub">${bps.length ? `Vertical lines are your breakpoints (${what} at that or faster; times are rounded down to a tick).` : 'Add breakpoints to mark your target times.'}</div><div class="scroll">${chartBox((rg) => cumulativeSvg(series, labels, bps, rg).replace('% of successful runs finished by this time', `% of raids at this ${what} or faster`))}</div>
+      ${rows.map((x) => `<div class="small" style="margin-top:8px" data-nbar="${x.idx}"><button class="ghost sm" data-nraid="${x.idx}">Show raid${multi ? ` - ${esc(x.label)}` : ''}</button> <span class="muted" data-nmsg="${x.idx}"></span></div><div style="width:0;min-width:100%"><div data-nout="${x.idx}"></div></div>`).join('')}</div>`;
   }
 
   // ---------------------------------------------------------------- report
-  const repState = () => { const r = root(); r.report ||= { raids: 4000, seed: '', bps: '' }; return r.report; };
-  const showRep = () => { const r = repState(); for (const k of ['raids', 'seed', 'bps']) rep.querySelector(`[data-r="${k}"]`).value = r[k]; };
-  rep.addEventListener('change', (e) => { const r = repState(), el = e.target; if (!el.dataset.r) return; r[el.dataset.r] = el.dataset.r === 'raids' ? Number(el.value) || 4000 : el.value; persist(); });
+  const repState = () => { const r = root(); r.report ||= { raids: 4000, seed: '', bps: '' }; r.report.sets ||= ['A']; r.report.labels ||= {}; return r.report; };
+  const showRep = () => {
+    const r = repState(), rs = root();
+    for (const k of ['raids', 'seed', 'bps']) rep.querySelector(`[data-r="${k}"]`).value = r[k];
+    rep.querySelector('[data-rsets]').innerHTML = `<div class="muted small">Sets to run (compared on the same raids)</div><div class="row" style="gap:8px">${SETS.map((k) => `<label class="pick" style="flex-direction:row;gap:4px;align-items:center" data-setcol="${k}"><input type="checkbox" data-nrset="${k}" ${rs.sets[k] ? '' : 'disabled'} ${rs.sets[k] && r.sets.includes(k) ? 'checked' : ''}>${k}</label><input data-nrlabel="${k}" placeholder="Set ${k} label" value="${esc(r.labels[k] || '')}" style="width:110px" ${rs.sets[k] ? '' : 'disabled'}>`).join('')}</div>`;
+  };
+  rep.addEventListener('change', (e) => {
+    const r = repState(), el = e.target;
+    if (el.dataset.nrset) { const k = el.dataset.nrset; r.sets = SETS.filter((x) => (x === k ? el.checked : r.sets.includes(x))); persist(); return; }
+    if (el.dataset.nrlabel) { r.labels[el.dataset.nrlabel] = el.value; persist(); return; }
+    if (!el.dataset.r) return; r[el.dataset.r] = el.dataset.r === 'raids' ? Number(el.value) || 4000 : el.value; persist();
+  });
   rep.addEventListener('click', async (e) => {
     if (e.target.dataset.act !== 'run') return;
     const r = repState(), status = rep.querySelector('[data-rstatus]'), err = rep.querySelector('[data-rerr]'), out = rep.querySelector('[data-rout]');
     err.textContent = '';
     let bps = []; try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
-    const st = cur(), players = playersNow(st), n = Math.max(100, Number(r.raids) || 4000), seed = String(r.seed || '').trim() || `n${Date.now()}`;
-    const wave = st.wave && st.wave.on ? parseWaveTimes(st.wave.rows) : null;
-    if (wave && wave.error) { err.textContent = `Wave time: ${wave.error}`; return; }
-    const run = { players, opts: { ...roomOpts(st), plans: { backup: team() === 1 ? null : st.backup }, ...(wave ? { waveDist: wave.dist } : {}) } };
-    out.innerHTML = await reportHtml(run, { n, seed, bps, prog: (d) => { status.textContent = `Running... ${d} / ${n}`; } });
+    const n = Math.max(100, Number(r.raids) || 4000), seed = String(r.seed || '').trim() || `n${Date.now()}`;
+    const keys = r.sets.filter((k) => setOf(k)); if (!keys.length) { err.textContent = 'Tick at least one set to run.'; return; }
+    const list = [];
+    for (const k of keys) {
+      const st = setOf(k), wave = st.wave && st.wave.on ? parseWaveTimes(st.wave.rows) : null;
+      if (wave && wave.error) { err.textContent = `Set ${k} wave time: ${wave.error}`; return; }
+      list.push({ k, label: setLabel(k), run: { players: playersNow(st), opts: { ...roomOpts(st), plans: { backup: team() === 1 ? null : st.backup }, ...(wave ? { waveDist: wave.dist } : {}) } } });
+    }
+    out.innerHTML = await reportMulti(list, { n, seed, bps, prog: (d, k) => { status.textContent = `Running ${keys.length > 1 ? `set ${k}: ` : ''}${d} / ${n}`; } });
     status.textContent = `Done: ${n.toLocaleString()} raids (seed ${seed}).`;
   });
 

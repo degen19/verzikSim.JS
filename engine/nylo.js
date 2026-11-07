@@ -302,6 +302,7 @@ export function partialSet(p, predStyle, style, weapon, n, d) {
   for (const k of best[0]) cur[k] = full[k];
   return { set: cur, missing: diff.filter((k) => !best[0].includes(k)).map((k) => full[k]).filter(Boolean), full: false };
 }
+export const TOME_FALLBACK = 0.25;   // he's melee at this share of his HP or less: their tome specs become claw specs
 export const SOLO_UNDER = new Set([0, 1, 2, 3, 5, 6, 7, 8]), SOLO_HITS = [4], HEAL_LOOP = 3;
 export const BOSS_MAX = 70, PRAYED_MAX = 17, VENG_CD = 50, HP_MAX = 99, REDEMPTION = 24;
 export const BOSS_ATK = { melee: (400 + 9) * 64, ranged: (350 + 9) * 64, magic: (50 + 9) * (600 + 64) };
@@ -509,7 +510,13 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
         if (e) T.push(e);
       };
       const MEL = 'Attack 118 · Strength 118';
-      const pl = p.pl, nextSpec = pl.specs[0];
+      const pl = p.pl; let nextSpec = pl.specs[0];
+      // tome fallback: he's melee and at 25% or less - no magic form may come, nor time for buffed autos: the tome specs
+      // they have left become claw specs (if they have claws), straight away
+      if (f.form === 'melee' && pl.specs.includes('tome') && hp <= NYLO_HP[team] * TOME_FALLBACK && p.has.has('Dragon claws')) {
+        pl.specs = pl.specs.map((x) => (x === 'tome' ? 'claw' : x)); p.clawNow = true; nextSpec = pl.specs[0];
+        if (T) T.push({ t, i: p.i, supply: `tome specs -> claw specs (he's melee at ${Math.round(hp / NYLO_HP[team] * 100)}% HP)` });
+      }
       const surge = () => { if (pl.surge && !p.surged) { p.surgePending = true; drink(p, t); } };
       // tome tick fixing: a tome hit to come and he's not magic -> blowpipes / bows that leave room for it in a magic form next
       let fix = null;
