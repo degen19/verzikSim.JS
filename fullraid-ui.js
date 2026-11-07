@@ -324,7 +324,10 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       /** Cooldown into room r for a player whose last surge was in room `last`. */
       const lateCdK = (r, last, k) => Math.max(0, atOf[last][k] + SURGE_CD - med.slice(last, r).reduce((a, x) => a + x, 0));
       const lateDist = new Map();                                   // `${kind}|${variant}|${cooldowns}` -> times with those players' cooldown carried in
-      const roomSets = (d) => subsets(KINDS.map((_, r) => r)).filter((x) => x.length <= d).map((x) => x.sort((p, q) => p - q));
+      // with Verzik in the raid, everyone with a dose surges there (on cooldown if they surged earlier - there's no reason
+      // to hold one back); their other doses can go in the rooms before
+      const VI = KINDS.indexOf('verzik');
+      const roomSets = (d) => subsets(KINDS.map((_, r) => r)).filter((x) => x.length <= d && (VI < 0 || d < 1 || x.includes(VI))).map((x) => x.sort((p, q) => p - q));
       const planList = () => { let ps = [[]]; for (let k = 0; k < t; k++) ps = ps.flatMap((pl) => roomSets(doses0[k]).map((r) => [...pl, r])); return ps; };
       const setsOf = (pl) => KINDS.map((_, r) => pl.map((x, k) => (x.includes(r) ? k : -1)).filter((k) => k >= 0));
       /** Room r's carried-in cooldowns for a plan's players who surged in an earlier room ({k: ticks}), or null. */
