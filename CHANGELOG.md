@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.39.1 - 2026-11-07
+- `engine/nylo.js`: `rangedPlan(k, hasBp, fastW)` - darts only: `tb bp tb` from k 2, else Twisted bows.
+
 ## v1.39.0 - 2026-11-07
 - `engine/nylo.js`: `normSwitches` - `plan.maxSwitches` is `{ melee, range, mage }` (a number -> all three); the partial set uses the form's style; wrong prediction + due on N2 (not the spawn) -> attack on N3 (`st.n2late`); `TOME_FALLBACK` 0.20, ZCB specs included.
 - `nylo-ui.js`, `fullraid-ui.js`: three Max switches columns per player.

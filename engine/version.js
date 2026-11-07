@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.39.0';
+export const VERSION = '1.39.1';
 export const CHANGES = [
+  { version: '1.39.1', date: '2026-11-07', items: [
+    'Nylocas: players whose only 2-tick weapon is thrown dragon darts (no blowpipe or Ascension crossbows) play tbow dart tbow in his ranged form when their first attack is on N3, and Twisted bows only otherwise - never the 4 / 3 dart sequences (three dart hits are worth less than a Twisted bow hit).',
+  ] },
   { version: '1.39.0', date: '2026-11-07', items: [
     'Nylocas: Max switches on wrong prediction is set per style - melee, range and mage (a wrong prediction uses the count for the style he turns into). Saved single numbers carry over to all three.',
     'Nylocas: a wrong prediction with their attack due on N2 (his form\'s first attackable tick, not the spawn) pushes it to N3 - nobody can switch and still click in time.',
