@@ -1,6 +1,11 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.38.1';
+export const VERSION = '1.39.0';
 export const CHANGES = [
+  { version: '1.39.0', date: '2026-11-07', items: [
+    'Nylocas: Max switches on wrong prediction is set per style - melee, range and mage (a wrong prediction uses the count for the style he turns into). Saved single numbers carry over to all three.',
+    'Nylocas: a wrong prediction with their attack due on N2 (his form\'s first attackable tick, not the spawn) pushes it to N3 - nobody can switch and still click in time.',
+    'Nylocas: fallback at 20% (was 25%) - when he\'s melee at 20% of his HP or less, scheduled tome and ZCB specs become claw specs (if they have claws).',
+  ] },
   { version: '1.38.1', date: '2026-11-07', items: [
     'Full raid (exhaustive): the dropped-plans list shows the closest 20 (by what each could at least get) - display only, every plan is still checked.',
   ] },

@@ -13,7 +13,7 @@ import { parse_chart } from './engine/sim.js';
 import { CODES, CODE_HELP, isAutoTick, checkRow } from './engine/chartform.js';
 import { gearOfLetter } from './engine/gearstore.js';
 import { runXarpus } from './engine/xarpus.js';
-import { runNylo, parseWaveTimes, fmtWave, MAX_SWITCHES } from './engine/nylo.js';
+import { runNylo, parseWaveTimes, fmtWave, MAX_SWITCHES, normSwitches } from './engine/nylo.js';
 import { Rng } from './engine/rng.js';
 import { ALL_ROOMS, forceSurgers, fullScore, fullBetter, SURGE_CD, surgersOf, withSurgers, subsets, distOf, convolve, planScore } from './engine/fullraid.js';
 import { FullRaidPool } from './fullraid-pool.js';
@@ -86,7 +86,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     s.on ||= { nylo: s.nylo.on ?? true, sote: true, xarpus: true, verzik: true };   // the rooms to run (in a row)
     s.nylo.maxSwitches ||= []; s.nylo.healer ??= null; s.nylo.restores ??= 8; s.nylo.bp ??= '';
     s.nylo.wave ||= [{ time: '', freq: '' }];
-    for (let k = 0; k < t; k++) s.nylo.maxSwitches[k] ??= MAX_SWITCHES;
+    for (let k = 0; k < t; k++) s.nylo.maxSwitches[k] = normSwitches(s.nylo.maxSwitches[k] ?? MAX_SWITCHES);
     s.nylo.maxSwitches.length = t; if (s.nylo.healer != null && (t !== 2 || s.nylo.healer >= t)) s.nylo.healer = null;
     return s;
   };
@@ -116,8 +116,8 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       <div class="frblk"><h4>${tick(s, 'nylo')}</h4>
         ${s.on.nylo ? (() => { const w = parseWaveTimes(s.nylo.wave); return `<div class="muted small">The waves and the boss: room time = wave time + boss time (the waves run down surge cooldowns too). The solver decides the specs and surges; cross praying with each player's Max switches.</div>
         <div class="row wrap" style="gap:14px;align-items:flex-start;margin-top:6px">
-          <div class="scroll"><table class="bt"><tr><th></th><th title="Cross praying: a wrong prediction leaves this many item switches a tick before their first attack in the form (the weapon first)">Max switches on wrong prediction</th>${t === 2 ? '<th title="Feeds HP and Vengs to other player with redemption - requires locator orb and restore doses">Healer Tech</th>' : ''}</tr>
-            ${Array.from({ length: t }, (_, k) => `<tr><td class="rl">${name(k)}</td><td><select data-nyms="${k}">${[1, 2, 3, 4, 5, 6, 7, 8].map((x) => `<option ${x === Number(s.nylo.maxSwitches[k]) ? 'selected' : ''}>${x}</option>`).join('')}</select></td>${t === 2 ? `<td style="text-align:center"><input type="checkbox" data-nyh="${k}" ${s.nylo.healer === k ? 'checked' : ''}></td>` : ''}</tr>`).join('')}</table></div>
+          <div class="scroll"><table class="bt"><tr><th></th>${[['melee', 'melee'], ['range', 'range'], ['mage', 'mage']].map(([, l]) => `<th title="Cross praying: a wrong prediction with him ${l} leaves this many ${l} item switches a tick before their first attack in the form (the weapon first). Due on N2: the attack goes on N3">Max ${l} switches<br>on wrong prediction</th>`).join('')}${t === 2 ? '<th title="Feeds HP and Vengs to other player with redemption - requires locator orb and restore doses">Healer Tech</th>' : ''}</tr>
+            ${Array.from({ length: t }, (_, k) => `<tr><td class="rl">${name(k)}</td>${['melee', 'range', 'mage'].map((y) => `<td><select data-nyms="${k}|${y}">${[1, 2, 3, 4, 5, 6, 7, 8].map((x) => `<option ${x === s.nylo.maxSwitches[k][y] ? 'selected' : ''}>${x}</option>`).join('')}</select></td>`).join('')}${t === 2 ? `<td style="text-align:center"><input type="checkbox" data-nyh="${k}" ${s.nylo.healer === k ? 'checked' : ''}></td>` : ''}</tr>`).join('')}</table></div>
           ${t === 2 ? `<label title="Restore doses for the Healer Tech player's redemption loops">Restore doses<input type="number" min="0" max="40" data-ny="restores" value="${esc(s.nylo.restores)}" style="width:60px"></label>` : ''}
           <div><div class="small" style="font-weight:600">Wave times (required)</div><table class="bt"><tr><th>Wave time</th><th>Frequency</th><th></th></tr>
             ${s.nylo.wave.map((r, j) => `<tr><td><input data-nyw="${j}|time" value="${esc(r.time)}" placeholder="m:ss.s" style="width:80px"></td><td><input data-nyw="${j}|freq" value="${esc(r.freq)}" placeholder="%" style="width:60px"> %</td><td>${s.nylo.wave.length > 1 ? `<button class="ghost sm" data-nywdel="${j}">Remove</button>` : ''}</td></tr>`).join('')}</table>
@@ -166,7 +166,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     const el = e.target, s = st();
     if (el.dataset.on) { s.on[el.dataset.on] = el.checked; save(state); render(); return; }
     if (el.dataset.ny) { const k = el.dataset.ny; s.nylo[k] = k === 'restores' ? Math.max(0, Math.trunc(Number(el.value) || 0)) : el.value; save(state); return; }
-    if (el.dataset.nyms != null) { s.nylo.maxSwitches[Number(el.dataset.nyms)] = Number(el.value); save(state); return; }
+    if (el.dataset.nyms != null) { const [k, y] = el.dataset.nyms.split('|'); s.nylo.maxSwitches[Number(k)] = { ...normSwitches(s.nylo.maxSwitches[Number(k)]), [y]: Number(el.value) }; save(state); return; }
     if (el.dataset.nyh != null) { s.nylo.healer = el.checked ? Number(el.dataset.nyh) : null; save(state); render(); return; }
     if (el.dataset.nyw) { const [j, f] = el.dataset.nyw.split('|'); s.nylo.wave[Number(j)][f] = el.value.trim(); save(state); render(); return; }
     if (el.dataset.f === 'soteNoLate') s.sote.noLateSurge = el.checked;

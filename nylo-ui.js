@@ -5,7 +5,8 @@ import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/
 import { blankPlayer } from './engine/loadout.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { histogramSvg, cumulativeSvg, chartBox } from './engine/report.js';
-import { runNylo, NYLO_HP, FAST, parseWaveTimes, drawWave, fmtWave } from './engine/nylo.js';
+import { runNylo, NYLO_HP, FAST, parseWaveTimes, drawWave, fmtWave, normSwitches } from './engine/nylo.js';
+const SW_STYLES = [['melee', 'Melee'], ['range', 'Range'], ['mage', 'Mage']];
 import { solveNylo, rangedThresholds, backupThresholds, pairedChange, withThresholds, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, better as scoreBetter } from './engine/nylosolve.js';
 import { NyloPool } from './nylo-solver-pool.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
@@ -126,7 +127,7 @@ export function createNylo(host, { getTeam }) {
       ${notes.map((x) => `<div class="warn small" style="margin-bottom:4px">${esc(x)}</div>`).join('')}
       <div class="scroll"><table class="bt"><tr><th></th><th title="95: their first regen comes the tick after their first spec">Start spec</th><th title="+25% straight after their first spec">Surge</th>
         <th title="Their first attack (his melee form) - a halberd opener goes on their second, after a scythe">Opening spec</th><th title="After their opener, in order, each when his form allows: claws / halberd (melee), tome (magic), ZCB (in place of a Twisted bow, ranged). Never their first attack">Second spec</th>
-        <th title="Cross praying: between forms they wear the gear of the form they predict (he's magic or melee -> ranged; ranged -> melee; a tome spec planned -> magic) and pray for the other. Guessed wrong: this many item switches a tick before their first attack (the weapon first, then what adds the most damage)">Max switches on<br>wrong prediction</th>
+        ${SW_STYLES.map(([, l]) => `<th title="Cross praying: between forms they wear the gear of the form they predict (he's magic or melee -> ranged; ranged -> melee; a tome spec planned -> magic) and pray for the other. Guessed wrong and he's ${l.toLowerCase()}: this many ${l.toLowerCase()} item switches a tick before their first attack (the weapon first, then what adds the most damage). Due on N2: the attack goes on N3">Max ${l.toLowerCase()} switches<br>on wrong prediction</th>`).join('')}
         ${t === 2 ? '<th title="Feeds HP and Vengs to other player with redemption - requires locator orb and restore doses">Healer Tech</th>' : ''}
         ${t === 1 ? '' : [1, 2, 3].map((k) => `<th title="Below this % of his HP they stop this green-form sequence and play Twisted bows only (bp: their 2-tick hit - blowpipe, crossbows or darts). Which sequence depends on their first attack in the form: its 2nd tick 4bp tbow, 3rd tbow bp tbow, 4th 3bp tbow">Stop sequence at HP:<br>${PLAN_NAMES[k]}</th>`).join('')}</tr>
       ${st.players.map((p, k) => { const gk = gearK(st, k); return `<tr><td class="rl">${esc(names[k])}</td>
@@ -134,7 +135,7 @@ export function createNylo(host, { getTeam }) {
         <td style="text-align:center"><input type="checkbox" data-p="${k}|surge" ${p.surge ? 'checked' : ''}></td>
         <td><select data-p="${k}|open">${OPENS.map(([v, l]) => `<option value="${v}" ${v === p.open ? 'selected' : ''} ${canOpen(gk, v) ? '' : 'disabled'}>${l}</option>`).join('')}</select></td>
         <td><select data-p="${k}|specs" style="width:150px">${SEQS.map((s) => `<option value="${seqKey(s)}" ${seqKey(s) === seqKey(p.specs) ? 'selected' : ''} ${canSeq(gk, s) && !(t === 1 && s.includes('tome')) ? '' : 'disabled'}>${seqName(s)}</option>`).join('')}</select></td>
-        <td><select data-p="${k}|maxSwitches">${opt([1, 2, 3, 4, 5, 6, 7, 8].map((x) => [x, x]), p.maxSwitches ?? 8)}</select></td>
+        ${SW_STYLES.map(([y]) => `<td><select data-p="${k}|maxSwitches.${y}">${opt([1, 2, 3, 4, 5, 6, 7, 8].map((x) => [x, x]), normSwitches(p.maxSwitches)[y])}</select></td>`).join('')}
         ${t === 2 ? `<td style="text-align:center"><input type="checkbox" data-p="${k}|healer" ${p.healer ? 'checked' : ''}></td>` : ''}
         ${t === 1 ? '' : `<td>${stopSel(k, 1)}</td><td>${stopSel(k, 2)}</td><td>${stopSel(k, 3)}</td>`}</tr>`; }).join('')}</table></div>
       <div style="margin-top:10px">${pick()} title="Add the Nylocas waves before the boss: room time = wave time + boss time (the Report's numbers and charts). In a full raid it also runs down surge cooldowns from the rooms before"><input type="checkbox" data-s="waveOn" ${st.wave && st.wave.on ? 'checked' : ''}>Include wave time</label></div>
@@ -167,7 +168,8 @@ export function createNylo(host, { getTeam }) {
     } else if (el.dataset.p) {
       const [k, f] = el.dataset.p.split('|'), p = st.players[Number(k)];
       if (f === 'specs') p.specs = el.value === 'none' ? [] : el.value.split('+');
-      else if (f === 'startSpec' || f === 'maxSwitches') p[f] = Number(el.value);
+      else if (f === 'startSpec') p[f] = Number(el.value);
+      else if (f.startsWith('maxSwitches.')) p.maxSwitches = { ...normSwitches(p.maxSwitches), [f.slice(12)]: Number(el.value) };
       else if (f === 'healer') { st.players.forEach((q) => { q.healer = false; }); p.healer = el.checked; }   // one Healer Tech at most
       else if (el.type === 'checkbox') p[f] = el.checked;
       else p[f] = el.value;
@@ -212,8 +214,8 @@ export function createNylo(host, { getTeam }) {
   host.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b) showRaid(Number(b.dataset.nraid)); });
 
   /** A setup laid out. */
-  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Max switches</th>${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
-    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${p.maxSwitches ?? 8}</td>${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
+  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Max switches (melee / range / mage)</th>${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
+    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${(({ melee, range, mage }) => `${melee} / ${range} / ${mage}`)(normSwitches(p.maxSwitches))}</td>${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
     <div class="small">Backup BGS: ${c.backup ? `${esc(names[c.backup.p])} while his Defence is ${c.backup.at}+` : 'none'}</div>`;
   const statsRow = (totals, bps) => { const v = totals.slice().sort((a, b) => a - b), n = v.length, asc = [...bps].sort((a, b) => a - b);
     return { mean: v.reduce((a, b) => a + b, 0) / n, med: v[n >> 1], q10: v[Math.max(0, Math.floor(n * 0.1) - 1)], q25: v[Math.max(0, Math.floor(n * 0.25) - 1)], fast: v[0], bp: asc.map((b) => v.filter((x) => x * 0.6 <= b + 1e-9).length / n) }; };
@@ -350,7 +352,7 @@ export function createNylo(host, { getTeam }) {
     const t = team(), st = cur(), all = playersNow(st), ef = EFFORT[v.effort] || EFFORT.normal;
     const base = all.map((p) => ({ name: p.name, gear: p.gear })), names = all.map((p) => p.name), gear = all.map((p) => p.gear);
     const opts = roomOpts(st);
-    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: 'gain', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: Number(p.maxSwitches ?? 8) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
+    const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: 'gain', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: normSwitches(p.maxSwitches) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
     const t1 = Date.now(), say = (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };
@@ -432,7 +434,7 @@ export function createNylo(host, { getTeam }) {
     const base = Array.from({ length: t }, (_, k) => { const g = (gp && gp[k]) || blankPlayer(k); return { name: g.name || `Player ${k + 1}`, gear: g, surgeCd: surgeCd[k] || 0 }; });
     const names = base.map((b) => b.name), gear = base.map((b) => b.gear);
     const opts = { takeoffs: true, offPrayVeng: true, restores: Number(restores) || 0, waveDist };
-    const extra = (k) => ({ maxSwitches: Number(maxSwitches[k] ?? 8) || 8, healer: t === 2 && healer === k });
+    const extra = (k) => ({ maxSwitches: normSwitches(maxSwitches[k]), healer: t === 2 && healer === k });
     const start = { players: gear.map((g, k) => ({ ...defaultPlan(g), surge: false, ...extra(k) })), backup: null };
     const pool = new NyloPool(base, t, opts); onPool(pool);
     try {

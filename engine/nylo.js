@@ -176,7 +176,7 @@ export const TEST_PLAN = [
 export const NEEDS = { bgs: 'Bandos godsword', claw: 'Dragon claws', halb: 'Crystal halberd', tome: "Zorya's tome", zcb: 'Zaryte crossbow' };
 export function normPlan(pl, has, team = 4) {
   const out = { open: 'none', specs: [], clawMode: 'asap', startSpec: 100, surge: false, tomeTickFix: true, healer: false, maxSwitches: MAX_SWITCHES, ...pl };
-  out.maxSwitches = Math.max(1, Math.min(MAX_SWITCHES, Number(out.maxSwitches) || MAX_SWITCHES));
+  out.maxSwitches = normSwitches(out.maxSwitches);
   out.specs = (out.specs || []).filter((x) => has.has(NEEDS[x]) && !(team === 1 && x === 'tome'));   // solos: no tome (only ticks 5 and 10)
   if (team !== 2) out.healer = false;
   if (out.open !== 'none' && !has.has(NEEDS[out.open])) out.open = 'none';
@@ -255,10 +255,17 @@ function alignAct(t, f, ev, target) {
 //   redemption (+24) and a restore, while restore doses last.
 // Cross praying: nobody knows his next form until it shows. Between forms they switch to the gear of the form they predict
 //   and pray for the other one (his attack and their offensive prayer): right, they only flick prayers; wrong, their prayers
-//   are already right and they get Max switches (plan.maxSwitches, 1-8) a tick before their first attack in the form -
+//   are already right and they get Max switches (plan.maxSwitches[style of his form], 1-8) a tick before their first attack in the form -
 //   the weapon first, then the items that add the most to that attack together (full void counts as a set). The rest of the form, their full set.
 //   Prediction: he's magic or melee -> ranged (the tick fixes); ranged -> melee; a tome spec planned (or buffed autos left) -> magic.
 export const MAX_SWITCHES = 8;
+/** plan.maxSwitches: { melee, range, mage } - how many switches they get into that style's gear on a wrong prediction
+ *  (1-8 each). A plain number (older plans) is used for all three. */
+export function normSwitches(v) {
+  const c = (x) => Math.max(1, Math.min(MAX_SWITCHES, Number(x) || MAX_SWITCHES));
+  if (v == null || typeof v !== 'object') return { melee: c(v), range: c(v), mage: c(v) };
+  return { melee: c(v.melee), range: c(v.range), mage: c(v.mage) };
+}
 const STYLE = { melee: 'melee', ranged: 'range', magic: 'mage' };
 const BASE_WEAPON = { melee: 'Scythe of vitur', range: 'Twisted bow', mage: 'Eye of ayak' };
 //   plan.predictFlip {form: pct}: below pct of his HP, from that form they predict the other one instead.
@@ -302,7 +309,7 @@ export function partialSet(p, predStyle, style, weapon, n, d) {
   for (const k of best[0]) cur[k] = full[k];
   return { set: cur, missing: diff.filter((k) => !best[0].includes(k)).map((k) => full[k]).filter(Boolean), full: false };
 }
-export const TOME_FALLBACK = 0.25;   // he's melee at this share of his HP or less: their tome specs become claw specs
+export const TOME_FALLBACK = 0.20;   // he's melee at this share of his HP or less: their tome / ZCB specs become claw specs
 export const SOLO_UNDER = new Set([0, 1, 2, 3, 5, 6, 7, 8]), SOLO_HITS = [4], HEAL_LOOP = 3;
 export const BOSS_MAX = 70, PRAYED_MAX = 17, VENG_CD = 50, HP_MAX = 99, REDEMPTION = 24;
 export const BOSS_ATK = { melee: (400 + 9) * 64, ranged: (350 + 9) * 64, magic: (50 + 9) * (600 + 64) };
@@ -489,8 +496,15 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       const under = (solo && f.start !== spawn) || (p.underForm === f.start && f.form !== 'melee');
       const base = { t, i: p.i, target: `Nylocas Vasilias (${f.form}) - Defence ${def}` };
       p.ovr = null; let ovrNote = null;
+      // a wrong prediction and due on N2 (his form's first attackable tick, not the spawn): nobody can switch and still
+      // click in time - the attack goes on N3
+      if (p.mis === f.start && !p.misUsed && f.start !== spawn && t - f.start === FIRST_ATTACK_OFFSET) {
+        p.next = t + 1; st.n2late = (st.n2late || 0) + 1;
+        if (T) T.push({ t, i: p.i, supply: `predicted ${p.pred} - switching: attack pushed N2 -> N3` });
+        continue;
+      }
       if (p.mis === f.start && !p.misUsed) {                     // a wrong prediction: their first attack on Max switches
-        const n = p.pl.maxSwitches * (t - f.start), ps0 = STYLE[p.pred], memo = new Map();
+        const n = p.pl.maxSwitches[STYLE[f.form]] * (t - f.start), ps0 = STYLE[p.pred], memo = new Map();
         p.ovr = (style, weapon) => {
           if (!memo.has(weapon)) { const r = partialSet(p, ps0, style, weapon, n, def); memo.set(weapon, r); if (!ovrNote) ovrNote = r; }
           return memo.get(weapon).set;
@@ -505,17 +519,18 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
         if (p.ovr) {
           p.ovr = null; p.misUsed = true;
           if (ovrNote && !ovrNote.full) st.short = (st.short || 0) + 1;
-          if (e) e.what += ` (predicted ${p.pred}: ${p.pl.maxSwitches * (t - f.start)} switch${p.pl.maxSwitches * (t - f.start) === 1 ? '' : 'es'}${ovrNote ? (ovrNote.full ? ' - full set' : ` - not on: ${ovrNote.missing.join(', ')}`) : ''})`;
+          if (e) e.what += ` (predicted ${p.pred}: ${p.pl.maxSwitches[STYLE[f.form]] * (t - f.start)} ${STYLE[f.form]} switch${p.pl.maxSwitches[STYLE[f.form]] * (t - f.start) === 1 ? '' : 'es'}${ovrNote ? (ovrNote.full ? ' - full set' : ` - not on: ${ovrNote.missing.join(', ')}`) : ''})`;
         }
         if (e) T.push(e);
       };
       const MEL = 'Attack 118 · Strength 118';
       const pl = p.pl; let nextSpec = pl.specs[0];
-      // tome fallback: he's melee and at 25% or less - no magic form may come, nor time for buffed autos: the tome specs
-      // they have left become claw specs (if they have claws), straight away
-      if (f.form === 'melee' && pl.specs.includes('tome') && hp <= NYLO_HP[team] * TOME_FALLBACK && p.has.has('Dragon claws')) {
-        pl.specs = pl.specs.map((x) => (x === 'tome' ? 'claw' : x)); p.clawNow = true; nextSpec = pl.specs[0];
-        if (T) T.push({ t, i: p.i, supply: `tome specs -> claw specs (he's melee at ${Math.round(hp / NYLO_HP[team] * 100)}% HP)` });
+      // tome / ZCB fallback: he's melee and at 20% or less - no magic or ranged form may come in time: the tome and ZCB
+      // specs they have left become claw specs (if they have claws), straight away
+      if (f.form === 'melee' && pl.specs.some((x) => x === 'tome' || x === 'zcb') && hp <= NYLO_HP[team] * TOME_FALLBACK && p.has.has('Dragon claws')) {
+        const was = [...new Set(pl.specs.filter((x) => x === 'tome' || x === 'zcb'))].map((x) => (x === 'tome' ? 'tome' : 'ZCB')).join(' / ');
+        pl.specs = pl.specs.map((x) => (x === 'tome' || x === 'zcb' ? 'claw' : x)); p.clawNow = true; nextSpec = pl.specs[0];
+        if (T) T.push({ t, i: p.i, supply: `${was} specs -> claw specs (he's melee at ${Math.round(hp / NYLO_HP[team] * 100)}% HP)` });
       }
       const surge = () => { if (pl.surge && !p.surged) { p.surgePending = true; drink(p, t); } };
       // tome tick fixing: a tome hit to come and he's not magic -> blowpipes / bows that leave room for it in a magic form next
