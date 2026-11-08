@@ -3,6 +3,7 @@ export const VERSION = '1.41.1';
 export const CHANGES = [
   { version: '1.41.1', date: '2026-11-08', items: [
     'Full raid solver, Use my P1 chart: when a player\'s chart needs their surge (a P on it, or Dawn specs / spec transfers they can\'t afford without one), surge plans that use it in an earlier room and leave it on cooldown then are left out - so their chart specs go when scheduled. The results say which players\' charts need a surge, by when, and how many plans were left out.',
+    'Full raid solver, Use my P1 chart: a P on the chart is also checked for how late the surge could go without skipping any of the player\'s chart specs - that later tick is their deadline, and Verzik is also solved from your chart with those surges moved there (it keeps whichever plays better).',
     'Full raid solver, normal search: a Verzik setup whose solve planned fewer surges than the plan has (e.g. a P1 chart with no P on it) is also tried with everyone\'s surge put in - before, every plan could be skipped and the run end with no results. No results now says so.',
   ] },
   { version: '1.41.0', date: '2026-11-07', items: [

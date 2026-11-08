@@ -536,30 +536,55 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     }
     return { cfgs, seeds, gp, shadowOwners };
   }
-  /** Use my P1 chart: when each player's chart needs their surge (Verzik room ticks), else null. A P on their chart:
-   *  that tick. Otherwise P1 is played with their surge unavailable (everyone else's as normal): the first tick one of
-   *  their chart's specs (a Dawn spec, a spec transfer) is skipped for want of spec - the earliest over 40 raids. */
+  /** First tick (P1, earliest over 40 raids) a player's chart spec (a Dawn spec, a spec transfer) is skipped for want of
+   *  spec, with cfg as given; null: none is. */
+  const firstSkip = (cfg, k) => {
+    let need = null;
+    for (let i = 0; i < 40; i++) {
+      const res = run_p1(cfg, team, new Rng(`need#${k}#${i}`)), nm = res.players[k].name;
+      for (const f of res.flags || []) {
+        const m = /^t(\d+): (.+?) (Dawn spec with only|ST.* needs 100% spec)/.exec(f);
+        if (m && m[2] === nm) { const x = Number(m[1]); if (need == null || x < need) need = x; break; }
+      }
+    }
+    return need;
+  };
+  /** Each player's surge in a P1 chart: {chartAt: their P's tick (null: no P), latest: the latest tick they can drink it
+   *  without any of their chart's specs being skipped (null: their chart never needs it in P1)}. Their surge held back
+   *  (everyone else's as normal): the first skipped spec F; then a surge at a custom tick from F - 2 down to their P
+   *  (no P: tick 1), the first that skips none of their specs. */
+  function chartSurges(cfg) {
+    return cfg.map((c, k) => {
+      const pT = Object.entries(c.actions || {}).filter(([, a]) => a === 'P').map(([x]) => Number(x)), chartAt = pT.length ? Math.min(...pT) : null;
+      const noP = (q) => ({ ...q, actions: Object.fromEntries(Object.entries(q.actions || {}).filter(([, a]) => a !== 'P')) });
+      const others = cfg.map((q, j) => (j === k ? q : { ...q, surgeCdTicks: 0, forceSurge: true }));
+      const F = firstSkip(others.map((q, j) => (j === k ? { ...noP(q), surgeCdTicks: 99999, customSurgeTick: null, forceSurge: false } : q)), k);
+      if (F == null) return { chartAt, latest: null };
+      const lo = chartAt ?? 1;
+      for (let T = F - 2; T > lo; T--) {
+        const test = others.map((q, j) => (j === k ? { ...noP(q), surgeCdTicks: 0, customSurgeTick: T, forceSurge: false } : q));
+        if (firstSkip(test, k) == null) return { chartAt, latest: T };
+      }
+      return { chartAt, latest: lo };   // no later tick works: their P (no P: as early as they can)
+    });
+  }
+  /** Use my P1 chart: the latest tick each player's surge has to be up by (Verzik room ticks), else null. */
   async function chartSurgeNeeds({ gearSet: gs, supplies = {}, chartSet = null, chart = null }) {
     const { seeds } = await fullCfgs({ gearSet: gs, supplies, chartSet, chart });
     if (!seeds.length) return null;
-    const cfg = seeds[0].cfg;
-    return cfg.map((c, k) => {
-      const pT = Object.entries(c.actions || {}).filter(([, a]) => a === 'P').map(([x]) => Number(x));
-      if (pT.length) return Math.min(...pT);
-      const test = cfg.map((q, j) => (j === k ? { ...q, surgeCdTicks: 99999, customSurgeTick: null, forceSurge: false } : { ...q, surgeCdTicks: 0, forceSurge: true }));
-      let need = null;
-      for (let i = 0; i < 40; i++) {
-        const res = run_p1(test, team, new Rng(`need#${k}#${i}`)), nm = res.players[k].name;
-        for (const f of res.flags || []) {
-          const m = /^t(\d+): (.+?) (Dawn spec with only|ST.* needs 100% spec)/.exec(f);
-          if (m && m[2] === nm) { const x = Number(m[1]); if (need == null || x < need) need = x; break; }
-        }
-      }
-      return need;
-    });
+    return chartSurges(seeds[0].cfg).map((x) => x.latest);
   }
   async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, hornOwners = null, supplies = {}, chartSet = null, chart = null, bps = [], effort = 'standard', surgeCd = [], say = () => {}, stopped = () => false, onPool = () => {} }) {
     const { cfgs, seeds, gp, shadowOwners } = await fullCfgs({ gearSet: gs, supplies, chartSet, chart, surgeCd });
+    // your chart, and (when it moves any) your chart with its P surges as late as its specs allow: the solver keeps the better
+    if (seeds.length) {
+      const sg = chartSurges(seeds[0].cfg.map((c) => ({ ...c, surgeCdTicks: 0 })));
+      if (sg.some((x) => x.chartAt != null && x.latest !== x.chartAt)) {
+        const cfg = seeds[0].cfg.map((c, k) => (sg[k].chartAt == null || sg[k].latest === sg[k].chartAt ? c
+          : { ...c, actions: Object.fromEntries(Object.entries(c.actions || {}).filter(([, a]) => a !== 'P')), customSurgeTick: sg[k].latest, ...(sg[k].latest == null ? { forceSurge: true } : {}) }));   // not needed in P1: once it won't waste spec
+        seeds.push({ cfg, label: `${seeds[0].label}, surges late (${sg.map((x, k) => (x.chartAt != null && x.latest !== x.chartAt ? `P${k + 1} t${x.chartAt} -> ${x.latest == null ? 'when it won\'t waste spec' : `t${x.latest}`}` : null)).filter(Boolean).join(', ')})` });
+      }
+    }
     const p = new SolverPool(); onPool(p);
     const timer = setInterval(() => { if (stopped()) p.stop(); }, 300);
     try {

@@ -3,7 +3,7 @@
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
 ## v1.41.1 - 2026-11-08
-- `solver-ui.js`: `fullCfgs` (split from `fullRaidSolve`), `chartSurgeNeeds` (a P's tick, else P1 played 40 times with the player's surge held back - the first skipped Dawn spec / spec transfer). `fullraid-ui.js`: `chartOk` - exhaustive plans checked after their rooms before Verzik are solved, normal-search plans by the median cooldown carried (`CHART_MARGIN` 5 ticks); an error when a chart needs a surge from a player with no doses; a results line. Normal search: Verzik variants with `forceSurgers` for everyone with a dose (plans need them); an empty result shows a message.
+- `solver-ui.js`: `fullCfgs` (split from `fullRaidSolve`); `chartSurges` / `chartSurgeNeeds`: each player's latest workable surge tick (P1 played 40 times with their surge held back for the first skipped Dawn spec / spec transfer F, then custom surge ticks from F - 2 down to their P - no P: tick 1 - until none is skipped; never needed: null); `fullRaidSolve` adds a second seed, your chart with its P surges moved to that tick. `fullraid-ui.js`: `chartOk` - exhaustive plans checked after their rooms before Verzik are solved, normal-search plans by the median cooldown carried (`CHART_MARGIN` 5 ticks); an error when a chart needs a surge from a player with no doses; a results line. Normal search: Verzik variants with `forceSurgers` for everyone with a dose (plans need them); an empty result shows a message.
 
 ## v1.41.0 - 2026-11-07
 - `engine/xarpus.js`: per-player `rangePot` (`rangedLevel` / `normRangePot` from `engine/sote.js`) for Ralos / ZCB / blowpipe, at the hit's tick; not set: the old rule (Ralos players divine, else 99).
