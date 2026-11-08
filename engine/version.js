@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.40.0';
+export const VERSION = '1.41.0';
 export const CHANGES = [
+  { version: '1.41.0', date: '2026-11-07', items: [
+    'Xarpus: Range pot per player, as in Sotetseg (in the Xarpus tab, its Solver and the Full raid tab). Divine: 112 Ranged all room; Regular: 112, then 1 lower every 90 seconds from the room\'s start; not potted: 99. Used for Ralos Specs, ZCB specs and blowpipe tick fixes; the solvers keep it as set. Sets saved before keep how the sim played them: Ralos players Divine, everyone else not potted.',
+  ] },
   { version: '1.40.0', date: '2026-11-07', items: [
     'Pause / Resume beside every Stop button (reports, solvers, optimizers, the Full raid solver): the pieces already running finish, then the run waits using no CPU; Resume carries on from the same spot with the inputs it started with. Elapsed times leave out the paused time. The Nylocas report now has a Stop button too.',
     'Sotetseg: Range pot per player (in the Sotetseg tab, its Solver and the Full raid tab). Divine: 112 Ranged all room; Regular: 112, then 1 lower every 90 seconds from the room\'s start; not potted: 99. Used for prefires and ZCB specs; the solvers keep it as set. Setups saved before count as Divine (no change to their results).',

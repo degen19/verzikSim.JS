@@ -2,6 +2,10 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.41.0 - 2026-11-07
+- `engine/xarpus.js`: per-player `rangePot` (`rangedLevel` / `normRangePot` from `engine/sote.js`) for Ralos / ZCB / blowpipe, at the hit's tick; not set: the old rule (Ralos players divine, else 99).
+- `xarpus-ui.js`: Range pot column (older sets filled in by the old rule, `autoRangePot`), a mirrored table in the Solver, `rangePot` in the solver's fixed player parts; `fullRaidSolve({ rangePots })`. `fullraid-ui.js`: Range pot row in the Xarpus block (default: the old rule on the default plan). `engine/xarpusmech.js`: Range pot row.
+
 ## v1.40.0 - 2026-11-07
 - `engine/pause.js` (new): one pause switch for the page - `isPaused`, `setPaused`, `whenRunning`, `breath` (yield + wait out a pause), `whenFree`, `activeNow` (a clock that stops while paused). `pause-ui.js` (new): the Pause / Resume buttons (live while their Stop button is; Stop while paused resumes; cleared when no run is going).
 - Worker pools (`pool.js`, `solver-pool.js`, the Nylocas / Sotetseg / Xarpus / solo / Full raid pools) hand out no new pieces while paused; the page loops (`breath`) and step loops (`whenFree`) wait. `fullraid-pool.js`: 4 pieces per worker per batch; `optimizer-ui.js`: each worker's share in ~20k setup-raid pieces - so a pause lands within seconds.

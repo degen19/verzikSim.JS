@@ -10,7 +10,8 @@ import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/
 import { parseBreakpoints } from './engine/optimize.js';
 import { runSote, MAZE_HOW, defaultMazes, normRangePot } from './engine/sote.js';
 import { rangePotCell, rangePotFrom, RANGE_POT_TIP } from './sote-ui.js';
-import { HEALS_DEFAULT } from './engine/xarpus.js';
+import { HEALS_DEFAULT, defaultXarpusPlan } from './engine/xarpus.js';
+import { autoRangePot } from './xarpus-ui.js';
 import { parse_chart } from './engine/sim.js';
 import { CODES, CODE_HELP, isAutoTick, checkRow } from './engine/chartform.js';
 import { gearOfLetter } from './engine/gearstore.js';
@@ -80,7 +81,8 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     s.sote ||= {}; s.sote.players ||= []; s.sote.noLateSurge ??= false;
     for (let k = 0; k < t; k++) { s.sote.players[k] ||= { pnecks: 2, sharks: 3, rests: 0, restores: 3, mazes: null }; s.sote.players[k].rangePot = normRangePot(s.sote.players[k].rangePot); }
     s.sote.players.length = t;
-    s.xarpus ||= {}; s.xarpus.heals ??= HEALS_DEFAULT[t]; s.xarpus.exactHeals ??= false;
+    s.xarpus ||= {}; s.xarpus.heals ??= HEALS_DEFAULT[t]; s.xarpus.exactHeals ??= false; s.xarpus.rangePots ||= [];
+    { const dp = defaultXarpusPlan(t); for (let k = 0; k < t; k++) s.xarpus.rangePots[k] = s.xarpus.rangePots[k] == null ? autoRangePot(dp, k) : normRangePot(s.xarpus.rangePots[k]); s.xarpus.rangePots.length = t; }   // default: as the sim played it before (Ralos players in the default plan)
     s.verzik ||= {}; s.verzik.pnecks ||= []; for (let k = 0; k < t; k++) s.verzik.pnecks[k] ??= 0; s.verzik.pnecks.length = t;
     s.verzik.team ||= { Sharks: '', 'Brew sips': '', 'Restore sips': '', 'SCB sips': '' };
     s.trades ??= false;
@@ -133,7 +135,9 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Only setups where every surge is drunk in P1"><input type="checkbox" data-f="soteNoLate" ${s.sote.noLateSurge ? 'checked' : ''}>No P2 / P3 surges</label></div></div>
       <div class="frblk"><h4>${tick(s, 'xarpus')}</h4>${s.on.xarpus ? '' : '<div class="muted small">Not run.</div>'}<div class="row" style="gap:14px;align-items:end" ${s.on.xarpus ? '' : 'hidden'}>
         <label title="Exhumed heals (missed ticks): each one is HP on top of his base">Number of heals<input type="number" min="0" data-xh value="${esc(s.xarpus.heals)}" style="width:70px"></label>
-        <label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-xe ${s.xarpus.exactHeals ? 'checked' : ''}>Exact heals (no ±2)</label></div></div>
+        <label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-xe ${s.xarpus.exactHeals ? 'checked' : ''}>Exact heals (no ±2)</label></div>
+        <div ${s.on.xarpus ? '' : 'hidden'} style="margin-top:6px"><div class="scroll"><table class="bt"><tr><th></th>${Array.from({ length: t }, (_, k) => `<th>${name(k)}</th>`).join('')}</tr>
+          <tr><td class="rl" title="${RANGE_POT_TIP.replace('prefires and ZCB specs', 'Ralos Specs, ZCB specs and blowpipe tick fixes')}">Range pot</td>${Array.from({ length: t }, (_, k) => `<td>${rangePotCell('xrpot', k, s.xarpus.rangePots[k])}</td>`).join('')}</tr></table></div></div></div>
       <div class="frblk"><h4>${tick(s, 'verzik')}</h4>${s.on.verzik ? '' : '<div class="muted small">Not run.</div>'}<div ${s.on.verzik ? '' : 'hidden'}><div class="row" style="gap:14px;align-items:end;flex-wrap:wrap">
         ${Object.keys(s.verzik.team).map((h) => `<label title="The whole team's (blank: the chart template's default)">${h === 'SCB sips' ? 'Super combat sips' : h} (team)<input type="number" min="0" data-vt="${esc(h)}" value="${esc(s.verzik.team[h])}" placeholder="default" style="width:80px"></label>`).join('')}</div>
         <div class="scroll"><table class="bt"><tr><th></th>${Array.from({ length: t }, (_, k) => `<th>${name(k)}</th>`).join('')}</tr>
@@ -183,6 +187,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     else if (el.dataset.maze) { const [k, i] = el.dataset.maze.split('|').map(Number), sp = s.sote.players[k], m = [...mazes(sp, k, gearPlayers(s))]; m[i] = el.value; sp.mazes = m; }
     else if (el.dataset.xh != null) s.xarpus.heals = Math.max(0, Math.trunc(Number(el.value) || 0));
     else if (el.dataset.xe != null) s.xarpus.exactHeals = el.checked;
+    else if (el.dataset.xrpot != null || el.dataset.xrpotkind != null) { const k = Number(el.dataset.xrpot ?? el.dataset.xrpotkind); s.xarpus.rangePots[k] = rangePotFrom(el, el.dataset.xrpotkind != null, s.xarpus.rangePots[k]); save(state); render(); return; }
     else if (el.dataset.vt) s.verzik.team[el.dataset.vt] = el.value === '' ? '' : Math.max(0, Math.trunc(Number(el.value) || 0));
     else if (el.dataset.vp != null) s.verzik.pnecks[Number(el.dataset.vp)] = Math.max(0, Math.trunc(Number(el.value) || 0));
     else return;
@@ -271,7 +276,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         return clean({ kind: 'nylo', list: it, setups: it.slice(0, ef.keep).map((x, i) => ({ i, setup: x.run })), med: it.length ? medOf(it[0].totals) + Math.round(wave.mean) : 0 }, cd); };
       const soteSolve = async (cd, tag) => { const it = await rooms.sote.fullRaidSolve({ ...common, supplies: soteSup, noLateSurge: !!s.sote.noLateSurge, surgeCd: cd, bps: bpOf('sote') != null ? [bpOf('sote')] : [], say: say(`Sotetseg ${tag}`) });
         return clean({ kind: 'sote', list: it, setups: it.slice(0, ef.keep).map((x, i) => ({ i, setup: { players: x.replay.players, entry: x.replay.entry, opts: x.replay.opts } })), med: it.length ? medOf(it[0].totals) : 0 }, cd); };
-      const xSolve = async (cd, tag) => { const it = await rooms.xarpus.fullRaidSolve({ ...common, heals: s.xarpus.heals, exactHeals: !!s.xarpus.exactHeals, surgeCd: cd, bps: bpOf('xarpus') != null ? [bpOf('xarpus')] : [], say: say(`Xarpus ${tag}`) });
+      const xSolve = async (cd, tag) => { const it = await rooms.xarpus.fullRaidSolve({ ...common, heals: s.xarpus.heals, exactHeals: !!s.xarpus.exactHeals, rangePots: s.xarpus.rangePots, surgeCd: cd, bps: bpOf('xarpus') != null ? [bpOf('xarpus')] : [], say: say(`Xarpus ${tag}`) });
         return clean({ kind: 'xarpus', list: it, setups: it.slice(0, ef.keep).map((x, i) => ({ i, setup: x.run })), med: it.length ? medOf(it[0].totals) : 0 }, cd); };
       const vSolve = async (cd, tag, bps) => { const r = await rooms.verzik.fullRaidSolve({ ...common, hornOwners, supplies: vSup, effort: ef.verz, chart: s.useChart ? chartOf(s, t) : null, surgeCd: cd, bps, say: say(`Verzik ${tag}`) });
         return clean({ kind: 'verzik', res: r, list: r.top || [], setups: (r.top || []).slice(0, ef.keep).map((x, i) => ({ i, setup: { cfgs: x.cfg } })) }, cd); };

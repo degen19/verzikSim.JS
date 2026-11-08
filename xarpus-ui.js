@@ -12,6 +12,10 @@ import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresult
 import { solveXarpus, better as scoreBetter, normalizePlan } from './engine/xarpussolve.js';
 import { XarpusPool } from './xarpus-solver-pool.js';
 import { runXarpus } from './engine/xarpus.js';
+import { normRangePot } from './engine/sote.js';
+import { rangePotCell, rangePotFrom, RANGE_POT_TIP } from './sote-ui.js';
+/** Range pot before the option was set: Ralos players (opening or backup Ralos Spec) divine, everyone else not potted. */
+export const autoRangePot = (plan, k) => ((plan.players[k] || {}).open === 'ralos' || (plan.backups || []).some((b) => Number(b.p) === k && b.spec === 'ralos') ? 'divine' : '');
 import { Rng } from './engine/rng.js';
 import { pickRaid, timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
 
@@ -58,6 +62,7 @@ export function createXarpus(host, { getTeam }) {
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Also swap two players' Defence or damage specs, and move a Lightbearer / surge, in one step"><input type="checkbox" data-vs="swaps">Swaps</label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Also change a player's Defence spec, damage spec, start spec and Lightbearer cycles together (e.g. no maul: 95% start, ZCB, Lightbearer for a second) - plans one change at a time can't reach"><input type="checkbox" data-vs="roles">Role changes</label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Search again from the default plan for the scale and keep the best of everything (about 2x the time)"><input type="checkbox" data-vs="restarts">Restarts</label></div>
+      <div data-vpots style="margin-top:6px"></div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>
     `)}`;
   wireSubtabs(host, 'verzikSim.xarpusTabs.v1');
@@ -78,6 +83,7 @@ export function createXarpus(host, { getTeam }) {
     }
     st.players.length = t;
     migrateXarpus(st, t); normalizePlan(st);
+    st.players.forEach((p, k) => { if (p.rangePot === undefined || p.rangePot === null) p.rangePot = autoRangePot(st, k); });   // older sets: as the sim played them
     return st;
   };
   const cur = () => { const r = rootState(); return fixSet(r.sets[r.cur] ||= blankSet()); };
@@ -139,11 +145,11 @@ export function createXarpus(host, { getTeam }) {
       <style>.xblk{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}.xblk h4{margin:0 0 2px;font-size:14px}.xblk p{margin:2px 0 6px}
         .xstep{display:inline-block;width:19px;height:19px;border-radius:50%;background:var(--accent);color:var(--card);text-align:center;font-size:12px;line-height:19px;margin-right:6px;font-weight:700}</style>
       ${blk(0, 'Players', `<div class="scroll"><table class="bt"><tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th>
-          <th title="Drink a surge with their first special attack">Surge</th><th title="Spec regens on Lightbearer (a regen every 25 ticks), then Ultor. A 95% start's regen after their first spec doesn't count as one">Lightbearer cycles</th></tr>
+          <th title="Drink a surge with their first special attack">Surge</th><th title="Spec regens on Lightbearer (a regen every 25 ticks), then Ultor. A 95% start's regen after their first spec doesn't count as one">Lightbearer cycles</th><th title="${RANGE_POT_TIP.replace('prefires and ZCB specs', 'Ralos Specs, ZCB specs and blowpipe tick fixes')}">Range pot</th></tr>
         ${st.players.map((p, k) => `<tr><td class="rl">${esc(pname(k))}</td>
           <td><select data-p="${k}|startSpec"><option value="100" ${p.startSpec === 95 ? '' : 'selected'}>100</option><option value="95" ${p.startSpec === 95 ? 'selected' : ''}>95</option></select></td>
           <td style="text-align:center"><input type="checkbox" data-p="${k}|surge" ${p.surge ? 'checked' : ''}></td>
-          <td><select data-p="${k}|lbCycles">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${n === Number(p.lbCycles || 0) ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`)}
+          <td><select data-p="${k}|lbCycles">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${n === Number(p.lbCycles || 0) ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></td><td>${rangePotCell('xpot', k, p.rangePot)}</td></tr>`).join('')}</table></div>`)}
       ${blk(1, 'Opening Defence specs', `<p class="muted small">One each, or None. An Elder maul goes on their first attack; a BGS or Ralos Spec after their first scythe - or, if anyone mauls again (step 2), once those mauls are in - and only if his Defence is above the Defence target. A horn only ever helps the opening mauls: the caster and the first other opening mauler can't miss.</p>
         <div class="scroll"><table class="bt"><tr><th></th><th>Opening spec</th><th>When</th><th title="Soulflame horn on the interact tick (needs a horn in the Gear tab)">Horn</th></tr>
         ${st.players.map((p, k) => `<tr><td class="rl">${esc(pname(k))}</td><td>${sel(k, 'open', OPENERS, p.open)}</td>
@@ -235,6 +241,7 @@ export function createXarpus(host, { getTeam }) {
       else st[k] = Math.max(0, Math.trunc(Number(el.value) || 0));
       persist(); render(); return;
     }
+    if (el.dataset.xpot != null || el.dataset.xpotkind != null) { const p = st.players[Number(el.dataset.xpot ?? el.dataset.xpotkind)]; p.rangePot = rangePotFrom(el, el.dataset.xpotkind != null, p.rangePot); persist(); render(); showSol(); return; }
     if (el.dataset.p) {
       const [k, key] = el.dataset.p.split('|'), p = st.players[Number(k)];
       p[key] = el.type === 'checkbox' ? el.checked : ['startSpec', 'lbCycles'].includes(key) ? Number(el.value) : el.value;
@@ -324,10 +331,18 @@ export function createXarpus(host, { getTeam }) {
     sol.querySelector('[data-v="bps"]').value = v.bps; sol.querySelector('[data-v="effort"]').value = v.effort;
     for (const k of ALLOW) sol.querySelector(`[data-va="${k}"]`).checked = !!v.allow[k];
     for (const k of ['swaps', 'roles', 'restarts']) sol.querySelector(`[data-vs="${k}"]`).checked = k === 'roles' ? (v.search || {}).roles !== false : !!(v.search || {})[k];
+    // Range pots (not searched - the same setting as in each set's Players table above, shown here for the sets to solve)
+    const ks = (v.sets || []).filter((k) => rs.sets[k]), names = playersNow(cur()).map((p) => p.name);
+    sol.querySelector('[data-vpots]').innerHTML = ks.length ? `<div class="muted small">Range pot (kept as set - not searched; the same setting as in the Players table above)</div>
+      <div class="scroll"><table class="bt"><tr><th></th>${names.map((n) => `<th>${esc(n)}</th>`).join('')}</tr>${ks.map((k) => `<tr><td class="rl">${esc(setLabel(k))}</td>${setOf(k).players.map((p, j) => `<td>${rangePotCell('vpot', `${k}|${j}`, p.rangePot)}</td>`).join('')}</tr>`).join('')}</table></div>` : '';
   };
   sol.addEventListener('change', (e) => {
     const v = solState(), el = e.target;
-    if (el.dataset.runset) v.sets = pickSets(v.sets, el);
+    if (el.dataset.vpot != null || el.dataset.vpotkind != null) {
+      const [k, j] = String(el.dataset.vpot ?? el.dataset.vpotkind).split('|'), p = setOf(k).players[Number(j)];
+      p.rangePot = rangePotFrom(el, el.dataset.vpotkind != null, p.rangePot); persist(); render(); showSol(); return;
+    }
+    if (el.dataset.runset) { v.sets = pickSets(v.sets, el); persist(); showSol(); return; }
     else if (el.dataset.v) v[el.dataset.v] = el.value;
     else if (el.dataset.va) v.allow[el.dataset.va] = el.checked;
     else if (el.dataset.vs) { v.search ||= {}; v.search[el.dataset.vs] = el.checked; }
@@ -481,7 +496,7 @@ export function createXarpus(host, { getTeam }) {
       for (const [n, k] of keys.entries()) {
         if (me.stopped) break;
         const st = setOf(k), all = playersNow(st), pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '';
-        const base = all.map((p) => ({ name: p.name, gear: p.gear })), names = all.map((p) => p.name);
+        const base = all.map((p) => ({ name: p.name, gear: p.gear, rangePot: normRangePot(p.rangePot) })), names = all.map((p) => p.name);   // range pot: kept as set, not searched
         const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'horn' || f === 'surge' ? !!p[f] : p[f]]));
         const setPlan = (x) => normalizePlan({ players: x.players.map(planOf), remaul: structuredClone(x.remaul), backups: structuredClone(x.backups), defTarget: Number(x.defTarget) || 20, holdZcb: !!x.holdZcb, chally: !!x.chally, challyAt: Number(x.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
         const start = setPlan(st);
@@ -502,11 +517,11 @@ export function createXarpus(host, { getTeam }) {
 
   /** Full raid: solve the current set with the Full raid's Gear set, Lightbearers and the surge cooldowns carried in
    *  (ticks per player). Returns the ranked setups, each with what a full raid needs to play it ({players, opts}). */
-  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, gearPatch = [], heals = HEALS_DEFAULT[team()], exactHeals = false, surgeCd, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
+  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, gearPatch = [], heals = HEALS_DEFAULT[team()], exactHeals = false, rangePots = [], surgeCd, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
     // the Full raid's own settings (nothing from this tab): the default plan, every option searched
     const t = team(), st = { ...blankSet(), gearSet: gs, heals, exactHeals };
     const all = playersNow(st).map((p, k) => ({ ...p, gear: { ...p.gear, ...(gearPatch[k] || {}) }, surgeCd: surgeCd[k] || 0 }));
-    const base = all.map((p) => ({ name: p.name, gear: p.gear, surgeCd: p.surgeCd })), names = all.map((p) => p.name);
+    const base = all.map((p, k) => ({ name: p.name, gear: p.gear, surgeCd: p.surgeCd, rangePot: rangePots[k] != null ? normRangePot(rangePots[k]) : autoRangePot(st, k) })), names = all.map((p) => p.name);
     const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'horn' || f === 'surge' ? !!p[f] : p[f]]));
     const setPlan = (x) => normalizePlan({ players: x.players.map(planOf), remaul: structuredClone(x.remaul), backups: structuredClone(x.backups), defTarget: Number(x.defTarget) || 20, holdZcb: !!x.holdZcb, chally: !!x.chally, challyAt: Number(x.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
     // Lightbearers: only the players holding one this room (no trades), no more than the raid has; horns likewise
