@@ -2,6 +2,7 @@
 export const VERSION = '1.41.1';
 export const CHANGES = [
   { version: '1.41.1', date: '2026-11-08', items: [
+    'Verzik P1 chart builder (the solvers\' own P1 charts): a surge only goes in at 65% spec or less, so the next regen isn\'t wasted - a 95% start surges after their second Dawn, not after the first (60 -> 70 regen -> 95 would lose 5% at the next regen). Same or better charts in tests (3-5 man).',
     'Full raid solver, Use my P1 chart: when a player\'s chart needs their surge (a P on it, or Dawn specs / spec transfers they can\'t afford without one), surge plans that use it in an earlier room and leave it on cooldown then are left out - so their chart specs go when scheduled. The results say which players\' charts need a surge, by when, and how many plans were left out.',
     'Full raid solver, Use my P1 chart: a P on the chart is also checked for how late the surge could go without skipping any of the player\'s chart specs - that later tick is their deadline, and Verzik is also solved from your chart with those surges moved there (it keeps whichever plays better).',
     'Full raid solver, normal search: a Verzik setup whose solve planned fewer surges than the plan has (e.g. a P1 chart with no P on it) is also tried with everyone\'s surge put in - before, every plan could be skipped and the run end with no results. No results now says so.',

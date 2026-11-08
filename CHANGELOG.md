@@ -3,6 +3,7 @@
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
 ## v1.41.1 - 2026-11-08
+- `engine/solver.js`: `SURGE_MAX_AT` 65 - a holder's P (and a Custom Surge Timing) only at 65% or less (was: under 75); a giver's optional surge is skipped above it. `engine/sim.js`: `SURGE_AT_PLANNED` 65 for the full raid's planned (forced) surges from P2 on.
 - `solver-ui.js`: `fullCfgs` (split from `fullRaidSolve`); `chartSurges` / `chartSurgeNeeds`: each player's latest workable surge tick (P1 played 40 times with their surge held back for the first skipped Dawn spec / spec transfer F, then custom surge ticks from F - 2 down to their P - no P: tick 1 - until none is skipped; never needed: null); `fullRaidSolve` adds a second seed, your chart with its P surges moved to that tick. `fullraid-ui.js`: `chartOk` - exhaustive plans checked after their rooms before Verzik are solved, normal-search plans by the median cooldown carried (`CHART_MARGIN` 5 ticks); an error when a chart needs a surge from a player with no doses; a results line. Normal search: Verzik variants with `forceSurgers` for everyone with a dose (plans need them); an empty result shows a message.
 
 ## v1.41.0 - 2026-11-07

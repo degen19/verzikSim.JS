@@ -25,6 +25,9 @@ export const CHART_END = 80;                 // 3-5 man (P1 ends well before thi
 export const DUO_END = 140;                  // duos: P1 takes ~115-135 ticks
 const endOf = (ctx) => ctx.end || CHART_END;
 const DAWN_COST = 35, SURGE = 25, THRALL_EVERY = 4;
+/** A surge goes in at this spec % or less: +25, then the next regen's +10, stays within 100 (a 95% start doesn't
+ *  surge after their first Dawn's 60 -> 70 regen - after their second). */
+const SURGE_MAX_AT = 65;
 const DAWN_MEAN = 112.5, DAWN_VAR = ((150 - 75 + 1) ** 2 - 1) / 12;
 
 // ------------------------------------------------------------------ attack values (exact, with the P1 damage cap)
@@ -126,7 +129,7 @@ export function placeRotation(ctx, plan, { maxTick = endOf(ctx) - 6 } = {}) {
     for (const a of list) {
       const x = e.p[a.k];
       if (a.code === 'P') {
-        if (x.s + SURGE >= 100) { if (a.optional) continue; return `${ctx.players[a.k].name}'s surge on ${t} would reach 100%`; }
+        if (x.s > SURGE_MAX_AT) { if (a.optional) continue; return `${ctx.players[a.k].name}'s surge on ${t} would waste spec (${x.s}%: the next regen goes over 100)`; }
         x.s += SURGE;
       } else if (a.code.startsWith('ST')) {
         if (x.s < 100) return `${ctx.players[a.k].name} needs 100% to transfer on ${t}`;
@@ -138,9 +141,9 @@ export function placeRotation(ctx, plan, { maxTick = endOf(ctx) - 6 } = {}) {
       if (commit) codes[a.k][t] = a.code;
     }
     // Custom Surge Timing: from that tick on, the first tick the player has nothing else charted and the surge won't
-    // reach 100% (charted as P there: a P on the chart replaces the custom timing in the sim)
+    // waste spec (SURGE_MAX_AT; charted as P there: a P on the chart replaces the custom timing in the sim)
     e.p.forEach((x, k) => {
-      if (x.cs == null || t < x.cs || list.some((a) => a.k === k) || x.s + SURGE >= 100 || ctx.dodge[k].has(t)) return;
+      if (x.cs == null || t < x.cs || list.some((a) => a.k === k) || x.s > SURGE_MAX_AT || ctx.dodge[k].has(t)) return;
       x.s += SURGE; x.cs = null;
       if (commit) codes[k][t] = 'P';
     });

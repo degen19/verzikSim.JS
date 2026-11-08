@@ -85,11 +85,13 @@ export const PRAYERS = { 'Piety': [1.20, 1.23], 'Zeal': [1.25, 1.28] };
 
 export const SURGE_CD = 500;                  // surge potion cooldown (ticks)
 export const SURGE_AT = 70;                   // after P1: re-surge when off cooldown and at or below this spec %
+export const SURGE_AT_PLANNED = 65;           // a full raid's planned surge: at or below this, so +25 and the next regen (+10) waste nothing
+                                              // (a 95% start: not after their first Dawn's 60 -> 70 regen - after the second)
 
 
 /** Duos (and later solos) only. From P2 on: surge again (+25%) once its 500-tick cooldown is up, if spec <= 70% and off potion delay. */
 export function auto_surge(p, t, L, tag = '') {
-  if (!p.auto_surge_on || p.dead || t < p.surge_ready || p.spec > SURGE_AT || t < p.sip_ready) return false;
+  if (!p.auto_surge_on || p.dead || t < p.surge_ready || p.spec > (p.surge_planned ? SURGE_AT_PLANNED : SURGE_AT) || t < p.sip_ready) return false;
   if (p.surge_left != null) { if (p.surge_left <= 0) return false; p.surge_left -= 1; }   // solos: a set number of surge doses
   const old = p.spec;
   p.spec = Math.min(100, p.spec + 25); p.gain_src = 'other';
@@ -758,7 +760,7 @@ export function run_p1(cfgs, team, rng, log = null) {
     p.last_atk_t = null;
     p.actions = c.actions;
     p.auto_surge_on = team <= 2;           // surge re-use after its cooldown: duos/solos only
-    if (c.forceSurge && team > 2 && !Object.values(p.actions).includes('P') && p.custom_tick == null) { p.auto_surge_on = true; p.surge_left = 1; }   // full raid: a surge planned for them (once its cooldown's up and it won't waste spec)
+    if (c.forceSurge && team > 2 && !Object.values(p.actions).includes('P') && p.custom_tick == null) { p.auto_surge_on = true; p.surge_left = 1; p.surge_planned = true; }   // full raid: a surge planned for them (once its cooldown's up and it won't waste spec)
     if (Object.values(p.actions).includes('P')) p.custom_tick = null;   // a P on the chart takes priority over the custom timing
     // 95% start, a Dawn spec on the chart and no R: no regen before their first spec, then a forced regen the tick after it
     const acts = Object.values(p.actions);
