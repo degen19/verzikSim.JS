@@ -13,6 +13,7 @@ export const FULLRAID_MECHANICS = {
       R('Goal', 'All', 'A total time (or several) for the rooms ticked, or a breakpoint for each room. Rank by Goal time: the share of attempts under the goal. Rank by Success rate: the share that finish, then the median time.', 'Goal time / specific breakpoints; Rank by'),
       R('Min. success %', 'All', 'Plans that finish less often than this go to the bottom however fast they are - your team\'s risk tolerance.', 'Min. success %'),
       R('Surges', 'All', 'Each player\'s surge cooldown at the first room and how many doses they bring. A surge runs down its cooldown through the rooms (the Nylocas wave time included); a player out of doses doesn\'t surge.', 'Surge cooldown; doses'),
+      R('Use my P1 chart', 'All', 'Verzik keeps your P1 chart. When a player\'s chart needs their surge - a P on it, or Dawn specs / spec transfers they can\'t afford without one (P1 played with their surge held back: the first spec it skips) - plans that surge them in an earlier room are left out if that surge would still be on cooldown then (5 ticks of margin, at the rooms\' median times). A chart that needs a surge from a player with no doses is an error.', 'Use my Verzik P1 chart'),
       R('Room settings', 'All', 'Each room\'s own inputs live here too (Nylocas: wave times - required - max switches, Healer Tech, restores; Xarpus: heals; Verzik: supplies, horn and Lightbearer trading, Use my P1 chart). Gear comes from the Gear tab.', 'Per-room rows'),
     ] },
     { title: 'Normal search', rows: [

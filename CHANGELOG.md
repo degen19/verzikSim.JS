@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.41.1 - 2026-11-08
+- `solver-ui.js`: `fullCfgs` (split from `fullRaidSolve`), `chartSurgeNeeds` (a P's tick, else P1 played 40 times with the player's surge held back - the first skipped Dawn spec / spec transfer). `fullraid-ui.js`: `chartOk` - exhaustive plans checked after their rooms before Verzik are solved, normal-search plans by the median cooldown carried (`CHART_MARGIN` 5 ticks); an error when a chart needs a surge from a player with no doses; a results line. Normal search: Verzik variants with `forceSurgers` for everyone with a dose (plans need them); an empty result shows a message.
+
 ## v1.41.0 - 2026-11-07
 - `engine/xarpus.js`: per-player `rangePot` (`rangedLevel` / `normRangePot` from `engine/sote.js`) for Ralos / ZCB / blowpipe, at the hit's tick; not set: the old rule (Ralos players divine, else 99).
 - `xarpus-ui.js`: Range pot column (older sets filled in by the old rule, `autoRangePot`), a mirrored table in the Solver, `rangePot` in the solver's fixed player parts; `fullRaidSolve({ rangePots })`. `fullraid-ui.js`: Range pot row in the Xarpus block (default: the old rule on the default plan). `engine/xarpusmech.js`: Range pot row.

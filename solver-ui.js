@@ -3,7 +3,8 @@
 // The inputs come from the chart template's own fields (engine/chartform.js), so defaults match the chart.
 import { activeNow } from './engine/pause.js';
 import { readXlsx } from './engine/xlsx.js';
-import { parse_chart, ringByDawnsText } from './engine/sim.js';
+import { parse_chart, ringByDawnsText, run_p1 } from './engine/sim.js';
+import { Rng } from './engine/rng.js';
 import { withGear, withGearSet, GEAR_SETS, blowpipes, gearOfLetter, loadGear, gearSet as gearSetOf, playersOf as gearPlayersOf } from './engine/gearstore.js';
 import { describe, readValues, overlaySheet, shadowBlock, SHADOW_MODES, multiInput, multiFromBox, migrateKeys } from './engine/chartform.js';
 import { parseBreakpoints } from './engine/optimize.js';
@@ -506,8 +507,9 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
 
   /** Full raid: solve Verzik with this tab's settings, the Full raid's Gear set and Lightbearers and the surge cooldowns
    *  carried in (ticks per player). chartSet 'A' / 'B' / 'C': your chart's P1 as it is (only rings, DCs, horns... searched). */
-  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, hornOwners = null, supplies = {}, chartSet = null, chart = null, bps = [], effort = 'standard', surgeCd = [], say = () => {}, stopped = () => false, onPool = () => {} }) {
-    // the Full raid's own settings (nothing from this tab): the chart template's defaults, its supplies, shadows from the Gear tab
+  /** The Full raid's Verzik players (nothing from this tab: the chart template's defaults, its supplies, shadows from the
+   *  Gear tab) and the chart seed (your P1 chart / a Verzik set's), surge cooldowns carried in. */
+  async function fullCfgs({ gearSet: gs, supplies = {}, chartSet = null, chart = null, surgeCd = [] }) {
     team = getTeam(); await ensure(team);
     const gp = (() => { const set = gearSetOf(loadGear(), team, gs); return set ? gearPlayersOf(set, team) : null; })();
     const values = { ...tpl[team].defaults };
@@ -532,6 +534,32 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       cfg = cfg.map((c, k) => ({ ...cfgs[k], actions: c.actions, startSpec: c.startSpec, lightbearerOn: c.lightbearerOn, dawnThr: c.dawnThr, eastBoak: c.eastBoak || cfgs[k].eastBoak, westBoak: c.westBoak || cfgs[k].westBoak, eastPattern: c.eastPattern || cfgs[k].eastPattern, ringSwitch: c.ringSwitch, targetSpec: c.targetSpec, customSurgeTick: c.customSurgeTick }));
       seeds.push({ cfg, label: `Set ${chartSet}` });
     }
+    return { cfgs, seeds, gp, shadowOwners };
+  }
+  /** Use my P1 chart: when each player's chart needs their surge (Verzik room ticks), else null. A P on their chart:
+   *  that tick. Otherwise P1 is played with their surge unavailable (everyone else's as normal): the first tick one of
+   *  their chart's specs (a Dawn spec, a spec transfer) is skipped for want of spec - the earliest over 40 raids. */
+  async function chartSurgeNeeds({ gearSet: gs, supplies = {}, chartSet = null, chart = null }) {
+    const { seeds } = await fullCfgs({ gearSet: gs, supplies, chartSet, chart });
+    if (!seeds.length) return null;
+    const cfg = seeds[0].cfg;
+    return cfg.map((c, k) => {
+      const pT = Object.entries(c.actions || {}).filter(([, a]) => a === 'P').map(([x]) => Number(x));
+      if (pT.length) return Math.min(...pT);
+      const test = cfg.map((q, j) => (j === k ? { ...q, surgeCdTicks: 99999, customSurgeTick: null, forceSurge: false } : { ...q, surgeCdTicks: 0, forceSurge: true }));
+      let need = null;
+      for (let i = 0; i < 40; i++) {
+        const res = run_p1(test, team, new Rng(`need#${k}#${i}`)), nm = res.players[k].name;
+        for (const f of res.flags || []) {
+          const m = /^t(\d+): (.+?) (Dawn spec with only|ST.* needs 100% spec)/.exec(f);
+          if (m && m[2] === nm) { const x = Number(m[1]); if (need == null || x < need) need = x; break; }
+        }
+      }
+      return need;
+    });
+  }
+  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, hornOwners = null, supplies = {}, chartSet = null, chart = null, bps = [], effort = 'standard', surgeCd = [], say = () => {}, stopped = () => false, onPool = () => {} }) {
+    const { cfgs, seeds, gp, shadowOwners } = await fullCfgs({ gearSet: gs, supplies, chartSet, chart, surgeCd });
     const p = new SolverPool(); onPool(p);
     const timer = setInterval(() => { if (stopped()) p.stop(); }, 300);
     try {
@@ -552,7 +580,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   }
 
   return {
-    api: { fullRaidSolve, fullRaidShow },
+    api: { fullRaidSolve, fullRaidShow, chartSurgeNeeds },
     async refresh() {
       const t = getTeam();
       if (running && t !== team) return;                              // keep the running solve on screen
