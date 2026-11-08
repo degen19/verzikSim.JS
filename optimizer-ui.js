@@ -1,6 +1,7 @@
 // Optimizer tab: choose inputs to vary, set breakpoints, see the estimated run time, run a staged search.
 import { parse_chart, surge_tick } from './engine/sim.js';
 import { threadCount, workersAvailable } from './pool.js';
+import { whenFree, activeNow } from './engine/pause.js';
 import { catalog, applyCombo, validCfgs, dawnsOk, dawnShortfalls, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts, cfgsToFields } from './engine/optimize.js';
 import { withGear } from './engine/gearstore.js';
 import { verzikTreeHtml, profileChunks } from './engine/vtree.js';
@@ -41,7 +42,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     <div id="o-opts"></div>
     <div class="row between" style="margin-top:12px">
       <div id="o-est" class="muted"></div>
-      <div class="row"><button id="o-go">Start search</button><button id="o-stop" class="ghost" disabled>Stop</button></div>
+      <div class="row"><button id="o-go">Start search</button><button id="o-stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button></div>
     </div>
     <div class="bar"><div id="o-prog"></div></div>
     <div id="o-status" class="muted small" style="margin-top:6px"></div>
@@ -127,10 +128,10 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     if (own) pool = makePool();
     try {
       await runBatch([base], 0, 150 * CORES, 12345);                // warm-up: the browser speeds the sim up as it runs
-      const t0 = performance.now();
+      const t0 = activeNow();
       await runBatch([base], 150 * CORES, 350 * CORES, 12345);
       // the sim keeps speeding up for a while after this; long searches run ~2.5x faster than this short test
-      rate = 2.5 * (200 * CORES) / ((performance.now() - t0) / 1000);
+      rate = 2.5 * (200 * CORES) / ((activeNow() - t0) / 1000);
     } finally {
       if (own) { pool.forEach((w) => w.terminate()); pool = null; }
     }
@@ -153,17 +154,27 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     const own = !pool; const ws = pool || makePool();
     const span = to - from, per = Math.ceil(span / ws.length);
     const done = new Array(ws.length).fill(0);
-    return Promise.all(ws.map((w, i) => new Promise((res, rej) => {
-      const a = from + per * i, b = Math.min(to, a + per);
-      if (a >= b) { res(null); return; }
+    // each worker's share goes over in pieces of ~20,000 setup-raids, so Pause lands within a few seconds
+    const step = Math.max(1, Math.floor(20000 / Math.max(1, variants.length)));
+    const piece = (w, a, b, before) => new Promise((res, rej) => whenFree(() => {
       w.onmessage = (ev) => {
-        if (ev.data.progress != null) { done[i] = ev.data.progress; onDone && onDone(done.reduce((s, x) => s + x, 0)); return; }
+        if (ev.data.progress != null) { done[before.i] = before.base + ev.data.progress; onDone && onDone(done.reduce((s, x) => s + x, 0)); return; }
         if (ev.data.error) { rej(new Error(ev.data.error)); return; }
         res(ev.data.result);
       };
       w.onerror = (ev) => rej(new Error(ev.message || 'worker failed'));
       w.postMessage({ cmd: 'batch', variants, team, from: a, to: b, seed, bps: curBps });
-    }))).then((parts) => {
+    }));
+    return Promise.all(ws.map(async (w, i) => {
+      const a0 = from + per * i, b0 = Math.min(to, a0 + per);
+      if (a0 >= b0) return null;
+      let acc = null;
+      for (let a = a0; a < b0; a += step) {
+        const b = Math.min(b0, a + step), r = await piece(w, a, b, { i, base: (a - a0) * variants.length });   // progress is in setup-raids
+        acc = acc ? acc.map((x, v) => mergeCounts(x, r[v])) : r;
+      }
+      return acc;
+    })).then((parts) => {
       if (own) ws.forEach((w) => w.terminate());
       parts = parts.filter(Boolean);
       return variants.map((_, v) => parts.reduce((acc, p) => mergeCounts(acc, p[v]), null));
@@ -190,14 +201,14 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     let total = planRaids(combos.length, $('o-depth').value) * sets.length;
     let doneBefore = 0, stageLabel = '';
     const prog = (d) => {
-      const done = doneBefore + d, el = (performance.now() - t0) / 1000;
+      const done = doneBefore + d, el = (activeNow() - t0) / 1000;
       $('o-prog').style.width = `${Math.min(100, done / total * 100).toFixed(1)}%`;
       if (done > total * 0.03 && el > 3) $('o-status').textContent = `${stageLabel} · about ${dur(el / done * (total - done))} left`;
     };
     stopped = false; $('o-go').disabled = true; $('o-stop').disabled = false;
     pool = makePool();
     const seed = Math.floor(Math.random() * 1e8);
-    var t0 = performance.now();
+    var t0 = activeNow();
     try {
       // every chosen set gets the same combos; all sets' setups run together on the same raids, pruning is per set
       const stage = async (list, from, to, sd, label) => {
@@ -271,9 +282,9 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       finals.forEach((x, i) => { x.counts = res[i]; });
       perSet = perSet.map((l) => l.slice().sort((a, c) => fsc(c.counts, metric) - fsc(a.counts, metric)));
       $('o-prog').style.width = '100%';
-      const secs = (performance.now() - t0) / 1000;
+      const secs = (activeNow() - t0) / 1000;
       if (secs > 20) { rate = total / secs; keepRate(rateId(), rate); }      // better estimates next time
-      $('o-status').textContent = `Done in ${dur((performance.now() - t0) / 1000)} · final round: ${depth.n[2].toLocaleString()} fresh raids per setup.`;
+      $('o-status').textContent = `Done in ${dur((activeNow() - t0) / 1000)} · final round: ${depth.n[2].toLocaleString()} fresh raids per setup.`;
       renderResults(perSet, metric, ofK);
     } catch (e) {
       $('o-err').textContent = e.message;

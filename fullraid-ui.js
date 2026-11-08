@@ -5,9 +5,11 @@
 // played together as whole raids (engine/fullraid.js) and ranked on the total time or on each room's own breakpoint.
 // Results: for the combination shown, each boss's procedure (decision tree, example raids; Verzik's P1 chart) and its
 // standard Run report (20,000 raids), with the surge cooldowns / doses players come into that room with; then the charts.
+import { activeNow } from './engine/pause.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { parseBreakpoints } from './engine/optimize.js';
-import { runSote, MAZE_HOW, defaultMazes } from './engine/sote.js';
+import { runSote, MAZE_HOW, defaultMazes, normRangePot } from './engine/sote.js';
+import { rangePotCell, rangePotFrom, RANGE_POT_TIP } from './sote-ui.js';
 import { HEALS_DEFAULT } from './engine/xarpus.js';
 import { parse_chart } from './engine/sim.js';
 import { CODES, CODE_HELP, isAutoTick, checkRow } from './engine/chartform.js';
@@ -76,7 +78,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     for (let k = 0; k < t; k++) { s.cd[k] ??= ''; s.doses[k] ??= 2; }
     s.cd.length = t; s.doses.length = t;
     s.sote ||= {}; s.sote.players ||= []; s.sote.noLateSurge ??= false;
-    for (let k = 0; k < t; k++) s.sote.players[k] ||= { pnecks: 2, sharks: 3, rests: 0, restores: 3, mazes: null };
+    for (let k = 0; k < t; k++) { s.sote.players[k] ||= { pnecks: 2, sharks: 3, rests: 0, restores: 3, mazes: null }; s.sote.players[k].rangePot = normRangePot(s.sote.players[k].rangePot); }
     s.sote.players.length = t;
     s.xarpus ||= {}; s.xarpus.heals ??= HEALS_DEFAULT[t]; s.xarpus.exactHeals ??= false;
     s.verzik ||= {}; s.verzik.pnecks ||= []; for (let k = 0; k < t; k++) s.verzik.pnecks[k] ??= 0; s.verzik.pnecks.length = t;
@@ -124,10 +126,10 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
             <button class="ghost sm" data-nywadd style="margin-top:4px">+ Add wave time</button>
             <div class="small ${w.error ? 'warn' : 'muted'}" data-nywmsg style="margin-top:4px">${w.error ? esc(w.error) : `Average wave time ${fmtWave(Math.round(w.mean))} - times a whole tick, 2.4s (4 ticks) apart; frequencies add up to 100%.`}</div></div>
         </div>`; })() : '<div class="muted small">Not run.</div>'}</div>
-      <div class="frblk"><h4>${tick(s, 'sote')}</h4>${s.on.sote ? '' : '<div class="muted small">Not run.</div>'}<div ${s.on.sote ? '' : 'hidden'}><div class="scroll"><table class="bt"><tr><th></th><th>Phoenix necklaces</th><th>Sharks</th><th title="Guthix rest sips (a 4 dose = 4 sips)">Guthix rest sips</th><th>Restore sips</th><th title="How they cross the first maze (Redemption needs a locator orb, 1-4s; Shark: one player)">First maze</th><th>Second maze</th></tr>
+      <div class="frblk"><h4>${tick(s, 'sote')}</h4>${s.on.sote ? '' : '<div class="muted small">Not run.</div>'}<div ${s.on.sote ? '' : 'hidden'}><div class="scroll"><table class="bt"><tr><th></th><th>Phoenix necklaces</th><th>Sharks</th><th title="Guthix rest sips (a 4 dose = 4 sips)">Guthix rest sips</th><th>Restore sips</th><th title="How they cross the first maze (Redemption needs a locator orb, 1-4s; Shark: one player)">First maze</th><th>Second maze</th><th title="${RANGE_POT_TIP}">Range pot</th></tr>
         ${Array.from({ length: t }, (_, k) => { const sp = s.sote.players[k], m = mazes(sp, k, gp);
           return `<tr><td class="rl">${name(k)}</td>${['pnecks', 'sharks', 'rests', 'restores'].map((f) => `<td><input type="number" min="0" data-sote="${k}|${f}" value="${esc(sp[f])}" style="width:60px"></td>`).join('')}
-          ${[0, 1].map((i) => `<td><select data-maze="${k}|${i}">${MAZE_HOW.map(([v, l]) => `<option value="${v}" ${v === m[i] ? 'selected' : ''} ${v === 'redemption' && t >= 5 ? 'disabled' : ''}>${l}</option>`).join('')}</select></td>`).join('')}</tr>`; }).join('')}</table></div>
+          ${[0, 1].map((i) => `<td><select data-maze="${k}|${i}">${MAZE_HOW.map(([v, l]) => `<option value="${v}" ${v === m[i] ? 'selected' : ''} ${v === 'redemption' && t >= 5 ? 'disabled' : ''}>${l}</option>`).join('')}</select></td>`).join('')}<td>${rangePotCell('spot', k, sp.rangePot)}</td></tr>`; }).join('')}</table></div>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Only setups where every surge is drunk in P1"><input type="checkbox" data-f="soteNoLate" ${s.sote.noLateSurge ? 'checked' : ''}>No P2 / P3 surges</label></div></div>
       <div class="frblk"><h4>${tick(s, 'xarpus')}</h4>${s.on.xarpus ? '' : '<div class="muted small">Not run.</div>'}<div class="row" style="gap:14px;align-items:end" ${s.on.xarpus ? '' : 'hidden'}>
         <label title="Exhumed heals (missed ticks): each one is HP on top of his base">Number of heals<input type="number" min="0" data-xh value="${esc(s.xarpus.heals)}" style="width:70px"></label>
@@ -155,7 +157,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         <label title="Plans that finish less often than this (of every attempt) go to the bottom, however fast - your team's risk tolerance. Blank: no minimum.">Min. success %<input data-f="minSuccess" value="${esc(s.minSuccess ?? '')}" placeholder="none" style="width:60px"></label>
         <label>Effort<select data-f="effort">${Object.entries(EFFORTS).map(([k, x]) => `<option value="${k}" ${k === s.effort ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Every surge plan (who surges in which room, within their doses - always Verzik), each room solved for exactly that plan and the cooldowns it brings; plans that can't win dropped by bounds; the rest played as whole raids. Much slower (can be hours) - the most accurate. Use my Verzik P1 chart speeds it up a lot."><input type="checkbox" data-f="exhaustive" ${s.exhaustive ? 'checked' : ''}>Exhaustive surge plans (slow)</label>
-        <button data-act="run">Solve</button><button data-act="stop" class="ghost" disabled>Stop</button>
+        <button data-act="run">Solve</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
       </div>
       <div data-status class="muted" style="margin-top:8px"></div><div data-err class="err"></div></div>
       <div data-out></div>`;
@@ -176,6 +178,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     else if (el.dataset.room != null) s.rooms[Number(el.dataset.room)] = el.value;
     else if (el.dataset.cact) { const [k, x] = el.dataset.cact.split('|').map(Number), v = String(el.value || '').trim().toUpperCase(), ch = chartOf(s, team()); if (v) ch.acts[k][x] = v; else delete ch.acts[k][x]; save(state); render(); return; }
     else if (el.dataset.cstart != null) chartOf(s, team()).start[Number(el.dataset.cstart)] = Number(el.value);
+    else if (el.dataset.spot != null || el.dataset.spotkind != null) { const k = Number(el.dataset.spot ?? el.dataset.spotkind); s.sote.players[k].rangePot = rangePotFrom(el, el.dataset.spotkind != null, s.sote.players[k].rangePot); save(state); render(); return; }
     else if (el.dataset.sote) { const [k, f] = el.dataset.sote.split('|'); s.sote.players[Number(k)][f] = Math.max(0, Math.trunc(Number(el.value) || 0)); }
     else if (el.dataset.maze) { const [k, i] = el.dataset.maze.split('|').map(Number), sp = s.sote.players[k], m = [...mazes(sp, k, gearPlayers(s))]; m[i] = el.value; sp.mazes = m; }
     else if (el.dataset.xh != null) s.xarpus.heals = Math.max(0, Math.trunc(Number(el.value) || 0));
@@ -253,9 +256,9 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     const gearPatch = s.trades && hornLimit ? gp.map(() => ({ horn: true })) : [];
     job = { stopped: false, pools: [] }; const me = job;
     const btn = (x) => host.querySelector(`[data-act="${x}"]`); btn('run').disabled = true; btn('stop').disabled = false;
-    const t1 = Date.now(), say = (room) => (txt) => { status.textContent = `${room}: ${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };
+    const t1 = activeNow(), say = (room) => (txt) => { status.textContent = `${room}: ${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; };
     const common = { gearSet: s.gearSet, lbRings, lbOwners, hornLimit, gearPatch, effort: s.effort, stopped: () => me.stopped, onPool: (p) => me.pools.push(p) };
-    const soteSup = s.sote.players.map((sp, k) => ({ pnecks: sp.pnecks, sharks: sp.sharks, rests: sp.rests, restores: sp.restores, mazes: mazes(sp, k, gp) }));
+    const soteSup = s.sote.players.map((sp, k) => ({ pnecks: sp.pnecks, sharks: sp.sharks, rests: sp.rests, restores: sp.restores, mazes: mazes(sp, k, gp), rangePot: normRangePot(sp.rangePot) }));
     const vSup = { team: Object.fromEntries(Object.entries(s.verzik.team).filter(([, x]) => x !== '' && x != null)), players: s.verzik.pnecks.map((n) => ({ 'Phoenix necklaces': n })) };
     try {
       const how = { mode: s.mode, total, rooms: roomBps, rankBy: s.rankBy };
@@ -388,7 +391,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
           .filter((r) => { const k = r.totals.join(','); if (sameRes.has(k)) return false; sameRes.add(k); return true; });
         minFirst(ranked);
         results = { ranked, vBps, how, t, kinds: KINDS, wave, exhaustive: { plans: plans.length, alive: alive.length, solves: nSolves, dropped }, ctx: { team: t, surgeCd: cd0, doses: doses0 }, seed, names: gp.map((p, k) => p.name || `Player ${k + 1}`), raids: ef.raids, plans: plans.length, nVariants: nSolves }; charted = 0; autoReports(0);
-        status.textContent = `Done in ${Math.round((Date.now() - t1) / 1000)}s: ${plans.length} surge plans, ${alive.length} solved exactly, ${nSolves} room solves.`;
+        status.textContent = `Done in ${Math.round((activeNow() - t1) / 1000)}s: ${plans.length} surge plans, ${alive.length} solved exactly, ${nSolves} room solves.`;
         return;
       }
       // ---- 1. every room solved twice, in order: surges allowed (everyone with a dose) and no surges; each room's
@@ -538,7 +541,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         .sort((x, y) => (fullBetter(x.score, y.score) ? -1 : fullBetter(y.score, x.score) ? 1 : 0));
       minFirst(ranked);
       results = { ranked, vBps, how, t, kinds: KINDS, wave, ctx: { team: t, surgeCd: cd0, doses: doses0 }, seed, names: gp.map((p, k) => p.name || `Player ${k + 1}`), raids: ef.raids, plans: scored.length, nVariants: variants.length }; charted = 0; autoReports(0);
-      status.textContent = `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
+      status.textContent = `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
     } catch (x) {
       status.textContent = me.stopped ? 'Stopped.' : '';
       if (!me.stopped && x.message !== 'Solver stopped.') err.textContent = `Couldn't solve: ${x.message}`;

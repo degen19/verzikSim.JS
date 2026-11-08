@@ -39,6 +39,7 @@
     button, .filebtn { font: inherit; padding: 9px 18px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
     button:disabled { opacity: .5; cursor: default; }
     .ghost { background: var(--field); color: var(--accent); border: 1px solid var(--accent); }
+    button.paused { background: var(--accent); color: var(--bg, #111); }                           /* Resume (a run is paused) */
     .sm { padding: 5px 10px; font-size: 13px; }
     .filebtn { display: inline-block; flex-direction: row; }
     .muted { color: var(--ink2); font-size: 13px; }
@@ -230,7 +231,7 @@
         <label>Set C label<input id="labC" placeholder="optional"></label>
         <label title="Target room times (m:ss), rounded down to a tick. A raid counts if it finishes at that time or faster. Marked on the &quot;% of all attempts&quot; chart and added to the Odds table.">Breakpoints (optional)<input id="bpsRun" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <button id="go">Run</button>
-        <button id="stop" class="ghost" disabled>Stop</button>
+        <button id="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
         <button id="dl" class="ghost" disabled>Download report</button>
       </div>
       <div id="runStatus" class="muted" style="margin-top:10px"></div>

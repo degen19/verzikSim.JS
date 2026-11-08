@@ -2,6 +2,7 @@
 // and their reds line), then what they do if bounced; who death charges what comes first. Built from branchProfile (optimize.js). Branches and lines
 // under 1% of raids are left out; a "she died first" reds line (fewer attacks than their usual one) is an outcome,
 // not a choice, so it's left out too; a player who does the same in every branch gets one line.
+import { breath } from './pause.js';
 import { branchProfile } from './optimize.js';
 
 const MIN = 0.01;
@@ -141,7 +142,7 @@ export async function profileChunks(cfgs, team, n, seed, onProgress = () => {}) 
   for (let i = 0; i < n; i += 200) {
     by = branchProfile(cfgs, team, i, Math.min(n, i + 200), seed, by);
     onProgress(Math.min(n, i + 200), n);
-    await new Promise((r) => setTimeout(r, 0));
+    await breath();
   }
   return by;
 }

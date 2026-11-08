@@ -5,7 +5,10 @@ import { readXlsx } from './engine/xlsx.js';
 import { SOTE_MECHANICS } from './engine/sotemech.js';
 import { SOLO_SECTIONS } from './engine/solomech.js';
 import { XARPUS_MECHANICS } from './engine/xarpusmech.js';
-const BOSSES = [['verzik', 'Verzik', 'Set on the chart'], ['sote', 'Sotetseg', 'Set in the Sotetseg tab'], ['xarpus', 'Xarpus', 'Set in the Xarpus tab']];
+import { NYLO_MECHANICS } from './engine/nylomech.js';
+import { FULLRAID_MECHANICS } from './engine/fullraidmech.js';
+const BOSSES = [['nylo', 'Nylocas', 'Set in the Nylocas tab'], ['sote', 'Sotetseg', 'Set in the Sotetseg tab'], ['xarpus', 'Xarpus', 'Set in the Xarpus tab'], ['verzik', 'Verzik', 'Set on the chart'], ['full', 'Full raid solver', 'Set in the Full raid tab']];
+const OWN = { nylo: NYLO_MECHANICS, sote: SOTE_MECHANICS, xarpus: XARPUS_MECHANICS, full: FULLRAID_MECHANICS };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -31,16 +34,16 @@ export function createMechanics(details, body, { getRoom } = {}) {
   let data = null, boss = null, picked = null;       // picked: the boss chosen in the section (else the tab's)
   const cache = {};
   async function render() {
-    const want = picked || (['sote', 'xarpus'].includes(getRoom && getRoom()) ? getRoom() : 'verzik');
+    const want = picked || (OWN[getRoom && getRoom()] ? getRoom() : 'verzik');
     if (!data || want !== boss) {
       boss = want;
       body.innerHTML = '<p class="muted">Loading...</p>';
-      try { data = cache[boss] ||= boss === 'sote' ? SOTE_MECHANICS : boss === 'xarpus' ? XARPUS_MECHANICS : await loadMechanics(); } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+      try { data = cache[boss] ||= OWN[boss] || await loadMechanics(); } catch (e) { body.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
       body.innerHTML = `
-        <div class="row" style="margin:0 0 8px"><label>Boss<select id="m-b">${BOSSES.map(([v, l]) => `<option value="${v}" ${v === boss ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+        <div class="row" style="margin:0 0 8px"><label>Room<select id="m-b">${BOSSES.map(([v, l]) => `<option value="${v}" ${v === boss ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
         ${data.intro.map((t) => `<p class="muted small">${esc(t)}</p>`).join('')}
         <div class="row" style="margin:8px 0">
-          <label>Search<input id="m-q" placeholder="e.g. ${boss === 'sote' ? 'maze, ball, horn' : boss === 'xarpus' ? 'screech, Ralos, heals' : 'brew, purple, horn'}" style="width:220px"></label>
+          <label>Search<input id="m-q" placeholder="e.g. ${{ sote: 'maze, ball, horn', xarpus: 'screech, Ralos, heals', nylo: 'tome, switches, under', full: 'exhaustive, effort, bounds' }[boss] || 'brew, purple, horn'}" style="width:220px"></label>
           <label>Scale<select id="m-s"><option value="">All scales</option><option value="solo">Solo</option><option value="duo">Duo</option><option value="team">3-5 man</option></select></label>
         </div>
         <div class="row" style="margin:0 0 6px"><button class="ghost sm" id="m-all">Expand all</button><button class="ghost sm" id="m-none">Collapse all</button></div>
@@ -67,7 +70,7 @@ export function createMechanics(details, body, { getRoom } = {}) {
     const html = data.sections.map((sec) => {
       const rows = sec.rows.filter((r) => scaleOk(r.scales) && hit(r));
       if (!rows.length) return '';
-      return `<details class="msec" ${q ? 'open' : ''}><summary>${esc(sec.title)} <span class="muted small">(${rows.length})</span></summary><div class="scroll"><table class="bt mech"><tr><th>Topic</th><th>Scales</th><th>What the sim does</th><th>${(BOSSES.find((x) => x[0] === boss) || BOSSES[0])[2]}</th></tr>${
+      return `<details class="msec" ${q ? 'open' : ''}><summary>${esc(sec.title)} <span class="muted small">(${rows.length})</span></summary><div class="scroll"><table class="bt mech"><tr><th>Topic</th><th>Scales</th><th>${boss === 'full' ? 'What the solver does' : 'What the sim does'}</th><th>${(BOSSES.find((x) => x[0] === boss) || BOSSES[0])[2]}</th></tr>${
         rows.map((r) => `<tr><td class="rl">${esc(r.topic)}</td><td>${esc(r.scales)}</td><td class="what">${esc(r.what)}</td><td class="inp">${esc(r.input)}</td></tr>`).join('')}</table></div></details>`;
     }).join('');
     body.querySelector('#m-list').innerHTML = html || '<p class="muted">Nothing matches.</p>';

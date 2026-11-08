@@ -1,6 +1,7 @@
 // Verz Solver tab: set the team's gear and settings, and the solver builds the P1 chart and
 // picks start specs, Lightbearers, ring swap %, the purple / reds DCs and the horns (engine/roomsolver.js).
 // The inputs come from the chart template's own fields (engine/chartform.js), so defaults match the chart.
+import { activeNow } from './engine/pause.js';
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart, ringByDawnsText } from './engine/sim.js';
 import { withGear, withGearSet, GEAR_SETS, blowpipes, gearOfLetter, loadGear, gearSet as gearSetOf, playersOf as gearPlayersOf } from './engine/gearstore.js';
@@ -219,7 +220,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       ${section('adv', 'Advanced', advBody, false)}
       <div class="row between" style="margin-top:12px">
         <div id="sv-est" class="muted small"></div>
-        <div class="row"><button id="sv-go" ${running ? 'disabled' : ''}>Start solver</button><button id="sv-stop" class="ghost" ${running ? '' : 'disabled'}>Stop</button></div>
+        <div class="row"><button id="sv-go" ${running ? 'disabled' : ''}>Start solver</button><button id="sv-stop" class="ghost" ${running ? '' : 'disabled'}>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button></div>
       </div>
       <div class="bar"><div id="sv-prog"></div></div>
       <div id="sv-status" class="muted small" style="margin-top:6px"></div>
@@ -381,7 +382,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     running = true; root.querySelector('#sv-go').disabled = true; root.querySelector('#sv-stop').disabled = false;
     const status = root.querySelector('#sv-status'), bar = root.querySelector('#sv-prog');
     const STAGES = ['Planning', 'P1 charts', 'Editing your chart', 'Screening', 'Ring swaps, purple and P2 horns', 'Reds DCs and P3 horns', 'Final check', 'Done'];
-    const t0 = performance.now();
+    const t0 = activeNow();
     pool = new SolverPool();
     let last = { stage: 'Planning', raids: 0 };
     const tick = setInterval(() => show(last), 1000);
@@ -389,7 +390,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       last = p;
       const i = Math.max(0, STAGES.indexOf(p.stage));
       bar.style.width = `${(i / (STAGES.length - 1) * 100).toFixed(0)}%`;
-      status.textContent = `${p.stage}${p.stage === 'Done' ? '' : '...'} · ${p.raids.toLocaleString()} raids · ${Math.round((performance.now() - t0) / 1000)}s`;
+      status.textContent = `${p.stage}${p.stage === 'Done' ? '' : '...'} · ${p.raids.toLocaleString()} raids · ${Math.round((activeNow() - t0) / 1000)}s`;
     }
     try {
       const res = await solveRoom(cfgs, team, {
@@ -399,7 +400,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         seeds: seeds.map(({ cfg, label }) => ({ cfg, label })),
       }, pool);
       const mine = Object.fromEntries(seeds.map((sd) => [sd.label, { values: sd.values, diff: formDiff(sd.values, lastValues) }]));
-      results = { ...res, bps, team, names: names(), minSucc: s.minSucc, ofKills: s.bpBasis === 'kills', secs: (performance.now() - t0) / 1000, values: lastValues, mine, skipped };
+      results = { ...res, bps, team, names: names(), minSucc: s.minSucc, ofKills: s.bpBasis === 'kills', secs: (activeNow() - t0) / 1000, values: lastValues, mine, skipped };
       sortCol = null; sortDir = 1; shownSetups.clear();
       show({ stage: 'Done', raids: res.stats.raids });
       bar.style.width = '100%';

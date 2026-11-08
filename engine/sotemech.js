@@ -28,7 +28,8 @@ export const SOTE_MECHANICS = {
       R('Solos and the ball', 'Solo', 'Purple sweets (1-3 HP, as many as needed) instead of sharks. Solos never bring Guthix rests.'),
     ] },
     { title: 'Players', rows: [
-      R('Stats', 'All', 'Super combats always on (118 Attack / Strength / Defence), Zeal or Piety (+25% Defence either way); prefires and ZCB specs range potted (112 Ranged) on Rigour, magic on Augury.', 'Gear tab: prayer, gear'),
+      R('Stats', 'All', 'Super combats always on (118 Attack / Strength / Defence), Zeal or Piety (+25% Defence either way); prefires and ZCB specs on Rigour at the player\'s Ranged level (below), magic on Augury.', 'Gear tab: prayer, gear'),
+      R('Range pot', 'All', 'Each player\'s Ranged level for prefires and ZCB specs. Divine: 112 the whole room. Regular: 112, then 1 lower every 90 seconds from the room\'s start (111 at 1:30, 110 at 3:00...). Not potted: 99. The Solver and the Full raid solver keep it as set - they don\'t search it. Setups saved before the option count as Divine.', 'Range pot (each player)'),
       R('Gear', 'All', 'Melee from the Gear tab (Amulet of rancour on every scythe); prefires and ZCB specs in their best ranged / magic gear, slot by slot.', 'Gear set'),
       R('Flinch', '3-5', 'Every attack is lined up so it\'s never on the tick before one of hers - she can\'t melee them.'),
       R('Flinch (duos / solos)', 'Solo, Duo', 'They don\'t flinch (more melees, fewer magic attacks - fewer death balls) unless a melee through prayer (max 27) could kill them.'),

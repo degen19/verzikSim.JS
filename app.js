@@ -1,4 +1,5 @@
 // Browser front end: chart source (import or build on the page), Run report, Optimizer, What's new.
+import { activeNow } from './engine/pause.js';
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart } from './engine/sim.js';
 import { mergeResults, reportHtml, reportPage, REPORT_CSS } from './engine/report.js';
@@ -20,6 +21,7 @@ import { SimPool } from './pool.js';
 import { installMagnifier } from './engine/magnify.js';
 import { installChartCrop } from './chartcrop.js';
 import { installTableSort } from './tablesort.js';
+import { installPause } from './pause-ui.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -27,6 +29,7 @@ const style = document.createElement('style'); style.textContent = REPORT_CSS; d
 installMagnifier(document);                                              // Magnify button on every report chart
 installChartCrop(document);                                              // drag across a report chart to crop it
 installTableSort(document);                                              // click a results column title to sort it
+installPause();                                                          // Pause / Resume beside every Stop button
 $('ver').textContent = `v${VERSION}`;
 // light / dark switch (saved in this browser)
 const themeLabel = () => { $('theme').textContent = document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode'; };
@@ -277,7 +280,7 @@ $('go').addEventListener('click', async () => {
     for (const s of sets) s[1] = s[1].map((c) => ({ ...c, scope }));                // phases to simulate (see simulate.js)
     const labels = sets.map(([b]) => $(`lab${b}`).value || (b === 'A' ? `${t}-man` : `${t}-man set ${b}`));
     const res = [];
-    const t0 = performance.now();
+    const t0 = activeNow();
     for (let k = 0; k < sets.length; k++) {
       $('runStatus').textContent = `Running ${labels[k]} (${k + 1} of ${sets.length})...`;
       try {
@@ -289,7 +292,7 @@ $('go').addEventListener('click', async () => {
       }
     }
     $('prog').style.width = '100%';
-    const secs = (performance.now() - t0) / 1000;
+    const secs = (activeNow() - t0) / 1000;
     $('err').textContent = notes.length ? `Chart notes:\n${notes.join('\n')}` : '';
     $('runStatus').textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * sets.length / secs).toLocaleString()} raids/s · ${lastInfo ? lastInfo.mode : ''} (seed ${seed}).`;
     $('out').innerHTML = reportHtml(res, labels, t, runs, { breakpoints })

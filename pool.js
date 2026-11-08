@@ -1,5 +1,6 @@
 // Browser worker pool for report runs: reusable Web Workers, a chunk queue, progress, Stop, and a
 // single-thread fallback. Results are identical for a given seed whatever the thread count (see engine/parallel.js).
+import { isPaused, whenFree, breath } from './engine/pause.js';
 import { planChunks, runChunk, mergeResults, workerCount, SINGLE_THREAD_BELOW } from './engine/parallel.js';
 
 const WORKER_URL = new URL('./worker.js', import.meta.url);   // relative: works under the GitHub Pages repo path
@@ -67,6 +68,7 @@ export class SimPool {
       const fail = (err) => { if (settled) return; settled = true; this.active = null; this.stop(); reject(err); };
       this.active = { cancel: () => fail(new Error('Run stopped.')) };
       const feed = (w) => {
+        if (isPaused()) { whenFree(() => { if (!settled) feed(w); }); return; }   // paused: hold the next chunk
         const c = queue.shift();
         if (c) w.postMessage({ cmd: 'chunk', runId, k: c.k, runs: c.runs, seed });
       };
@@ -102,7 +104,7 @@ export class SimPool {
         if (cancelled) throw new Error('Run stopped.');
         results.push(runChunk(cfgs, team, c.k, c.runs, seed));
         done += c.runs; onProgress && onProgress(done / runs);
-        await new Promise((r) => setTimeout(r, 0));
+        await breath();
       }
       this.active = null;
       return mergeResults(results);

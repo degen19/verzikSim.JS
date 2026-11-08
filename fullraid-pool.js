@@ -1,5 +1,6 @@
 // Worker pool for the Full raid solver: combinations split across the workers by raid range (every core on every
 // combination) and put back together in order. Without Web Workers it runs the same code on the page.
+import { isPaused, whenFree, breath } from './engine/pause.js';
 import { evalFull, evalRooms, roomReport, mergeReports, fullRaidReports } from './engine/fullraid.js';
 import { threadCount, workersAvailable } from './pool.js';
 
@@ -26,6 +27,7 @@ export class FullRaidPool {
     return new Promise((resolve, reject) => { this.queue.push({ msg, resolve, reject }); this.pump(); });
   }
   pump() {
+    if (isPaused()) { whenFree(() => this.pump()); return; }   // paused: no new pieces until resume
     while (this.idle.length && this.queue.length) {
       const w = this.idle.shift(), t = this.queue.shift(), id = ++this.seq;
       this.jobs.set(id, t); w.postMessage({ ...t.msg, id });
@@ -33,8 +35,8 @@ export class FullRaidPool {
   }
   /** Play `combos` on raids [from, to): [{totals, ends}] in order. */
   async run(combos, from, to, seed) {
-    if (this.local) { await new Promise((r) => setTimeout(r, 0)); return evalFull(combos, this.ctx, from, to, seed); }
-    const chunk = Math.max(25, Math.ceil((to - from) / this.n)), parts = [];
+    if (this.local) { await breath(); return evalFull(combos, this.ctx, from, to, seed); }
+    const chunk = Math.max(25, Math.ceil((to - from) / (this.n * 4))), parts = [];   // 4 pieces per worker: a pause lands sooner
     for (let a = from; a < to; a += chunk) parts.push(this.task({ combos, ctx: this.ctx, from: a, to: Math.min(to, a + chunk), seed }));
     const res = await Promise.all(parts);
     return combos.map((_, i) => {
@@ -45,7 +47,7 @@ export class FullRaidPool {
   }
   /** Room variants ([{kind, setup, cd}]) on raids [from, to): [{ends}] in order - split across the workers by variant. */
   async runRooms(items, from, to, seed) {
-    if (this.local) { await new Promise((r) => setTimeout(r, 0)); return evalRooms(items, this.ctx.team, from, to, seed); }
+    if (this.local) { await breath(); return evalRooms(items, this.ctx.team, from, to, seed); }
     const per = Math.max(1, Math.ceil(items.length / (this.n * 3))), parts = [];
     for (let i = 0; i < items.length; i += per) parts.push(this.task({ rooms: items.slice(i, i + per), ctx: this.ctx, from, to, seed }));
     return (await Promise.all(parts)).flat();
@@ -55,7 +57,7 @@ export class FullRaidPool {
     const parts = []; let done = 0;
     for (let a = from; a < to; a += size) {
       const b = Math.min(to, a + size);
-      parts.push((this.local ? (async () => { await new Promise((r) => setTimeout(r, 0)); return run(a, b); })() : this.task({ ...msg, from: a, to: b, seed }))
+      parts.push((this.local ? (async () => { await breath(); return run(a, b); })() : this.task({ ...msg, from: a, to: b, seed }))
         .then((x) => { done += b - a; if (onProgress) onProgress(done); return x; }));
     }
     return Promise.all(parts);

@@ -1,5 +1,7 @@
 // Xarpus tab: per-player room settings for every scale (sets A / B / C, saved in this browser or to a file), a Report
 // comparing the ticked sets and the Solver. Gear comes from the Gear tab (the Gear set picked here).
+import { breath, whenFree } from './engine/pause.js';
+import { activeNow } from './engine/pause.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { blankPlayer } from './engine/loadout.js';
 import { newXarpusResult, addXarpusRaids, xarpusReportHtml, xarpusReportPage } from './engine/xarpusreport.js';
@@ -33,7 +35,7 @@ export function createXarpus(host, { getTeam }) {
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
         <div data-rsets></div>
         <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
-        <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-act="dl" class="ghost" disabled>Download report</button>
+        <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button><button data-act="dl" class="ghost" disabled>Download report</button>
       </div>
       <div data-rstatus class="muted" style="margin-top:8px"></div><div data-rerr class="err"></div><div data-rout style="margin-top:8px"></div>
     `)}
@@ -48,7 +50,7 @@ export function createXarpus(host, { getTeam }) {
         <div data-vsets></div>
         <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label>Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
-        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
+        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
       </div>
       <div class="row" style="margin-top:6px">${[['def', 'Defence specs'], ['dps', 'Damage specs'], ['fix', 'Tick fixes'], ['start', 'Start spec'], ['lb', 'Lightbearer'], ['surge', 'Surges'], ['horn', 'Horns'], ['defTarget', 'Defence target'], ['zcbBelow', 'ZCB → claws HP'], ['chally', 'Chally last hit']]
         .map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
@@ -303,7 +305,7 @@ export function createXarpus(host, { getTeam }) {
       const to = Math.min(n, i + Math.max(25, Math.floor(200 / runs.length)));
       try { for (const x of runs) addXarpusRaids(x.res, x.players, t, i, to, { seed, ...x.opts }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`;
-      setTimeout(step, 0);
+      whenFree(() => setTimeout(step, 0));   // paused: the next step waits for resume
     };
     step();
   });
@@ -382,7 +384,7 @@ export function createXarpus(host, { getTeam }) {
       for (const [k, kinds] of players.map((_, k) => [k, new Set(res.specLog.filter((z) => z.i === k).map((z) => z.kind))])) for (const q of kinds) stats[k].spec[q] = (stats[k].spec[q] || 0) + 1;
       for (const [k, fx2] of players.map((_, k) => [k, new Set(res.fixes.filter((z) => z.i === k).map((z) => z.fix))])) for (const q of fx2) stats[k].fix[q] = (stats[k].fix[q] || 0) + 1;
       all.push({ i, total: res.end, key: res.end == null ? '' : `${(res.dropAt ?? res.kill) - EXHUMED_TICKS[t]},${res.end - (res.dropAt ?? res.kill)}`, open: res.openLanded, nOpen: res.openMaulers });
-      if (i % 200 === 199) await new Promise((z) => setTimeout(z, 0));
+      if (i % 200 === 199) await breath();
     }
     x.stats = stats;
     return (x.all = all);
@@ -474,7 +476,7 @@ export function createXarpus(host, { getTeam }) {
     const t = team(), ef = EFFORT[v.effort] || EFFORT.normal, sr = v.search || {};
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
-    const t1 = Date.now(), groups = [];
+    const t1 = activeNow(), groups = [];
     try {
       for (const [n, k] of keys.entries()) {
         if (me.stopped) break;
@@ -488,12 +490,12 @@ export function createXarpus(host, { getTeam }) {
         try {
           const items = await solveXarpus({ start, gear: all.map((p) => p.gear), allow: { ...v.allow }, surgeLimit: Number(st.surgeLimit) || 0, lbRings: Number(st.lbRings ?? t),
             swaps: !!sr.swaps, roles: sr.roles !== false, restarts, bps, ...ef, top: 10 }, (...args) => me.pool.run(...args),
-          (txt) => { status.textContent = `${pre}${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; }, () => me.stopped);
+          (txt) => { status.textContent = `${pre}${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; }, () => me.stopped);
           groups.push({ k, label: setLabel(k), items: items.map((r) => ({ ...r, set: k, names, run: { players: base.map((b, j) => ({ ...b, ...r.cfg.players[j] })), opts: { heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals, ...r.cfg } } })) });
         } finally { me.pool.stop(); }
         vresults = { groups: [...groups], bps, t }; showResults();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
     } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
     finally { vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });

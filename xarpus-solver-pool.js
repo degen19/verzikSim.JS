@@ -1,6 +1,7 @@
 // Worker pool for the Xarpus Solver: a batch of setups is split across the workers (by setup, or by raid range when
 // there are fewer setups than workers) and put back together in order, so every core works on every batch. Without
 // Web Workers it runs the same code on the page.
+import { isPaused, whenFree, breath } from './engine/pause.js';
 import { evalXarpus } from './engine/xarpussolve.js';
 import { threadCount, workersAvailable } from './pool.js';
 
@@ -29,6 +30,7 @@ export class XarpusPool {
     return new Promise((resolve, reject) => { this.queue.push({ msg, resolve, reject }); this.pump(); });
   }
   pump() {
+    if (isPaused()) { whenFree(() => this.pump()); return; }   // paused: no new pieces until resume
     while (this.idle.length && this.queue.length) {
       const w = this.idle.shift(), t = this.queue.shift(), id = ++this.seq;
       this.jobs.set(id, t); w.postMessage({ ...t.msg, id });
@@ -37,7 +39,7 @@ export class XarpusPool {
   /** Play `configs` on raids [from, to): [{totals, split, defEnd}] in order. */
   async run(configs, from, to, seed) {
     const common = { base: this.base, team: this.team, seed, opts: this.opts };
-    if (this.local) { await new Promise((r) => setTimeout(r, 0)); return evalXarpus(configs, this.base, this.team, from, to, seed, this.opts); }
+    if (this.local) { await breath(); return evalXarpus(configs, this.base, this.team, from, to, seed, this.opts); }
     if (configs.length >= this.n) {                                  // by setup
       const per = Math.ceil(configs.length / this.n), parts = [];
       for (let i = 0; i < configs.length; i += per) parts.push(this.task({ ...common, configs: configs.slice(i, i + per), from, to }));

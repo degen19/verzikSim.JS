@@ -2,6 +2,13 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.40.0 - 2026-11-07
+- `engine/pause.js` (new): one pause switch for the page - `isPaused`, `setPaused`, `whenRunning`, `breath` (yield + wait out a pause), `whenFree`, `activeNow` (a clock that stops while paused). `pause-ui.js` (new): the Pause / Resume buttons (live while their Stop button is; Stop while paused resumes; cleared when no run is going).
+- Worker pools (`pool.js`, `solver-pool.js`, the Nylocas / Sotetseg / Xarpus / solo / Full raid pools) hand out no new pieces while paused; the page loops (`breath`) and step loops (`whenFree`) wait. `fullraid-pool.js`: 4 pieces per worker per batch; `optimizer-ui.js`: each worker's share in ~20k setup-raid pieces - so a pause lands within seconds.
+- `nylo-ui.js`: Report Stop button (`reportMulti` takes `stopped`).
+- `engine/sote.js`: `rangedLevel(rangePot, t)`, `normRangePot`, `RANGE_POT_DRAIN` (150 ticks); `prefireNumbers(p, kind, defLvl, t)`; trace stats show the level. `sote-ui.js`: Range pot column, a mirrored table in the Solver, `rangePot` kept in the solver's fixed player parts; `fullraid-ui.js`: Range pot column in the Sotetseg block.
+- `engine/nylomech.js`, `engine/fullraidmech.js` (new); `mechanics-ui.js`: Room picker with Nylocas and Full raid solver; `engine/sotemech.js`: Range pot row.
+
 ## v1.39.2 - 2026-11-07
 - `engine/nylo.js`: `rangedPlan` - darts only: `tb bp tb` from k 1 too.
 

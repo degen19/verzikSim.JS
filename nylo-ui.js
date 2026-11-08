@@ -1,6 +1,8 @@
 // Nylocas tab (solo - 5s; duos: Healer Tech, solos: under him every form): per-player room settings (opening spec, damage specs, start spec, surge, tome tick fix,
 // Twisted-bows-only thresholds) and the team's backup BGS, saved in this browser; a Report (raids played, boss times,
 // Show raid) and the Solver (best spec setups, then each player's ranged tick fix thresholds). Gear from the Gear tab.
+import { breath, whenFree } from './engine/pause.js';
+import { activeNow } from './engine/pause.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { blankPlayer } from './engine/loadout.js';
 import { parseBreakpoints } from './engine/optimize.js';
@@ -35,7 +37,7 @@ export function createNylo(host, { getTeam }) {
         <label>Raids<input data-r="raids" type="number" min="100" step="1000" style="width:90px"></label>
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
         <label title="Target boss times (m:ss: his spawn to the room's end)">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
-        <button data-act="run">Run</button>
+        <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
       </div>
       <div data-rstatus class="muted" style="margin-top:8px"></div><div data-rerr class="err"></div><div data-rout style="margin-top:8px"></div>`)}
     ${pane('opt', 'data-opt', `
@@ -46,7 +48,7 @@ export function createNylo(host, { getTeam }) {
         <label>Effort<select data-o="effort"><option value="quick">Quick (800 raids)</option><option value="normal">Normal (1,500)</option><option value="thorough">Thorough (3,000)</option></select></label>
         ${pick()}><input type="checkbox" data-oc="bgs" checked>Backup BGS</label>
         ${pick()}><input type="checkbox" data-oc="thr" checked>Tick fix thresholds</label>
-        <button data-oact="run">Optimize</button><button data-oact="stop" class="ghost" disabled>Stop</button>
+        <button data-oact="run">Optimize</button><button data-oact="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
       </div>
       <div data-ostatus class="muted" style="margin-top:8px"></div><div data-oerr class="err"></div><div data-oout style="margin-top:8px"></div>`)}
     ${pane('solve', 'data-solve', `
@@ -58,7 +60,7 @@ export function createNylo(host, { getTeam }) {
       <div class="row">
         <label title="Target boss times (m:ss)">Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label>Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
-        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
+        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
       </div>
       <div class="row" style="margin-top:6px">${[['open', 'Opening specs'], ['specs', 'Second specs'], ['start', 'Start spec'], ['surge', 'Surges'], ['backup', 'Backup BGS']]
         .map(([k, l]) => `${pick()}><input type="checkbox" data-va="${k}">${l}</label>`).join('')}
@@ -195,7 +197,7 @@ export function createNylo(host, { getTeam }) {
     for (let i = 0; i < x.n; i++) {
       const r = runNylo(x.run.players, team(), new Rng(`${x.seed}#${i}`), x.run.opts);
       all.push({ i, total: r.roomEnd, key: r.roomEnd == null ? '' : String(r.roomEnd) });
-      if (i % 250 === 249) await new Promise((z) => setTimeout(z, 0));
+      if (i % 250 === 249) await breath();
     }
     return (x.all = all);
   }
@@ -225,7 +227,7 @@ export function createNylo(host, { getTeam }) {
   const reportHtml = (run, o = {}) => reportMulti([{ k: 'A', label: 'Nylocas', run }], o);
   /** Several setups (sets) on the same raids: each one's stats, the charts with a line / bars each, Show raid each.
    *  list: [{k, label, run}]. */
-  async function reportMulti(list, { n = 4000, seed = `n${Date.now()}`, bps = [], prog = () => {}, title = null } = {}) {
+  async function reportMulti(list, { n = 4000, seed = `n${Date.now()}`, bps = [], prog = () => {}, title = null, stopped = () => false } = {}) {
     const asc = [...bps].sort((a, b) => a - b), multi = list.length > 1, rows = [];
     for (const x of list) {
       const run = x.run, wave = run.opts && run.opts.waveDist ? { dist: run.opts.waveDist, mean: run.opts.waveDist.reduce((a, [t, f]) => a + t * f, 0) } : null;
@@ -235,7 +237,7 @@ export function createNylo(host, { getTeam }) {
         const res = runNylo(run.players, team(), new Rng(`${seed}#${i}`), run.opts);
         all.push({ i, boss: res.boss, wave: res.wave, total: res.roomEnd, key: String(res.boss) });
         for (const [k, v] of Object.entries(res.st)) agg[k] = (agg[k] || 0) + v;
-        if (i % 250 === 249) { prog(i + 1, x.k); await new Promise((z) => setTimeout(z, 0)); }
+        if (i % 250 === 249) { prog(i + 1, x.k); await breath(); if (stopped()) throw new Error('Stopped.'); }
       }
       fx.all = all;
       rows.push({ ...x, wave, all, agg, idx: flat.length - 1, s: statsRow(all.map((z) => z.total ?? 99999), bps), sb: wave ? statsRow(all.map((z) => z.boss ?? 99999), []) : null });
@@ -268,8 +270,10 @@ export function createNylo(host, { getTeam }) {
     if (el.dataset.nrlabel) { r.labels[el.dataset.nrlabel] = el.value; persist(); return; }
     if (!el.dataset.r) return; r[el.dataset.r] = el.dataset.r === 'raids' ? Number(el.value) || 4000 : el.value; persist();
   });
+  let repJob = null;
   rep.addEventListener('click', async (e) => {
-    if (e.target.dataset.act !== 'run') return;
+    if (e.target.dataset.act === 'stop') { if (repJob) repJob.stop = true; return; }
+    if (e.target.dataset.act !== 'run' || repJob) return;
     const r = repState(), status = rep.querySelector('[data-rstatus]'), err = rep.querySelector('[data-rerr]'), out = rep.querySelector('[data-rout]');
     err.textContent = '';
     let bps = []; try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
@@ -281,8 +285,13 @@ export function createNylo(host, { getTeam }) {
       if (wave && wave.error) { err.textContent = `Set ${k} wave time: ${wave.error}`; return; }
       list.push({ k, label: setLabel(k), run: { players: playersNow(st), opts: { ...roomOpts(st), plans: { backup: team() === 1 ? null : st.backup }, ...(wave ? { waveDist: wave.dist } : {}) } } });
     }
-    out.innerHTML = await reportMulti(list, { n, seed, bps, prog: (d, k) => { status.textContent = `Running ${keys.length > 1 ? `set ${k}: ` : ''}${d} / ${n}`; } });
-    status.textContent = `Done: ${n.toLocaleString()} raids (seed ${seed}).`;
+    const me = repJob = { stop: false }, go = rep.querySelector('[data-act="run"]'), stopB = rep.querySelector('[data-act="stop"]');
+    go.disabled = true; stopB.disabled = false;
+    try {
+      out.innerHTML = await reportMulti(list, { n, seed, bps, stopped: () => me.stop, prog: (d, k) => { status.textContent = `Running ${keys.length > 1 ? `set ${k}: ` : ''}${d} / ${n}`; } });
+      status.textContent = `Done: ${n.toLocaleString()} raids (seed ${seed}).`;
+    } catch (x) { if (me.stop) status.textContent = 'Stopped.'; else err.textContent = `Couldn't run: ${x.message}`; }
+    finally { repJob = null; go.disabled = false; stopB.disabled = true; }
   });
 
   // ---------------------------------------------------------------- solver
@@ -355,7 +364,7 @@ export function createNylo(host, { getTeam }) {
     const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: 'gain', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: normSwitches(p.maxSwitches) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
-    const t1 = Date.now(), say = (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };
+    const t1 = activeNow(), say = (txt) => { status.textContent = `${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; };
     try {
       me.pool = new NyloPool(base, t, opts);
       const run = (...args) => me.pool.run(...args);
@@ -370,7 +379,7 @@ export function createNylo(host, { getTeam }) {
           showResults();
         }
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
     } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
     finally { if (me.pool) me.pool.stop(); vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
@@ -404,7 +413,7 @@ export function createNylo(host, { getTeam }) {
     const cfgNow = { players: st.players.map((p) => structuredClone(p)), backup: t > 1 && st.backup ? { ...st.backup } : null };
     ojob = { stopped: false, pool: null }; const me = ojob;
     obtn('run').disabled = true; obtn('stop').disabled = false;
-    const t1 = Date.now(), say = (txt) => { status.textContent = `${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; };
+    const t1 = activeNow(), say = (txt) => { status.textContent = `${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; };
     ores = { n, names, bgs: null, thr: null }; showOpt();
     try {
       me.pool = new NyloPool(base, t, roomOpts(st));
@@ -421,7 +430,7 @@ export function createNylo(host, { getTeam }) {
         ores.combWhat = [bb ? `backup BGS: ${names[bb.p]} at Defence ${bb.at}+` : '', anyThr ? 'every player\'s thresholds below' : ''].filter(Boolean).join(' + ');
         showOpt();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
     } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't optimize: ${x.message}`; }
     finally { if (me.pool) me.pool.stop(); ojob = null; obtn('run').disabled = false; obtn('stop').disabled = true; }
   });

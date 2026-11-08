@@ -8,13 +8,20 @@
 //    swap to Ultor (the regen timer restarts). The solver will pick Surge / Lightbearer cycles too.
 //  - Prefires with the Twisted bow / ZCB are made in their best ranged gear, Shadow / Shadow Barrage in their best magic
 //    gear (each slot: their ranged, magic or melee item, or nothing - loadout.js bestWorn).
+import { breath, whenFree } from './engine/pause.js';
+import { activeNow } from './engine/pause.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS, putGearSet } from './engine/gearstore.js';
 import { bestWorn, bonuses, blankPlayer } from './engine/loadout.js';
 import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './engine/sotereport.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { solveSote } from './engine/sotesolve.js';
 import { SotePool } from './sote-solver-pool.js';
-import { defaultMazes, MAZE_HOW, defaultSpecs, defaultSetup, SPECS, SPEC_COST, CLAW_BELOW, BACKUP_DEF, BACKUP_PRIMARY } from './engine/sote.js';
+import { defaultMazes, MAZE_HOW, defaultSpecs, defaultSetup, SPECS, SPEC_COST, CLAW_BELOW, BACKUP_DEF, BACKUP_PRIMARY, normRangePot } from './engine/sote.js';
+/** Range pot cell: a tickbox, and with it ticked Divine / Regular. attr: the data attribute (value `${key}`). */
+export const RANGE_POT_TIP = 'Range potted: Divine - 112 Ranged all room; Regular - 112, then 1 lower every 90 seconds from the room\'s start. Not ticked: 99 Ranged. Used for prefires and ZCB specs; the solvers keep it as set';
+export const rangePotCell = (attr, key, v) => { v = normRangePot(v); return `<label class="pick" style="flex-direction:row;gap:4px;align-items:center" title="${RANGE_POT_TIP}"><input type="checkbox" data-${attr}="${key}" ${v ? 'checked' : ''}>${v ? `<select data-${attr}kind="${key}"><option value="divine" ${v === 'divine' ? 'selected' : ''}>Divine</option><option value="regular" ${v === 'regular' ? 'selected' : ''}>Regular</option></select>` : ''}</label>`; };
+/** The new value from a Range pot tickbox / select change (prev: the stored value). */
+export const rangePotFrom = (el, isKind, prev) => (isKind ? el.value : el.checked ? (normRangePot(prev) || 'divine') : '');
 import { projectPlayer, TYPICAL_TIMES } from './engine/soteplan.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresults.js';
@@ -37,7 +44,7 @@ export const PREFIRES = [
   ["Tumeken's shadow", "Tumeken's shadow", "Tumeken's shadow"],
 ];
 const STYLE = { 'Twisted bow': 'range', 'Zaryte crossbow': 'range', 'Shadow ancient sceptre': 'mage', "Tumeken's shadow": 'mage' };
-const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 2, sharks: 3, rests: 0, restores: 3, prefire: '' });
+const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 2, sharks: 3, rests: 0, restores: 3, prefire: '', rangePot: 'divine' });
 /** How each player crosses each maze (First maze / Second maze; default by their phoenix necklaces - defaultMazes):
  *  Pneck: stall on the maze with a phoenix necklace. Redemption (1-4s, with a locator orb from the Gear tab): orb down to
  *  1 HP and stall with Redemption (a restore sip a maze; they swing a tick late). Shark (one player at most): skip away
@@ -55,7 +62,7 @@ export function createSote(host, { getTeam }) {
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
         <div data-rsets></div>
         <label title="Target room times (m:ss), rounded down to a tick. Marked on the chart and added to Odds.">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
-        <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-act="dl" class="ghost" disabled>Download report</button>
+        <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button><button data-act="dl" class="ghost" disabled>Download report</button>
       </div>
       <div data-rstatus class="muted" style="margin-top:8px"></div>
       <div data-rerr class="err"></div>
@@ -69,7 +76,7 @@ export function createSote(host, { getTeam }) {
         <label>Raids per instance<input data-o="raids" type="number" min="100" step="500" style="width:90px"></label>
         <label>Seed (optional)<input data-o="seed" placeholder="random" style="width:100px"></label>
         <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-o="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
-        <button data-oact="run">Find the best entry</button><button data-oact="stop" class="ghost" disabled>Stop</button>
+        <button data-oact="run">Find the best entry</button><button data-oact="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
       </div>
       <div data-ostatus class="muted" style="margin-top:8px"></div>
       <div data-oerr class="err"></div>
@@ -87,7 +94,7 @@ export function createSote(host, { getTeam }) {
         <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label title="Quick: fewer raids per try and rounds; Thorough: more (slower, steadier)">Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
         <label title="Surge potions the Solver may use (its own limit, separate from the room setting above). Starts at the room setting until you change it">Solver surge limit<select data-v="surgeLimit"></select></label>
-        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
+        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
       </div>
       <div class="row" style="margin-top:6px">
         ${[['prefire', 'Prefires'], ['start', 'Start spec'], ['surge', 'Surges'], ['lb', 'Lightbearer'], ['specs', 'Specs'], ['entry', 'Entry instance']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}
@@ -98,6 +105,7 @@ export function createSote(host, { getTeam }) {
           ['noLateSurge', 'No P2 / P3 surges', 'Only setups where every surge is drunk in P1 (with a P1 spec, backup, horn or ZCB spec prefire); in its raids nobody surges in P2 or P3, even if their P1 spec slips to the next phase'],
           ['restarts', 'Restarts', 'Search again from two other starting setups - the default for the scale and the setup above with the players\' roles moved one along - and keep the best of everything (about 3x the time)']].map(([k, l, tt]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="${tt}"><input type="checkbox" data-vs="${k}">${l}</label>`).join('')}
       </div>
+      <div data-vpots style="margin-top:6px"></div>
       <div data-vstatus class="muted" style="margin-top:8px"></div>
       <div data-verr class="err"></div>
       <div data-vout style="margin-top:8px"></div>
@@ -249,6 +257,7 @@ export function createSote(host, { getTeam }) {
         <td><input type="number" min="0" step="1" style="width:64px" data-s="${k}|rests" value="${esc(p.rests ?? 0)}"></td>
         <td><input type="number" min="0" step="1" style="width:64px" data-s="${k}|restores" value="${esc(p.restores ?? 3)}"></td>
         <td><select data-s="${k}|prefire" style="max-width:150px">${opts}</select>${note}</td>
+        <td>${rangePotCell('pot', k, p.rangePot)}</td>
         <td>${mazeSel(p, k, 0)}</td><td>${mazeSel(p, k, 1)}</td></tr>`;
     };
     root.innerHTML = `<h3 style="margin-top:0">Sotetseg <span class="muted small">(${team()}-man)</span></h3>
@@ -269,7 +278,7 @@ export function createSote(host, { getTeam }) {
       ${runs.length ? `<div class="muted small" style="margin-bottom:4px">Run: every player runs the ${runs.map((i) => (i ? 'second' : 'first')).join(' and ')} maze instead of skipping it - a real maze each time; usually 4-12 ticks slower than a skip.</div>` : ''}
       <style>.sote-cfg th{white-space:normal !important;max-width:96px;vertical-align:bottom}</style>
       <div class="scroll"><table class="bt sote-cfg">
-        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Guthix rest sips they bring (a 4 dose = 4 sips): heal 5 a sip, on the potion delay (can go with a shark on the same tick)">Guthix rest sips</th><th title="Prayer restore sips they bring (default 3): a redemption skip takes one a maze; after the second maze a redemption skipper uses spares on locator orb Redemption procs to Heal Other">Restore sips</th><th title="Their first attack, before the room starts">Prefire</th><th title="How they cross the first maze. Pneck: stall with a phoenix necklace. Redemption: orb down to 1 HP and stall with Redemption (locator orb; 1-4s). Shark: skip away from the others, eating through it (one player). Run: everyone runs it">First maze</th><th title="How they cross the second maze">Second maze</th></tr>
+        <tr><th></th><th title="Spec % at the start of the room. 95: their first regen comes the tick after their first special attack, then as normal">Start spec (%)</th><th title="Drink a surge with their first special attack">Surge</th><th title="How many spec regens they wear Lightbearer for (a regen every 25 ticks on it), then swap to Ultor">Lightbearer cycles</th><th title="Phoenix necklaces they bring">Phoenix necklaces</th><th title="Sharks they bring">Sharks</th><th title="Guthix rest sips they bring (a 4 dose = 4 sips): heal 5 a sip, on the potion delay (can go with a shark on the same tick)">Guthix rest sips</th><th title="Prayer restore sips they bring (default 3): a redemption skip takes one a maze; after the second maze a redemption skipper uses spares on locator orb Redemption procs to Heal Other">Restore sips</th><th title="Their first attack, before the room starts">Prefire</th><th title="${RANGE_POT_TIP}">Range pot</th><th title="How they cross the first maze. Pneck: stall with a phoenix necklace. Redemption: orb down to 1 HP and stall with Redemption (locator orb; 1-4s). Shark: skip away from the others, eating through it (one player). Run: everyone runs it">First maze</th><th title="How they cross the second maze">Second maze</th></tr>
         ${st.players.map(row).join('')}
       </table></div>
       <details class="video" data-specs ${st.specsOpen === false ? '' : 'open'} style="margin-top:14px"><summary>Specs</summary>
@@ -352,6 +361,7 @@ export function createSote(host, { getTeam }) {
       p.mazes = [...(Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), !!(gp && gp[k] && gp[k].locator), team()))];
       p.mazes[i] = t.value; persist(); render(); return;
     }
+    if (t.dataset.pot != null || t.dataset.potkind != null) { const k = Number(t.dataset.pot ?? t.dataset.potkind); st.players[k].rangePot = rangePotFrom(t, t.dataset.potkind != null, st.players[k].rangePot); persist(); render(); showSol(); return; }
     if (!t.dataset.s) return;
     const [k, key] = t.dataset.s.split('|');
     st.players[Number(k)][key] = key === 'prefire' ? t.value : key === 'surge' ? t.checked : (t.value === '' ? '' : Number(t.value));
@@ -380,7 +390,7 @@ export function createSote(host, { getTeam }) {
       const gear = gp ? gp[k] : blankPlayer(k), orb = !!gear.locator;
       return { name: gear.name || `Player ${k + 1}`, gear, own: true, prefire: p.prefire || '', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge,
         lbCycles: Number(p.lbCycles || 0), pnecks: Number(p.pnecks || 0), sharks: Number(p.sharks || 0), rests: Number(p.rests || 0), restores: Number(p.restores ?? 3),
-        mazes: Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), orb, team()),
+        mazes: Array.isArray(p.mazes) ? p.mazes : defaultMazes(Number(p.pnecks || 0), orb, team()), rangePot: normRangePot(p.rangePot),
         specs: (Array.isArray(p.specs) ? p.specs : (defaultSpecs(team())[k] || [])).map((x) => { const y = { ...x, horn: gear.horn ? (x.horn ? (Number(x.horn) === 2 ? 2 : true) : false) : false }; if (!barrageOk) delete y.ifBarrage; return y; }) };
     });
   };
@@ -426,7 +436,7 @@ export function createSote(host, { getTeam }) {
       const to = Math.min(n, i + Math.max(10, Math.floor(50 / runs.length)));
       try { for (const x of runs) addSoteRaids(x.res, x.players, t, i, to, { seed, ...x.opts }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`;
-      setTimeout(step, 0);
+      whenFree(() => setTimeout(step, 0));   // paused: the next step waits for resume
     };
     step();
   });
@@ -512,7 +522,7 @@ export function createSote(host, { getTeam }) {
       try { addSoteRaids(x.res[entry], x.players, t, i, to, { seed, entry, ...x.opts }); } catch (y) { err.textContent = `Couldn't run set ${x.k}: ${y.message}`; me.stop = true; }
       i = to; if (i >= n) { entry++; i = 0; if (entry > 3) { entry = 0; si++; } }
       status.textContent = si >= runs.length ? 'Ranking...' : `Running${runs.length > 1 ? ` set ${runs[si].k} (${si + 1} of ${runs.length})` : ''}... i${entry}: ${i.toLocaleString()} / ${n.toLocaleString()} raids`;
-      setTimeout(step, 0);
+      whenFree(() => setTimeout(step, 0));   // paused: the next step waits for resume
     };
     step();
   });
@@ -538,10 +548,18 @@ export function createSote(host, { getTeam }) {
     for (const k of ALLOW) sol.querySelector(`[data-va="${k}"]`).checked = v.allow[k] !== false;
     v.search ||= { ...SEARCH_DEFAULT };
     for (const k of Object.keys(SEARCH_DEFAULT)) sol.querySelector(`[data-vs="${k}"]`).checked = !!v.search[k];
+    // Range pots (not searched - the same setting as in each set's player table above, shown here for the sets to solve)
+    const ks = (v.sets || []).filter((k) => rs.sets[k]), names = playersNow(tstate()).map((p) => p.name);
+    sol.querySelector('[data-vpots]').innerHTML = ks.length ? `<div class="muted small" title="${RANGE_POT_TIP}">Range pot (kept as set - not searched; the same setting as in the player table above)</div>
+      <div class="scroll"><table class="bt"><tr><th></th>${names.map((n) => `<th>${esc(n)}</th>`).join('')}</tr>${ks.map((k) => `<tr><td class="rl">${esc(setLabel(k))}</td>${setOf(k).players.map((p, j) => `<td>${rangePotCell('vpot', `${k}|${j}`, p.rangePot)}</td>`).join('')}</tr>`).join('')}</table></div>` : '';
   };
   for (const ev of ['input', 'change']) sol.addEventListener(ev, (e) => {
     const v = solState();
-    if (e.target.dataset.runset) v.sets = pickSets(v.sets, e.target);
+    if (ev === 'change' && (e.target.dataset.vpot != null || e.target.dataset.vpotkind != null)) {
+      const [k, j] = String(e.target.dataset.vpot ?? e.target.dataset.vpotkind).split('|'), p = setOf(k).players[Number(j)];
+      p.rangePot = rangePotFrom(e.target, e.target.dataset.vpotkind != null, p.rangePot); persist(); render(); showSol(); return;
+    }
+    if (e.target.dataset.runset) { v.sets = pickSets(v.sets, e.target); persist(); showSol(); return; }
     else if (e.target.dataset.v) v[e.target.dataset.v] = e.target.dataset.v === 'surgeLimit' ? Number(e.target.value) : e.target.value;
     else if (e.target.dataset.va) v.allow[e.target.dataset.va] = e.target.checked;
     else if (e.target.dataset.vs) { v.search ||= { ...SEARCH_DEFAULT }; v.search[e.target.dataset.vs] = e.target.checked; }
@@ -594,7 +612,7 @@ export function createSote(host, { getTeam }) {
       const ev = new Set(res.events || []);
       for (const x of res.specLog || []) { ev.add(`fired:${x.i}:${x.carried ? x.ph - 1 : x.ph}:${x.kind}`); if (x.carried) ev.add(`carried:${x.i}:${x.ph - 1}`); }
       all.push({ i, total: res.end != null && res.split ? res.end : null, key: res.split ? SPL.map((q) => res.split[q]).join(',') : '', wipeAt: res.wipeAt, hp: res.hp, ev });
-      if (i % 100 === 99) { if (msg) msg.textContent = `Replaying ${allN.toLocaleString()} raids... ${(i + 1).toLocaleString()}`; await new Promise((z) => setTimeout(z, 0)); }
+      if (i % 100 === 99) { if (msg) msg.textContent = `Replaying ${allN.toLocaleString()} raids... ${(i + 1).toLocaleString()}`; await breath(); }
     }
     if (msg) msg.textContent = '';
     return (r.replay.all = all);
@@ -733,7 +751,7 @@ export function createSote(host, { getTeam }) {
     let all = playersNow(st);
     if (full) all = all.map((p, j) => { const gear = { ...p.gear, ...(full.gearPatch[j] || {}) };   // Full raid: who holds a horn this room
       return { ...p, gear, specs: p.specs.map((x) => ({ ...x, horn: gear.horn ? x.horn : false })) }; });
-    const base = all.map((p, j) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes, ...(full ? { surgeCd: full.surgeCd[j] || 0 } : {}) }));
+    const base = all.map((p, j) => ({ name: p.name, gear: p.gear, pnecks: p.pnecks, sharks: p.sharks, rests: p.rests, restores: p.restores, mazes: p.mazes, rangePot: p.rangePot, ...(full ? { surgeCd: full.surgeCd[j] || 0 } : {}) }));
     const start = { entry: Number(st.entry) || 0, backupDef: st.backupDef ?? BACKUP_DEF, players: all.map((p) => ({ prefire: p.prefire, startSpec: p.startSpec, surge: p.surge, lbCycles: p.lbCycles, specs: p.specs.map((x) => ({ spec: 'none', backup: false, horn: false, ...x })) })) };
     const sr0 = v.search || SEARCH_DEFAULT;
     const opts = { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF, ...(sr0.noLateSurge ? { noLateSurge: true } : {}) };
@@ -792,16 +810,16 @@ export function createSote(host, { getTeam }) {
     const t = team();
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
-    const t1 = Date.now(), groups = [];
+    const t1 = activeNow(), groups = [];
     try {
       for (const [n, k] of keys.entries()) {
         if (me.stopped) break;
         const pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '';
-        const items = await solveSet(k, v, bps, me, (txt) => { status.textContent = `${pre}${txt} (${Math.round((Date.now() - t1) / 1000)}s)`; });
+        const items = await solveSet(k, v, bps, me, (txt) => { status.textContent = `${pre}${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; });
         groups.push({ k, label: setLabel(k), items });
         vresults = { groups: [...groups], bps, t }; showResults();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((Date.now() - t1) / 1000)}s.`;
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
     } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
     finally { vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
@@ -824,7 +842,7 @@ export function createSote(host, { getTeam }) {
   async function fullProcedure(el, { players, entry = 0, opts = {}, names = [], n = 2000, seed = 'fullproc', bps = [], say = () => {} }) {
     fullNames = names;
     const res = newSoteResult(), t = team(), o = { entry, ...opts };
-    for (let i = 0; i < n; i += 100) { addSoteRaids(res, players, t, i, Math.min(n, i + 100), { seed, ...o }); say(`Playing Sotetseg raids... ${Math.min(n, i + 100).toLocaleString()} / ${n.toLocaleString()}`); await new Promise((z) => setTimeout(z, 0)); }
+    for (let i = 0; i < n; i += 100) { addSoteRaids(res, players, t, i, Math.min(n, i + 100), { seed, ...o }); say(`Playing Sotetseg raids... ${Math.min(n, i + 100).toLocaleString()} / ${n.toLocaleString()}`); await breath(); }
     const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];
     const r = { set: '__full', cfg: { players, backupDef: opts.backupDef, clawBelow: opts.clawBelow }, events: res.events || {}, totals: [...res.total, ...Array(res.wipes).fill(9999)],
       replay: { players, seed, entry, opts: o, raids: (res.idx || []).map((i, j) => ({ i, total: res.total[j], key: SPL.map((q) => res.split[q][j]).join(',') })), allN: res.runs } };

@@ -1,6 +1,7 @@
 // Verzik for solos: no chart - the room settings below (P1 plays itself: Dawn spec off cooldown, Dawn autos, Lightbearer).
 // Sets A / B / C (switch, copy, save in this browser or to a file), a Report comparing the ticked sets, and the Solver
 // (Commit % for each spec level, and optionally the shadow mode, Ayak P2, godbook and Lightbearer cycles). Gear: the Gear tab.
+import { activeNow } from './engine/pause.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS, putGearSet } from './engine/gearstore.js';
 import { applyToCfg, blankPlayer, BOTH_AMULETS } from './engine/loadout.js';
 import { reportHtml, reportPage } from './engine/report.js';
@@ -52,7 +53,7 @@ export function createSolo(host) {
         <div data-rsets></div>
         <label title="Target room times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label title="Numbers of reds sets to mark off: the report shows the % of kills done in each (e.g. 4, 5, 6, 7)">Mark reds sets<input data-r="marks" placeholder="e.g. 4, 5, 6, 7" style="width:120px"></label>
-        <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-act="dl" class="ghost" disabled>Download report</button>
+        <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button><button data-act="dl" class="ghost" disabled>Download report</button>
       </div>
       <div data-rstatus class="muted" style="margin-top:8px"></div><div class="bar"><div data-prog></div></div>
       <div data-rerr class="err"></div><div data-rout style="margin-top:8px"></div>
@@ -70,7 +71,7 @@ export function createSolo(host) {
         <label>Breakpoints (optional)<input data-v="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <label title="How far each raid is played while solving: times are then to the end of P2, or the whole room">Phases<select data-v="scope"><option value="full">Full raid</option><option value="p2">P1 + P2 (to end of P2)</option></select></label>
         <label>Effort<select data-v="effort"><option value="quick">Quick</option><option value="normal">Normal</option><option value="thorough">Thorough</option></select></label>
-        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button>
+        <button data-vact="run">Solve</button><button data-vact="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page): the pieces already running finish, then it waits. Resume carries on from the same spot with the inputs it started with">Pause</button>
       </div>
       <div class="row" style="margin-top:6px">${[['shadow', 'Shadow mode'], ['ayak', 'Ayak P2'], ['godbook', 'Godbook'], ['lb', 'Lightbearer cycles'], ['lbcamp', 'LB P2 Until Reds'], ['flick', 'LB Flick Reds']].map(([k, l]) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-va="${k}">${l}</label>`).join('')}</div>
       <div data-vstatus class="muted" style="margin-top:8px"></div><div data-verr class="err"></div><div data-vout style="margin-top:8px"></div>
@@ -231,7 +232,7 @@ export function createSolo(host) {
     const runs = Math.max(100, Number(r.raids) || 5000), seed = String(r.seed || '').trim() || Math.floor(Math.random() * 1e9);
     const labels = keys.map((k) => (r.labels[k] || '').trim() || `Set ${k}`);
     running = true; btn('run').disabled = true; btn('stop').disabled = false;
-    const res = [], t0 = performance.now();
+    const res = [], t0 = activeNow();
     try {
       for (let i = 0; i < keys.length; i++) {
         const cfgs = [{ ...cfgOfSet(setOf(keys[i])), scope: r.scope }];
@@ -241,7 +242,7 @@ export function createSolo(host) {
       prog.style.width = '100%';
       const ropts = { breakpoints: bps, markSets: marks };
       out.innerHTML = reportHtml(res, labels, 1, runs, ropts); lastPage = reportPage(res, labels, 1, runs, ropts); btn('dl').disabled = false;
-      const secs = (performance.now() - t0) / 1000;
+      const secs = (activeNow() - t0) / 1000;
       status.textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * keys.length / secs).toLocaleString()} raids/s (seed ${seed}).`;
     } catch (x) { err.textContent = x.message; status.textContent = ''; }
     finally { running = false; btn('run').disabled = false; btn('stop').disabled = true; }
@@ -302,7 +303,7 @@ export function createSolo(host) {
     const eff = EFFORT[v.effort] || EFFORT.normal, scope = v.scope === 'p2' ? 'p2' : 'full';
     solver = { stopped: false, pool: null }; const me = solver;
     vbtn('run').disabled = true; vbtn('stop').disabled = false; out.innerHTML = ''; lastBps = bps; lastDowns = downs; lastScope = scope;
-    const t0 = performance.now(), groups = [];
+    const t0 = activeNow(), groups = [];
     try {
       for (const [n, k] of keys.entries()) {
         if (me.stopped) break;
@@ -316,7 +317,7 @@ export function createSolo(host) {
         } finally { me.pool.stop(); }
         results = [...groups]; showResults();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${((performance.now() - t0) / 1000).toFixed(0)}s.`;
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${((activeNow() - t0) / 1000).toFixed(0)}s.`;
     } catch (x) { if (!me.stopped) err.textContent = x.message; else status.textContent = 'Stopped.'; }
     finally { solver = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });

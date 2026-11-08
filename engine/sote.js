@@ -85,7 +85,17 @@ export const PREFIRE = {
   'Shadow Barrage':   { weapon: 'Shadow ancient sceptre', style: 'mage', tick: 5, delay: 4 },
   "Tumeken's shadow": { weapon: "Tumeken's shadow", style: 'mage', tick: 5, delay: 4 },
 };
-const RANGED = 112;                                             // range potted (99 + ranging potion) for prefires / ZCB
+const RANGED = 112, RANGED_BASE = 99;                            // range potted (99 + ranging potion) / not
+export const RANGE_POT_DRAIN = 150;                              // a regular ranging potion: -1 Ranged every 90s from the room's start
+/** A player's Ranged level on tick t (prefires / ZCB): rangePot 'divine' 112 all room; 'regular' 112, then 1 lower every
+ *  90 seconds from the room's start (to 99); none ('' / null) 99. */
+export function rangedLevel(rangePot, t = 0) {
+  if (rangePot === 'divine') return RANGED;
+  if (rangePot === 'regular') return Math.max(RANGED_BASE, RANGED - Math.floor(Math.max(0, t) / RANGE_POT_DRAIN));
+  return RANGED_BASE;
+}
+/** The setting as stored: 'divine' | 'regular' | '' (not potted). Unset (setups from before the option): divine. */
+export const normRangePot = (v) => (v === 'divine' || v === 'regular' || v === '' ? v : v === false || v === 'none' ? '' : 'divine');
 const PRAY = { Piety: [1.20, 1.23], Zeal: [1.25, 1.28] };     // melee accuracy / strength
 
 /** Her defence roll for a style at her current Defence level. */
@@ -209,12 +219,13 @@ export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, ZCB_SPEC = 75, ZCB_DEL
 // attack; not a melee (no melee from her off it). Surge: +25% spec, straight after their first spec (once).
 
 /** A prefire's numbers: {ch, mx, kind}. Ranged on Rigour (+20% acc, +23% str), magic on Augury (+25% acc, +4% dmg). */
-export function prefireNumbers(p, kind, defLvl) {
+export function prefireNumbers(p, kind, defLvl, t = 0) {
   const pf = PREFIRE[kind];
   const { set } = bestWorn(p.gear, pf.style, pf.weapon), b = bonuses(set);
   if (pf.style === 'range') {
     const v = b.eliteVoid ? [1.10, 1.125] : [1, 1];
-    const ea = Math.floor((Math.floor(RANGED * 1.20) + 8) * v[0]), es = Math.floor((Math.floor(RANGED * 1.23) + 8) * v[1]);
+    const lvl = rangedLevel(p.rangePot, t);
+    const ea = Math.floor((Math.floor(lvl * 1.20) + 8) * v[0]), es = Math.floor((Math.floor(lvl * 1.23) + 8) * v[1]);
     let roll = ea * (b.atk[4] + 64), mx = Math.floor(0.5 + es * (b.rstr + 64) / 640);
     if (pf.weapon === 'Twisted bow') { const [a, d] = tbowMult(SOTE.mag); roll = Math.floor(roll * a); mx = Math.floor(mx * d); }
     if (pf.spec) roll *= 2;                                           // ZCB spec: double accuracy
@@ -309,7 +320,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const gearOf = (p, style, weapon) => { const w = ringOn(worn(p.gear, style, weapon), p); return Object.values(w).filter((x) => x && x !== 'none').join(', '); };
   const regenIn = (p) => (p.spec >= 100 ? null : Math.max(1, (p.lb ? 25 : 50) - (p.regen || 0)));
   // (the sim's fixed boosted stats - super combat 118s, ranging potion 112, 99 Magic)
-  const statsOf = (style) => (style === 'range' ? 'Ranged 112' : style === 'mage' ? 'Magic 99' : 'Attack 118 · Strength 118 · Defence 118');
+  const statsOf = (style, p = null, t = 0) => (style === 'range' ? `Ranged ${rangedLevel(p ? p.rangePot : 'divine', t)}` : style === 'mage' ? 'Magic 99' : 'Attack 118 · Strength 118 · Defence 118');
   // (with a trace, the log lines about supplies - sharks, rests, phoenix necklaces, redemption, restores, surges - also
   // go into it, on the player's row)
   const SUPPLY = /surge|shark|Guthix rest|phoenix|Redemption|restore|heals other/i;
@@ -330,7 +341,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
   const mazes = [];
   const ev = new Set(), mark = (k) => ev.add(k);   // what happened this raid (the Solver's Adjustments counts)
   const st = { specLog: [], specMissed: [], dmg: { prefire: 0, scythe: 0, maul: 0, bgs: 0, claw: 0, halb: 0, zcb: 0, thrall: 0, veng: 0, ruby: 0 }, specs: { maul: 0, maulHit: 0, bgs: 0, bgsHit: 0, claw: 0, halb: 0, zcb: 0, horn: 0, surge: 0 }, orbs: { taken: 0, prayed: 0, vengd: 0 }, melees: 0, balls: 0, ballSplit: 0, ballEat: 0, ballHeal: 0, sharks: 0, rests: 0, restores: 0, locator: 0, lateOrb: 0, runs: [], stalls: [], sharkSkips: [] };
-  const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear,
+  const ps = players.map((c, i) => ({ i, name: c.name || `P${i + 1}`, gear: c.gear, rangePot: normRangePot(c.rangePot),
     prefire: c.prefire || '', pnecks: Number(c.pnecks ?? 0), sharks: Number(c.sharks ?? 0), spec: Number(c.startSpec ?? 100),
     surgePlan: !!c.surge, surgeReady: Math.max(0, Number(c.surgeCd) || 0), regen: 0, specs: [0, 1, 2].map((k) => ({ ...S_('none'), ...((c.specs || specsDefault[i] || [])[k] || {}) })), hornDone: [false, false, false],
     hornUntil: -1, surged: false, surgeAt: null, zcbCarry: -1, clawCarry: -1, vengPops: [0, 0, 0], orbedDown: -1, rests: Number(c.rests ?? 0), restores: Number(c.restores ?? 3), sharkMazes: [], redeemNow: false, cycleAfter: 0, lb: false, lbLeft: Number(c.lbCycles || 0), lbOffAt: null, specDone: [0, 0, 0], swings: [0, 0, 0],
@@ -475,7 +486,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       const pf = PREFIRE[p.prefire];
       if (pf.spec) { spend(p, pf.spec, pf.tick); st.specs.zcb++; }   // a ZCB spec prefire costs its 75% (a surge after it, as any first spec)
       hits.push([pf.tick + pf.delay, p, null, `prefire ${p.prefire}`, p.prefire]);
-      hits[hits.length - 1].tr = TR({ t: pf.tick, i: p.i, code: PREFIRE_CODE[p.prefire] || p.prefire, target: 'Sotetseg', stats: statsOf(pf.style), gear: trace ? gearOf(p, pf.style, pf.weapon) : null, spec: p.spec, regenIn: trace ? regenIn(p) : null });
+      hits[hits.length - 1].tr = TR({ t: pf.tick, i: p.i, code: PREFIRE_CODE[p.prefire] || p.prefire, target: 'Sotetseg', stats: statsOf(pf.style, p, pf.tick), gear: trace ? gearOf(p, pf.style, pf.weapon) : null, spec: p.spec, regenIn: trace ? regenIn(p) : null });
       after = pf.tick + 5;
       p.thrallNext = pf.tick + 1 + rng.randint(1, 2);             // thrall summoned after the prefire
     }
@@ -874,7 +885,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       if (kill != null) { if (kill === t) { anim = DEATH_ANIM_OVERKILL; L.on && L(`t${t} ${h[1].name} ${h[3]} lands after the kill (overkill)`); } if (trace) for (const x of landing.slice(landing.indexOf(h))) creditRolled(x); break; }
       const [, p, , label, kind] = h;
       if (kind && PREFIRE[kind]) {
-        const n = prefireNumbers(p, kind, defLvl), rb = Math.min(110, Math.floor(hp * 0.22));
+        const n = prefireNumbers(p, kind, defLvl, t), rb = Math.min(110, Math.floor(hp * 0.22));
         if (h.tr) { h.tr.acc = n.ch; h.tr.exp = PREFIRE[kind].spec ? constMV(n.ch, rb) : n.ruby ? sumMV(hitMV(n.ch, n.mx), constMV(n.ch * 0.066, rb)) : hitMV(n.ch, n.mx); }
         if (rng.random() < n.ch) {
           let d = Math.max(1, rng.randint(0, n.mx));
@@ -888,7 +899,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
           damage(t, d, `${p.name} ${label}`, 'prefire');
         } else L.on && L(`t${t} ${p.name} ${label} misses`);
       } else if (kind === 'zcb') {
-        const n = prefireNumbers(p, 'ZCB spec', defLvl); if (h.tr) { h.tr.acc = n.ch; h.tr.exp = constMV(n.ch, Math.min(110, Math.floor(hp * 0.22))); }
+        const n = prefireNumbers(p, 'ZCB spec', defLvl, t); if (h.tr) { h.tr.acc = n.ch; h.tr.exp = constMV(n.ch, Math.min(110, Math.floor(hp * 0.22))); }
         if (rng.random() < n.ch) {
           const r = Math.min(110, Math.floor(hp * 0.22)); p.hp -= Math.floor(p.hp / 10);
           damage(t, r, `${p.name} ZCB spec ruby`, 'zcb');
@@ -1078,7 +1089,7 @@ export function runSote(players, team, rng, log = null, { upTo = 3, entry = 0, c
       if (team > 2 && !p.entry && act === 'scythe' && isHerTick(t + 1)) { p.next = t + 1; L.on && L(`t${t} ${p.name} drops a tick (back on her attack ticks)`); continue; }
       p.swings[ph]++;
       const trE = TR({ t, i: p.i, code: { zcb: 'ZCB', zcbCarry: 'ZCB', maul: 'EM', bgs: 'BGS', halb: 'Ch', claw: 'C', clawCarry: 'C', scythe: 'S' }[act] || act,
-        ...(trace ? { target: 'Sotetseg', stats: statsOf(act === 'zcb' || act === 'zcbCarry' ? 'range' : 'melee'), gear: gearOf(p, act === 'zcb' || act === 'zcbCarry' ? 'range' : 'melee', { zcb: 'Zaryte crossbow', zcbCarry: 'Zaryte crossbow', maul: 'Elder maul', bgs: 'Bandos godsword', claw: 'Dragon claws', clawCarry: 'Dragon claws', halb: 'Scythe of vitur', scythe: 'Scythe of vitur' }[act]).replace(act === 'halb' ? 'Scythe of vitur' : '\u0000', 'Crystal halberd'), spec: p.spec, regenIn: regenIn(p) } : {}) }), nHits = hits.length;
+        ...(trace ? { target: 'Sotetseg', stats: statsOf(act === 'zcb' || act === 'zcbCarry' ? 'range' : 'melee', p, t), gear: gearOf(p, act === 'zcb' || act === 'zcbCarry' ? 'range' : 'melee', { zcb: 'Zaryte crossbow', zcbCarry: 'Zaryte crossbow', maul: 'Elder maul', bgs: 'Bandos godsword', claw: 'Dragon claws', clawCarry: 'Dragon claws', halb: 'Scythe of vitur', scythe: 'Scythe of vitur' }[act]).replace(act === 'halb' ? 'Scythe of vitur' : '\u0000', 'Crystal halberd'), spec: p.spec, regenIn: regenIn(p) } : {}) }), nHits = hits.length;
       if (act !== 'scythe') st.specLog.push({ i: p.i, ph, kind: act === 'claw' || act === 'clawCarry' ? 'claws' : act === 'halb' ? 'halberd' : act === 'zcbCarry' ? 'zcb' : act, t, carried: act === 'zcbCarry' || act === 'clawCarry' });
       if (act === 'zcb' || act === 'zcbCarry') {
         spend(p, ZCB_SPEC, t); if (act === 'zcb') { p.specDone[ph]++; p.dmgSpecs[ph]++; } st.specs.zcb++;

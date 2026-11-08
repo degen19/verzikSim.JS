@@ -2,6 +2,7 @@
 // Each batch of setups is split into raid ranges, one per worker, so every core works on every batch; ranges are put
 // back together in raid order (mergeCounts), so the answer is the same for any number of workers. Without Web Workers
 // it falls back to the same code on the page itself.
+import { isPaused, whenFree, breath } from './engine/pause.js';
 import { mergeCounts, localEvaluator } from './engine/roomsolver.js';
 import { threadCount, workersAvailable } from './pool.js';
 
@@ -34,6 +35,7 @@ export class SolverPool {
     return new Promise((resolve, reject) => { this.queue.push({ msg, resolve, reject }); this.pump(); });
   }
   pump() {
+    if (isPaused()) { whenFree(() => this.pump()); return; }   // paused: no new pieces until resume
     while (this.idle.length && this.queue.length) {
       const w = this.idle.shift(), t = this.queue.shift(), id = ++this.seq;
       this.jobs.set(id, t);

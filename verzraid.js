@@ -1,6 +1,7 @@
 // Verzik Show raid: plays a setup's raids to pick the median / top 25% / top 10% / fastest one, replays it with the
 // tick log on, and reads the Attack Timeline (attacks, damage, her attacks and HP, phase points) from that log - the
 // Verzik engines aren't changed for it. Used by the Report, Optimizer and Verz Solver.
+import { breath } from './engine/pause.js';
 import { runOneSplit, runOneLogged, raidRng } from './engine/optimize.js';
 import { pickRaid, timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
 
@@ -246,7 +247,7 @@ function playRaids(e, key) {
         else fails.push({ i: j, prog: r.reds ?? (r.p1end != null ? 1e6 + r.p1end : 2e6), reds: r.reds, dawns: r.dawns });   // failed: how far it got (reds proc tick; else P1's end)
       }
       const msg = el('data-vraidmsg'); if (msg && e.waiting) msg.textContent = `Playing ${RAIDS.toLocaleString()} raids... ${Math.min(RAIDS, i + 100).toLocaleString()}`;
-      await new Promise((r) => setTimeout(r, 0));
+      await breath();
     }
     Object.assign(e, { raids, fails, all });
     const msg = el('data-vraidmsg'); if (msg) msg.textContent = '';
