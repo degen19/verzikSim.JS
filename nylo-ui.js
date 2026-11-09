@@ -216,8 +216,8 @@ export function createNylo(host, { getTeam }) {
   host.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b) showRaid(Number(b.dataset.nraid)); });
 
   /** A setup laid out. */
-  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Max switches (melee / range / mage)</th>${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
-    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${(({ melee, range, mage }) => `${melee} / ${range} / ${mage}`)(normSwitches(p.maxSwitches))}</td>${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
+  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Max switches (melee / range / mage)</th>${c.players.some((p) => p.rangedStop && Object.keys(p.rangedStop).length) ? '<th title="Ranged tick fix: below this share of his HP, that green-form sequence (by their first attack) is Twisted bows only">Twisted bows only below</th>' : ''}${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
+    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${(({ melee, range, mage }) => `${melee} / ${range} / ${mage}`)(normSwitches(p.maxSwitches))}</td>${c.players.some((q) => q.rangedStop && Object.keys(q.rangedStop).length) ? `<td>${[1, 2, 3].filter((x) => (p.rangedStop || {})[x] != null).map((x) => `${PLAN_NAMES[x]} ${p.rangedStop[x]}%`).join(' · ') || '-'}</td>` : ''}${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
     <div class="small">Backup BGS: ${c.backup ? `${esc(names[c.backup.p])} while his Defence is ${c.backup.at}+` : 'none'}</div>`;
   const statsRow = (totals, bps) => { const v = totals.slice().sort((a, b) => a - b), n = v.length, asc = [...bps].sort((a, b) => a - b);
     return { mean: v.reduce((a, b) => a + b, 0) / n, med: v[n >> 1], q10: v[Math.max(0, Math.floor(n * 0.1) - 1)], q25: v[Math.max(0, Math.floor(n * 0.25) - 1)], fast: v[0], bp: asc.map((b) => v.filter((x) => x * 0.6 <= b + 1e-9).length / n) }; };
@@ -438,17 +438,28 @@ export function createNylo(host, { getTeam }) {
   /** Full raid: the Nylocas Solver on the Full raid's gear, surge cooldowns carried in (ticks per player, from the room's
    *  start: the waves run them down), Max switches, Healer Tech (duos), restore doses and wave times. -> ranked setups,
    *  each with what a full raid plays ({players, opts}). */
-  async function fullRaidSolve({ gearSet: gs, surgeCd, maxSwitches = [], healer = null, restores = 8, waveDist, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
+  async function fullRaidSolve({ gearSet: gs, surgeCd, mustSurge = null, maxSwitches = [], healer = null, restores = 8, waveDist, bps = [], effort = 'normal', keep = 3, say = () => {}, stopped = () => false, onPool = () => {} }) {
     const t = team(), gp = gearOf(gs);
     const base = Array.from({ length: t }, (_, k) => { const g = (gp && gp[k]) || blankPlayer(k); return { name: g.name || `Player ${k + 1}`, gear: g, surgeCd: surgeCd[k] || 0 }; });
     const names = base.map((b) => b.name), gear = base.map((b) => b.gear);
     const opts = { takeoffs: true, offPrayVeng: true, restores: Number(restores) || 0, waveDist };
     const extra = (k) => ({ maxSwitches: normSwitches(maxSwitches[k]), healer: t === 2 && healer === k });
-    const start = { players: gear.map((g, k) => ({ ...defaultPlan(g), surge: false, ...extra(k) })), backup: null };
+    // mustSurge (a full raid plan's surgers here): their surge is on throughout the search - their specs are planned around it
+    const start = { players: gear.map((g, k) => ({ ...defaultPlan(g), surge: !!(mustSurge && mustSurge.includes(k)), ...extra(k) })), backup: null };
     const pool = new NyloPool(base, t, opts); onPool(pool);
     try {
       const ef = EFFORT[effort] || EFFORT.normal;
-      const items = await solveNylo({ start, gear, allow: Object.fromEntries(ALLOW.map((k) => [k, true])), surgeLimit: t, swaps: true, roles: true, bps, ...ef, top: 10 }, (...a) => pool.run(...a), say, stopped);
+      const items = await solveNylo({ start, gear, allow: Object.fromEntries(ALLOW.map((k) => [k, k !== 'surge' || !mustSurge])), surgeLimit: t, swaps: true, roles: true, bps, ...ef, top: 10 }, (...a) => pool.run(...a), say, stopped);
+      // each kept setup's ranged tick fix thresholds (Twisted bows only below them), as the Optimizer finds them - kept only
+      // when they're clearly faster on the same raids
+      const run = (cfgs, from, to, seed) => pool.run(cfgs, from, to, seed);
+      for (const [i, r] of items.slice(0, keep).entries()) {
+        if (stopped()) break;
+        const thr = await rangedThresholds(r.cfg, gear, run, ef.thrRaids, (m) => say(`setup ${i + 1}: ${m}`), stopped);
+        if (!thr.some((x) => [1, 2, 3].some((k) => x.best[k] != null))) continue;
+        const cfg = withThresholds(r.cfg, thr), ch = await pairedChange(r.cfg, cfg, run, ef.thrRaids);
+        if (ch.d < -ch.ci) { const [res] = await run([cfg], 0, ef.finalRaids, 'nfin'); items[i] = { ...r, cfg, totals: res.totals, thr }; }
+      }
       return items.map((r) => ({ ...r, cfg: { ...r.cfg, players: r.cfg.players.map((p, k) => ({ ...p, ...extra(k) })) },
         run: { players: base.map((b, k) => ({ ...b, plan: { ...r.cfg.players[k], ...extra(k) } })), opts: { ...opts, plans: { backup: r.cfg.backup } } } }));
     } finally { pool.stop(); }

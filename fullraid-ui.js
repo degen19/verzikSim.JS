@@ -274,11 +274,11 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       const medOf = (v) => { const a = v.filter((x) => x < 9999).sort((x, y) => x - y); return a.length ? a[a.length >> 1] : 0; };
       // each room's solve -> {list (as its tab shows it), setups: [{setup, i}]} - its best few, in full-raid form; med: its
       // median room time (Nylocas: boss + the average wave)
-      const nSolve = async (cd, tag) => { const it = await rooms.nylo.fullRaidSolve({ ...common, maxSwitches: s.nylo.maxSwitches, healer: s.nylo.healer, restores: s.nylo.restores, waveDist: wave.dist, surgeCd: cd, bps: bpOf('nylo') != null ? [bpOf('nylo') - wave.mean * 0.6].filter((b) => b > 0) : [], say: say(`Nylocas ${tag}`) });
+      const nSolve = async (cd, tag, must = null) => { const it = await rooms.nylo.fullRaidSolve({ ...common, mustSurge: must, keep: ef.keep, maxSwitches: s.nylo.maxSwitches, healer: s.nylo.healer, restores: s.nylo.restores, waveDist: wave.dist, surgeCd: cd, bps: bpOf('nylo') != null ? [bpOf('nylo') - wave.mean * 0.6].filter((b) => b > 0) : [], say: say(`Nylocas ${tag}`) });
         return clean({ kind: 'nylo', list: it, setups: it.slice(0, ef.keep).map((x, i) => ({ i, setup: x.run })), med: it.length ? medOf(it[0].totals) + Math.round(wave.mean) : 0 }, cd); };
-      const soteSolve = async (cd, tag) => { const it = await rooms.sote.fullRaidSolve({ ...common, supplies: soteSup, noLateSurge: !!s.sote.noLateSurge, surgeCd: cd, bps: bpOf('sote') != null ? [bpOf('sote')] : [], say: say(`Sotetseg ${tag}`) });
+      const soteSolve = async (cd, tag, must = null) => { const it = await rooms.sote.fullRaidSolve({ ...common, mustSurge: must, supplies: soteSup, noLateSurge: !!s.sote.noLateSurge, surgeCd: cd, bps: bpOf('sote') != null ? [bpOf('sote')] : [], say: say(`Sotetseg ${tag}`) });
         return clean({ kind: 'sote', list: it, setups: it.slice(0, ef.keep).map((x, i) => ({ i, setup: { players: x.replay.players, entry: x.replay.entry, opts: x.replay.opts } })), med: it.length ? medOf(it[0].totals) : 0 }, cd); };
-      const xSolve = async (cd, tag) => { const it = await rooms.xarpus.fullRaidSolve({ ...common, heals: s.xarpus.heals, exactHeals: !!s.xarpus.exactHeals, rangePots: s.xarpus.rangePots, surgeCd: cd, bps: bpOf('xarpus') != null ? [bpOf('xarpus')] : [], say: say(`Xarpus ${tag}`) });
+      const xSolve = async (cd, tag, must = null) => { const it = await rooms.xarpus.fullRaidSolve({ ...common, mustSurge: must, heals: s.xarpus.heals, exactHeals: !!s.xarpus.exactHeals, rangePots: s.xarpus.rangePots, surgeCd: cd, bps: bpOf('xarpus') != null ? [bpOf('xarpus')] : [], say: say(`Xarpus ${tag}`) });
         return clean({ kind: 'xarpus', list: it, setups: it.slice(0, ef.keep).map((x, i) => ({ i, setup: x.run })), med: it.length ? medOf(it[0].totals) : 0 }, cd); };
       const vSolve = async (cd, tag, bps) => { const r = await rooms.verzik.fullRaidSolve({ ...common, hornOwners, supplies: vSup, effort: ef.verz, chart: s.useChart ? chartOf(s, t) : null, surgeCd: cd, bps, say: say(`Verzik ${tag}`) });
         return clean({ kind: 'verzik', res: r, list: r.top || [], setups: (r.top || []).slice(0, ef.keep).map((x, i) => ({ i, setup: { cfgs: x.cfg } })) }, cd); };
@@ -304,7 +304,9 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       /** A plan is fine for the chart unless an earlier-room surge leaves a player's surge on cooldown past CHART_MARGIN
        *  ticks before their chart needs it. cdV: cooldowns into Verzik (ticks). */
       const chartOk = (pl, cdV) => !needs || needs.every((n, k) => n == null || !pl[k].some((r) => r < VIk) || cdV[k] <= n - CHART_MARGIN);
-      const solveOf = (kind, cd, tag) => (kind === 'nylo' ? nSolve(cd, tag) : kind === 'sote' ? soteSolve(cd, tag) : kind === 'xarpus' ? xSolve(cd, tag) : vSolve(cd, tag, vBps));
+      // must: players who surge in this room in the plan being solved for (exhaustive) - the room solver plans their specs
+      // around it instead of a surge being put in afterwards
+      const solveOf = (kind, cd, tag, must = null) => (kind === 'nylo' ? nSolve(cd, tag, must) : kind === 'sote' ? soteSolve(cd, tag, must) : kind === 'xarpus' ? xSolve(cd, tag, must) : vSolve(cd, tag, vBps));
       // ================================================================ exhaustive surge plans
       // Every surge plan (the rooms each player surges in, within their doses - with Verzik in the raid, always Verzik:
       // the rest of their doses in the rooms before, its Verzik surge then once the cooldown is up), each room solved
@@ -323,7 +325,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
           const kind = KINDS[r], key = `${kind}|${cd.map(q10).join(',')}`;
           if (!solved.has(key)) {
             nSolves++; const who = cd.map((c, k) => (c < 99999 ? `P${k + 1}${c > 0 ? ` (cooldown ${fsec(c)})` : ''}` : null)).filter(Boolean);
-            const sv = await solveOf(kind, cd, `#${nSolves}: ${who.length ? `${who.join(', ')} surge` : 'no surges'}`); stop();
+            const sv = await solveOf(kind, cd, `#${nSolves}: ${who.length ? `${who.join(', ')} surge` : 'no surges'}`, cd.map((c, k) => (c < 99999 ? k : -1)).filter((k) => k >= 0)); stop();
             if (!sv.setups.length) throw new Error(`${KIND_NAME[kind]}: the solver found no setup that finishes.`);
             // literally this plan: exactly these players surge in this room - the solver's best setup that has all of
             // them surging, else its best with their surges put in (and nobody else's)
@@ -390,7 +392,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
             const later = KINDS.slice(VI + 1).length ? (await walk(pl)).slice(VI + 1) : [];   // (no rooms after Verzik today)
             B.push({ pl, lo: planScore([...out, { dist: distOf(ev.ends) }, ...later].map((x) => x.dist), how), hi: planScore([...out, ready, ...later].map((x) => x.dist), how) });
           }
-          const shareMode = B[0].hi.length > 1 || how.rankBy === 'success';
+          const shareMode = B[0].hi.length > 2 || how.rankBy === 'success';   // (scores end with -median, -mean)
           const best = B.reduce((m, x) => (fullBetter(x.lo, m.lo) ? x : m), B[0]).lo;
           const noise = (p) => 2 * Math.sqrt(Math.max(p * (1 - p), 0.01) / n1);
           const keep = (x) => (shareMode

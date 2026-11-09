@@ -156,6 +156,29 @@ export async function solveXarpus(ctx, run, progress = () => {}, stopped = () =>
   if (stopped() || !ranked.length) return [];
   progress(`Playing the top ${ranked.length} setups on ${finalRaids.toLocaleString()} raids each...`, 1);
   const res = await run(ranked.map((x) => x.cfg), 0, finalRaids, 'xfinal');
-  return ranked.map((x, i) => ({ cfg: x.cfg, score: scoreOf(res[i].totals, bps), totals: res[i].totals, split: res[i].split, defEnd: res[i].defEnd }))
+  const outv = ranked.map((x, i) => ({ cfg: x.cfg, score: scoreOf(res[i].totals, bps), totals: res[i].totals, split: res[i].split, defEnd: res[i].defEnd }))
     .sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));
+  if (ctx.allow.start && !stopped()) { const p = await polishStarts(outv[0], run, finalRaids, 'xfinal', bps, () => true, progress); if (p !== outv[0]) outv.unshift(p); }
+  return outv;
+}
+
+/** Last step: each player's other start spec (95 / 100) on the best setup, on the final raids - a change kept only when
+ *  it's clearly faster there (95% gives a regen right after their first spec: a spec planned after it can come in time). */
+async function polishStarts(best, run, finalRaids, seed, bps, ok, progress) {
+  let cur = best;
+  for (let pass = 0; pass < 2; pass++) {
+    const cands = cur.cfg.players.map((p, k) => ({ ...cur.cfg, players: cur.cfg.players.map((q, j) => (j === k ? { ...q, startSpec: q.startSpec === 95 ? 100 : 95 } : q)) })).filter(ok);
+    if (!cands.length) break;
+    progress(`Checking each player's other start spec on ${finalRaids.toLocaleString()} raids...`, 1);
+    const res = await run(cands, 0, finalRaids, seed);
+    let pick = null;
+    res.forEach((r, i) => {
+      const d = r.totals.map((x, n) => x - cur.totals[n]), m = d.reduce((a, b) => a + b, 0) / d.length;
+      const sd = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, d.length - 1)), sc = scoreOf(r.totals, bps);
+      if (m < -1.96 * sd / Math.sqrt(d.length) && !better(cur.score, sc) && (!pick || m < pick.m)) pick = { i, m, r, sc };
+    });
+    if (!pick) break;
+    cur = { ...cur, ...pick.r, cfg: cands[pick.i], score: pick.sc };
+  }
+  return cur;
 }

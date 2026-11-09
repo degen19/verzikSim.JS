@@ -25,7 +25,7 @@ export const canSeq = (gear, seq) => seq.every((x) => has(gear, x));
 export const canOpen = (gear, v) => v === 'none' || has(gear, v);
 /** The default plan for a player: no opener, claws if they have them. */
 export const defaultPlan = (gear) => ({ open: 'none', specs: has(gear, 'claw') ? ['claw'] : [], clawMode: 'gain', startSpec: 100, surge: false, tomeTickFix: true });
-export const keyOf = (cfg) => JSON.stringify([cfg.players.map((p) => [p.open, p.specs, p.startSpec, !!p.surge]), cfg.backup || null]);
+export const keyOf = (cfg) => JSON.stringify([cfg.players.map((p) => [p.open, p.specs, p.startSpec, !!p.surge, p.rangedStop || null]), cfg.backup || null]);
 /** Spec each costs. */
 export const SPEC_COST = { bgs: 50, claw: 50, halb: 30, zcb: 75, tome: 50 };
 const MELEE_SPECS = new Set(['claw', 'halb']);
@@ -74,10 +74,17 @@ export function neighbours(cfg, ctx) {
   const g = ctx.gear, A = ctx.allow, surges = P.filter((p) => p.surge).length;
   P.forEach((p, k) => {
     const N = `P${k + 1}`;
-    if (A.open) for (const [v, l] of OPENS) if (v !== p.open && canOpen(g[k], v)) add({ [k]: { open: v } }, null, `${N} opens ${l}`);
-    if (A.specs) for (const s of SEQS) if (JSON.stringify(s) !== JSON.stringify(p.specs) && canSeq(g[k], s)) add({ [k]: { specs: s } }, null, `${N} damage specs ${seqName(s)}`);
+    // (each with the other start spec too: a halberd opener can pay only from a 95% start - its regen right after)
+    const flip = p.startSpec === 95 ? 100 : 95;
+    if (A.open) for (const [v, l] of OPENS) if (v !== p.open && canOpen(g[k], v)) { add({ [k]: { open: v } }, null, `${N} opens ${l}`); if (A.start) add({ [k]: { open: v, startSpec: flip } }, null, `${N} opens ${l}, start ${flip}%`); }
+    if (A.specs) for (const s of SEQS) if (JSON.stringify(s) !== JSON.stringify(p.specs) && canSeq(g[k], s)) { add({ [k]: { specs: s } }, null, `${N} damage specs ${seqName(s)}`); if (A.start) add({ [k]: { specs: s, startSpec: flip } }, null, `${N} damage specs ${seqName(s)}, start ${flip}%`); }
     if (A.start) add({ [k]: { startSpec: p.startSpec === 95 ? 100 : 95 } }, null, `${N} start ${p.startSpec === 95 ? 100 : 95}%`);
     if (A.surge && (p.surge || surges < ctx.surgeLimit)) add({ [k]: { surge: !p.surge } }, null, `${N} ${p.surge ? 'no surge' : 'surge'}`);
+    // a surge and a spec it pays for, together (neither pays off alone: a claw on top of a ZCB needs the surge)
+    if (A.surge && !p.surge && surges < ctx.surgeLimit) {
+      if (A.open) for (const [v, l] of OPENS) if (v !== p.open && canOpen(g[k], v)) add({ [k]: { open: v, surge: true } }, null, `${N} surge, opens ${l}`);
+      if (A.specs) for (const s of SEQS) if (JSON.stringify(s) !== JSON.stringify(p.specs) && canSeq(g[k], s)) add({ [k]: { specs: s, surge: true } }, null, `${N} surge, damage specs ${seqName(s)}`);
+    }
     if (A.backup && has(g[k], 'bgs')) for (const at of BACKUP_ATS) if (!cfg.backup || cfg.backup.p !== k || cfg.backup.at !== at) add({}, { backup: { p: k, at } }, `backup BGS: ${N} at Defence ${at}+`);
   });
   if (A.backup && cfg.backup) add({}, { backup: null }, 'no backup BGS');
@@ -133,6 +140,7 @@ export async function solveNylo(ctx, run, progress = () => {}, stopped = () => f
   const res = await run(ranked.map((x) => x.cfg), 0, finalRaids, 'nfinal');
   const outv = ranked.map((x, i) => ({ cfg: x.cfg, score: scoreOf(res[i].totals, bps), totals: res[i].totals, kills: res[i].kills }))
     .sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));
+  if (ctx.allow.start && !stopped()) { const p = await polishStarts(outv[0], run, finalRaids, 'nfinal', bps, (c) => c.players.every(feasible), progress); if (p !== outv[0]) outv.unshift(p); }
   // setups that play out the same on every raid (e.g. a second spec that never goes off) are one: the first kept
   const same = new Set();
   return outv.filter((r) => { const k = r.totals.join(','); if (same.has(k)) return false; same.add(k); return true; });
@@ -233,3 +241,24 @@ export async function pairedChange(base, cfg, run, n, seed = 'ncomb') {
 }
 /** A setup with each player's best thresholds (rangedThresholds rows) in place of theirs. */
 export const withThresholds = (cfg, thr) => ({ ...cfg, players: cfg.players.map((p, k) => { const row = (thr || []).find((r) => r.p === k); if (!row) return p; const rs = {}; for (const x of [1, 2, 3]) if (row.best[x] != null) rs[x] = row.best[x]; return { ...p, rangedStop: rs }; }) });
+
+/** Last step: each player's other start spec (95 / 100) on the best setup, on the final raids - a change kept only when
+ *  it's clearly faster there (95% gives a regen right after their first spec: a spec planned after it can come in time). */
+async function polishStarts(best, run, finalRaids, seed, bps, ok, progress) {
+  let cur = best;
+  for (let pass = 0; pass < 2; pass++) {
+    const cands = cur.cfg.players.map((p, k) => ({ ...cur.cfg, players: cur.cfg.players.map((q, j) => (j === k ? { ...q, startSpec: q.startSpec === 95 ? 100 : 95 } : q)) })).filter(ok);
+    if (!cands.length) break;
+    progress(`Checking each player's other start spec on ${finalRaids.toLocaleString()} raids...`, 1);
+    const res = await run(cands, 0, finalRaids, seed);
+    let pick = null;
+    res.forEach((r, i) => {
+      const d = r.totals.map((x, n) => x - cur.totals[n]), m = d.reduce((a, b) => a + b, 0) / d.length;
+      const sd = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, d.length - 1)), sc = scoreOf(r.totals, bps);
+      if (m < -1.96 * sd / Math.sqrt(d.length) && !better(cur.score, sc) && (!pick || m < pick.m)) pick = { i, m, r, sc };
+    });
+    if (!pick) break;
+    cur = { ...cur, ...pick.r, cfg: cands[pick.i], score: pick.sc };
+  }
+  return cur;
+}

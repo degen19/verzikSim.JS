@@ -517,7 +517,7 @@ export function createXarpus(host, { getTeam }) {
 
   /** Full raid: solve the current set with the Full raid's Gear set, Lightbearers and the surge cooldowns carried in
    *  (ticks per player). Returns the ranked setups, each with what a full raid needs to play it ({players, opts}). */
-  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, gearPatch = [], heals = HEALS_DEFAULT[team()], exactHeals = false, rangePots = [], surgeCd, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
+  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, gearPatch = [], heals = HEALS_DEFAULT[team()], exactHeals = false, rangePots = [], surgeCd, mustSurge = null, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
     // the Full raid's own settings (nothing from this tab): the default plan, every option searched
     const t = team(), st = { ...blankSet(), gearSet: gs, heals, exactHeals };
     const all = playersNow(st).map((p, k) => ({ ...p, gear: { ...p.gear, ...(gearPatch[k] || {}) }, surgeCd: surgeCd[k] || 0 }));
@@ -530,9 +530,10 @@ export function createXarpus(host, { getTeam }) {
       if (p.horn) { if (!all[k].gear.horn || (hornLimit != null && h >= hornLimit)) p.horn = false; else h++; }
     }); return plan; };
     const start = fit(setPlan(st)), hh = { heals: Number(heals) || 0, exactHeals: !!exactHeals };
+    if (mustSurge) start.players.forEach((p, k) => { p.surge = mustSurge.includes(k); });   // a full raid plan's surgers: on throughout the search
     const pool = new XarpusPool(base, t, hh); onPool(pool);
     try {
-      const allow = Object.fromEntries(ALLOW.map((k) => [k, k !== 'surge' || t > 0]));
+      const allow = Object.fromEntries(ALLOW.map((k) => [k, k !== 'surge' || (t > 0 && !mustSurge)]));
       const items = await solveXarpus({ start, gear: all.map((p) => p.gear), allow, surgeLimit: t, lbRings, lbOwners, hornLimit, swaps: true, roles: true,
         restarts: [], bps, ...(EFFORT[effort] || EFFORT.normal), top: 10 }, (...args) => pool.run(...args), say, stopped);
       return items.map((r) => ({ ...r, set: rootState().cur, names, run: { players: base.map((b, k) => ({ ...b, ...r.cfg.players[k] })), opts: { ...hh, ...r.cfg } } }));

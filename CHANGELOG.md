@@ -2,6 +2,12 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.42.0 - 2026-11-09
+- `fullraid-ui.js`: `solveOf(kind, cd, tag, must)` - exhaustive room solves get the plan's surgers (`mustSurge`); `nylo-ui.js` / `sote-ui.js` / `xarpus-ui.js` `fullRaidSolve({ mustSurge })`: their surge on, surge not searched. Nylocas `fullRaidSolve`: `rangedThresholds` + `pairedChange` per kept setup (`keep`), baked in when clearly faster; procedure column 'Twisted bows only below'. `shareMode` reads scores ending -median, -mean.
+- `engine/fullraid.js`: `planScore` ends with -mean (ties on the median).
+- `engine/nylosolve.js`: neighbours - surge + opener / damage specs together, opener / damage specs with the start flipped; `keyOf` includes `rangedStop`; `polishStarts` after the final stage (also `engine/xarpussolve.js`).
+- `solver-ui.js`: `chartSurges` - no saving tick: their P, else F.
+
 ## v1.41.2 - 2026-11-09
 - `engine/tome.js`: `tome_plan` (Scythe first hit after tome) - state carries tomes used and how the first (r16) went; the second tome only r19 (first missed) / r25 (first hit) / r30; no r11 tome, `Ts`, `za`, claws or claw scratches. `engine/reds.js`: `p.tome_used`, `p.tome_first`. `builder-ui.js`: the setting's tooltip.
 

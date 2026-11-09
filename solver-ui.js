@@ -552,7 +552,8 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   /** Each player's surge in a P1 chart: {chartAt: their P's tick (null: no P), latest: the latest tick they can drink it
    *  without any of their chart's specs being skipped (null: their chart never needs it in P1)}. Their surge held back
    *  (everyone else's as normal): the first skipped spec F; then a surge at a custom tick from F - 2 down to their P
-   *  (no P: tick 1), the first that skips none of their specs. */
+   *  (no P: tick 1), the first that skips none of their specs (none does - the chart's too much even with a surge: their P,
+   *  else F). */
   function chartSurges(cfg) {
     return cfg.map((c, k) => {
       const pT = Object.entries(c.actions || {}).filter(([, a]) => a === 'P').map(([x]) => Number(x)), chartAt = pT.length ? Math.min(...pT) : null;
@@ -565,7 +566,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         const test = others.map((q, j) => (j === k ? { ...noP(q), surgeCdTicks: 0, customSurgeTick: T, forceSurge: false } : q));
         if (firstSkip(test, k) == null) return { chartAt, latest: T };
       }
-      return { chartAt, latest: lo };   // no later tick works: their P (no P: as early as they can)
+      return { chartAt, latest: chartAt ?? F };   // no tick saves every spec: their P (no P: before the first one it skips)
     });
   }
   /** Use my P1 chart: the latest tick each player's surge has to be up by (Verzik room ticks), else null. */

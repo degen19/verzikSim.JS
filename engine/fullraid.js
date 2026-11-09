@@ -241,7 +241,11 @@ export function planScore(ds, { mode, total = [], rooms = [], rankBy = 'goal' },
   let lo = ab.lo + v.lo, hi = ab.lo + ab.p.length + v.lo + v.p.length;
   while (lo < hi) { const m = (lo + hi) >> 1; if (F(m) >= ok / 2) hi = m; else lo = m + 1; }
   const med = ok > 0 ? lo : 1e9;
-  if (rankBy === 'success') return [ok, -med];
-  if (mode === 'rooms' && rooms.some((b) => b != null)) return [ds.reduce((m, d, j) => m * (rooms[j] == null ? d.ok : cdf(d, Math.floor(rooms[j] / 0.6 + 1e-6))), 1), -med];
-  return [...[...total].sort((a, b) => a - b).map((b) => F(Math.floor(b / 0.6 + 1e-6))), -med];
+  // the mean time (of finishing raids) breaks ties: room times come in whole instance cycles, so two plans a fraction of
+  // a second apart often share a median
+  const meanOf = (d) => { let w = 0, m = 0; for (let i = 0; i < d.p.length; i++) { w += d.p[i]; m += d.p[i] * i; } return w > 0 ? d.lo + m / w : 1e9; };
+  const mean = ok > 0 ? meanOf(ab) + meanOf(v) : 1e9;
+  if (rankBy === 'success') return [ok, -med, -mean];
+  if (mode === 'rooms' && rooms.some((b) => b != null)) return [ds.reduce((m, d, j) => m * (rooms[j] == null ? d.ok : cdf(d, Math.floor(rooms[j] / 0.6 + 1e-6))), 1), -med, -mean];
+  return [...[...total].sort((a, b) => a - b).map((b) => F(Math.floor(b / 0.6 + 1e-6))), -med, -mean];
 }

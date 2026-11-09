@@ -1,6 +1,14 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.41.2';
+export const VERSION = '1.42.0';
 export const CHANGES = [
+  { version: '1.42.0', date: '2026-11-09', items: [
+    'Full raid solver, exhaustive: a plan\'s surge in Nylocas / Sotetseg / Xarpus is on throughout that room\'s search, so the player\'s specs are planned around it (before: the room was solved without it and the surge put in afterwards - a surge that paid for nothing).',
+    'Full raid solver: each kept Nylocas setup gets its ranged tick fix thresholds (Twisted bows only below them), as the Optimizer finds them - only when clearly faster; the procedure shows them (before: the sequences went on till he died).',
+    'Full raid solver: plans with the same median are ranked by their mean time (room times come in whole cycles, so a plan a fraction of a second faster could lose a tie).',
+    'Nylocas Solver: tries a surge together with a spec it pays for (a claw on top of a ZCB), and an opener / damage spec change with the other start spec (a halberd opener from 95%) - each a step a one-change search couldn\'t take.',
+    'Nylocas and Xarpus Solvers: a last check of each player\'s other start spec (95 / 100) on the best setup, on the final raids - kept when clearly faster (a 95% start can bring a spec in time - a maul then a ZCB).',
+    'Full raid, Use my P1 chart: a chart a surge can\'t save at any tick needs it by their P (else before the first spec it skips) - not from tick 1.',
+  ] },
   { version: '1.41.2', date: '2026-11-09', items: [
     'Verzik reds, Scythe first hit after tome: only the listed tome sequences. Nothing on r11 but a scythe (no two-tome start there); 50% on r16: tome r16; 100%: a second tome on r19 after a miss, r25 after a hit (once the 3 buffed attacks are done), or with a delay - scythe r25, tome r30; under 50% on r16: scythe through r26 (ZCB r21 if bounced), tome r31. No claws, plain tome autos or specs while buffed. Delay or not: the most expected damage from their numbers.',
   ] },

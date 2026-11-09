@@ -826,11 +826,12 @@ export function createSote(host, { getTeam }) {
 
   /** Full raid: solve the current set with the Full raid's Gear set, Lightbearers and surge cooldowns carried in (ticks).
    *  Returns the ranked setups; each has its replay (players, entry, opts) for playing it in a full raid. */
-  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, gearPatch = [], supplies = [], noLateSurge = false, surgeCd, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
+  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, gearPatch = [], supplies = [], noLateSurge = false, surgeCd, mustSurge = null, bps = [], effort = 'normal', say = () => {}, stopped = () => false, onPool = () => {} }) {
     // the Full raid's own settings (nothing from this tab): default plan, its supplies and mazes, every option searched
     const t = team(), ds = defaultSetup(t), dsp = defaultSpecs(t);
     const st = { gearSet: gs, entry: 0, players: Array.from({ length: t }, (_, k) => ({ ...blank(), prefire: ds[k].prefire, startSpec: ds[k].startSpec, surge: ds[k].surge, specs: dsp[k].map((x) => ({ ...x })), ...(supplies[k] || {}) })) };
-    const v = { allow: {}, search: { ...SEARCH_DEFAULT, noLateSurge } };
+    if (mustSurge) st.players.forEach((p, k) => { p.surge = mustSurge.includes(k); });   // a full raid plan's surgers: on throughout the search
+    const v = { allow: mustSurge ? { surge: false } : {}, search: { ...SEARCH_DEFAULT, noLateSurge: noLateSurge && !mustSurge } };
     const me = { stopped: false, pool: null }, timer = setInterval(() => { if (stopped()) { me.stopped = true; if (me.pool) me.pool.stop(); } }, 300);
     try { return await solveSet(rootState().cur, v, bps, new Proxy(me, { set: (o, k, x) => { o[k] = x; if (k === 'pool') onPool(x); return true; } }), say, { st, surgeCd, lbRings, lbOwners, hornLimit, gearPatch, effort }); }
     finally { clearInterval(timer); }
