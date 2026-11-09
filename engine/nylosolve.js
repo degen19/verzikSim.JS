@@ -7,6 +7,7 @@
 // Ranked by the share of raids at your breakpoints (if any), then the mean boss time, then the top 10%.
 // Then, for the best setup: each player's Twisted-bows-only thresholds for his green forms (ranged tick fix: 4 hits +
 // bow / bow, hit, bow / 3 hits + bow, by the boss HP) - rangedThresholds.
+import { pruneSurges } from './solvecheck.js';
 import { runNylo, NEEDS, FAST } from './nylo.js';
 import { Rng } from './rng.js';
 
@@ -140,6 +141,10 @@ export async function solveNylo(ctx, run, progress = () => {}, stopped = () => f
   const res = await run(ranked.map((x) => x.cfg), 0, finalRaids, 'nfinal');
   const outv = ranked.map((x, i) => ({ cfg: x.cfg, score: scoreOf(res[i].totals, bps), totals: res[i].totals, kills: res[i].kills }))
     .sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));
+  if (ctx.allow.surge && !stopped()) for (let i = 0; i < Math.min(3, outv.length); i++) {   // surges that pay for nothing come out
+    const p = await pruneSurges(outv[i], async (c) => { const [r] = await run([c], 0, finalRaids, 'nfinal'); return { totals: r.totals, kills: r.kills }; }, (t) => scoreOf(t, bps), (c, k) => { const q = { ...c.players[k], specs: [...c.players[k].specs] }; while (!feasible(q) && q.specs.length) q.specs.pop(); if (!feasible(q)) q.open = 'none'; return { ...c, players: c.players.map((p, j) => (j === k ? canonPlan(q) : p)) }; }, stopped);   // (without the surge: the specs it paid for trimmed from the end)
+    if (p !== outv[i]) outv[i] = p;
+  }
   if (ctx.allow.start && !stopped()) { const p = await polishStarts(outv[0], run, finalRaids, 'nfinal', bps, (c) => c.players.every(feasible), progress); if (p !== outv[0]) outv.unshift(p); }
   // setups that play out the same on every raid (e.g. a second spec that never goes off) are one: the first kept
   const same = new Set();

@@ -7,6 +7,7 @@
 // improves (or the round limit). The best setups seen are then played at every entry instance and ranked.
 // Ranking: with breakpoints, the share of raids finished by the fastest breakpoint (then the next ...), then the
 // median; without, the median, then the top 25%, the top 10% and the mean.
+import { pruneSurges } from './solvecheck.js';
 import { runSote, hornN, BACKUP_DEF, BACKUP_DEFS } from './sote.js';
 import { Rng } from './rng.js';
 
@@ -242,6 +243,11 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     if (pruned) {
       const [r2] = await run([pruned], 0, finalRaids, 'final', b.entry), s2 = scoreOf(r2.totals, bps);
       if (!better(b.score, s2)) { cfg = pruned; b = { ...b, score: s2, totals: r2.totals, split: r2.split, events: r2.events || {} }; }
+    }
+    // surges that pay for nothing come out (not when the full raid's plan has them surge here: surges aren't searched then)
+    if (ctx.allow.surge && !stopped()) {
+      const p = await pruneSurges({ cfg, totals: b.totals, score: b.score }, async (c) => { const [r2] = await run([c], 0, finalRaids, 'final', b.entry); return { totals: r2.totals, split: r2.split, events: r2.events || {} }; }, (t) => scoreOf(t, bps), (c) => c, stopped);
+      if (p.cfg !== cfg) { cfg = p.cfg; b = { ...b, score: p.score, totals: p.totals, split: p.split, events: p.events }; }
     }
     // the fewest Lightbearer cycles that do as well: one less at a time, kept while it scores no worse (a cycle more
     // than needed only keeps them off Ultor - the search can land on one by noise)

@@ -3,6 +3,7 @@
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
 ## v1.42.0 - 2026-11-09
+- `engine/solvecheck.js` (new): `pruneSurges` (`SURGE_WORTH` 1/3 tick, paired on the final raids; `fix` trims what the surge paid for - Nylocas: damage specs from the end, then the opener), used by `solveNylo` / `solveXarpus` (top 3) and `solveSote` (each finalist) when surges are searched.
 - `fullraid-ui.js`: `solveOf(kind, cd, tag, must)` - exhaustive room solves get the plan's surgers (`mustSurge`); `nylo-ui.js` / `sote-ui.js` / `xarpus-ui.js` `fullRaidSolve({ mustSurge })`: their surge on, surge not searched. Nylocas `fullRaidSolve`: `rangedThresholds` + `pairedChange` per kept setup (`keep`), baked in when clearly faster; procedure column 'Twisted bows only below'. `shareMode` reads scores ending -median, -mean.
 - `engine/fullraid.js`: `planScore` ends with -mean (ties on the median).
 - `engine/nylosolve.js`: neighbours - surge + opener / damage specs together, opener / damage specs with the start flipped; `keyOf` includes `rangedStop`; `polishStarts` after the final stage (also `engine/xarpussolve.js`).

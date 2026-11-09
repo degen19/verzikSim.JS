@@ -7,6 +7,7 @@
 // many (the same raids for each), and the best is kept if it beats the current setup. Repeat until nothing improves.
 // The best setups seen are then played on more raids and ranked: with breakpoints by the share finished at the fastest
 // one (then the next), otherwise by the median, then the top 10%.
+import { pruneSurges } from './solvecheck.js';
 import { runXarpus, canDo, OPENERS, BACKUP_SPECS, DPS_SPECS, FIXES, DEF_TARGETS, CHALLY_ATS, openMaulers } from './xarpus.js';
 import { Rng } from './rng.js';
 
@@ -158,6 +159,10 @@ export async function solveXarpus(ctx, run, progress = () => {}, stopped = () =>
   const res = await run(ranked.map((x) => x.cfg), 0, finalRaids, 'xfinal');
   const outv = ranked.map((x, i) => ({ cfg: x.cfg, score: scoreOf(res[i].totals, bps), totals: res[i].totals, split: res[i].split, defEnd: res[i].defEnd }))
     .sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));
+  if (ctx.allow.surge && !stopped()) for (let i = 0; i < Math.min(3, outv.length); i++) {   // surges that pay for nothing come out
+    const p = await pruneSurges(outv[i], async (c) => { const [r] = await run([c], 0, finalRaids, 'xfinal'); return { totals: r.totals, split: r.split, defEnd: r.defEnd }; }, (t) => scoreOf(t, bps), (c) => c, stopped);
+    if (p !== outv[i]) outv[i] = p;
+  }
   if (ctx.allow.start && !stopped()) { const p = await polishStarts(outv[0], run, finalRaids, 'xfinal', bps, () => true, progress); if (p !== outv[0]) outv.unshift(p); }
   return outv;
 }

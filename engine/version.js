@@ -2,6 +2,7 @@
 export const VERSION = '1.42.0';
 export const CHANGES = [
   { version: '1.42.0', date: '2026-11-09', items: [
+    'Nylocas, Sotetseg and Xarpus Solvers: a last sense check - each surge in the best setups is played without it (and without the spec it paid for, if they couldn\'t afford it then), and comes out unless it\'s clearly faster with it by 0.2s or more on average. No surges for nothing (a surge that paid for a halberd worth 0.04s, a surge with nothing to pay for). Surges a full raid plan puts in that room stay.',
     'Full raid solver, exhaustive: a plan\'s surge in Nylocas / Sotetseg / Xarpus is on throughout that room\'s search, so the player\'s specs are planned around it (before: the room was solved without it and the surge put in afterwards - a surge that paid for nothing).',
     'Full raid solver: each kept Nylocas setup gets its ranged tick fix thresholds (Twisted bows only below them), as the Optimizer finds them - only when clearly faster; the procedure shows them (before: the sequences went on till he died).',
     'Full raid solver: plans with the same median are ranked by their mean time (room times come in whole cycles, so a plan a fraction of a second faster could lose a tie).',
