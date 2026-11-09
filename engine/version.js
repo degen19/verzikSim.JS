@@ -1,6 +1,10 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.42.0';
+export const VERSION = '1.42.1';
 export const CHANGES = [
+  { version: '1.42.1', date: '2026-11-09', items: [
+    'Nylocas Solver, Optimizer and the Full raid solver\'s Nylocas procedure: the ranged tick fix in words, for each player and sequence - \'4bp tbow - stop at 80%\', \'tbow bp tbow - stop at 30%\', \'3bp tbow - thresholds make no difference - stop at your own preference\' - with their own 2-tick weapon (crossbows, darts: tbow dart tbow from N2 / N3). The large threshold table is gone.',
+    'Nylocas Solver: when thresholds that each looked faster aren\'t faster together (they overlap), none of them is given.',
+  ] },
   { version: '1.42.0', date: '2026-11-09', items: [
     'Full raid solver: surge doses go wherever they make the whole raid fastest - a player with one dose can surge in Nylocas instead of Verzik when that\'s worth more (before: with Verzik in, everyone with a dose always surged there). Every dose is used; a later surge waits for the cooldown; a player your P1 chart needs a Verzik surge from always has it. Verzik is tried with every combination of surgers. Exhaustive has more plans (1 dose each, 4 rooms: 4 per player).',
     'Nylocas, Sotetseg and Xarpus Solvers: a last sense check - each surge in the best setups is played without it (and without the spec it paid for, if they couldn\'t afford it then), and comes out unless it\'s clearly faster with it by 0.2s or more on average. No surges for nothing (a surge that paid for a halberd worth 0.04s, a surge with nothing to pay for). Surges a full raid plan puts in that room stay.',

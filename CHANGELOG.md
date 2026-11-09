@@ -2,6 +2,9 @@
 
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
+## v1.42.1 - 2026-11-09
+- `engine/nylosolve.js`: `planLabel`, `stopLines`; `rangedThresholds` rows name the weapon the sim uses (`fastWeaponOf`, new in `engine/nylo.js`). `nylo-ui.js`: `thrHtml` as lines (no table); procedure column 'Ranged tick fix' from `cfg.thr` (or the setup's `rangedStop`); `procHtml(c, names, gears)`; the full raid keeps `thr` on each setup; the solver drops thresholds that aren't faster together.
+
 ## v1.42.0 - 2026-11-09
 - `fullraid-ui.js`: plans - each player's rooms any set of `min(doses, rooms)` (chart-needed: any set with Verzik, up to their doses), Verzik no longer forced; `chartOk` needs the Verzik surge in the plan; Verzik variants `forceSurgers` for every subset of the players with a dose; step 6 (earlier surges kept only when clearly better) retired - the whole-raid ranking decides.
 - `engine/solvecheck.js` (new): `pruneSurges` (`SURGE_WORTH` 1/3 tick, paired on the final raids; `fix` trims what the surge paid for - Nylocas: damage specs from the end, then the opener), used by `solveNylo` / `solveXarpus` (top 3) and `solveSote` (each finalist) when surges are searched.

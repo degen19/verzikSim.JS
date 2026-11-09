@@ -8,7 +8,7 @@
 // Then, for the best setup: each player's Twisted-bows-only thresholds for his green forms (ranged tick fix: 4 hits +
 // bow / bow, hit, bow / 3 hits + bow, by the boss HP) - rangedThresholds.
 import { pruneSurges } from './solvecheck.js';
-import { runNylo, NEEDS, FAST } from './nylo.js';
+import { runNylo, NEEDS, FAST, fastWeaponOf } from './nylo.js';
 import { Rng } from './rng.js';
 
 export const OPENS = [['none', 'None'], ['bgs', 'BGS'], ['claw', 'Claws'], ['halb', 'Halberd']];
@@ -20,6 +20,27 @@ export const seqName = (s) => (s.length ? s.map((x) => SPEC_NAME[x]).join(' → 
 export const BACKUP_ATS = [10, 20, 30, 40, 50];
 export const STOP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 export const PLAN_NAMES = { 1: '4bp tbow', 2: 'tbow bp tbow', 3: '3bp tbow' };   // bp: their 2-tick hit (blowpipe, crossbows or darts)
+const SHORT = { 'Toxic blowpipe': 'bp', 'Ascension crossbows': 'crossbow', 'Dragon dart': 'dart' };
+/** A player's green-form sequences in words, by the tick of their first attack (1: N2, 2: N3, 3: N4) - with their own
+ *  2-tick weapon; darts only: tbow dart tbow from N2 or N3, Twisted bows from N4 (no sequence - no threshold). */
+export function planLabel(k, weapon) {
+  const w = SHORT[weapon] || 'bp';
+  if (w === 'dart') return k === 3 ? null : `tbow dart tbow (from N${k + 1})`;
+  return { 1: `4${w} tbow`, 2: `tbow ${w} tbow`, 3: `3${w} tbow` }[k];
+}
+/** When to stop each sequence (Twisted bows only below that % of his HP), in words: [{label, text}] per sequence.
+ *  row: a rangedThresholds row (best: {k: pct | null} - null: no threshold clearly faster than going on) - or, with no
+ *  row, the setup's own rangedStop. */
+export function stopLines(p, weapon, row = null) {
+  return [1, 2, 3].map((k) => {
+    const label = planLabel(k, weapon);
+    if (!label) return null;
+    const pct = row ? row.best[k] : (p.rangedStop || {})[k];
+    const text = pct != null ? `stop at ${pct}%`
+      : row ? 'thresholds make no difference - stop at your own preference' : 'go on till he\'s dead';
+    return { label, text };
+  }).filter(Boolean);
+}
 
 const has = (gear, x) => (gear.weapons || []).includes(NEEDS[x]);
 export const canSeq = (gear, seq) => seq.every((x) => has(gear, x));
@@ -158,7 +179,7 @@ export async function solveNylo(ctx, run, progress = () => {}, stopped = () => f
 export async function rangedThresholds(cfg, gear, run, n, progress = () => {}, stopped = () => false) {
   const seed = 'nthr', [base] = await run([cfg], 0, n, seed), bt = base.totals, out = [];
   for (let k = 0; k < cfg.players.length && !stopped(); k++) {
-    const w = FAST.find((x) => (gear[k].weapons || []).includes(x));
+    const w = fastWeaponOf(gear[k]);   // (the one they'd use: the hardest-hitting)
     if (!w) continue;
     const row = { p: k, weapon: w, plans: {}, best: {} };
     for (const plan of [1, 2, 3]) {

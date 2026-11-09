@@ -7,9 +7,9 @@ import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/
 import { blankPlayer } from './engine/loadout.js';
 import { parseBreakpoints } from './engine/optimize.js';
 import { histogramSvg, cumulativeSvg, chartBox } from './engine/report.js';
-import { runNylo, NYLO_HP, FAST, parseWaveTimes, drawWave, fmtWave, normSwitches } from './engine/nylo.js';
+import { runNylo, NYLO_HP, FAST, parseWaveTimes, drawWave, fmtWave, normSwitches, fastWeaponOf } from './engine/nylo.js';
 const SW_STYLES = [['melee', 'Melee'], ['range', 'Range'], ['mage', 'Mage']];
-import { solveNylo, rangedThresholds, backupThresholds, pairedChange, withThresholds, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, better as scoreBetter } from './engine/nylosolve.js';
+import { solveNylo, rangedThresholds, backupThresholds, pairedChange, withThresholds, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, stopLines, planLabel, better as scoreBetter } from './engine/nylosolve.js';
 import { NyloPool } from './nylo-solver-pool.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { Rng } from './engine/rng.js';
@@ -216,8 +216,8 @@ export function createNylo(host, { getTeam }) {
   host.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b) showRaid(Number(b.dataset.nraid)); });
 
   /** A setup laid out. */
-  const procHtml = (c, names) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Max switches (melee / range / mage)</th>${c.players.some((p) => p.rangedStop && Object.keys(p.rangedStop).length) ? '<th title="Ranged tick fix: below this share of his HP, that green-form sequence (by their first attack) is Twisted bows only">Twisted bows only below</th>' : ''}${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
-    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${(({ melee, range, mage }) => `${melee} / ${range} / ${mage}`)(normSwitches(p.maxSwitches))}</td>${c.players.some((q) => q.rangedStop && Object.keys(q.rangedStop).length) ? `<td>${[1, 2, 3].filter((x) => (p.rangedStop || {})[x] != null).map((x) => `${PLAN_NAMES[x]} ${p.rangedStop[x]}%`).join(' · ') || '-'}</td>` : ''}${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
+  const procHtml = (c, names, gears = []) => `<table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Opening spec</th><th>Second spec</th><th>Max switches (melee / range / mage)</th><th title="Ranged tick fix: below that share of his HP, that green-form sequence (picked by the tick of their first attack there) is Twisted bows only">Ranged tick fix</th>${c.players.some((p) => p.healer) ? '<th>Healer Tech</th>' : ''}</tr>
+    ${c.players.map((p, k) => `<tr><td>${esc(names[k])}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${SPEC_NAME[p.open]}</td><td>${seqName(p.specs)}</td><td>${(({ melee, range, mage }) => `${melee} / ${range} / ${mage}`)(normSwitches(p.maxSwitches))}</td><td class="small" style="text-align:left">${(() => { const row = (c.thr || []).find((x) => x.p === k), w = row ? row.weapon : (gears[k] ? fastWeaponOf(gears[k]) : null); return w ? stopHtml(stopLines(p, w, row)) : 'Twisted bows only (no 2-tick weapon)'; })()}</td>${c.players.some((q) => q.healer) ? `<td>${p.healer ? 'yes' : '-'}</td>` : ''}</tr>`).join('')}</table>
     <div class="small">Backup BGS: ${c.backup ? `${esc(names[c.backup.p])} while his Defence is ${c.backup.at}+` : 'none'}</div>`;
   const statsRow = (totals, bps) => { const v = totals.slice().sort((a, b) => a - b), n = v.length, asc = [...bps].sort((a, b) => a - b);
     return { mean: v.reduce((a, b) => a + b, 0) / n, med: v[n >> 1], q10: v[Math.max(0, Math.floor(n * 0.1) - 1)], q25: v[Math.max(0, Math.floor(n * 0.25) - 1)], fast: v[0], bp: asc.map((b) => v.filter((x) => x * 0.6 <= b + 1e-9).length / n) }; };
@@ -312,15 +312,15 @@ export function createNylo(host, { getTeam }) {
     persist();
   });
   let vjob = null, vres = null;
-  const thrHtml = (thr, names, whose = 'best setup') => {
+  /** Ranged tick fix: when each player stops each green-form sequence (Twisted bows only below that % of his HP). */
+  const stopHtml = (lines) => lines.map((x) => `${esc(x.label)} - <b>${esc(x.text)}</b>`).join('<br>');
+  const thrHtml = (thr, names, whose = 'best setup', solo = null) => {
     if (!thr) return '';
+    const overlap = solo ? solo.flatMap((row) => [1, 2, 3].filter((k) => row.best[k] != null).map((k) => `${esc(names[row.p])} ${esc(planLabel(k, row.weapon) || '')} ${row.best[k]}%`)).join(', ') : '';
     if (!thr.length) return '<p class="muted small">Nobody has a blowpipe, Ascension crossbows or dragon darts - Twisted bows only.</p>';
-    const cell = (x, best) => `<td style="${x.pct === best ? 'font-weight:700;background:rgba(80,200,120,.15)' : ''}${x.d > x.ci ? ';color:var(--bad,#e66)' : ''}">${x.d >= 0 ? '+' : ''}${x.d.toFixed(2)}<span class="muted" style="font-size:10px"> ±${x.ci.toFixed(2)}</span></td>`;
-    return `<h4 style="margin:12px 0 2px">Ranged tick fix thresholds (${whose})</h4>
-      <p class="muted small" style="margin:0 0 6px">Change in mean boss time (ticks; negative is faster, ± the 95% range) if that player stops each green-form sequence below each % of his HP and plays Twisted bows only (bp: their 2-tick hit) - one player and sequence at a time, on the same raids. Bold: their best, when it's clearly faster than continuing till he's dead.</p>
-      ${thr.map((row) => `<div class="small" style="margin-top:6px"><b>${esc(names[row.p])}</b> <span class="muted">(${esc(row.weapon)})</span> - ${[1, 2, 3].map((k) => `${PLAN_NAMES[k]}: <b>${row.best[k] == null ? 'continue till dead' : `stop at ${row.best[k]}%`}</b>`).join(' · ')}</div>
-        <div class="scroll"><table class="bt"><tr><th>Sequence</th>${STOP_PCTS.map((p) => `<th>&lt; ${p}%</th>`).join('')}</tr>
-        ${[1, 2, 3].map((k) => `<tr><td class="rl">${PLAN_NAMES[k]}</td>${row.plans[k].map((x) => cell(x, row.best[k])).join('')}</tr>`).join('')}</table></div>`).join('')}
+    return `<h4 style="margin:12px 0 2px">Ranged tick fix: when to stop each sequence (${whose})</h4>
+      <p class="muted small" style="margin:0 0 6px">Below that share of his HP they play Twisted bows only in his green form (each sequence is picked by the tick of their first attack there). Tested one player and sequence at a time, on the same raids - a stop is given only when it's clearly faster than going on${overlap ? ' - and when they\'re faster together too: here the ones that looked faster on their own (' + overlap + ') weren\'t, together' : ''}.</p>
+      ${thr.map((row) => `<div class="small" style="margin-top:6px"><b>${esc(names[row.p])}</b> <span class="muted">(${esc(row.weapon)})</span><br>${stopHtml(stopLines({}, row.weapon, row))}</div>`).join('')}
       <button class="ghost sm" data-usethr style="margin-top:6px">Use these thresholds in the settings</button>`;
   };
   /** The recommendations played together against the setup they came from (they don't simply add up: they overlap). */
@@ -337,8 +337,8 @@ export function createNylo(host, { getTeam }) {
         return `<tr${i === 0 ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${fsec(s.med)}</td><td>${fsec(s.q25)}</td><td>${fsec(s.q10)}</td><td>${fsec(s.fast)}</td>${s.bp.map((q) => `<td>${(q * 100).toFixed(1)}%</td>`).join('')}
           <td class="small" style="text-align:left;font-weight:400">${short}</td>
           <td style="white-space:nowrap"><button class="ghost sm" data-vshow="${i}">Procedure</button> <button class="ghost sm" data-vuse="${i}">Use</button></td></tr>
-          <tr class="sub-row" data-vproc="${i}" hidden><td colspan="${7 + asc.length}" style="text-align:left">${procHtml(r.cfg, names)}${raidBar(r.run, bps)}</td></tr>`; }).join('')}</table></div>
-      ${combHtml(vres.comb, 'every player\'s thresholds below')}${thrHtml(thr, names)}</div>`;
+          <tr class="sub-row" data-vproc="${i}" hidden><td colspan="${7 + asc.length}" style="text-align:left">${procHtml(r.cfg, names, r.run.players.map((q) => q.gear))}${raidBar(r.run, bps)}</td></tr>`; }).join('')}</table></div>
+      ${vres.thrSolo ? '' : combHtml(vres.comb, 'every player\'s thresholds below')}${thrHtml(thr, names, 'best setup', vres.thrSolo)}</div>`;
   };
   sol.addEventListener('click', async (e) => {
     const el = e.target, status = sol.querySelector('[data-vstatus]'), err = sol.querySelector('[data-verr]'), vbtn = (a) => sol.querySelector(`[data-vact="${a}"]`);
@@ -373,9 +373,12 @@ export function createNylo(host, { getTeam }) {
       vres = { items: items.map((r) => ({ ...r, run: mk(r.cfg) })), bps, names, thr: null }; showResults();
       if (v.search.thr && t > 1 && items.length && !me.stopped) {
         vres.thr = await rangedThresholds(items[0].cfg, gear, run, ef.thrRaids, say, () => me.stopped);
+        if (vres.items[0]) vres.items[0] = { ...vres.items[0], cfg: { ...vres.items[0].cfg, thr: vres.thr } };   // (its procedure says when to stop)
         showResults();
         if (vres.thr.some((r) => Object.values(r.best).some((x) => x != null)) && !me.stopped) {
           say('All the thresholds together'); vres.comb = await pairedChange(items[0].cfg, withThresholds(items[0].cfg, vres.thr), run, ef.thrRaids);
+          // each looked faster on its own but together they aren't (they overlap): none of them is worth it
+          if (!(vres.comb.d < -vres.comb.ci)) { vres.thrSolo = vres.thr; vres.thr = vres.thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } })); if (vres.items[0]) vres.items[0] = { ...vres.items[0], cfg: { ...vres.items[0].cfg, thr: vres.thr } }; }
           showResults();
         }
       }
@@ -456,9 +459,11 @@ export function createNylo(host, { getTeam }) {
       for (const [i, r] of items.slice(0, keep).entries()) {
         if (stopped()) break;
         const thr = await rangedThresholds(r.cfg, gear, run, ef.thrRaids, (m) => say(`setup ${i + 1}: ${m}`), stopped);
+        items[i] = { ...r, cfg: { ...r.cfg, thr } };   // (the procedure says when to stop, or that it makes no difference)
         if (!thr.some((x) => [1, 2, 3].some((k) => x.best[k] != null))) continue;
-        const cfg = withThresholds(r.cfg, thr), ch = await pairedChange(r.cfg, cfg, run, ef.thrRaids);
+        const cfg = { ...withThresholds(r.cfg, thr), thr }, ch = await pairedChange(r.cfg, cfg, run, ef.thrRaids);
         if (ch.d < -ch.ci) { const [res] = await run([cfg], 0, ef.finalRaids, 'nfin'); items[i] = { ...r, cfg, totals: res.totals, thr }; }
+        else items[i] = { ...r, cfg: { ...r.cfg, thr: thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } })) } };   // together they don't help: none
       }
       return items.map((r) => ({ ...r, cfg: { ...r.cfg, players: r.cfg.players.map((p, k) => ({ ...p, ...extra(k) })) },
         run: { players: base.map((b, k) => ({ ...b, plan: { ...r.cfg.players[k], ...extra(k) } })), opts: { ...opts, plans: { backup: r.cfg.backup } } } }));
@@ -467,7 +472,7 @@ export function createNylo(host, { getTeam }) {
   /** Full raid: show setups (best first) in this tab's Solver results. */
   const fullRaidShow = (items, bps) => { vres = { items, bps, names: items[0] ? items[0].run.players.map((p) => p.name) : [], thr: null }; showResults(); };
   /** Full raid: a setup's procedure (its plan and Show raid) into `el`. */
-  const procedure = (el, { cfg, names, run }, bps = []) => { el.innerHTML = `${procHtml(cfg, names)}${raidBar(run, bps)}`; if (!el.dataset.wired) { el.dataset.wired = '1'; el.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b && !host.contains(b)) showRaid(Number(b.dataset.nraid)); }); } };
+  const procedure = (el, { cfg, names, run }, bps = []) => { el.innerHTML = `${procHtml(cfg, names, run.players.map((q) => q.gear))}${raidBar(run, bps)}`; if (!el.dataset.wired) { el.dataset.wired = '1'; el.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b && !host.contains(b)) showRaid(Number(b.dataset.nraid)); }); } };
 
   function refreshAll() { render(); showRep(); showSol(); }
   return { refresh: () => { state = loadKey(STORE); refreshAll(); }, api: { fullRaidSolve, fullRaidShow, procedure, reportHtml, team } };

@@ -187,6 +187,8 @@ export function normPlan(pl, has, team = 4) {
 /** Their 2-tick ranged weapon for his green forms: the best they have of blowpipe, Ascension crossbows, thrown dragon darts. */
 export const FAST = ['Toxic blowpipe', 'Ascension crossbows', 'Dragon dart'];
 const FAST_CODE = { 'Toxic blowpipe': 'BP', 'Ascension crossbows': 'AX', 'Dragon dart': 'DD' };
+/** The 2-tick weapon a player with this gear uses here (null: none) - the one that hits hardest. */
+export const fastWeaponOf = (gear) => fastWeapon({ gear, has: new Set(gear.weapons || []) });
 function fastWeapon(p) {
   const own = FAST.filter((w) => p.has.has(w));
   if (!own.length) return null;
