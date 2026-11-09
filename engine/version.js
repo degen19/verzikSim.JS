@@ -1,6 +1,9 @@
 // Sim version and the "What's new" list shown on the page. Newest first. Keep CHANGELOG.md in step with this.
-export const VERSION = '1.41.1';
+export const VERSION = '1.41.2';
 export const CHANGES = [
+  { version: '1.41.2', date: '2026-11-09', items: [
+    'Verzik reds, Scythe first hit after tome: only the listed tome sequences. Nothing on r11 but a scythe (no two-tome start there); 50% on r16: tome r16; 100%: a second tome on r19 after a miss, r25 after a hit (once the 3 buffed attacks are done), or with a delay - scythe r25, tome r30; under 50% on r16: scythe through r26 (ZCB r21 if bounced), tome r31. No claws, plain tome autos or specs while buffed. Delay or not: the most expected damage from their numbers.',
+  ] },
   { version: '1.41.1', date: '2026-11-08', items: [
     'Verzik P1 chart builder (the solvers\' own P1 charts): a surge only goes in at 65% spec or less, so the next regen isn\'t wasted - a 95% start surges after their second Dawn, not after the first (60 -> 70 regen -> 95 would lose 5% at the next regen). Same or better charts in tests (3-5 man).',
     'Full raid solver, Use my P1 chart: when a player\'s chart needs their surge (a P on it, or Dawn specs / spec transfers they can\'t afford without one), surge plans that use it in an earlier room and leave it on cooldown then are left out - so their chart specs go when scheduled. The results say which players\' charts need a surge, by when, and how many plans were left out.',

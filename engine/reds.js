@@ -177,7 +177,7 @@ export function tome_turn(p, act, t, r, n, rng, vq, rank, st, L) {
     const spec = act === 'T' || act === 'Ts', k = act === 'Ts' ? 2 : act === 'za' ? 0 : 1;
     const [ch, mx] = tome_numbers(p, k), d = roll(ch, mx), old = p.spec;
     if (spec) p.spec -= 50;
-    if (act === 'T') p.tome_buff = d > 0 ? 3 : 0;
+    if (act === 'T') { p.tome_buff = d > 0 ? 3 : 0; p.tome_used = (p.tome_used || 0) + 1; if (p.tome_used === 1) p.tome_first = r === 16 ? (d > 0 ? 1 : 0) : 'x'; }   // (Scythe first hit after tome: the second tome's ticks)
     else if (act === 'Ts') p.tome_buff = p.tome_buff - 1 + (d > 0 ? 3 : 0);
     else if (act === 'Tb') p.tome_buff -= 1;
     p.next_attack = t + (act === 'T' || act === 'za' ? 3 : 2);
@@ -222,7 +222,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
     p.sh_col_done = false;
     p.purple_pending = false;             // no purple to come once the reds start
     p.reds_bp = false;
-    p.tome_on = !!ga(p, 'tome_reds', false); p.tome_buff = 0; p.tome_lock = false; p.tome_melee = false; p.tome_out16 = false; p.tome_act16 = null;   // Tome Reds (tome.js)
+    p.tome_on = !!ga(p, 'tome_reds', false); p.tome_buff = 0; p.tome_used = 0; p.tome_first = null; p.tome_lock = false; p.tome_melee = false; p.tome_out16 = false; p.tome_act16 = null;   // Tome Reds (tome.js)
     if (p.next_attack < P) {
       p.next_attack = P;
     }
