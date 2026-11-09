@@ -19,14 +19,13 @@ export const FULLRAID_MECHANICS = {
     { title: 'Normal search', rows: [
       R('1. Rooms solved twice', 'All', 'Each room is solved with surges allowed (everyone with a dose) and with none, in raid order; each room\'s cooldowns in are what\'s left after the rooms before at their median times.'),
       R('2. Surge choices', 'All', 'Every solved setup is also tried with each subset of its surgers dropped (not re-solved) - one room on its own, on the screening raids.'),
-      R('3. Plans scored', 'All', 'Every combination of room choices (doses permitting; with Verzik in, always a Verzik surge) is scored from the rooms\' time spreads put together.'),
+      R('3. Plans scored', 'All', 'Every combination of room choices - each player\'s doses all used, in whichever rooms (a later surge waits for the cooldown) - is scored from the rooms\' time spreads put together.'),
       R('4. Refine', 'All', 'Normal / Thorough effort: the best plan\'s rooms are re-solved for exactly its surgers, where that\'s a new choice, and the plans scored again.'),
       R('5. Whole raids', 'All', 'The best plans (12 / 20 / 30 by effort) are played as whole raids with the surge cooldowns carried for real, all on the same raids.'),
-      R('6. Earlier surges', 'All', 'A plan with surges before Verzik is played again without them; it keeps them only if that\'s clearly better on the same raids (the goal first, then time; more than 2 standard errors).'),
       R('Accuracy', 'All', 'Good, not exact: a plan has to make the top 12-30 on the room-by-room screen to be played as a whole raid, and most rooms use setups solved for "everyone surges" or "no surges" with surgers taken out rather than solved for that exact plan. Best when one plan is clearly ahead; close calls can come out in either order.'),
     ] },
     { title: 'Exhaustive search', rows: [
-      R('Every plan', 'All', 'Every surge plan - who surges in which room, within their doses (with Verzik in: always Verzik, the rest of their doses in rooms before it). Each plan is played literally: its surges forced, each room solved for exactly that plan and the cooldowns it brings (cooldowns rounded to 10 ticks; a solve is reused by every plan with the same case).', 'Exhaustive surge plans'),
+      R('Every plan', 'All', 'Every surge plan - who surges in which room, each player\'s doses all used, in whichever rooms. Each plan is played literally: its surges forced, each room solved for exactly that plan and the cooldowns it brings (cooldowns rounded to 10 ticks; a solve is reused by every plan with the same case).', 'Exhaustive surge plans'),
       R('Bounds', 'All', 'Before solving every plan, Verzik is played with every planned surge ready (the most it can give) and with only the fresh ones (the least). A plan whose best case is below the best plan\'s worst case (with a noise margin, or 5 points / 10 ticks clearly worse) is dropped - the closest 20 dropped plans are listed.'),
       R('Whole raids', 'All', 'The plans left are played as whole raids on the same raids and ranked; plans with identical results are shown once.'),
       R('Accuracy', 'All', 'The most accurate: no plan is missed by screening and every room is solved for its plan. What\'s left is the room solvers\' own search (set by Effort) and raid-to-raid noise.'),
