@@ -37,7 +37,7 @@ export function stopLines(p, weapon, row = null) {
     if (!label) return null;
     const pct = row ? row.best[k] : (p.rangedStop || {})[k];
     const text = pct != null ? `stop at ${pct}%`
-      : row ? 'thresholds make no difference - stop at your own preference' : 'go on till he\'s dead';
+      : row ? 'thresholds make no difference - stop at your own preference' : 'not tested (as set: go on till he\'s dead)';
     return { label, text };
   }).filter(Boolean);
 }

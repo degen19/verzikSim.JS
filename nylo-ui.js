@@ -375,6 +375,14 @@ export function createNylo(host, { getTeam }) {
         vres.thr = await rangedThresholds(items[0].cfg, gear, run, ef.thrRaids, say, () => me.stopped);
         if (vres.items[0]) vres.items[0] = { ...vres.items[0], cfg: { ...vres.items[0].cfg, thr: vres.thr } };   // (its procedure says when to stop)
         showResults();
+        // the next two setups' thresholds too (each procedure says when to stop), each kept only when together they're
+        // clearly faster on the same raids - as the Full raid solver does
+        for (let i = 1; i < Math.min(3, vres.items.length) && !me.stopped; i++) {
+          const c0 = vres.items[i].cfg, thr = await rangedThresholds(c0, gear, run, ef.thrRaids, (m) => say(`setup ${i + 1}: ${m}`), () => me.stopped);
+          const any = thr.some((x) => [1, 2, 3].some((k) => x.best[k] != null)), ch = any && !me.stopped ? await pairedChange(c0, withThresholds(c0, thr), run, ef.thrRaids) : null;
+          vres.items[i] = { ...vres.items[i], cfg: { ...c0, thr: ch && ch.d < -ch.ci ? thr : thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } })) } };
+          showResults();
+        }
         if (vres.thr.some((r) => Object.values(r.best).some((x) => x != null)) && !me.stopped) {
           say('All the thresholds together'); vres.comb = await pairedChange(items[0].cfg, withThresholds(items[0].cfg, vres.thr), run, ef.thrRaids);
           // each looked faster on its own but together they aren't (they overlap): none of them is worth it
