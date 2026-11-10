@@ -24,7 +24,7 @@ const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } ca
 
 // which template fields go where (the rest are decided by the solver, or not used)
 const PLAYER_SETUP = ['Name', 'meleePrayer', 'Custom Surge Timing'];
-const PLAYER_GEAR = ['helm', 'body', 'legs', 'amulet', 'bloodFuryThreshold', 'has3Tick', 'Has BP', 'Shadow', '3:1', 'Shadow while LB', 'Shadow camp', 'Deep proc'];
+const PLAYER_GEAR = ['helm', 'body', 'legs', 'amulet', 'bloodFuryThreshold', 'has3Tick', 'Has BP', 'Shadow', '3:1', 'Shadow while LB', 'Shadow camp', 'Deep proc', 'Tome Reds', 'Scythe first hit after tome'];
 const ADV_GEAR = ['bouncedZCB', 'offPrayer', 'hornPriority', 'Phoenix necklaces', 'Pneck on P1', 'Redemption flick', 'Pass green if death'];
 // 3-5 man: the solver picks the Dawn threshold (1-6%)
 const TEAM_MAIN = ['Deep proc HP %', 'P2 Scythe last hit threshold', 'P3 halberd HP %'];
@@ -36,7 +36,7 @@ const LABEL = {
   Name: 'Name', meleePrayer: 'Prayer', 'Custom Surge Timing': 'Custom surge (m:ss)', helm: 'Helm', body: 'Body', legs: 'Legs', amulet: 'Amulet',
   bloodFuryThreshold: 'Blood fury threshold', has3Tick: '3-tick weapon', 'Has BP': 'Has BP', bouncedZCB: 'Bounced ZCB', offPrayer: 'Off prayer (P3)',
   hornPriority: 'Horn priority', 'Phoenix necklaces': 'Phoenix necklaces', 'Pneck on P1': 'Pneck on P1', 'Redemption flick': 'Redemption flick',
-  'Pass green if death': 'Pass green if death', redCrab: 'Red crab', 'Brew sips': 'Brew sips', 'SCB sips': 'Super combat sips',
+  'Pass green if death': 'Pass green if death', 'Tome Reds': 'Tome Reds', 'Scythe first hit after tome': 'Scythe first hit after tome', redCrab: 'Red crab', 'Brew sips': 'Brew sips', 'SCB sips': 'Super combat sips',
   'Restore sips': 'Restore sips', Sharks: 'Sharks', 'P2 Scythe last hit threshold': 'P2 halberd: scythe below HP %',
 };
 const HELP = {
@@ -50,6 +50,8 @@ const HELP = {
   'Shadow while LB': 'Shadow while wearing Lightbearer, then scythe (or 3:1) after the swap. Needs Shadow.',
   '3:1': 'Scythe, but the attack that would collide with Verzik becomes a shadow. Needs Shadow.',
   'Deep proc': 'Shadow from max distance below the Deep proc HP %. Needs Shadow.',
+  'Tome Reds': 'Zorya\'s tome in P2 reds (needs a tome in the Gear tab). Your starting point: the solver tries it on and off for each player with a tome.',
+  'Scythe first hit after tome': 'A full-switch scythe as their first hit after their last buffed tome attack (needs a tome). Kept as you set it - the solver doesn\'t change it.',
   offPrayer: 'Verzik P3 autos taken off prayer (0-9)',
   'Brew sips': 'Saradomin brew sips the whole team brings', 'SCB sips': 'Super combat potion sips the whole team brings',
   'Restore sips': 'Super restore sips the whole team brings', Sharks: 'Sharks the whole team brings',
@@ -191,7 +193,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const bpCol = { custom: true, label: 'Has BP', help: 'The solver hands out the blowpipes (Advanced)', cell: () => '<span class="muted" title="The solver hands out the blowpipes (Advanced)">Solver</span>' };
     // gear (helm / body / legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab
     const BF = [['gear', 'bloodFuryThreshold'], ['gear', 'Blood fury in']];
-    const roleCols = duo ? [['setup', 'Name'], ['setup', 'Custom Surge Timing'], ...BF, ['gear', 'Shadow'], ['gear', 'Deep proc']]
+    const roleCols = duo ? [['setup', 'Name'], ['setup', 'Custom Surge Timing'], ...BF, ['gear', 'Shadow'], ['gear', 'Deep proc'], ['gear', 'Tome Reds'], ['gear', 'Scythe first hit after tome']]
       : [['setup', 'Name'], boakCol, patCol, ['setup', 'Custom Surge Timing'], ...BF, ...(pickBP ? [bpCol] : []), ...PLAYER_GEAR.slice(7).map((h) => ['gear', h])];
     const playersBody = `<p class="muted small" style="margin-top:4px">Gear (helm, body, legs, amulet, prayer, blowpipe, 3-tick weapon, mage gear) comes from the Gear tab; the Blood fury threshold is set here - Gear set ${esc(s.gearSet || 'A')}.</p>${playerTable(roleCols)}
       <p class="muted small">${duo ? 'Tick Shadow for the mage (one player). The solver picks the shadow mode (camp, 3:1, Shadow while LB, or 3:1 + Shadow while LB) and the Dawn and P2 last-hit thresholds (1-5%).'
@@ -293,7 +295,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
    *  and not what the solver decides (or the form randomizes, horn priority). */
   function formDiff(mine, form) {
     const solved = new Set(['startSpec (%)', 'lightbearerOn', 'PurpleDC', '1st Purple DC', '2nd Purple DC', 'WestDC', 'EastDC', 'Ring switch %', 'Ring % by Dawns',
-      'Target spec', 'Horn', 'P2 horn', 'P3 horn', 'hornPriority', 'Name', ...(team === 2 ? [...DUO_SOLVED, 'Shadow camp', '3:1', 'Shadow while LB'] : TEAM_SOLVED)]);
+      'Target spec', 'Horn', 'P2 horn', 'P3 horn', 'hornPriority', 'Name', 'Tome Reds', ...(team === 2 ? [...DUO_SOLVED, 'Shadow camp', '3:1', 'Shadow while LB'] : TEAM_SOLVED)]);
     const shown = new Set([...PLAYER_SETUP, ...PLAYER_GEAR, ...ADV_GEAR, 'redCrab', 'East Boak', 'West Boak', 'East Pattern',
       ...tpl[team].desc.tables.team.map((f) => f.header).filter((h) => h !== 'Death tick')]);
     const out = new Set();
@@ -328,6 +330,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     if (team !== 2) put('team', 'East bounce tech', null, x.cfg[0].eastBounce || 0);
     x.cfg.forEach((c, k) => {
       put('gear', 'Has BP', k, c.hasBP !== false);
+      put('gear', 'Tome Reds', k, !!c.tomeReds); put('gear', 'Scythe first hit after tome', k, !!c.scytheAfterTome);
       if (team === 2) return;
       put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB); put('gear', 'Deep proc', k, !!c.deepProc);
       if (c.shadowSrc != null && c.shadowSrc !== k) {           // the shadow moved here: their mage gear comes with it

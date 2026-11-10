@@ -86,6 +86,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     s.xarpus ||= {}; s.xarpus.heals ??= HEALS_DEFAULT[t]; s.xarpus.exactHeals ??= false; s.xarpus.rangePots ||= [];
     { const dp = defaultXarpusPlan(t); for (let k = 0; k < t; k++) s.xarpus.rangePots[k] = s.xarpus.rangePots[k] == null ? autoRangePot(dp, k) : normRangePot(s.xarpus.rangePots[k]); s.xarpus.rangePots.length = t; }   // default: as the sim played it before (Ralos players in the default plan)
     s.verzik ||= {}; s.verzik.pnecks ||= []; for (let k = 0; k < t; k++) s.verzik.pnecks[k] ??= 0; s.verzik.pnecks.length = t;
+    s.verzik.tome ||= []; for (let k = 0; k < t; k++) s.verzik.tome[k] ||= { reds: false, scythe: false }; s.verzik.tome.length = t;
     s.verzik.team ||= { Sharks: '', 'Brew sips': '', 'Restore sips': '', 'SCB sips': '' };
     s.trades ??= false;
     s.nylo ||= {};
@@ -143,8 +144,9 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       <div class="frblk"><h4>${tick(s, 'verzik')}</h4>${s.on.verzik ? '' : '<div class="muted small">Not run.</div>'}<div ${s.on.verzik ? '' : 'hidden'}><div class="row" style="gap:14px;align-items:end;flex-wrap:wrap">
         ${Object.keys(s.verzik.team).map((h) => `<label title="The whole team's (blank: the chart template's default)">${h === 'SCB sips' ? 'Super combat sips' : h} (team)<input type="number" min="0" data-vt="${esc(h)}" value="${esc(s.verzik.team[h])}" placeholder="default" style="width:80px"></label>`).join('')}</div>
         <div class="scroll"><table class="bt"><tr><th></th>${Array.from({ length: t }, (_, k) => `<th>${name(k)}</th>`).join('')}</tr>
-          <tr><td class="rl">Phoenix necklaces</td>${Array.from({ length: t }, (_, k) => `<td><input type="number" min="0" data-vp="${k}" value="${esc(s.verzik.pnecks[k])}" style="width:60px"></td>`).join('')}</tr></table></div>
-        <div class="muted small">Shadows come from the Gear tab (a Tumeken's shadow): the solver tries the shadow options for whoever has one. Everything else is the chart template's defaults.</div>
+          <tr><td class="rl">Phoenix necklaces</td>${Array.from({ length: t }, (_, k) => `<td><input type="number" min="0" data-vp="${k}" value="${esc(s.verzik.pnecks[k])}" style="width:60px"></td>`).join('')}</tr>
+          ${[['reds', 'Tome Reds', "Zorya's tome in P2 reds (needs a tome in the Gear tab). The starting point: the solver tries it on and off for each player with a tome"], ['scythe', 'Scythe first hit after tome', 'A full-switch scythe as their first hit after their last buffed tome attack (needs a tome). Kept as set - the solver doesn\'t change it']].map(([f, l, tip]) => `<tr><td class="rl" title="${esc(tip)}">${l}</td>${Array.from({ length: t }, (_, k) => { const has = !!(gp && gp[k] && (gp[k].weapons || []).includes("Zorya's tome")); return `<td style="text-align:center"><input type="checkbox" data-vtome="${k}|${f}" ${has && s.verzik.tome[k][f] ? 'checked' : ''} ${has ? '' : 'disabled title="No Zorya\'s tome (Gear tab)"'}></td>`; }).join('')}</tr>`).join('')}</table></div>
+        <div class="muted small">Tome Reds: the solver tries it on and off for each player with a tome; Scythe first hit after tome stays as ticked. Shadows come from the Gear tab (a Tumeken's shadow): the solver tries the shadow options for whoever has one. Everything else is the chart template's defaults.</div>
       <div class="row wrap" style="gap:14px;align-items:center;margin:10px 0 0">
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Keep your Verzik chart's P1 rotation (much faster) - ring swaps, DCs, horns and the rest are still searched"><input type="checkbox" data-f="useChart" ${s.useChart ? 'checked' : ''}>Use my Verzik P1 chart</label>
       </div>
@@ -191,6 +193,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     else if (el.dataset.xe != null) s.xarpus.exactHeals = el.checked;
     else if (el.dataset.xrpot != null || el.dataset.xrpotkind != null) { const k = Number(el.dataset.xrpot ?? el.dataset.xrpotkind); s.xarpus.rangePots[k] = rangePotFrom(el, el.dataset.xrpotkind != null, s.xarpus.rangePots[k]); save(state); render(); return; }
     else if (el.dataset.vt) s.verzik.team[el.dataset.vt] = el.value === '' ? '' : Math.max(0, Math.trunc(Number(el.value) || 0));
+    else if (el.dataset.vtome) { const [k, f] = el.dataset.vtome.split('|'); s.verzik.tome[Number(k)][f] = el.checked; }
     else if (el.dataset.vp != null) s.verzik.pnecks[Number(el.dataset.vp)] = Math.max(0, Math.trunc(Number(el.value) || 0));
     else return;
     save(state);
@@ -266,7 +269,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     const t1 = activeNow(), say = (room) => (txt) => { status.textContent = `${room}: ${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; };
     const common = { gearSet: s.gearSet, lbRings, lbOwners, hornLimit, gearPatch, effort: s.effort, stopped: () => me.stopped, onPool: (p) => me.pools.push(p) };
     const soteSup = s.sote.players.map((sp, k) => ({ pnecks: sp.pnecks, sharks: sp.sharks, rests: sp.rests, restores: sp.restores, mazes: mazes(sp, k, gp), rangePot: normRangePot(sp.rangePot) }));
-    const vSup = { team: Object.fromEntries(Object.entries(s.verzik.team).filter(([, x]) => x !== '' && x != null)), players: s.verzik.pnecks.map((n) => ({ 'Phoenix necklaces': n })) };
+    const vSup = { team: Object.fromEntries(Object.entries(s.verzik.team).filter(([, x]) => x !== '' && x != null)), players: s.verzik.pnecks.map((n, k) => ({ 'Phoenix necklaces': n, 'Tome Reds': !!s.verzik.tome[k].reds, 'Scythe first hit after tome': !!s.verzik.tome[k].scythe })) };
     try {
       const how = { mode: s.mode, total, rooms: roomBps, rankBy: s.rankBy };
       const NONE = cd0.map(() => 99999), RN = { nylo: 'Nylocas', sote: 'Sotetseg', xarpus: 'Xarpus', verzik: 'Verzik' };
