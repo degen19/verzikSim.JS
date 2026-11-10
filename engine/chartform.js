@@ -111,9 +111,13 @@ export function describe(ws, team, block = 'A') {
   }
   const gr = findRow('helm');
   if (gr) for (const [h, c] of headers(gr)) { tables.gear.push(h); for (let k = 0; k < team; k++) add('gear', h, k, gr + 1 + k, c); }
-  // Tome Reds sits at the end of the template's gear row: shown next to Shadow
-  if (tables.gear.includes('Tome Reds') && tables.gear.includes('Shadow')) { tables.gear.splice(tables.gear.indexOf('Tome Reds'), 1); tables.gear.splice(tables.gear.indexOf('Shadow') + 1, 0, 'Tome Reds'); }
-  if (tables.gear.includes('Scythe first hit after tome')) { tables.gear.splice(tables.gear.indexOf('Scythe first hit after tome'), 1); tables.gear.splice(tables.gear.indexOf('Tome Reds') + 1, 0, 'Scythe first hit after tome'); }
+  // the shadow settings together, from Shadow on (Shadow camp, Tome Reds and Scythe first hit after tome sit at the end of
+  // the template's gear row): Shadow, 3:1, Shadow while LB, Shadow camp, Deep proc, Tome Reds, Scythe first hit after tome
+  if (tables.gear.includes('Shadow')) {
+    const grp = ['Shadow', '3:1', 'Shadow while LB', 'Shadow camp', 'Deep proc', 'Tome Reds', 'Scythe first hit after tome'].filter((h) => tables.gear.includes(h));
+    const at = tables.gear.indexOf('Shadow'), rest = tables.gear.filter((h) => !grp.includes(h));
+    rest.splice(tables.gear.slice(0, at).filter((h) => !grp.includes(h)).length, 0, ...grp); tables.gear = rest;
+  }
   const mr = findRow('mage helm');
   if (mr) for (const [h, c] of headers(mr)) { tables.mage.push(h); for (let k = 0; k < team; k++) add('mage', h, k, mr + 1 + k, c); }
   const tr = findRow('Tick');
