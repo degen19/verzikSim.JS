@@ -6,7 +6,7 @@ import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/
 import { blankPlayer } from './engine/loadout.js';
 import { newXarpusResult, addXarpusRaids, xarpusReportHtml, xarpusReportPage } from './engine/xarpusreport.js';
 import { parseBreakpoints } from './engine/optimize.js';
-import { defaultXarpusPlan, migrateXarpus, canDo, openMaulers, defCap, OPENERS, BACKUP_SPECS, DPS_SPECS, FIXES, DEF_TARGETS, CHALLY_ATS, ZCB_BELOW, HEALS_DEFAULT, HEALS_NOTE, HEAL, HEAL_SPREAD, XARPUS_HP, screechHp, EXHUMED_TICKS } from './engine/xarpus.js';
+import { defaultXarpusPlan, migrateXarpus, canDo, openMaulers, defCap, OPENERS, BACKUP_SPECS, DPS_SPECS, FIXES, DEF_TARGETS, CHALLY_ATS, ZCB_BELOW, HEALS_DEFAULT, HEALS_NOTE, HEAL, HEAL_SPREAD, XARPUS_HP, screechHp, EXHUMED_TICKS, hornN } from './engine/xarpus.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { setPicker, pickSets, setResultsHtml, wireSetResults } from './setresults.js';
 import { solveXarpus, better as scoreBetter, normalizePlan } from './engine/xarpussolve.js';
@@ -45,7 +45,7 @@ export function createXarpus(host, { getTeam }) {
     `)}
     ${pane('solve', 'data-solve', `
       <p class="muted small" style="margin-top:8px">Searches for the best setup from the one above: each player's opening Defence spec, who mauls again for each number of opening mauls landed,
-        the backups (who, which spec, the order and "back up right away"), the Defence target (${DEF_TARGETS.join(', ')}), damage spec (ZCB, claws) and holding ZCBs for the screech, tick fix, start spec, Lightbearer cycles, surge and horn, the ZCB → claws HP and the Chally last hit (${CHALLY_ATS.join(', ')}%) -
+        the backups (who, which spec, the order and "back up right away"), the Defence target (${DEF_TARGETS.join(', ')}), damage spec (ZCB, claws) and holding ZCBs for the screech or ZCB As Soon As Available, tick fix, start spec, Lightbearer cycles, surge and horn (none / 1 / 2 others), the ZCB → claws HP and the Chally last hit (${CHALLY_ATS.join(', ')}%) -
         within the Surge potions / Lightbearers limits and the gear each player has. Each round it tries every single change (with Role changes: a player's opening spec, damage spec, start spec and Lightbearer cycles together; with Swaps: also two
         players' opening or damage specs swapped, a Lightbearer / surge moved) on a few raids, then the best on more, and keeps the best if it beats the
         current setup, until nothing does (Restarts: again from the default plan for the scale). Setups with no Defence spec at all are skipped. The top setups are then played on more raids and ranked:
@@ -150,11 +150,11 @@ export function createXarpus(host, { getTeam }) {
           <td><select data-p="${k}|startSpec"><option value="100" ${p.startSpec === 95 ? '' : 'selected'}>100</option><option value="95" ${p.startSpec === 95 ? 'selected' : ''}>95</option></select></td>
           <td style="text-align:center"><input type="checkbox" data-p="${k}|surge" ${p.surge ? 'checked' : ''}></td>
           <td><select data-p="${k}|lbCycles">${[0, 1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${n === Number(p.lbCycles || 0) ? 'selected' : ''}>${n || 'None'}</option>`).join('')}</select></td><td>${rangePotCell('xpot', k, p.rangePot)}</td></tr>`).join('')}</table></div>`)}
-      ${blk(1, 'Opening Defence specs', `<p class="muted small">One each, or None. An Elder maul goes on their first attack; a BGS or Ralos Spec after their first scythe - or, if anyone mauls again (step 2), once those mauls are in - and only if his Defence is above the Defence target. A horn only ever helps the opening mauls: the caster and the first other opening mauler can't miss.</p>
-        <div class="scroll"><table class="bt"><tr><th></th><th>Opening spec</th><th>When</th><th title="Soulflame horn on the interact tick (needs a horn in the Gear tab)">Horn</th></tr>
+      ${blk(1, 'Opening Defence specs', `<p class="muted small">One each, or None. An Elder maul goes on their first attack; a BGS or Ralos Spec after their first scythe - or, if anyone mauls again (step 2), once those mauls are in - and only if his Defence is above the Defence target. Horn (Soulflame horn, on the interact tick, 25% per other player): the caster and 1 or 2 others get a buff on their next melee hit - a maul / BGS can't miss, a scythe's first hitsplat can't miss. Other players' opening mauls get it first, then BGS openers, then the rest (ZCB users last).</p>
+        <div class="scroll"><table class="bt"><tr><th></th><th>Opening spec</th><th>When</th><th title="Soulflame horn on the interact tick: how many other players get the buff, 25% each (needs a horn in the Gear tab)">Horn</th></tr>
         ${st.players.map((p, k) => `<tr><td class="rl">${esc(pname(k))}</td><td>${sel(k, 'open', OPENERS, p.open)}</td>
           <td class="muted small" style="text-align:left">${p.open === 'maul' ? `First attack (t${EXHUMED_TICKS[t] + 1})` : p.open === 'none' ? '-' : 'After their first scythe'}</td>
-          <td style="text-align:center"><input type="checkbox" data-p="${k}|horn" ${p.horn ? 'checked' : ''} ${gp && gp[k] && gp[k].horn ? '' : 'disabled title="No Soulflame horn (Gear tab)"'}></td></tr>`).join('')}</table></div>`)}
+          <td><select data-p="${k}|horn" ${gp && gp[k] && gp[k].horn ? '' : 'disabled title="No Soulflame horn (Gear tab)"'}>${[[0, 'None'], [1, '1 other (25%)'], [2, '2 others (50%)']].map(([v, l]) => `<option value="${v}" ${v === hornN(p) ? 'selected' : ''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`)}
       ${blk(2, 'Maul again if short', N ? `<p class="muted small">Once the ${N} opening maul${N === 1 ? ' is' : 's are'} in: who mauls, by how many landed (whether their own landed or not - and a player who didn't open with a maul can too, e.g. duos' 2:2). They maul on their next attack.</p>
         <div class="scroll"><table class="bt"><tr><th>Opening mauls</th>${st.players.map((_, k) => `<th>${esc(pname(k))}</th>`).join('')}</tr>
         ${Array.from({ length: N + 1 }, (_, n) => `<tr><td class="rl">${n} of ${N} land</td>${st.players.map((_, k) => `<td style="text-align:center"><input type="checkbox" data-rm="${n}|${k}" ${(st.remaul[n] || []).includes(k) ? 'checked' : ''} ${canDo(gearK(k), 'maul') ? '' : 'disabled title="No Elder maul or BGS (Gear tab)"'}></td>`).join('')}</tr>`).join('')}</table></div>`
@@ -175,7 +175,9 @@ export function createXarpus(host, { getTeam }) {
           <th title="After their own Defence specs, as often as their spec allows. ZCB: held for the screech (see the right) or once the mauls are settled. Claws: once no Defence spec is still to come">Damage spec</th>
           <th title="If their scythe (or ZCB) would go off on the i3 before the screech: lose tick(s) (scythe, next attack 6 ticks later - 7 a quarter of the time: they lose 1 tick 75% of the time, 2 ticks 25%), an Eye of ayak hit (3 ticks - their magic gear), a blowpipe hit (2 - Rigour, quiver, gloves, necklace), a claw spec or a claw scratch (4 ticks)">Tick fix at the screech</th></tr>
         ${st.players.map((p, k) => `<tr><td class="rl">${esc(pname(k))}</td><td>${sel(k, 'dps', DPS_SPECS, p.dps, 120)}</td><td>${sel(k, 'fix', FIXES, p.fix, 200)}</td></tr>`).join('')}</table></div>
-        <div style="max-width:420px">${pick()} style="color:var(--ink)"><input type="checkbox" data-s="holdZcb" ${st.holdZcb ? 'checked' : ''}>Hold ZCBs for the screech</label>
+        <div style="max-width:420px">${pick()} style="color:var(--ink)"><input type="checkbox" data-s="zcbAsap" ${st.zcbAsap ? 'checked' : ''}>ZCB As Soon As Available</label>
+          <p class="muted small" style="margin:4px 0 10px">Everyone (all or nothing): each ZCB goes on their first attack with 75% spec once their own Defence specs are done - no waiting on the mauls or the screech. Overrides Hold ZCBs.</p>
+          ${pick()} style="color:var(--ink)${st.zcbAsap ? ';opacity:.5' : ''}"><input type="checkbox" data-s="holdZcb" ${st.holdZcb ? 'checked' : ''} ${st.zcbAsap ? 'disabled' : ''}>Hold ZCBs for the screech</label>
           <p class="muted small" style="margin:4px 0 10px">Players with ZCB hold it until the screech, then fire on their first attack from it - nobody waits for anyone else, so no ticks are lost. Off: they ZCB once the mauls are in.</p>
           <label title="A planned ZCB becomes claws (if they have them) once his HP is below this - the ruby is 22% of his HP (max 110), so it's worth less than a claw spec and the tick it gains by then">ZCB → claws below (HP)<input data-s="zcbBelow" type="number" min="0" step="50" value="${esc(st.zcbBelow)}" style="width:80px"></label>
           <p class="muted small" style="margin:6px 0 10px">A Claw spec tick fix goes before their ZCB.</p>
@@ -244,7 +246,7 @@ export function createXarpus(host, { getTeam }) {
     if (el.dataset.xpot != null || el.dataset.xpotkind != null) { const p = st.players[Number(el.dataset.xpot ?? el.dataset.xpotkind)]; p.rangePot = rangePotFrom(el, el.dataset.xpotkind != null, p.rangePot); persist(); render(); showSol(); return; }
     if (el.dataset.p) {
       const [k, key] = el.dataset.p.split('|'), p = st.players[Number(k)];
-      p[key] = el.type === 'checkbox' ? el.checked : ['startSpec', 'lbCycles'].includes(key) ? Number(el.value) : el.value;
+      p[key] = el.type === 'checkbox' ? el.checked : key === 'horn' ? (el.value === '2' ? 2 : el.value === '1') : ['startSpec', 'lbCycles'].includes(key) ? Number(el.value) : el.value;
       if (key === 'open') normalizePlan(st);
       persist(); render(); return;
     }
@@ -262,7 +264,7 @@ export function createXarpus(host, { getTeam }) {
 
   /** The players for the engine: gear from the set's Gear set + the room settings. */
   const playersNow = (st) => { const gp = gearOf(st); return st.players.map((p, k) => ({ ...p, name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k) })); };
-  const optsOf = (st) => ({ heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals, defTarget: Number(st.defTarget) || 20, remaul: st.remaul, backups: st.backups, holdZcb: !!st.holdZcb, chally: !!st.chally, challyAt: Number(st.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
+  const optsOf = (st) => ({ heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals, defTarget: Number(st.defTarget) || 20, remaul: st.remaul, backups: st.backups, holdZcb: !!st.holdZcb, zcbAsap: !!st.zcbAsap, chally: !!st.chally, challyAt: Number(st.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
 
   // ---------------------------------------------------------------- report
   const repState = () => { const r = rootState(); r.report ||= { raids: 5000, seed: '', bps: '' }; r.report.sets ||= ['A']; r.report.labels ||= {}; return r.report; };
@@ -359,6 +361,9 @@ export function createXarpus(host, { getTeam }) {
    *  the plan, so a plan that can't happen (a ZCB they never have 75% for) says what they did instead. */
   const procHtml = (r, stats = null) => {
     const c = r.cfg, m = openMaulers(c.players), nm = (k) => esc(r.names[k]);
+    // who an interact horn buffs (as the engine picks): other opening mauls, then BGS openers, then the rest (ZCB users last)
+    const hornWho = (c, k) => { const n = hornN(c.players[k]); if (!n) return '-'; const rank = (j) => (c.players[j].open === 'maul' ? 0 : c.players[j].open === 'bgs' ? 1 : c.players[j].dps === 'zcb' ? 3 : 2);
+      return `${nm(k)} + ${c.players.map((_, j) => j).filter((j) => j !== k).sort((a, b) => rank(a) - rank(b)).slice(0, n).map(nm).join(', ')} (${25 * n}%)`; };
     const pct = (n) => `${Math.round(n * 100)}%`, KIND = { maul: 'maul', bgs: 'BGS', ralos: 'Ralos', zcb: 'ZCB', claw: 'claws', halb: 'halberd', horn: 'horn' };
     const did = (k, kinds) => { if (!stats) return ''; const x = stats[k], parts = kinds.filter((q) => x.spec[q]).map((q) => `${KIND[q]} ${pct(x.spec[q] / stats.n)}`);
       return `<div class="muted" style="font-size:11px">in raids: ${parts.join(' · ') || 'none'}</div>`; };
@@ -376,9 +381,9 @@ export function createXarpus(host, { getTeam }) {
     const re = m.length ? Array.from({ length: m.length + 1 }, (_, n) => `${n} land: ${(c.remaul[n] || []).map(nm).join(', ') || 'nobody'}`).join(' · ') : 'nobody opens with a maul';
     const bk = (c.backups || []).map((b, i) => `${i + 1}. ${nm(b.p)} ${lab(BACKUP_SPECS, b.spec)}${b.now >= 0 ? ` (right away if ${b.now} or fewer land)` : ''}`).join(' → ') || 'none';
     return `<div class="small">Maul again - ${re}</div><div class="small">Backups (Defence target ${c.defTarget}): ${bk}</div>
-      <div class="small">ZCBs ${c.holdZcb ? 'held for the screech' : 'once the mauls are in'} · ZCB → claws below ${c.zcbBelow} HP · ${c.chally ? `Chally last hit at ${c.challyAt}%` : 'no Chally last hit'}</div>
+      <div class="small">ZCBs ${c.zcbAsap ? 'as soon as available' : c.holdZcb ? 'held for the screech' : 'once the mauls are in'} · ZCB → claws below ${c.zcbBelow} HP · ${c.chally ? `Chally last hit at ${c.challyAt}%` : 'no Chally last hit'}</div>
       <table style="margin-top:4px"><tr><th>Player</th><th>Start</th><th>Surge</th><th>Lightbearer</th><th>Opening spec</th><th>Damage spec</th><th>Tick fix</th><th>Horn</th></tr>
-      ${c.players.map((p, k) => `<tr><td>${nm(k)}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td><td>${lab(OPENERS, p.open)}${did(k, ['maul', 'bgs', 'ralos'])}</td><td>${dmgCell(p, k)}</td><td>${fixCell(p, k)}</td><td>${p.horn ? 'yes' : '-'}</td></tr>`).join('')}</table>`;
+      ${c.players.map((p, k) => `<tr><td>${nm(k)}</td><td>${p.startSpec}%</td><td>${p.surge ? 'yes' : '-'}</td><td>${p.lbCycles ? `${p.lbCycles} cycles` : '-'}</td><td>${lab(OPENERS, p.open)}${did(k, ['maul', 'bgs', 'ralos'])}</td><td>${dmgCell(p, k)}</td><td>${fixCell(p, k)}</td><td>${hornWho(c, k)}</td></tr>`).join('')}</table>`;
   };
   // ---- Show raid: a setup's raids (played once, 2,000 of them), its timeline for the fastest / Top 10% / ... / median /
   // slowest and breakpoints, and an example raid for each number of opening mauls landed
@@ -479,7 +484,7 @@ export function createXarpus(host, { getTeam }) {
       if (!rs.sets[k]) rs.sets[k] = structuredClone(setOf(r.set) || cur());
       const st = setOf(k), rp = repState(); if (!rp.sets.includes(k)) rp.sets = SETS.filter((x) => x === k || rp.sets.includes(x));
       r.cfg.players.forEach((p, j) => { for (const f of PLAN) st.players[j][f] = p[f]; });
-      Object.assign(st, structuredClone({ remaul: r.cfg.remaul, backups: r.cfg.backups, defTarget: r.cfg.defTarget, holdZcb: r.cfg.holdZcb, chally: !!r.cfg.chally, challyAt: r.cfg.challyAt, zcbBelow: r.cfg.zcbBelow })); persist(); refreshAll();
+      Object.assign(st, structuredClone({ remaul: r.cfg.remaul, backups: r.cfg.backups, defTarget: r.cfg.defTarget, holdZcb: r.cfg.holdZcb, zcbAsap: !!r.cfg.zcbAsap, chally: !!r.cfg.chally, challyAt: r.cfg.challyAt, zcbBelow: r.cfg.zcbBelow })); persist(); refreshAll();
       status.textContent = `Set ${r.set} setup copied into set ${k}.`; return;
     }
     const a = el.dataset.vact; if (!a) return;
@@ -497,8 +502,8 @@ export function createXarpus(host, { getTeam }) {
         if (me.stopped) break;
         const st = setOf(k), all = playersNow(st), pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '';
         const base = all.map((p) => ({ name: p.name, gear: p.gear, rangePot: normRangePot(p.rangePot) })), names = all.map((p) => p.name);   // range pot: kept as set, not searched
-        const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'horn' || f === 'surge' ? !!p[f] : p[f]]));
-        const setPlan = (x) => normalizePlan({ players: x.players.map(planOf), remaul: structuredClone(x.remaul), backups: structuredClone(x.backups), defTarget: Number(x.defTarget) || 20, holdZcb: !!x.holdZcb, chally: !!x.chally, challyAt: Number(x.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
+        const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'horn' ? (hornN(p) === 2 ? 2 : hornN(p) === 1) : f === 'surge' ? !!p[f] : p[f]]));
+        const setPlan = (x) => normalizePlan({ players: x.players.map(planOf), remaul: structuredClone(x.remaul), backups: structuredClone(x.backups), defTarget: Number(x.defTarget) || 20, holdZcb: !!x.holdZcb, zcbAsap: !!x.zcbAsap, chally: !!x.chally, challyAt: Number(x.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
         const start = setPlan(st);
         const restarts = sr.restarts ? [setPlan(defaultXarpusPlan(t))] : [];
         me.pool = new XarpusPool(base, t, { heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals });
@@ -522,8 +527,8 @@ export function createXarpus(host, { getTeam }) {
     const t = team(), st = { ...blankSet(), gearSet: gs, heals, exactHeals };
     const all = playersNow(st).map((p, k) => ({ ...p, gear: { ...p.gear, ...(gearPatch[k] || {}) }, surgeCd: surgeCd[k] || 0 }));
     const base = all.map((p, k) => ({ name: p.name, gear: p.gear, surgeCd: p.surgeCd, rangePot: rangePots[k] != null ? normRangePot(rangePots[k]) : autoRangePot(st, k) })), names = all.map((p) => p.name);
-    const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'horn' || f === 'surge' ? !!p[f] : p[f]]));
-    const setPlan = (x) => normalizePlan({ players: x.players.map(planOf), remaul: structuredClone(x.remaul), backups: structuredClone(x.backups), defTarget: Number(x.defTarget) || 20, holdZcb: !!x.holdZcb, chally: !!x.chally, challyAt: Number(x.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
+    const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'horn' ? (hornN(p) === 2 ? 2 : hornN(p) === 1) : f === 'surge' ? !!p[f] : p[f]]));
+    const setPlan = (x) => normalizePlan({ players: x.players.map(planOf), remaul: structuredClone(x.remaul), backups: structuredClone(x.backups), defTarget: Number(x.defTarget) || 20, holdZcb: !!x.holdZcb, zcbAsap: !!x.zcbAsap, chally: !!x.chally, challyAt: Number(x.challyAt) || 5, zcbBelow: Number(st.zcbBelow ?? ZCB_BELOW) });
     // Lightbearers: only the players holding one this room (no trades), no more than the raid has; horns likewise
     const fit = (plan) => { let n = 0, h = 0; plan.players.forEach((p, k) => {
       if (p.lbCycles > 0) { if (n >= lbRings || (lbOwners && !lbOwners[k])) p.lbCycles = 0; else n++; }

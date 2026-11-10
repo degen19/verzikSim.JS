@@ -466,7 +466,7 @@ export function createNylo(host, { getTeam }) {
         else items[i] = { ...r, cfg: { ...r.cfg, thr: thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } })) } };   // together they don't help: none
       }
       return items.map((r) => ({ ...r, cfg: { ...r.cfg, players: r.cfg.players.map((p, k) => ({ ...p, ...extra(k) })) },
-        run: { players: base.map((b, k) => ({ ...b, plan: { ...r.cfg.players[k], ...extra(k) } })), opts: { ...opts, plans: { backup: r.cfg.backup } } } }));
+        run: { players: base.map((b, k) => ({ ...b, plan: { ...r.cfg.players[k], ...extra(k) } })), opts: { ...opts, plans: { backup: r.cfg.backup } }, thr: r.cfg.thr || null } }));   // thr: its tick fix thresholds (for the procedure)
     } finally { pool.stop(); }
   }
   /** Full raid: show setups (best first) in this tab's Solver results. */

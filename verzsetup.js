@@ -24,6 +24,7 @@ export function verzSetupHtml(cf, nm, team, { avg = null, p1Median = null } = {}
     ['Dawn threshold', cf[0].dawnThr ? `${cf[0].dawnThr}%` : 'never'],
     ...(team === 2 ? [] : [['Shadow', cf.map((c, k) => (c.shadow ? `${nm[k]}${[c.shadow31 && '3:1', c.shadowLB && 'while LB', c.deepProc && 'deep proc'].filter(Boolean).map((x) => ` (${x})`).join('')}` : null)).filter(Boolean).join(', ') || 'nobody']]),
     ['Blowpipes', cf.map((c, k) => (c.hasBP !== false ? nm[k] : null)).filter(Boolean).join(', ') || 'nobody'],
+    ...(cf.some((c) => c.hasTome) ? [['Tome Reds', cf.map((c, k) => (c.tomeReds ? `${nm[k]}${c.scytheAfterTome ? ' (scythe first hit after tome)' : ''}` : null)).filter(Boolean).join(', ') || 'nobody']] : []),
     ...(team === 2 ? [] : [['Boak sides', `West: ${cf.map((c, k) => (c.westBoak ? nm[k] : null)).filter(Boolean).join(', ') || '-'} | East: ${cf.map((c, k) => (c.eastBoak ? `${nm[k]} (${c.eastPattern || 'A'})` : null)).filter(Boolean).join(', ') || '-'}`]]),
     ...(team === 2 ? [] : [['East bounce tech', cf[0].eastBounce ? `${cf[0].eastBounce} (East: ${cf.map((c, k) => (c.eastBoak ? nm[k] : null)).filter(Boolean).join(', ') || 'nobody'})` : 'off']]),
     ['Start spec', cf.map((c, k) => `${nm[k]} ${c.startSpec}%`).join(', ')],

@@ -296,7 +296,7 @@ export const localEvaluator = {
 /** The settings that make a setup (everything the search chooses but the reds DCs). */
 const coreKey = (cfg) => JSON.stringify(cfg.map((c) => [c.lightbearerOn, c.PurpleDC, c.ringSwitch ?? null, c.ringByDawns ?? null, c.startSpec, c.actions,
   !!c.horn, !!c.hornP2, !!c.hornP3, !!c.Purple2DC, !!c.shadowCamp, !!c.shadow31, !!c.shadowLB, c.dawnThr ?? null, c.lastHitThr ?? null, c.eastBounce || 0,
-  !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null, c.hasBP !== false, !!c.shadow, !!c.deepProc, c.shadowSrc ?? null]));
+  !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null, c.hasBP !== false, !!c.shadow, !!c.deepProc, c.shadowSrc ?? null, !!c.tomeReds]));
 /** Every k-player subset of 0..n-1 (sorted). */
 export const combos = (n, k) => { const out = []; const go = (s, acc) => { if (acc.length === k) { out.push(acc); return; } for (let i = s; i < n; i++) go(i + 1, [...acc, i]); }; go(0, []); return out; };
 const SHADOW_KEYS = ['shadow', 'shadow31', 'shadowLB', 'shadowCamp', 'deepProc', 'mage', 'mageGear'];
@@ -548,6 +548,17 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     });
     return { s: best, changed };
   };
+  // Tome Reds: each player with a tome, their tome in reds on and off ('Scythe first hit after tome' stays as set)
+  const tomePass = async (s0) => {
+    let s = s0;
+    for (let k = 0; k < team; k++) {
+      if (!s.cfg[k].hasTome) continue;
+      const r = await optionPass(s, [(cf) => cf.map((c, j) => (j === k ? { ...c, tomeReds: !c.tomeReds } : c))]);
+      if (r.changed) stats.tomeChanged = (stats.tomeChanged || 0) + 1;
+      s = r.s;
+    }
+    return s;
+  };
   const mageK = base.findIndex((c) => c.shadow);
   const shadowSrc = base.map((c, k) => (c.shadow ? k : -1)).filter((k) => k >= 0);
   // 3-5 man: the P1 Dawn threshold (1-6%) - spec saved at the end of P1 for the claws in reds
@@ -610,7 +621,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     if (any) stats.duoChanged = (stats.duoChanged || 0) + 1;
     return any ? ringPass(s) : s;
   };
-  const s2 = (await Promise.all(keep1.map(async (x) => hornP2Pass(await duoPasses(await purplePass(await ringPass(x))))))).map((x) => ({ ...x, c: x.c2 }));
+  const s2 = (await Promise.all(keep1.map(async (x) => hornP2Pass(await tomePass(await duoPasses(await purplePass(await ringPass(x)))))))).map((x) => ({ ...x, c: x.c2 }));
   s2.sort((a, b) => rank(b.c, true) - rank(a.c, true));
   T('rings', t0);
   log(`  ring swaps: ${keep1.length} setups, ${stats.ringTried} values tried, ${stats.ringSame} identical to another, ${stats.ringCamp} camp-LB, ${stats.ringClaw} broke the claw rule`

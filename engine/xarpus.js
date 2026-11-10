@@ -38,7 +38,8 @@ export const RALOS_DRAIN = Math.floor(XARPUS.magic / 8);
 //  - Defence specs, in three steps (each player does at most 2 - 3 in solos):
 //     1. Opening specs (one each, or none): an Elder maul on their first attack; a BGS / Ralos Spec after their first
 //        scythe, once the opening mauls (and any re-mauls) are in - skipped if his Defence is already at or below the
-//        Defence target. A horn on the interact tick: the caster and the first other opening mauler can't miss.
+//        Defence target. A horn on the interact tick (1 or 2 other players, 25% each): the caster and their targets'
+//        next melee hit - a maul / BGS can't miss, a scythe's first hitsplat can't miss; other opening maulers first.
 //     2. Maul again: once the opening mauls have landed, the players chosen for that many landed maul on their next
 //        attack (whether theirs landed or not - and anyone can, not only the opening maulers: duos' 2:2).
 //     3. Backups, in list order, each only while his Defence is above the Defence target: one at a time - each waits for
@@ -73,6 +74,8 @@ export const screechHp = (start) => Math.floor(start * SCREECH_AT);
 // his death: the room ends 5 ticks (4 with overkill) counting the tick the killing hit lands - a hit landing on 203
 // ends it on 207 (206 with overkill): end = kill + 4 / kill + 3. He doesn't wait for a cycle start.
 export const DEATH_ANIM = 4, DEATH_ANIM_OVERKILL = 3;
+/** A plan's horn: 0 none, 1 or 2 other players (true = 1). */
+export const hornN = (x) => (x && x.horn ? (Number(x.horn) === 2 ? 2 : 1) : 0);
 export const HORN_COST = 25, HORN_TICKS = 10, SURGE = 25, SURGE_CD = 500, ZCB_SPEC = 75, BP_DELAY = 2, AYAK_DELAY = 2;
 export const ZCB_BELOW = 450;      // a planned ZCB becomes claws below this HP (the ruby: 22% of his HP, max 110)
 export const DEF_TARGETS = [10, 20, 30, 40];
@@ -114,7 +117,7 @@ export function migrateXarpus(st, team) {
     delete st.maulTarget; delete st.defStop;
   }
   for (const p of ps) if (p && p.dps === 'clawsScreech') { p.dps = 'claws'; }
-  st.remaul ||= {}; st.backups ||= []; st.defTarget ??= DEF_TARGET; st.holdZcb ??= true; st.chally ??= false; st.challyAt ??= CHALLY_AT;
+  st.remaul ||= {}; st.backups ||= []; st.defTarget ??= DEF_TARGET; st.holdZcb ??= true; st.zcbAsap ??= false; st.chally ??= false; st.challyAt ??= CHALLY_AT;
   return st;
 }
 const PRAY = { Piety: [1.20, 1.23], Zeal: [1.25, 1.28] };
@@ -184,7 +187,7 @@ const TRACE_CODE = { scythe: 'S', maul: 'EM', bgs: 'BGS', ralos: 'Ra', zcb: 'ZCB
 export function defaultXarpusPlan(team) {
   const P = (open, dps, extra = {}) => ({ startSpec: 100, surge: false, lbCycles: 0, open, horn: false, dps, fix: 'tick', ...extra });
   const R = (k) => ({ p: k, spec: 'ralos', now: -1 });
-  const plan = (players, remaul, backups) => ({ players, remaul, backups, defTarget: DEF_TARGET, holdZcb: true, chally: false, challyAt: CHALLY_AT });
+  const plan = (players, remaul, backups) => ({ players, remaul, backups, defTarget: DEF_TARGET, holdZcb: true, zcbAsap: false, chally: false, challyAt: CHALLY_AT });
   if (team === 1) return plan([P('maul', 'claws')], { 0: [0], 1: [0] }, []);                  // two mauls at the start
   // duos, 2:2 - P1 mauls twice; P2 scythes, mauls straight away if P1's first misses, then mauls until 2 have landed, then Ralos.
   // (3:1: both open with a maul, P1 mauls again whatever lands; backups P2 maul, P2 Ralos.)
@@ -204,7 +207,7 @@ export const defaultXarpus = (team) => defaultXarpusPlan(team).players;
  * ({landed: [player index]}), backups ([{p, spec, now (-1 never, else this many or fewer opening mauls)}]), holdZcb,
  * chally (Chally last hit), challyAt (% of his starting HP), zcbBelow (ZCB_BELOW)}. Returns {end, kill, startHp, heals, screech, ..., players: [{surgeCd (left at the end of the room), spec}]}.
  */
-export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAULT[team], exactHeals = false, defTarget = DEF_TARGET, remaul = {}, backups = [], holdZcb = true,
+export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAULT[team], exactHeals = false, defTarget = DEF_TARGET, remaul = {}, backups = [], holdZcb = true, zcbAsap = false,
   chally = false, challyAt = CHALLY_AT, zcbBelow = ZCB_BELOW, trace = null, specsLand = false, bgsToZero = false } = {}) {
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const EXH = EXHUMED_TICKS[team] || 96, BASE = XARPUS_HP[team] || 5000, CAP = defCap(team);
@@ -221,7 +224,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     let fix = c.fix || 'tick'; if (!ok(fix)) fix = 'tick';
     return { i, name: c.name || `P${i + 1}`, gear: g, spec: Number(c.startSpec ?? 100), regen: 0, regenHold: Number(c.startSpec ?? 100) < 100,
       surgePlan: !!c.surge, surged: false, surgeReady: Math.max(0, Number(c.surgeCd) || 0), surgeAt: null,
-      lb: false, lbLeft: Number(c.lbCycles || 0), dpsFrom: Number(c.dpsFrom) || 0, dps, fix, horn: !!c.horn && !!g.horn, firstSpec: false,
+      lb: false, lbLeft: Number(c.lbCycles || 0), dpsFrom: Number(c.dpsFrom) || 0, dps, fix, horn: g.horn ? hornN(c) : 0, firstSpec: false,
       open, openDone: open === 'none', noMaul: !own('Elder maul'), used: 0, attacks: 0, remaulDue: false, halb: own('Crystal halberd'), hornUsed: false, scytheSure: false,
       rangePot: c.rangePot === undefined || c.rangePot === null ? (open === 'ralos' || (backups || []).some((b) => Number(b.p) === i && b.spec === 'ralos') ? 'divine' : '') : normRangePot(c.rangePot),
       next: EXH + 1, hornUntil: -1, thrallNext: EXH + 1 + rng.randint(1, 2) };
@@ -315,19 +318,24 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     if (p.dps === 'none' || !ownDefDone(p) || t < p.dpsFrom) return null;   // their own Defence specs first; held until dpsFrom
     if (p.dps === 'zcb') {
       if (hp < zcbBelow) return !defOpen() && has(p, 'Dragon claws') && p.spec >= 50 ? 'claw' : null;
+      if (zcbAsap) return p.spec >= ZCB_SPEC ? 'zcb' : null;        // ZCB As Soon As Available: no waiting on the mauls or the screech
       if (holdZcb) return screech != null && t >= screech && p.spec >= ZCB_SPEC ? 'zcb' : null;   // held for the screech
       return settled() && p.spec >= ZCB_SPEC ? 'zcb' : null;        // else: once the mauls are settled
     }
     if (defOpen()) return null;                                     // claws: once no Defence spec is still to come
     return p.spec >= 50 ? 'claw' : null;
   };
-  // ---- horns on the interact tick: the caster and the first other opening mauler can't miss their next maul / BGS
+  // ---- horns on the interact tick (25% per other player, 1 or 2): the caster and their targets get a buff on their next
+  // melee hit (a maul / BGS can't miss, a scythe's first hitsplat can't miss) - other players' opening mauls first, then
+  // BGS openers, then the rest (ZCB users last); as many as their spec covers
   for (const c of ps.filter((q) => q.horn && q.spec >= HORN_COST)) {
-    const rec = ps.find((q) => q !== c && (q.open === 'maul' || q.open === 'bgs'));
-    spend(c, HORN_COST, EXH); st.specs.horn++; st.specLog.push({ i: c.i, kind: 'horn', t: EXH });
-    c.hornUntil = EXH + HORN_TICKS; c.hornUsed = true; if (rec) rec.hornUntil = EXH + HORN_TICKS;
-    if (trace) trace.push({ t: EXH, i: c.i, code: 'H', what: `Soulflame horn: ${c.name}${rec ? ` and ${rec.name}` : ''} can't miss their next maul / BGS`, spec: c.spec + HORN_COST, specAfter: c.spec });
-    L.on && L(`t${EXH} ${c.name} Soulflame horn (${c.spec}% left): ${c.name}${rec ? ` and ${rec.name}` : ''} can't miss their next maul / BGS`);
+    const others = ps.filter((q) => q !== c), rank = (q) => (q.open === 'maul' ? 0 : q.open === 'bgs' ? 1 : q.dps === 'zcb' ? 3 : 2);
+    const recs = others.sort((a, b) => rank(a) - rank(b)).slice(0, Math.min(c.horn, Math.floor(c.spec / HORN_COST)));
+    const cost = HORN_COST * Math.max(1, recs.length), who = [c, ...recs].map((q) => q.name).join(', ');
+    spend(c, cost, EXH); st.specs.horn++; st.specLog.push({ i: c.i, kind: 'horn', t: EXH, recs: recs.map((q) => q.i) });
+    c.hornUntil = EXH + HORN_TICKS; c.hornUsed = true; for (const q of recs) q.hornUntil = EXH + HORN_TICKS;
+    if (trace) trace.push({ t: EXH, i: c.i, code: 'H', what: `Soulflame horn (${cost}%): ${who} get the buff on their next melee hit`, spec: c.spec + cost, specAfter: c.spec });
+    L.on && L(`t${EXH} ${c.name} Soulflame horn (${c.spec}% left): ${who} get the buff on their next melee hit (to t${EXH + HORN_TICKS})`);
   }
   for (let t = EXH + 1; t <= EXH + 3000 && kill == null; t++) {
     // ---- hits landing
@@ -459,7 +467,8 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
       } else {                                                        // scythe (fix 'tick': a scythe, next attack 1 tick late - 2 ticks a quarter of the time)
         const [ch, mx] = melee(p, 'Scythe of vitur', 1, defLvl);
         const sure = p.scytheSure; p.scytheSure = false; acc = sure ? 1 : ch; exp = scytheMV(acc, mx);   // a last-hit horn: this swing can't miss
-        const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m) => (sure || rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
+        const horned = !sure && t <= p.hornUntil; if (horned) p.hornUntil = -1;   // an interact horn's buff: the first hitsplat can't miss
+        const parts = [mx, Math.floor(mx / 2), Math.floor(mx / 4)].map((m, j) => (sure || (horned && j === 0) || rng.random() < ch ? Math.max(1, rng.randint(0, m)) : 0));
         const lose = act === 'fix:tick' ? (rng.random() < 0.75 ? 1 : 2) : 0;   // lose tick(s): 1 tick 75% of the time, 2 ticks 25%
         hits.push([t + MELEE_DELAY, p, parts.reduce((a, b) => a + b, 0), `scythe ${parts.join('/')}${lose ? ` (tick fix: next swing ${lose} tick${lose > 1 ? 's' : ''} late)` : ''}`, 'scythe']);
         p.next = t + 5 + lose;

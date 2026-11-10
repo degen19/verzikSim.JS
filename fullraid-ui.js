@@ -496,7 +496,13 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       const setsOf = (pl) => KINDS.map((_, r) => pl.map((x, k) => (x.includes(r) ? k : -1)).filter((k) => k >= 0));
       /** Room r's carried-in cooldowns for a plan's players who surged in an earlier room ({k: ticks}), or null. */
       const lateOf = (pl, r) => { const o = {}; pl.forEach((x, k) => { if (!x.includes(r)) return; const prev = x.filter((q) => q < r); if (prev.length) o[k] = lateCdK(r, Math.max(...prev), k); }); return Object.keys(o).length ? o : null; };
-      const byRoomSet = (kind, set) => variants.filter((v) => v.kind === kind && v.surgers.join() === set.join()).sort((a, b2) => a.q - b2.q).slice(0, 2);
+      // a plan's surgers in a room; when no setup has exactly them (the room's solver found some of those surges not worth
+      // it and dropped them), the setups with the most of them - those players keep the dose (no wasted surge)
+      const byRoomSet = (kind, set) => {
+        let vs = variants.filter((v) => v.kind === kind && v.surgers.join() === set.join());
+        if (!vs.length) { const sub = variants.filter((v) => v.kind === kind && v.surgers.every((k) => set.includes(k))), most = Math.max(-1, ...sub.map((v) => v.surgers.length)); vs = sub.filter((v) => v.surgers.length === most); }
+        return vs.sort((a, b2) => a.q - b2.q).slice(0, 2);
+      };
       const distFor = (v, late) => (late ? lateDist.get(`${v.kind}|${variants.indexOf(v)}|${JSON.stringify(late)}`) : v.dist);
       /** Times for the later-room surge variants the plans need (played with those players' cooldown carried in). */
       const evalLate = async () => {
@@ -724,7 +730,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       if (kind === 'nylo') {
         box.innerHTML = entryLine(e, j); const inner = document.createElement('div'); box.append(inner);
         const op = r.setup.nylo.opts || {};
-        rooms.nylo.procedure(inner, { cfg: { players: players.map((p) => p.plan), backup: op.plans ? op.plans.backup : null }, names, run: { players, opts: op } }, roomBps(j));
+        rooms.nylo.procedure(inner, { cfg: { players: players.map((p) => p.plan), backup: op.plans ? op.plans.backup : null, thr: r.setup.nylo.thr || null }, names, run: { players, opts: op } }, roomBps(j));
         msg.textContent = '';
       } else if (kind === 'sote') {
         box.hidden = false; box.innerHTML = '';

@@ -1,6 +1,6 @@
 // Xarpus Solver: searches each player's opening Defence spec (maul / BGS / Ralos Spec / none), who mauls again for
 // each number of opening mauls landed, the backup list (who, which spec, in what order, and "back up right away"), the
-// Defence target, damage spec (ZCB / claws / none) and holding ZCBs for the screech, tick fix, start spec, Lightbearer
+// Defence target, damage spec (ZCB / claws / none) and holding ZCBs for the screech or ZCB As Soon As Available, tick fix, start spec, Lightbearer
 // cycles, surge and horn, the ZCB -> claws HP and the Chally last hit (and its threshold), for the best room times.
 // Search (as the Sotetseg Solver): from the setup given, each round every single change (with Swaps: also two players'
 // Defence specs swapped, a Lightbearer / surge moved) is played on a few raids, the best on more, the best of those on
@@ -8,7 +8,7 @@
 // The best setups seen are then played on more raids and ranked: with breakpoints by the share finished at the fastest
 // one (then the next), otherwise by the median, then the top 10%.
 import { pruneSurges } from './solvecheck.js';
-import { runXarpus, canDo, OPENERS, BACKUP_SPECS, DPS_SPECS, FIXES, DEF_TARGETS, CHALLY_ATS, openMaulers } from './xarpus.js';
+import { runXarpus, canDo, OPENERS, BACKUP_SPECS, DPS_SPECS, FIXES, DEF_TARGETS, CHALLY_ATS, openMaulers, hornN } from './xarpus.js';
 import { Rng } from './rng.js';
 
 export const ZCB_BELOWS = [0, 300, 400, 450, 500, 600, 800];
@@ -28,7 +28,7 @@ export function evalXarpus(configs, base, team, from, to, seed, opts = {}) {
     const players = base.map((b, k) => ({ ...b, ...cfg.players[k] }));
     const totals = [], split = { toScreech: [], kill: [] }, defEnd = [];
     for (let i = from; i < to; i++) {
-      const r = runXarpus(players, team, new Rng(`${seed}#${i}`), null, { ...opts, defTarget: cfg.defTarget, remaul: cfg.remaul, backups: cfg.backups, holdZcb: cfg.holdZcb, chally: cfg.chally, challyAt: cfg.challyAt, zcbBelow: cfg.zcbBelow });
+      const r = runXarpus(players, team, new Rng(`${seed}#${i}`), null, { ...opts, defTarget: cfg.defTarget, remaul: cfg.remaul, backups: cfg.backups, holdZcb: cfg.holdZcb, zcbAsap: !!cfg.zcbAsap, chally: cfg.chally, challyAt: cfg.challyAt, zcbBelow: cfg.zcbBelow });
       if (r.end == null) { totals.push(99999); continue; }
       totals.push(r.end); defEnd.push(r.defEnd);
       const drop = r.dropAt ?? r.kill; split.toScreech.push(drop); split.kill.push(r.end - drop);
@@ -45,7 +45,7 @@ export function scoreOf(totals, bps = []) {
   return [...asc.map((b) => -v.filter((t) => t * 0.6 <= b + 1e-9).length / v.length), med(v), q10(v)];
 }
 export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] < b[i] - 1e-12) return true; if (a[i] > b[i] + 1e-12) return false; } return false; };
-export const keyOf = (cfg) => JSON.stringify([cfg.players, cfg.remaul, cfg.backups, cfg.defTarget, cfg.holdZcb, cfg.zcbBelow, cfg.chally, cfg.chally ? cfg.challyAt : 0]);
+export const keyOf = (cfg) => JSON.stringify([cfg.players, cfg.remaul, cfg.backups, cfg.defTarget, cfg.holdZcb, !!cfg.zcbAsap, cfg.zcbBelow, cfg.chally, cfg.chally ? cfg.challyAt : 0]);
 
 /** A setup with no Defence spec at all (opening or backup) is knocked out - it's never close. */
 export const hasDefence = (cfg) => cfg.players.some((p) => p.open && p.open !== 'none') || (cfg.backups || []).length > 0;
@@ -68,7 +68,7 @@ export function neighbours(cfg, ctx) {
     if (ctx.allow.start) add({ [k]: { startSpec: p.startSpec === 95 ? 100 : 95 } }, null, `${N} start ${p.startSpec === 95 ? 100 : 95}%`);
     if (ctx.allow.lb) for (let c = 0; c <= 5; c++) if (c !== (p.lbCycles || 0) && (c === 0 || p.lbCycles > 0 || lbs < ctx.lbRings)) add({ [k]: { lbCycles: c } }, null, `${N} Lightbearer ${c}`);
     if (ctx.allow.surge && (p.surge || surges < ctx.surgeLimit)) add({ [k]: { surge: !p.surge } }, null, `${N} ${p.surge ? 'no surge' : 'surge'}`);
-    if (ctx.allow.horn && ctx.gear[k].horn) add({ [k]: { horn: !p.horn } }, null, `${N} ${p.horn ? 'no horn' : 'horn'}`);
+    if (ctx.allow.horn && ctx.gear[k].horn) for (const v of [0, 1, 2]) if (v !== hornN(p)) add({ [k]: { horn: v === 2 ? 2 : v === 1 } }, null, `${N} ${v ? `horn (${v} other${v > 1 ? 's' : ''})` : 'no horn'}`);
   });
   if (ctx.allow.def) {
     const m = openMaulers(P), B = cfg.backups || [];
@@ -87,7 +87,10 @@ export function neighbours(cfg, ctx) {
       for (let now = -1; now < m.length; now++) if (now !== b.now) add({}, { backups: B.map((x, j) => (j === i ? { ...x, now } : x)) }, `backup ${i + 1} (P${b.p + 1}): ${now < 0 ? 'wait its turn' : `right away if ${now} or fewer land`}`);
     });
   }
-  if (ctx.allow.dps) add({}, { holdZcb: !cfg.holdZcb }, cfg.holdZcb ? "don't hold ZCBs for the screech" : 'hold ZCBs for the screech');
+  if (ctx.allow.dps) {
+    if (!cfg.zcbAsap) add({}, { holdZcb: !cfg.holdZcb }, cfg.holdZcb ? "don't hold ZCBs for the screech" : 'hold ZCBs for the screech');
+    add({}, { zcbAsap: !cfg.zcbAsap }, cfg.zcbAsap ? 'ZCBs not as soon as available' : 'ZCB As Soon As Available');
+  }
   if (ctx.allow.defTarget) for (const v of DEF_TARGETS) if (v !== cfg.defTarget) add({}, { defTarget: v }, `Defence target ${v}`);
   if (ctx.allow.chally) {
     add({}, { chally: !cfg.chally }, cfg.chally ? 'no Chally last hit' : `Chally last hit at ${cfg.challyAt}%`);
