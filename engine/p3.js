@@ -276,7 +276,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
   players.forEach((p, i) => {
     p.next_attack = Kp + 6;
     const h3 = dget(cfgs[i], 'has3Tick', false);
-    p.has3 = h3 === 'Breaker' ? 'Obligator' : ['Obligator', 'Ayak', 'Swift blade'].includes(h3) ? h3 : (h3 === true ? 'Obligator' : false);   // Breaker: its old name
+    p.has3 = h3 === 'Breaker' ? 'Obligator' : ['Obligator', 'Ayak', 'Swift blade'].includes(h3) ? h3 : (h3 === true ? 'Obligator' : false);   // (a tome: P3 keeps the Eye of ayak default)   // Breaker: its old name
     if (!truthy(p.has3)) {
       p.has3 = DUO_DEFAULT_3T;                         // every scale: Eye of ayak unless the chart says otherwise
     }

@@ -261,7 +261,7 @@ function buildDuo(ctx, r) {
   for (let k = 0; k < ctx.players.length; k++) {
     const atk = ctx.atk[k], out = { ...r.codes[k] }, dodge = ctx.dodge[k];
     const blocked = new Set(Object.keys(r.codes[k]).filter((t) => out[t] !== 'D').map(Number));
-    const melee = new Set([...MELEE, ...(ctx.players[k].p.has3 && ctx.players[k].p.has3 !== 'Ayak' ? ['H'] : [])]);
+    const melee = new Set([...MELEE, ...(ctx.players[k].p.has3 && !['Ayak', 'Tome'].includes(ctx.players[k].p.has3) ? ['H'] : [])]);   // (Eye of ayak, a tome: magic)
     // staff windows (Dawn autos) and pick-up windows (no attack starts just before receiving it)
     const staff = [], noStart = new Set();
     D.forEach(([t, h], j) => {

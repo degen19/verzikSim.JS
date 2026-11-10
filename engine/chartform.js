@@ -207,7 +207,7 @@ export function checkRow(acts, has3Tick, team, hasBP = true) {
     const st = a.match(/^ST>(\d)$/);
     if (st && Number(st[1]) > team) return `tick ${t}: ${a} - there's no player ${st[1]}`;
     if (a === 'X' && !isAutoTick(t)) return `tick ${t}: X only goes on a Verzik auto tick (19, 33, 47...)`;
-    if (a === 'H' && (!has3Tick || has3Tick === 'No')) return `tick ${t}: H needs a 3-tick weapon (Obligator, Eye of ayak or Swift blade) in the Gear tab`;
+    if (a === 'H' && (!has3Tick || has3Tick === 'No')) return `tick ${t}: H needs a 3-tick weapon (Obligator, Eye of ayak, Zorya's tome or Swift blade) in the Gear tab`;
     if (a === 'B' && hasBP === false) return `tick ${t}: B needs Has BP ticked in the gear table`;
     if (a in SPEED) {
       if (prev && t - prev[0] < SPEED[prev[1]]) return `tick ${t}: ${a} is too soon after ${prev[1]} on tick ${prev[0]} (${SPEED[prev[1]]}t)`;

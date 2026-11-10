@@ -119,8 +119,8 @@ export const threeTick = (pl) => THREE_TICK_PRIORITY.find((w) => (pl.weapons || 
 // ------------------------------------------------------------------ the Verzik chart <-> gear
 const AMULET_OF = { 'Rancour': 'Amulet of rancour', 'Blood fury': 'Amulet of blood fury', 'Both': BOTH_AMULETS };
 const AMULET_TO = { 'Amulet of rancour': 'Rancour', 'Amulet of blood fury': 'Blood fury', [BOTH_AMULETS]: 'Both' };
-const THREE_OF = { 'Obligator': 'Obligator', 'Breaker': 'Obligator', 'Ayak': 'Eye of ayak', 'Swift blade': 'Swift blade' };
-const THREE_TO = { 'Obligator': 'Obligator', 'Eye of ayak': 'Ayak', 'Swift blade': 'Swift blade' };
+const THREE_OF = { 'Obligator': 'Obligator', 'Breaker': 'Obligator', 'Ayak': 'Eye of ayak', 'Tome': "Zorya's tome", 'Swift blade': 'Swift blade' };
+const THREE_TO = { 'Obligator': 'Obligator', 'Eye of ayak': 'Ayak', "Zorya's tome": 'Tome', 'Swift blade': 'Swift blade' };
 // the mage set the sim assumed for shadow players before the Gear tab
 const MAGE_DEFAULT = { head: 'Ancestral hat', body: 'Ancestral robe top', legs: 'Ancestral robe bottom', cape: 'Imbued saradomin cape',
   neck: 'Occult necklace', hands: 'Confliction gauntlets' };
@@ -170,7 +170,7 @@ export function applyToCfg(cfg, pl) {
   out.hasDc = (pl.weapons || []).includes('Dragon claws');
   out.hasZcb = (pl.weapons || []).includes('Zaryte crossbow');
   const t = threeTick(pl) || ((pl.weapons || []).includes('Swift blade') ? 'Swift blade' : null);
-  out.has3Tick = THREE_TO[t] || false;                      // Zorya's tome as a 3-tick weapon: not simulated yet
+  out.has3Tick = THREE_TO[t] || false;                      // Zorya's tome: a plain tome auto (3 ticks)
   out.mageGear = mageList(pl);
   out.hasShadow = (pl.weapons || []).includes("Tumeken's shadow");
   out.hasTome = (pl.weapons || []).includes("Zorya's tome");

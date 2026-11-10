@@ -41,6 +41,7 @@ export const WEAPONS = {
   'H_Swift blade': { name: 'Swift blade', idx: 1, atk: [0, 0, 0, 0, 0], str: 0, speed: 3, delay: 1 },
   'H_Obligator': { name: 'Obligator', idx: 2, atk: [0, 0, 120, 0, 0], str: 40, speed: 3, delay: 1 },
   'H_Ayak': { name: 'Eye of ayak', idx: 3, atk: [0, 0, 0, 30, 0], speed: 3, delay: 2, base_minus: 6 },
+  'H_Tome': { name: "Zorya's tome", idx: 3, atk: [0, 0, 0, 45, 0], speed: 3, delay: 3, base_minus: 9, mdmg: 15 },   // a plain (unbuffed) tome auto
   'E': { name: 'Eye of ayak', idx: 3, atk: [0, 0, 0, 30, 0], speed: 3, delay: 2, base_minus: 6 },
   'SB': { name: 'Sulphur blades', idx: 1, atk: [11, 72, 0, 0, 0], str: 64, speed: 4, delay: 1 },   // 2 hits, max split
   'B': { name: 'Blowpipe', idx: 4, atk: [0, 0, 0, 0, 30], rstr: 55, speed: 2, delay: 2 },
@@ -131,7 +132,7 @@ export function bf_swap(p, phase, L, t, tag = '') {
 export function bf_heal(p, label, dmg, rng, L, t, tag = '') {
   if (!p || p.amulet !== 'Blood fury' || !(dmg > 0)) return;
   const w = String(label).split(/\s+/)[0];
-  const melee = ['Scythe', 'Claw', 'Swift', 'Halberd', 'Obligator'].includes(w) || (label === '3-tick hit' && p.has3 !== 'Ayak');
+  const melee = ['Scythe', 'Claw', 'Swift', 'Halberd', 'Obligator'].includes(w) || (label === '3-tick hit' && p.has3 !== 'Ayak' && p.has3 !== 'Tome');
   if (!melee || rng.random() >= 0.20) return;
   const heal = floordiv(dmg * 30, 100);
   if (heal && p.hp < p.base) {
@@ -434,7 +435,7 @@ export class Player {
     const p = [ARMOUR[this.helm], ARMOUR[this.body], ARMOUR[this.legs],
       FIXED['Infernal cape'], FIXED['Avernic treads'],
       AMULETS[this.amulet], RINGS[this.ring]];
-    if (['T', 'H_Ayak', 'E'].includes(weapon_code)) p.push(CONFLICTION);
+    if (['T', 'H_Ayak', 'H_Tome', 'E'].includes(weapon_code)) p.push(CONFLICTION);
     else p.push(FIXED['Ferocious gloves']);
     return p;
   }
@@ -487,7 +488,7 @@ export function roll_attack(p, code, rng) {
   } else {                                             // sang / eye of ayak, no magic prayer
     eff_a = p.mag + 9;
     const base = floordiv(p.mag, 3) - dget(w, 'base_minus', 0);
-    const mdmg = sum(gear.map((g) => dget(g, 'mdmg', 0)));
+    const mdmg = dget(w, 'mdmg', 0) + sum(gear.map((g) => dget(g, 'mdmg', 0)));   // (the tome's own 15%)
     mx = floordiv(base * (100 + mdmg), 100);
     cap = 3;
   }
@@ -626,7 +627,7 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
       let v9 = get('has3Tick');
       if (v9 != null) {
         v9 = capitalize(pystr(v9).trim());
-        v9 = dget({ 'Obligator': 'Obligator', 'Breaker': 'Obligator', 'Ayak': 'Ayak', 'Swift blade': 'Swift blade', 'Yes': 'Obligator' }, v9, false);   // Breaker: its old name
+        v9 = dget({ 'Obligator': 'Obligator', 'Breaker': 'Obligator', 'Ayak': 'Ayak', 'Tome': 'Tome', 'Swift blade': 'Swift blade', 'Yes': 'Obligator' }, v9, false);   // Breaker: its old name
         cfgs[k].has3Tick = v9;
       }
       if (isPyNum(get('Phoenix necklaces'))) cfgs[k].pneck = pyint(get('Phoenix necklaces'));

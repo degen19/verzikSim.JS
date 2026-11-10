@@ -173,7 +173,7 @@ export function verzTrace(log, names, cfgs = null) {
       a.weapon = sp ? "Zorya's tome spec" : /buffed/.test(what) ? "Zorya's tome (buffed)" : "Zorya's tome";
       a.what = { S: 'Tome spec - hit (Zorya\'s Flow: 3 buffed)', M: 'Tome spec - missed', A: 'Tome buffed auto', a: 'Tome auto' }[a.tl] + (/while buffed/.test(what) ? ' (spec while buffed)' : '');
     }
-    if (a.code === '3t') { const wm = txt.match(/^3-TICK \(([^)]+)\)/); a.weapon = { Ayak: 'Eye of ayak' }[wm ? wm[1] : ''] || (wm ? wm[1] : a.what); }   // the actual 3-tick weapon
+    if (a.code === '3t') { const wm = txt.match(/^3-TICK \(([^)]+)\)/); a.weapon = { Ayak: 'Eye of ayak', Tome: "Zorya's tome" }[wm ? wm[1] : ''] || (wm ? wm[1] : a.what); }   // the actual 3-tick weapon
     if (spec[i] != null) {
       a.spec = sc ? +sc[1] : before; a.specAfter = spec[i];
       const nx = regens[i].find((x) => x > t); a.regenIn = a.spec >= 100 || nx == null ? null : nx - t;

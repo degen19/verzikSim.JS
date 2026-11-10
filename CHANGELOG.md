@@ -3,6 +3,7 @@
 Newest first. The same list appears under **What's new** on the page (`engine/version.js`).
 
 ## v1.42.1 - 2026-11-09
+- `engine/sim.js`: `H_Tome` (idx 3, +45 magic, base Magic/3 - 9, +15% magic damage - `roll_attack` adds a weapon's own `mdmg`; Confliction gauntlets; delay 3); `has3Tick` 'Tome'. `engine/loadout.js`: `THREE_TO` / `THREE_OF` with the tome. `engine/solver.js`: a tome H isn't melee. `engine/chartform.js`, `verzraid.js`: names.
 - `engine/nylosolve.js`: `planLabel`, `stopLines`; `rangedThresholds` rows name the weapon the sim uses (`fastWeaponOf`, new in `engine/nylo.js`). `nylo-ui.js`: `thrHtml` as lines (no table); procedure column 'Ranged tick fix' from `cfg.thr` (or the setup's `rangedStop`); `procHtml(c, names, gears)`; the full raid keeps `thr` on each setup; the solver drops thresholds that aren't faster together.
 
 ## v1.42.0 - 2026-11-09

@@ -2,6 +2,7 @@
 export const VERSION = '1.42.1';
 export const CHANGES = [
   { version: '1.42.1', date: '2026-11-09', items: [
+    'Verzik P1: Zorya\'s tome counts as a 3-tick weapon - an H on the chart is a plain tome auto (magic, 3 ticks; lands 3 ticks later), so a player with a tome and no Obligator / Eye of ayak no longer gets the "H needs a 3-tick weapon" warning, and their H is played instead of skipped. The P1 chart builder treats it as magic (like the Eye of ayak).',
     'Nylocas Solver, Optimizer and the Full raid solver\'s Nylocas procedure: the ranged tick fix in words, for each player and sequence - \'4bp tbow - stop at 80%\', \'tbow bp tbow - stop at 30%\', \'3bp tbow - thresholds make no difference - stop at your own preference\' - with their own 2-tick weapon (crossbows, darts: tbow dart tbow from N2 / N3). The large threshold table is gone.',
     'Nylocas Solver: when thresholds that each looked faster aren\'t faster together (they overlap), none of them is given.',
   ] },
