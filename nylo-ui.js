@@ -9,7 +9,7 @@ import { parseBreakpoints } from './engine/optimize.js';
 import { histogramSvg, cumulativeSvg, chartBox } from './engine/report.js';
 import { runNylo, NYLO_HP, FAST, parseWaveTimes, drawWave, fmtWave, normSwitches, fastWeaponOf } from './engine/nylo.js';
 const SW_STYLES = [['melee', 'Melee'], ['range', 'Range'], ['mage', 'Mage']];
-import { solveNylo, rangedThresholds, backupThresholds, pairedChange, withThresholds, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, stopLines, planLabel, better as scoreBetter } from './engine/nylosolve.js';
+import { solveNylo, rangedThresholds, backupThresholds, pairedChange, withThresholds, defaultPlan, canSeq, canOpen, OPENS, SEQS, seqName, SPEC_NAME, BACKUP_ATS, STOP_PCTS, PLAN_NAMES, stopLines, planLabel, better as scoreBetter, scoreOf } from './engine/nylosolve.js';
 import { NyloPool } from './nylo-solver-pool.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { Rng } from './engine/rng.js';
@@ -372,23 +372,28 @@ export function createNylo(host, { getTeam }) {
       const mk = (cfg) => ({ players: base.map((b, k) => ({ ...b, plan: cfg.players[k] })), opts: { ...opts, plans: { backup: cfg.backup } } });
       vres = { items: items.map((r) => ({ ...r, run: mk(r.cfg) })), bps, names, thr: null }; showResults();
       if (v.search.thr && t > 1 && items.length && !me.stopped) {
-        vres.thr = await rangedThresholds(items[0].cfg, gear, run, ef.thrRaids, say, () => me.stopped);
-        if (vres.items[0]) vres.items[0] = { ...vres.items[0], cfg: { ...vres.items[0].cfg, thr: vres.thr } };   // (its procedure says when to stop)
-        showResults();
-        // the next two setups' thresholds too (each procedure says when to stop), each kept only when together they're
-        // clearly faster on the same raids - as the Full raid solver does
-        for (let i = 1; i < Math.min(3, vres.items.length) && !me.stopped; i++) {
-          const c0 = vres.items[i].cfg, thr = await rangedThresholds(c0, gear, run, ef.thrRaids, (m) => say(`setup ${i + 1}: ${m}`), () => me.stopped);
-          const any = thr.some((x) => [1, 2, 3].some((k) => x.best[k] != null)), ch = any && !me.stopped ? await pairedChange(c0, withThresholds(c0, thr), run, ef.thrRaids) : null;
-          vres.items[i] = { ...vres.items[i], cfg: { ...c0, thr: ch && ch.d < -ch.ci ? thr : thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } })) } };
+        // the top 3 setups' ranged tick fix thresholds: each player and sequence on its own, then all together - kept (and
+        // played: the setup's times, Show raid and Use carry them) only when together they're clearly faster on the same raids
+        const none = (thr) => thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } }));
+        for (let i = 0; i < Math.min(3, vres.items.length) && !me.stopped; i++) {
+          const c0 = vres.items[i].cfg, tag = i ? `setup ${i + 1}: ` : '';
+          const thr = await rangedThresholds(c0, gear, run, ef.thrRaids, (m) => say(`${tag}${m}`), () => me.stopped);
+          if (me.stopped) break;
+          let keepThr = none(thr), comb = null;
+          if (thr.some((x) => [1, 2, 3].some((k) => x.best[k] != null))) {
+            say(`${tag}All the thresholds together`); comb = await pairedChange(c0, withThresholds(c0, thr), run, ef.thrRaids);
+            if (comb.d < -comb.ci) keepThr = thr;
+          }
+          if (keepThr === thr) {
+            const cfg = { ...withThresholds(c0, thr), thr, comb }, [res] = await run([cfg], 0, ef.finalRaids, 'nfinal');
+            vres.items[i] = { ...vres.items[i], cfg, totals: res.totals, kills: res.kills, score: scoreOf(res.totals, bps), run: mk(cfg) };
+          } else vres.items[i] = { ...vres.items[i], cfg: { ...c0, thr: keepThr, comb, thrSolo: comb ? thr : null } };
+          if (i === 0) { vres.thr = keepThr; vres.comb = comb; vres.thrSolo = vres.items[0].cfg.thrSolo || null; }
           showResults();
         }
-        if (vres.thr.some((r) => Object.values(r.best).some((x) => x != null)) && !me.stopped) {
-          say('All the thresholds together'); vres.comb = await pairedChange(items[0].cfg, withThresholds(items[0].cfg, vres.thr), run, ef.thrRaids);
-          // each looked faster on its own but together they aren't (they overlap): none of them is worth it
-          if (!(vres.comb.d < -vres.comb.ci)) { vres.thrSolo = vres.thr; vres.thr = vres.thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } })); if (vres.items[0]) vres.items[0] = { ...vres.items[0], cfg: { ...vres.items[0].cfg, thr: vres.thr } }; }
-          showResults();
-        }
+        // (thresholds can move a setup up: best first again)
+        const top3 = vres.items.slice(0, 3).sort((x, y) => (x.score && y.score ? (scoreBetter(x.score, y.score) ? -1 : scoreBetter(y.score, x.score) ? 1 : 0) : 0));
+        vres.items.splice(0, top3.length, ...top3); const c = vres.items[0].cfg; if (c.thr) { vres.thr = c.thr; vres.comb = c.comb || null; vres.thrSolo = c.thrSolo || null; } showResults();
       }
       status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
     } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
@@ -470,7 +475,7 @@ export function createNylo(host, { getTeam }) {
         items[i] = { ...r, cfg: { ...r.cfg, thr } };   // (the procedure says when to stop, or that it makes no difference)
         if (!thr.some((x) => [1, 2, 3].some((k) => x.best[k] != null))) continue;
         const cfg = { ...withThresholds(r.cfg, thr), thr }, ch = await pairedChange(r.cfg, cfg, run, ef.thrRaids);
-        if (ch.d < -ch.ci) { const [res] = await run([cfg], 0, ef.finalRaids, 'nfin'); items[i] = { ...r, cfg, totals: res.totals, thr }; }
+        if (ch.d < -ch.ci) { const [res] = await run([cfg], 0, ef.finalRaids, 'nfinal'); items[i] = { ...r, cfg, totals: res.totals, thr }; }
         else items[i] = { ...r, cfg: { ...r.cfg, thr: thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } })) } };   // together they don't help: none
       }
       return items.map((r) => ({ ...r, cfg: { ...r.cfg, players: r.cfg.players.map((p, k) => ({ ...p, ...extra(k) })) },

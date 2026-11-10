@@ -23,7 +23,7 @@ export const NYLO_MECHANICS = {
       R('Ranged (green)', 'All', 'Blowpipe / Ascension crossbows / thrown dragon darts (2 ticks, the best they have) and Twisted bow (5 ticks) at 112 Ranged on Rigour. The sequence depends on when their first attack in the form is: N2 - 4 fast hits then Twisted bow; N3 - tbow, fast, tbow; N4 - 3 fast then tbow; later - Twisted bows. All end with the last Twisted bow on the form\'s last tick.', 'Their 2-tick weapon: Gear tab'),
       R('Darts only', 'All', 'A player whose only 2-tick weapon is thrown dragon darts plays tbow, dart, tbow from N2 or N3 and Twisted bows otherwise - three dart hits are worth less than one Twisted bow hit.'),
       R('Ascension crossbows', 'All', 'Diamond bolts (e): 5.5% Armour Piercing procs - can\'t miss, 0-115% of their max.'),
-      R('Stop sequence at HP', 'All', 'Below this share of his HP, a green form\'s sequence (picked by the tick of their first attack: N2 / N3 / N4) becomes Twisted bows only - so they\'re free for the next form sooner when he\'s close to dying.', 'Stop sequence at HP (per player, per first-attack tick)'),
+      R('Stop sequence at HP', 'All', 'Below this share of his HP, a green form\'s sequence (picked by the tick of their first attack: N2 / N3 / N4) becomes Twisted bows only - so they\'re free for the next form sooner when he\'s close to dying. The raid recap marks the Twisted bow where a player stops.', 'Stop sequence at HP (per player, per first-attack tick)'),
       R('Hit delays', 'All', 'Scythe 1, Twisted bow 2, blowpipe / crossbows 2, Ayak 2, tome 2, ZCB 2, shadow 3.'),
     ] },
     { title: 'Specs', rows: [
@@ -58,7 +58,7 @@ export const NYLO_MECHANICS = {
       R('Solos', 'Solo', 'After his first form they\'re under him on each form\'s ticks 1-4 and 6-9, attacking only on 5 and 10 (scythe / Twisted bow / shadow, else Ayak, or a spec). He attacks once a form, on its 5th tick. Too low for a prayed hit: locator orb, redemption (+24) and a restore, while doses last.'),
     ] },
     { title: 'Solver and optimizer', rows: [
-      R('Solver', 'All', 'Searches each player\'s opener, specs, start spec, surge and (optionally) the backup BGS, swaps between players and the Stop sequence thresholds, in rounds - quick tests on a few raids, the promising changes on more. Only plans that work are tried: a melee spec means one is the opener, and the spec costs must fit start spec + surge + regen.', 'Solver: what to search; effort'),
+      R('Solver', 'All', 'Searches each player\'s opener, specs, start spec, surge and (optionally) the backup BGS and swaps between players, in rounds - quick tests on a few raids, the promising changes on more. Only plans that work are tried: a melee spec means one is the opener, and the spec costs must fit start spec + surge + regen. Then the top 3 setups\' Stop sequence thresholds: each player and sequence on its own, then all together - kept only when together they\'re clearly faster on the same raids, and then played (the setup\'s times, Show raid and Use all carry them).', 'Solver: what to search; effort'),
       R('Optimizer', 'All', 'Keeps the setup and tests the backup BGS and the Stop sequence thresholds on their own and all together, on the same raids - a backup only stays if it\'s actually better.'),
       R('Sets', 'All', 'Sets A / B / C hold three setups; the report runs the ticked ones on the same raids so they compare fairly.', 'Sets; Report: sets to run'),
     ] },

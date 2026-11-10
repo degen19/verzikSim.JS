@@ -603,7 +603,9 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       } else if (f.form === 'ranged') {
         if (p.planForm !== f.start) {
           p.planForm = f.start; const k = t - f.start, stop = pl.rangedStop || rangedStop;
-          p.plan = under || (stop && stop[k] != null && hp * 100 < stop[k] * NYLO_HP[team]) ? [] : rangedPlan(k, !!p.fastW, p.fastW);
+          const stopped = !under && stop && stop[k] != null && hp * 100 < stop[k] * NYLO_HP[team] && rangedPlan(k, !!p.fastW, p.fastW).length > 0;
+          p.plan = under || stopped ? [] : rangedPlan(k, !!p.fastW, p.fastW);
+          p.stopNote = stopped ? `tick fix stopped: he's under ${stop[k]}% on their N${k + 1} start - Twisted bows only this form` : null;   // (for the raid recap)
         }
         let w = p.plan.shift() || 'tb';
         if (w === 'tb' && nextSpec === 'zcb' && p.spec >= ZCB_SPEC) { w = 'zcb'; pl.specs.shift(); }
@@ -612,7 +614,7 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
           const sp = pay(ZCB_SPEC), gear = ranged(p, 'Zaryte crossbow', def)[2], ch = zcbChance(p, def), ok = rng.random() < ch;
           go('ZCB', 'ZCB spec (ruby: 22% of his HP, max 110)', gear, `Ranged ${RANGED} (Rigour, 2x accuracy)`, ch, constMV(ch, Math.min(110, Math.floor(hp * 0.22))), [ok ? null : 0], [ZCB_DELAY], 5, sp);
           surge();
-        } else { const [ch, mx, gear] = nyloTbow(p, def), d = roll(ch, mx); go('TB', 'Twisted bow', gear, `Ranged ${RANGED} (Rigour)`, ch, hitMV(ch, mx), [d], [TBOW_DELAY], 5); }
+        } else { const [ch, mx, gear] = nyloTbow(p, def), d = roll(ch, mx); go('TB', `Twisted bow${p.stopNote ? ` (${p.stopNote})` : ''}`, gear, `Ranged ${RANGED} (Rigour)`, ch, hitMV(ch, mx), [d], [TBOW_DELAY], 5); p.stopNote = null; }
       } else if (f.form === 'magic') {
         const MAG = `Magic ${MAGIC} (Augury)`;
         if (p.buff > 0 && t > p.buffUntil) p.buff = 0;             // the Flow lasts 30s (50 ticks) from their last tome spec
