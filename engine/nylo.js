@@ -536,6 +536,13 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
         pl.specs = pl.specs.map((x) => (x === 'tome' || x === 'zcb' ? 'claw' : x)); p.clawNow = true; nextSpec = pl.specs[0];
         if (T) T.push({ t, i: p.i, supply: `${was} specs -> claw specs (he's melee at ${Math.round(hp / NYLO_HP[team] * 100)}% HP)` });
       }
+      // two tome specs still to come and no magic form by his 4th (melee, ranged, melee, ranged): the first tome becomes a
+      // ZCB on this 4th form (in place of a Twisted bow, once they have 75%)
+      if (f.form === 'ranged' && !p.tomeToZcb && sched.indexOf(f) === 3 && !sched.slice(0, 4).some((x) => x.form === 'magic')
+        && pl.specs.filter((x) => x === 'tome').length >= 2 && p.has.has('Zaryte crossbow')) {
+        p.tomeToZcb = true; pl.specs.splice(pl.specs.indexOf('tome'), 1); pl.specs.unshift('zcb'); nextSpec = 'zcb';
+        if (T) T.push({ t, i: p.i, supply: 'a tome spec -> ZCB this form (two tomes to come, no magic form by his 4th)' });
+      }
       const surge = () => { if (pl.surge && !p.surged) { p.surgePending = true; drink(p, t); } };
       // tome tick fixing: a tome hit to come and he's not magic -> blowpipes / bows that leave room for it in a magic form next
       let fix = null;
