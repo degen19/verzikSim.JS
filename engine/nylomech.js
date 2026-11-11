@@ -35,7 +35,7 @@ export const NYLO_MECHANICS = {
       R('Tome', 'All', 'Zorya\'s tome spec in a magic form, then buffed autos (2 ticks) for 30 seconds, carried over between his magic forms. Not for solos (they only attack on ticks 5 and 10).'),
       R('Tome tick fix', 'All', 'While a tome hit is still to come, in his green forms they pick blowpipes / Twisted bows for the most damage that still leaves them free in time to fit it all into a magic form next. When he\'s likely to die this form or the next (and it isn\'t magic), they drop the tome and claw instead. Always on.'),
       R('Fallback at 20%', 'All', 'When he\'s melee at 20% of his HP or less, their remaining tome and ZCB specs become claw specs (if they have claws) - no magic or ranged form may come in time.'),
-      R('Two tomes, no magic', 'All', 'A player with two tome specs to come and no magic form by his 4th (melee, ranged, melee, ranged) ZCBs on that 4th form instead of their first tome (in place of a Twisted bow, once they have 75%; needs a ZCB). The fallback at 20% still applies.'),
+      R('No magic by his 4th', 'All', 'A player with a tome spec to come and 75%+ spec on his 4th form, with no magic form before it (melee, ranged, melee, ranged), ZCBs instead of the tome (in place of a Twisted bow; needs a ZCB). Any tome after it waits for the spec as usual.'),
       R('Surge', 'All', 'A spec surge (+25%) after their first spec, once their cooldown from the rooms before is up and it won\'t waste spec.', 'Surge; Surge potions'),
     ] },
     { title: 'Cross praying', rows: [

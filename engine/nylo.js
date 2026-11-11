@@ -330,7 +330,7 @@ export function playerDef(p) {
 
 /** One room. players: [{ name, gear (Gear tab), plan? (TEST_PLAN shape) }]. trace (opt): the Show raid entries.
  *  -> { spawn, kill, sched, def } */
-export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTickFix = true, takeoffs = true, rangedStop = null, ayakSkip = null, plans = null, restores = 8, offPrayVeng = true, wave = null, waveDist = null } = {}) {
+export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTickFix = true, takeoffs = true, rangedStop = null, ayakSkip = null, plans = null, restores = 8, offPrayVeng = true, wave = null, waveDist = null, tomeZcb4 = true, fallbackAt = TOME_FALLBACK, zcbFallbackAt = TOME_FALLBACK } = {}) {
   // wave / waveDist: the waves before him (ticks, or drawn from a parseWaveTimes distribution) - the room's clock starts
   // there: room time = wave + boss time; players' surgeCd (ticks left on the surge cooldown at the room's start) runs
   // down through the waves.
@@ -531,17 +531,18 @@ export function runNylo(players, team, rng, { spawn = 286, trace = null, tomeTic
       const pl = p.pl; let nextSpec = pl.specs[0];
       // tome / ZCB fallback: he's melee and at 20% or less - no magic or ranged form may come in time: the tome and ZCB
       // specs they have left become claw specs (if they have claws), straight away
-      if (f.form === 'melee' && pl.specs.some((x) => x === 'tome' || x === 'zcb') && hp <= NYLO_HP[team] * TOME_FALLBACK && p.has.has('Dragon claws')) {
-        const was = [...new Set(pl.specs.filter((x) => x === 'tome' || x === 'zcb'))].map((x) => (x === 'tome' ? 'tome' : 'ZCB')).join(' / ');
-        pl.specs = pl.specs.map((x) => (x === 'tome' || x === 'zcb' ? 'claw' : x)); p.clawNow = true; nextSpec = pl.specs[0];
+      const fbk = (x) => (x === 'tome' ? fallbackAt : x === 'zcb' ? zcbFallbackAt : -1), fb = (x) => hp <= NYLO_HP[team] * fbk(x);
+      if (f.form === 'melee' && pl.specs.some(fb) && p.has.has('Dragon claws')) {
+        const was = [...new Set(pl.specs.filter(fb))].map((x) => (x === 'tome' ? 'tome' : 'ZCB')).join(' / ');
+        pl.specs = pl.specs.map((x) => (fb(x) ? 'claw' : x)); p.clawNow = true; nextSpec = pl.specs[0];
         if (T) T.push({ t, i: p.i, supply: `${was} specs -> claw specs (he's melee at ${Math.round(hp / NYLO_HP[team] * 100)}% HP)` });
       }
-      // two tome specs still to come and no magic form by his 4th (melee, ranged, melee, ranged): the first tome becomes a
-      // ZCB on this 4th form (in place of a Twisted bow, once they have 75%)
-      if (f.form === 'ranged' && !p.tomeToZcb && sched.indexOf(f) === 3 && !sched.slice(0, 4).some((x) => x.form === 'magic')
-        && pl.specs.filter((x) => x === 'tome').length >= 2 && p.has.has('Zaryte crossbow')) {
+      // a tome to come, 75%+ spec, his 4th form and no magic form yet (melee, ranged, melee, ranged): a ZCB (if they have
+      // one) instead of their tome, this form - in place of a Twisted bow
+      if (tomeZcb4 && f.form === 'ranged' && !p.tomeToZcb && p.spec >= ZCB_SPEC && sched.indexOf(f) === 3 && !sched.slice(0, 4).some((x) => x.form === 'magic')
+        && pl.specs.includes('tome') && p.has.has('Zaryte crossbow')) {
         p.tomeToZcb = true; pl.specs.splice(pl.specs.indexOf('tome'), 1); pl.specs.unshift('zcb'); nextSpec = 'zcb';
-        if (T) T.push({ t, i: p.i, supply: 'a tome spec -> ZCB this form (two tomes to come, no magic form by his 4th)' });
+        if (T) T.push({ t, i: p.i, supply: 'tome spec -> ZCB this form (his 4th, no magic form yet)' });
       }
       const surge = () => { if (pl.surge && !p.surged) { p.surgePending = true; drink(p, t); } };
       // tome tick fixing: a tome hit to come and he's not magic -> blowpipes / bows that leave room for it in a magic form next
