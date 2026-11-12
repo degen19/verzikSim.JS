@@ -431,7 +431,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
           // a cooldown that's still running when the room's slowest raid without surges is over can't be drunk there: the
           // same as no surge in this room (exact - solved once, as the no-surge case)
           let cd = cdIn;
-          if (kind !== 'verzik' && cd.some((c) => c < 99999)) { const none = await solveRoom(r, cd.map(() => 99999)); cd = cd.map((c) => (c < 99999 && c >= none.slow ? 99999 : c)); }
+          if (kind !== 'verzik' && cd.some((c) => c < 99999)) { const none = await solveRoom(r, cd.map(() => 99999)), lim = kind === 'sote' && s.sote.noLateSurge ? none.p1Slow : none.slow; cd = cd.map((c) => (c < 99999 && c >= lim ? 99999 : c)); }   // (Sotetseg with no P2 / P3 surges: P1's slowest end)
           const key = `${kind}|${cd.map(qOf(kind)).join(',')}${warm ? `|warm ${JSON.stringify(warm.map((c) => [c.actions, c.startSpec, !!c.lightbearerOn]))}` : ''}`;
           if (!solved.has(key)) {
             nSolves++; const who = cd.map((c, k) => (c < 99999 ? `P${k + 1}${c > 0 ? ` (cooldown ${fsec(c)})` : ''}` : null)).filter(Boolean);
@@ -444,16 +444,17 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
             const setup = forceSurgers(kind, (has || sv.setups[0]).setup, set);
             // its times on their own (cooldowns as given) and the players' surge ticks in it (median)
             const [ev] = await pool.runRooms([{ kind, setup, cd: cd.map((c) => Math.min(c, 99999)) }], 0, n1, seed);
-            const at = cd.map(() => []);
+            const at = cd.map(() => []); let p1Slow = 0;
             if (kind !== 'verzik') for (let i = 0; i < 100; i++) {
               const rr = kind === 'nylo' ? runNylo(setup.players.map((p, k) => ({ ...p, surgeCd: cd[k] })), t, new Rng(`at#${i}`), setup.opts)
                 : kind === 'sote' ? runSote(setup.players.map((p, k) => ({ ...p, surgeCd: cd[k] })), t, new Rng(`at#${i}`), null, { ...setup.opts, entry: setup.entry })
                   : runXarpus(setup.players.map((p, k) => ({ ...p, surgeCd: cd[k] })), t, new Rng(`at#${i}`), null, setup.opts);
               if (rr && rr.players) rr.players.forEach((p, k) => { if (p.surgeAt != null) at[k].push(p.surgeAt); });
+              if (kind === 'sote' && rr && rr.split && rr.split.p1 != null) p1Slow = Math.max(p1Slow, rr.split.p1 + 10);   // (a margin: 100 raids)
             }
             const md = (a) => (a.length ? a.slice().sort((x, y) => x - y)[a.length >> 1] : null);
             const ok = ev.ends.filter((x) => x < 99999);
-            solved.set(key, { sv, setup, dist: distOf(ev.ends), med: md(ok) ?? 0, slow: ok.length ? Math.max(...ok) : 99999, at: at.map(md), surgers: surgersOf(kind, setup) });
+            solved.set(key, { sv, setup, dist: distOf(ev.ends), med: md(ok) ?? 0, slow: ok.length ? Math.max(...ok) : 99999, p1Slow: p1Slow || 99999, at: at.map(md), surgers: surgersOf(kind, setup) });
           }
           return solved.get(key);
         };

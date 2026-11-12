@@ -773,7 +773,7 @@ export function createSote(host, { getTeam, store = STORE, embed = false }) {
     if (full) start.players = fit(start.players).map((p, j) => (full.lbOwners && !full.lbOwners[j] ? { ...p, lbCycles: 0 } : p));   // the Full raid's Lightbearers / gear
     try {
       const res = await solveSote({ team: t, base, start, gear: all.map((p) => p.gear), allow: { ...Object.fromEntries(ALLOW.map((x) => [x, v.allow[x] !== false])) },
-        surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[full ? full.effort : v.effort] || EFFORT.normal), top: 10, ...(full ? { lbOwners: full.lbOwners, hornLimit: full.hornLimit } : {}), groups: groupsOf(base.map((b, j) => JSON.stringify([{ ...b, name: null, gear: { ...b.gear, name: null } }, full && full.lbOwners ? !!full.lbOwners[j] : null]))), swaps: !!sr.swaps, pairs: !!sr.pairs, restarts, noLateSurge: !!sr.noLateSurge },
+        surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[full ? full.effort : v.effort] || EFFORT.normal), top: 10, ...(full ? { lbOwners: full.lbOwners, hornLimit: full.hornLimit, mustSurge: full.mustSurge || null } : {}), groups: groupsOf(base.map((b, j) => JSON.stringify([{ ...b, name: null, gear: { ...b.gear, name: null } }, full && full.lbOwners ? !!full.lbOwners[j] : null]))), swaps: !!sr.swaps, pairs: !!sr.pairs, restarts, noLateSurge: !!sr.noLateSurge },
       (...args) => pool.run(...args), say, () => me.stopped);
       // Show raid: the final results were played on raids 'final#0..' at their entry instance - replayed from there
       const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];
@@ -832,9 +832,9 @@ export function createSote(host, { getTeam, store = STORE, embed = false }) {
     const t = team(), ds = defaultSetup(t), dsp = defaultSpecs(t);
     const st = { gearSet: gs, entry: 0, players: Array.from({ length: t }, (_, k) => ({ ...blank(), prefire: ds[k].prefire, startSpec: ds[k].startSpec, surge: ds[k].surge, specs: dsp[k].map((x) => ({ ...x })), ...(supplies[k] || {}) })) };
     if (mustSurge) st.players.forEach((p, k) => { p.surge = mustSurge.includes(k); });   // a full raid plan's surgers: on throughout the search
-    const v = { allow: mustSurge ? { surge: false } : {}, search: { ...SEARCH_DEFAULT, noLateSurge: noLateSurge && !mustSurge } };
+    const v = { allow: mustSurge ? { surge: false } : {}, search: { ...SEARCH_DEFAULT, noLateSurge } };   // (no P2 / P3 surges: a plan's surge too - drunk in P1 or not at all)
     const me = { stopped: false, pool: null }, timer = setInterval(() => { if (stopped()) { me.stopped = true; if (me.pool) me.pool.stop(); } }, 300);
-    try { return await solveSet(rootState().cur, v, bps, new Proxy(me, { set: (o, k, x) => { o[k] = x; if (k === 'pool') onPool(x); return true; } }), say, { st, surgeCd, lbRings, lbOwners, hornLimit, gearPatch, effort }); }
+    try { return await solveSet(rootState().cur, v, bps, new Proxy(me, { set: (o, k, x) => { o[k] = x; if (k === 'pool') onPool(x); return true; } }), say, { st, surgeCd, lbRings, lbOwners, hornLimit, gearPatch, effort, mustSurge }); }
     finally { clearInterval(timer); }
   }
   /** Full raid: show setups (best first) in this tab's Solver results. */
