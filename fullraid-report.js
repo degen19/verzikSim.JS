@@ -7,6 +7,7 @@ import { createNylo } from './nylo-ui.js';
 import { createSote } from './sote-ui.js';
 import { createXarpus } from './xarpus-ui.js';
 import { createBuilder } from './builder-ui.js';
+import { createSolo } from './solo-ui.js';
 import { parse_chart } from './engine/sim.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS, withGear } from './engine/gearstore.js';
 import { describe, readValues } from './engine/chartform.js';
@@ -16,7 +17,7 @@ import { ALL_ROOMS, surgersOf, fullScore } from './engine/fullraid.js';
 import { activeNow, breath } from './engine/pause.js';
 
 const KEY = 'verzikSim.fullraidReport.v1';     // {team: {on, src, gearSet, cd, doses, wave, raids, seed, bps}}
-const CUSTOM = { nylo: 'verzikSim.frCustom.nylo.v1', sote: 'verzikSim.frCustom.sote.v1', xarpus: 'verzikSim.frCustom.xarpus.v1', verzik: 'verzikSim.frCustom.verzik.v1' };
+const CUSTOM = { solo: 'verzikSim.frCustom.solo.v1', nylo: 'verzikSim.frCustom.nylo.v1', sote: 'verzikSim.frCustom.sote.v1', xarpus: 'verzikSim.frCustom.xarpus.v1', verzik: 'verzikSim.frCustom.verzik.v1' };
 const NAME = { nylo: 'Nylocas', sote: 'Sotetseg', xarpus: 'Xarpus', verzik: 'Verzik' };
 const SETS = ['A', 'B', 'C'];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -51,17 +52,22 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
     <div class="card" data-rpsetcard>
       ${ALL_ROOMS.map((k) => `<details class="rpsec" data-rpsec="${k}" hidden><summary data-rpsum="${k}"></summary>
         <div class="row wrap" style="gap:8px;align-items:center;margin-top:6px"><label>Procedure<select data-rpsrc="${k}"></select></label><span data-rpcopy="${k}"></span></div>
-        ${k === 'verzik' ? '<div data-rpvtabs hidden></div>' : ''}<div data-rpcust="${k}" style="margin-top:6px"></div></details>`).join('')}
+        ${k === 'verzik' ? '<div data-rpvtabs hidden></div>' : ''}<div data-rpcust="${k}" style="margin-top:6px">${k === 'verzik' ? '<div data-rpvchart></div><div data-rpvsolo></div>' : ''}</div></details>`).join('')}
     </div>
     <div data-out></div>`;
   const form = el.querySelector('[data-rpform]'), setcard = el.querySelector('[data-rpsetcard]');
   // the custom editors: each room's own settings, saved apart from its tab (made when first needed); Report set X's
   // custom procedure is the editor's set X
   const custom = {};
-  const customOf = (k) => {
+  const customOf = (k0) => {
+    const k = k0 === 'verzik' && team() === 1 ? 'solo' : k0;           // solos: the Solo tab's Verzik settings
+    if (k0 === 'verzik') { el.querySelector('[data-rpvchart]').hidden = k === 'solo'; el.querySelector('[data-rpvsolo]').hidden = k !== 'solo'; }
     if (custom[k]) return custom[k];
-    const box = el.querySelector(`[data-rpcust="${k}"]`);
-    if (k === 'verzik') {
+    const box = k === 'solo' ? el.querySelector('[data-rpvsolo]') : k === 'verzik' ? el.querySelector('[data-rpvchart]') : el.querySelector(`[data-rpcust="${k}"]`);
+    if (k === 'solo') {
+      const inst = createSolo(box, { store: CUSTOM.solo }); box.dataset.embed = '1';
+      custom[k] = { api: inst.api, show: (set) => { inst.refresh(); if (inst.api.curSet() !== set || !inst.api.hasSet(set)) inst.api.selectSet(set); } };
+    } else if (k === 'verzik') {
       const b = createBuilder(box, { store: CUSTOM.verzik, libcur: 'verzikSim.frCustom.libcur.v1', tabsEl: el.querySelector('[data-rpvtabs]'), hide: ['Custom Surge Timing'] });   // (the surge comes from the cooldown carried in)
       custom[k] = { builder: b, show: (set) => b.showBlock(team(), set) };
     } else {
@@ -74,7 +80,7 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
   const gp = (s) => { const set = gearSet(loadGear(), team(), s.gearSet); return set ? playersOf(set, team()) : null; };
   const name = (s, k) => esc((gp(s) || [])[k] ? gp(s)[k].name || `Player ${k + 1}` : `Player ${k + 1}`);
   const picked = (s) => { const ks = ALL_ROOMS.filter((k) => s.on[k]), ix = ks.map((k) => ALL_ROOMS.indexOf(k)); return { ks, ok: ks.length > 0 && ix.every((x, i) => !i || x === ix[i - 1] + 1) }; };
-  const srcName = (k, v) => (v === 'custom' ? 'Custom (made here)' : k === 'verzik' ? `Verz ${setLabel(v) || `Set ${v}`}` : `${NAME[k]} tab: Set ${v}`);
+  const srcName = (k, v) => (v === 'custom' ? 'Custom (made here)' : k === 'verzik' ? (team() === 1 ? `Solo tab: Set ${v}` : `Verz ${setLabel(v) || `Set ${v}`}`) : `${NAME[k]} tab: Set ${v}`);
   const srcOpts = (k, v) => [...SETS, 'custom'].map((x) => `<option value="${x}" ${x === v ? 'selected' : ''}>${esc(srcName(k, x))}</option>`).join('');
 
   function render() {
@@ -145,7 +151,10 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
     if (b.dataset.rpcopyset) {
       const [k, from] = b.dataset.rpcopyset.split('|'), c = customOf(k), err = form.querySelector('[data-rperr]'), s = st(); err.textContent = '';
       try {
-        if (k === 'verzik') {
+        if (k === 'verzik' && team() === 1) {
+          const got = rooms.solo.getSet(from); if (!got) throw new Error(`the Solo tab's Set ${from} is empty`);
+          c.show(s.cur); c.api.putSet(got);
+        } else if (k === 'verzik') {
           const wb = getWorkbook ? await getWorkbook() : null; if (!wb) throw new Error('no Verzik chart on the page');
           const t = team(), ws = await wb.load(`${t}-man`);
           await c.builder.setSet(t, s.cur, readValues(ws, describe(ws, t, from))); await c.show(s.cur);
@@ -164,6 +173,12 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
   /** Room k's setup in Report set `set`, as the whole raid plays it: a room tab's set, or that set's custom one. */
   async function setupOf(k, s, set, wave) {
     const src = s.sets[set].src[k], t = team();
+    if (k === 'verzik' && t === 1) {                                    // solos: the Solo tab's settings (or a custom one)
+      let su;
+      if (src === 'custom') { const c = customOf('verzik'); c.show(set); su = c.api.hasSet(set) ? c.api.setupOf(set) : null; } else su = rooms.solo.setupOf(src);
+      if (!su) throw new Error(`Set ${set}, Verzik: ${src === 'custom' ? 'its custom settings are empty' : `the Solo tab's Set ${src} is empty`}`);
+      return su;
+    }
     if (k === 'verzik') {
       const wb = src === 'custom' ? await customOf('verzik').builder.workbook(t) : getWorkbook ? await getWorkbook() : null;
       const b = src === 'custom' ? set : src;
@@ -199,21 +214,23 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
     const doses = s.doses.map(Number), n = Math.max(200, Number(s.raids) || 5000), seed = String(s.seed || '').trim() || `frrep${Date.now()}`;
     const ctx = { team: t, surgeCd: cd, doses }, pool = new FullRaidPool(ctx), me = job = { stopped: false };
     const go = form.querySelector('[data-rpact="run"]'), stopB = form.querySelector('[data-rpact="stop"]'); go.disabled = true; stopB.disabled = false;
-    const t1 = activeNow(), outs = setups.map(() => ({ totals: [], ends: pk.ks.map(() => []), p3: [] })), CH = 1000;
+    const t1 = activeNow(), outs = setups.map(() => ({ totals: [], ends: pk.ks.map(() => []), p3: [], late: cd.map(() => 0), reachedV: 0 })), CH = 1000;
     const timer = setInterval(() => { if (me.stopped) pool.stop(); }, 300);
     try {
       for (let a = 0; a < n && !me.stopped; a += CH) {
         const rs = await pool.run(setups, a, Math.min(n, a + CH), seed);
-        rs.forEach((r, i) => { const o = outs[i]; o.totals.push(...r.totals); r.ends.forEach((x, j) => o.ends[j].push(...x)); o.p3.push(...r.p3); });
+        rs.forEach((r, i) => { const o = outs[i]; o.totals.push(...r.totals); r.ends.forEach((x, j) => o.ends[j].push(...x)); o.p3.push(...r.p3); (r.late || []).forEach((x, k) => { o.late[k] += x; }); o.reachedV += r.reachedV || 0; });
         status.textContent = `Playing whole raids... ${outs[0].totals.length.toLocaleString()} / ${n.toLocaleString()}${setups.length > 1 ? ` (each of ${setups.length} sets)` : ''} (${Math.round((activeNow() - t1) / 1000)}s)`;
         await breath();
       }
       if (!outs[0].totals.length) { status.textContent = 'Stopped.'; return; }
       const how = { mode: 'total', total: bps, rooms: pk.ks.map(() => null), rankBy: 'goal' };
       const names = Array.from({ length: t }, (_, k) => ((gp(s) || [])[k] && gp(s)[k].name) || `Player ${k + 1}`);
+      // players whose P1 chart surge came before their cooldown was up (of the raids that got to Verzik)
+      const lateMsgs = outs.flatMap((o, i) => o.late.map((x, k) => (x > 0 && o.reachedV ? `${setups.length > 1 ? `Set ${s.run[i]}: ` : ''}${esc(names[k])} was unable to follow their P1 procedure in ${(x / o.reachedV * 100).toFixed(1)}% of raids due to not coming off surge cooldown early enough` : null)).filter(Boolean));
       const ranked = setups.map((su, i) => ({ label: `Set ${s.run[i]}`, plan: null, vars: pk.ks.map((kind) => ({ kind, setup: su[kind], surgers: surgersOf(kind, su[kind]), dropped: [] })), setup: su, ...outs[i], score: fullScore(outs[i], how) }));
-      const srcTxt = s.run.map((set) => `Set ${set}: ${pk.ks.map((k) => `${NAME[k]} ${s.sets[set].src[k] === 'custom' ? 'custom' : k === 'verzik' ? `Verz ${setLabel(s.sets[set].src[k]) || `Set ${s.sets[set].src[k]}`}` : `Set ${s.sets[set].src[k]}`}`).join(', ')}`).join(' · ');
-      onResults({ report: { sub: `${srcTxt}. ${outs[0].totals.length.toLocaleString()} whole raids${setups.length > 1 ? ' each, the same raids for each set' : ''} (seed ${esc(seed)}), surge cooldowns and doses carried room to room.`, summary: (ci) => summaryHtml(ranked, bps, ci) },
+      const srcTxt = s.run.map((set) => `Set ${set}: ${pk.ks.map((k) => `${NAME[k]} ${s.sets[set].src[k] === 'custom' ? 'custom' : k === 'verzik' ? srcName(k, s.sets[set].src[k]) : `Set ${s.sets[set].src[k]}`}`).join(', ')}`).join(' · ');
+      onResults({ report: { sub: `${srcTxt}. ${outs[0].totals.length.toLocaleString()} whole raids${setups.length > 1 ? ' each, the same raids for each set' : ''} (seed ${esc(seed)}), surge cooldowns and doses carried room to room.`, summary: (ci) => `${lateMsgs.length ? `<div class="warn" style="margin:0 0 8px" title="Of the raids that got to Verzik: a P on their P1 chart came before their surge was off cooldown (the surge waits for it)">${lateMsgs.map((m) => `<div>${m}</div>`).join('')}</div>` : ''}${summaryHtml(ranked, bps, ci)}` },
         title: `${t}-man Full raid: report`, ranked, how, t, kinds: pk.ks, names, ctx, seed, raids: outs[0].totals.length, vBps: [], chartNeeds: null, wave: null });
       status.textContent = `${me.stopped ? 'Stopped' : 'Done'} in ${Math.round((activeNow() - t1) / 1000)}s: ${outs[0].totals.length.toLocaleString()} raids${setups.length > 1 ? ` x ${setups.length} sets` : ''}.`;
     } catch (x) {

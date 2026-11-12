@@ -40,8 +40,8 @@ export class FullRaidPool {
     for (let a = from; a < to; a += chunk) parts.push(this.task({ combos, ctx: this.ctx, from: a, to: Math.min(to, a + chunk), seed }));
     const res = await Promise.all(parts);
     return combos.map((_, i) => {
-      const out = { totals: [], ends: res[0][i].ends.map(() => []), p3: [] };
-      for (const r of res) { out.totals.push(...r[i].totals); r[i].ends.forEach((e, j) => out.ends[j].push(...e)); out.p3.push(...r[i].p3); }
+      const out = { totals: [], ends: res[0][i].ends.map(() => []), p3: [], late: (res[0][i].late || []).map(() => 0), reachedV: 0 };
+      for (const r of res) { out.totals.push(...r[i].totals); r[i].ends.forEach((e, j) => out.ends[j].push(...e)); out.p3.push(...r[i].p3); (r[i].late || []).forEach((x, k) => { out.late[k] += x; }); out.reachedV += r[i].reachedV || 0; }
       return out;
     });
   }

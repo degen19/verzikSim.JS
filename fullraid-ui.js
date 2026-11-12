@@ -874,6 +874,11 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         box.innerHTML = entryLine(e, j); const inner = document.createElement('div'); box.append(inner);
         rooms.xarpus.procedure(inner, { cfg: { ...r.setup.xarpus.opts, players }, names, run: { players, opts: r.setup.xarpus.opts } }, roomBps(j));
         msg.textContent = '';
+      } else if (t === 1) {                                           // solo Verzik: the Solo tab's settings
+        const d0 = e ? e.doses[0] : Number(results.ctx.doses[0]) || 0, c = cfgs[0], yn = (x) => (x ? 'yes' : 'no'), rows = [['Godbook', yn(c.godbook)], ['Shadow', c.shadow ? (c.shadowCamp ? 'camp' : c.shadowLB ? 'while LB' : c.shadow31 ? '3:1' : 'yes') : 'no'], ['Reds', c.redsMode || 'scythe'],
+          ['Lightbearer cycles (P2 / reds)', `${c.lbP2 || 0} / ${c.lbReds || 0}`], ['LB Flick Reds', c.lbFlick || 0], ['Ayak in P2', c.ayakP2 ? `yes (${c.ayakAmount || 0})` : 'no'], ['Surge', d0 > 0 ? `${d0} dose${d0 === 1 ? '' : 's'}, after the first spec once the cooldown is up` : 'no doses left']];
+        box.innerHTML = `${entryLine(e, j)}<table class="bt">${rows.map(([a2, b2]) => `<tr><td class="rl">${a2}</td><td>${esc(String(b2))}</td></tr>`).join('')}</table><div class="muted small">The Solo tab's Verzik settings (its Report has the raid-by-raid view).</div>`;
+        msg.textContent = '';
       } else {
         const late = cfgs.map((c, k) => (c.customSurgeTick != null ? `${esc(names[k])} surges on tick ${c.customSurgeTick} (${fsec(c.customSurgeTick)}${e && e.cd[k] > 0 ? ', once the cooldown is up' : ''})` : null)).filter(Boolean);
           box.innerHTML = `${entryLine(e, j)}${late.length ? `<div class="small" style="margin:4px 0">Surges off the chart: ${late.join(' · ')}</div>` : ''}${verzSetupHtml(cfgs, names, t)}<div data-vtree style="margin-top:8px"></div>${verzRaidBar(`fr-${ci}-${Date.now()}`, cfgs, t, results.vBps || [])}`;

@@ -10,6 +10,7 @@ import { runXarpus } from './xarpus.js';
 import { runNylo } from './nylo.js';
 import { toRedsEnd } from './roomsolver.js';
 import { run_p3 } from './p3.js';
+import { run_solo } from './solo.js';
 import { Rng } from './rng.js';
 import { newSoteResult, addSoteRun, addSoteRaids } from './sotereport.js';
 import { newXarpusResult, addXarpusRun, addXarpusRaids } from './xarpusreport.js';
@@ -31,13 +32,13 @@ function verzikCfgs(cfgs, cd, doses) {
   return cfgs.map((c, k) => {
     const acts = { ...(c.actions || {}) }, pTicks = Object.keys(acts).filter((t) => acts[t] === 'P').map(Number);
     let custom = c.customSurgeTick ?? null;
-    if (doses[k] <= 0) { for (const t of pTicks) delete acts[t]; custom = null; return { ...c, actions: acts, customSurgeTick: null, forceSurge: false, surgeCdTicks: cd[k] }; }
+    if (doses[k] <= 0) { for (const t of pTicks) delete acts[t]; custom = null; return { ...c, actions: acts, customSurgeTick: null, forceSurge: false, surgeCdTicks: cd[k], surgeDoses: 0 }; }
     else if (cd[k] > 0) {
       const early = pTicks.filter((t) => t < cd[k]);
       if (early.length) { for (const t of early) delete acts[t]; custom = cd[k]; }
       else if (custom != null) custom = Math.max(custom, cd[k]);
     }
-    return { ...c, actions: acts, customSurgeTick: custom, surgeCdTicks: cd[k] };
+    return { ...c, actions: acts, customSurgeTick: custom, surgeCdTicks: cd[k], surgeDoses: doses[k] };
   });
 }
 
@@ -50,7 +51,7 @@ export function fullRaid(setup, ctx, i, seed = 'full', acc = null) {
   const { team } = ctx, rng = new Rng(`${seed}#${i}`), kinds = roomsOf(setup);
   let cd = ctx.surgeCd.map((x) => Math.max(0, Number(x) || 0)), doses = ctx.doses.map((x) => Math.max(0, Number(x) || 0));
   const ends = kinds.map(() => null);
-  let p3 = false;
+  let p3 = false, late = null;   // late: the players whose P1 chart surge came before their cooldown was up (reached Verzik)
   for (const [j, kind] of kinds.entries()) {
     if (acc) acc.entry[j].push({ cd: [...cd], doses: [...doses] });
     if (kind === 'nylo') {                                       // ---- Nylocas (waves + boss)
@@ -72,14 +73,20 @@ export function fullRaid(setup, ctx, i, seed = 'full', acc = null) {
       if (rx.end == null) return { ends, total: null, failAt: 'xarpus' };
       ends[j] = rx.end;
       rx.players.forEach((p, k) => { if (p.surgeAt != null) doses[k]--; cd[k] = p.surgeCd; });
+    } else if (team === 1) {                                     // ---- Verzik, solo (the Solo tab's engine)
+      const [c] = verzikCfgs(setup.verzik.cfgs, cd, doses), rs = run_solo(c, rng.fork('verzik'));
+      if (rs.end == null) return { ends, total: null, failAt: 'verzik' };
+      ends[j] = rs.end; p3 = true;
     } else {                                                     // ---- Verzik
+      // a P on their P1 chart before their surge is off cooldown: they can't follow the chart (the surge waits)
+      late = setup.verzik.cfgs.map((c, k) => (doses[k] > 0 && cd[k] > 0 && Object.entries(c.actions || {}).some(([t, a]) => a === 'P' && Number(t) < cd[k]) ? k : -1)).filter((k) => k >= 0);
       const cfgs = verzikCfgs(setup.verzik.cfgs, cd, doses), vr = rng.fork('verzik');
       const x = toRedsEnd(cfgs, team, vr), va = acc && acc.verzik;
       if (va) { va.runs++; if (x.r1 && x.r1.players.some((p) => p.dead)) va.die_p1++; if (x.r2) { va.depth.push(x.r2.hp / x.r2.max_hp * 100); va.reds.push(x.r2.reds_tick); } }
-      if (x.fail || !x.r3.success || (team === 2 && x.r3.players.every((p) => p.dead))) return { ends, total: null, failAt: 'verzik' };
+      if (x.fail || !x.r3.success || (team === 2 && x.r3.players.every((p) => p.dead))) return { ends, total: null, failAt: 'verzik', late };
       p3 = true;
       const r4 = run_p3({ ...x.r3, pid: x.r2.pid }, cfgs, team, vr.fork('p3'));
-      if (r4.kill == null) return { ends, total: null, failAt: 'verzik', p3 };
+      if (r4.kill == null) return { ends, total: null, failAt: 'verzik', p3, late };
       ends[j] = r4.end;
       if (va) {
         const { r1, r2, r3 } = x;
@@ -89,7 +96,7 @@ export function fullRaid(setup, ctx, i, seed = 'full', acc = null) {
       }
     }
   }
-  return { ends, total: ends.reduce((a, x) => a + x, 0), failAt: null, p3 };
+  return { ends, total: ends.reduce((a, x) => a + x, 0), failAt: null, p3, late };
 }
 
 /** Each room's own report, from whole raids of one combination: raids [from, to) played as fullRaid plays them, each
@@ -135,12 +142,14 @@ export function mergeReports(parts) {
  *  p3 (1: Verzik's P2 went down in reds - the raid got to P3)}. */
 export function evalFull(combos, ctx, from, to, seed) {
   return combos.map((setup) => {
-    const totals = [], ends = roomsOf(setup).map(() => []), p3 = [];
+    const totals = [], ends = roomsOf(setup).map(() => []), p3 = [], late = ctx.surgeCd.map(() => 0);
+    let reachedV = 0;
     for (let i = from; i < to; i++) {
       const r = fullRaid(setup, ctx, i, seed);
       totals.push(r.total ?? 99999); r.ends.forEach((e, j) => ends[j].push(e ?? 99999)); p3.push(r.p3 ? 1 : 0);
+      if (r.late) { reachedV++; for (const k of r.late) late[k]++; }
     }
-    return { totals, ends, p3 };
+    return { totals, ends, p3, late, reachedV };   // late: raids each player's P1 chart surge came before their cooldown was up, of reachedV
   });
 }
 

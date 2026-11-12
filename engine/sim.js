@@ -108,6 +108,7 @@ export function auto_surge(p, t, L, tag = '') {
 export function custom_surge(p, t, L, tag = '') {
   if (p.custom_tick == null || p.custom_done || p.dead || t < p.custom_tick || t < p.sip_ready) return false;
   p.custom_done = true;
+  if (p.surge_left != null) { if (p.surge_left <= 0) return false; p.surge_left -= 1; }   // (full raid: doses left)
   const old = p.spec;
   p.spec = Math.min(100, p.spec + 25); p.gain_src = 'other';
   p.surge_ready = t + SURGE_CD;
@@ -762,6 +763,7 @@ export function run_p1(cfgs, team, rng, log = null) {
     p.actions = c.actions;
     p.auto_surge_on = team <= 2;           // surge re-use after its cooldown: duos/solos only
     if (c.forceSurge && team > 2 && !Object.values(p.actions).includes('P') && p.custom_tick == null) { p.auto_surge_on = true; p.surge_left = 1; p.surge_planned = true; }   // full raid: a surge planned for them (once its cooldown's up and it won't waste spec)
+    if (team <= 2 && c.surgeDoses != null) p.surge_left = Math.max(0, Math.trunc(Number(c.surgeDoses) || 0));   // full raid duos: the doses left (surges re-used after their cooldown)
     if (Object.values(p.actions).includes('P')) p.custom_tick = null;   // a P on the chart takes priority over the custom timing
     // 95% start, a Dawn spec on the chart and no R: no regen before their first spec, then a forced regen the tick after it
     const acts = Object.values(p.actions);
@@ -953,7 +955,11 @@ export function run_p1(cfgs, team, rng, log = null) {
         if (t < p.surge_ready) {
           flags.push(`t${t}: ${p.name} surge on cooldown`);
           p.surge_pending = null;
+        } else if (p.surge_left != null && p.surge_left <= 0) {
+          flags.push(`t${t}: ${p.name} no surge doses left`);
+          p.surge_pending = null;
         } else {
+          if (p.surge_left != null) p.surge_left -= 1;
           const old = p.spec;
           p.spec = Math.min(100, p.spec + 25); p.gain_src = 'other';
           p.sip_ready = t + 3;

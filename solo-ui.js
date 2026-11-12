@@ -26,9 +26,9 @@ const fsec = (t) => { const s = t * 0.6, m = Math.floor(s / 60), r = s - m * 60;
 const COMMIT_LABEL = { c100: '100% spec', c80: '80%+ spec', c50: '50%+ spec', c30: '30%+ spec', c0: 'under 30%' };
 
 
-export function createSolo(host) {
-  let state = loadKey(STORE, {}), saved = loadKey(SAVED, []), savedPick = '', setMsg = '';
-  const persist = () => saveKey(STORE, state);
+export function createSolo(host, { store = STORE } = {}) {
+  let state = loadKey(store, {}), saved = loadKey(SAVED, []), savedPick = '', setMsg = '';
+  const persist = () => saveKey(store, state);
   const root = () => { state.sets ||= { A: blankSet() }; if (!state.sets[state.cur]) state.cur = 'A'; state.sets.A ||= blankSet(); return state; };
   const fix = (st) => { const b = blankSet(); for (const k of Object.keys(b)) st[k] ??= b[k]; st.commit = { ...b.commit, ...st.commit }; return st; };
   const cur = () => fix(root().sets[root().cur]);
@@ -341,5 +341,7 @@ export function createSolo(host) {
 
   function refreshAll() { render(); showRep(); showSol(); }
   refreshAll();
-  return { refresh: () => { state = loadKey(STORE, {}); saved = loadKey(SAVED, []); refreshAll(); } };
+  return { refresh: () => { state = loadKey(store, {}); saved = loadKey(SAVED, []); refreshAll(); },
+    api: { setupOf: (k) => (setOf(k) ? { cfgs: [cfgOfSet(setOf(k))] } : null), getSet: (k) => (setOf(k) ? structuredClone(setOf(k)) : null), curSet: () => root().cur, hasSet: (k) => !!root().sets[k],
+      putSet: (st) => { const r = root(); r.sets[r.cur] = structuredClone(st); persist(); refreshAll(); }, selectSet: (k) => { const r = root(); r.cur = k; r.sets[k] ||= blankSet(); persist(); refreshAll(); } } };
 }
