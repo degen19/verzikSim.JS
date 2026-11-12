@@ -62,7 +62,7 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
     if (custom[k]) return custom[k];
     const box = el.querySelector(`[data-rpcust="${k}"]`);
     if (k === 'verzik') {
-      const b = createBuilder(box, { store: CUSTOM.verzik, libcur: 'verzikSim.frCustom.libcur.v1', tabsEl: el.querySelector('[data-rpvtabs]') });
+      const b = createBuilder(box, { store: CUSTOM.verzik, libcur: 'verzikSim.frCustom.libcur.v1', tabsEl: el.querySelector('[data-rpvtabs]'), hide: ['Custom Surge Timing'] });   // (the surge comes from the cooldown carried in)
       custom[k] = { builder: b, show: (set) => b.showBlock(team(), set) };
     } else {
       const make = { nylo: createNylo, sote: createSote, xarpus: createXarpus }[k];
@@ -80,7 +80,7 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
   function render() {
     const s = st(), t = team(), pk = picked(s), g = loadGear(), w = parseWaveTimes(s.wave);
     form.innerHTML = `<h3 style="margin-top:0">Full raid report <span class="muted small">(${t}-man: ${pk.ks.map((k) => NAME[k]).join(' → ') || 'no rooms ticked'})</span></h3>
-      <p class="muted small">Your own procedure for each room - a set from that room's tab, or a custom one made here - played as whole raids: surge cooldowns and doses carry from room to room (a surge in Nylocas or Sotetseg moves when it's up again later). Report sets A / B / C below each pick their own procedures; tick the ones to run - they're played on the same raids. Each room's procedure keeps its own gear set.</p>
+      <p class="muted small">Your own procedure for each room - a set from that room's tab, or a custom one made here - played as whole raids: surge cooldowns and doses carry from room to room (a surge in Nylocas or Sotetseg moves when it's up again later). Report sets A / B / C below each pick their own procedures; tick the ones to run - they're played on the same raids. Each room's procedure keeps its own gear set. Verzik: no custom surge timing - a player with a dose left surges once their cooldown is up and it won't waste spec (or on their P, once it's up).</p>
       <div class="row wrap" style="gap:14px;align-items:center">${ALL_ROOMS.map((k) => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" data-rpon="${k}" ${s.on[k] ? 'checked' : ''}>${NAME[k]}</label>`).join('')}
         <span class="small ${pk.ok ? 'muted' : 'warn'}">${pk.ok ? 'Any run of rooms in raid order.' : 'Tick rooms in a row - no gaps.'}</span></div>
       <div class="row wrap" style="gap:14px;align-items:flex-start;margin-top:10px">
@@ -170,7 +170,10 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
       if (!wb) throw new Error('no Verzik chart on the page - import or build one');
       const cfgs = withGear(await parse_chart(wb, t, null, b, { deferBP: true }), t, b);
       if (!cfgs.some((c) => c.actions && Object.keys(c.actions).length)) throw new Error(`Set ${set}, Verzik: ${src === 'custom' ? 'its custom chart' : `Verz Set ${b}`} has no P1 chart`);
-      return { cfgs };
+      // the surge comes from the cooldown carried in from the rooms before, not a custom surge timing (ignored here): a
+      // player with a dose left and no P on the chart surges once it's up and it won't waste spec; a P before the
+      // cooldown's up waits for it (3-5 man; duos surge on their P)
+      return { cfgs: cfgs.map((c) => (t > 2 && !Object.values(c.actions || {}).includes('P') ? { ...c, customSurgeTick: null, forceSurge: true } : { ...c, customSurgeTick: null })) };
     }
     let su;
     if (src === 'custom') { const c = customOf(k); c.show(set); su = c.api.hasSet(set) ? c.api.setupOf(set) : null; }

@@ -39,7 +39,7 @@ const HELP = {
   '4 Claw Priority': "If Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status prioritises 100% spec for reds (both claws by r36, taking over the purple DC); the others prioritise 50%. Off: rings follow the chart.", has3Tick: 'Weapon used by H in the P1 chart',
 };
 
-export function createBuilder(root, { onChange, store = STORE, libcur = LIBCUR, tabsEl = null }) {   // store / libcur / tabsEl: a second chart (the Full raid's own)
+export function createBuilder(root, { onChange, store = STORE, libcur = LIBCUR, tabsEl = null, hide = [] }) {   // store / libcur / tabsEl: a second chart (the Full raid's own)
   let tplWb = null;
   const tpl = {};                 // team -> {ws, descs: {A, B}, defaults: {A, B}}
   let state = load(store);        // team -> {A: {key: value}, B: {...}}
@@ -281,7 +281,7 @@ export function createBuilder(root, { onChange, store = STORE, libcur = LIBCUR, 
       </div>
       <p class="muted small">${team}-man chart, Set ${block}. Changes are saved in this browser automatically. Sets B and C only run if their P1 chart has something in it.</p>
       ${gearPick()}
-      <h3>Setup</h3>${playerTable('setup', d.setup.filter((h) => !GEAR_HEADERS.has(h)))}
+      <h3>Setup</h3>${playerTable('setup', d.setup.filter((h) => !GEAR_HEADERS.has(h) && !hide.includes(h)))}
       <h3>Spec planner</h3><div id="vz-plan"></div>
       <p class="muted small">Same as the chart's End spec / Room Time / LB swings / Time of regen columns. P1 ends on the Death tick if set, otherwise on the last charted tick.</p>
       <h3>Team settings</h3><div class="row wrap teamset">${teamFields}</div>
