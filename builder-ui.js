@@ -10,8 +10,8 @@ const LIBCUR = 'verzikSim.libcur.v1';        // which saved / default chart each
 const CODE_BG = { S: '#8fd18f', D: '#c9b6e4', A: '#fff2a8', C: '#f8cbad', H: '#f4b183', E: '#b4c7e7', SB: '#ffd966', B: '#d9a6e0', T: '#8eb4e3',
   P: '#ff66cc', R: '#ffffff', X: '#595959', 'ST>n': '#33cc33' };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const load = () => { try { return migrateKeys(JSON.parse(localStorage.getItem(STORE))) || {}; } catch { return {}; } };
-const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: keep in memory */ } };
+const load = (key = STORE) => { try { return migrateKeys(JSON.parse(localStorage.getItem(key))) || {}; } catch { return {}; } };
+const save = (s, key = STORE) => { try { localStorage.setItem(key, JSON.stringify(s)); } catch { /* storage off: keep in memory */ } };
 const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const when = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -39,13 +39,13 @@ const HELP = {
   '4 Claw Priority': "If Verzik's P1 dies in 11 or fewer Dawn specs, the player with the highest regen status prioritises 100% spec for reds (both claws by r36, taking over the purple DC); the others prioritise 50%. Off: rings follow the chart.", has3Tick: 'Weapon used by H in the P1 chart',
 };
 
-export function createBuilder(root, { onChange }) {
+export function createBuilder(root, { onChange, store = STORE, libcur = LIBCUR, tabsEl = null }) {   // store / libcur / tabsEl: a second chart (the Full raid's own)
   let tplWb = null;
   const tpl = {};                 // team -> {ws, descs: {A, B}, defaults: {A, B}}
-  let state = load();             // team -> {A: {key: value}, B: {...}}
+  let state = load(store);        // team -> {A: {key: value}, B: {...}}
   let team = 4, block = 'A', timer = null;
   let lib = migrateKeys(loadKey(LIB));   // team -> [{id, name, saved, sets}]
-  let cur = loadKey(LIBCUR);      // team -> {kind: 'saved'|'default', id, name, snap}
+  let cur = loadKey(libcur);      // team -> {kind: 'saved'|'default', id, name, snap}
   let defaults = null;            // [{name, team, file, note}] from defaults/index.json (null = not fetched yet)
 
   async function ensure(t) {
@@ -74,7 +74,7 @@ export function createBuilder(root, { onChange }) {
     for (const [k, v] of Object.entries(old)) if (isChartKey(k)) out[k] = v;
     out[LOCK] = true; return out;
   };
-  const persist = () => { clearTimeout(timer); timer = setTimeout(() => save(state), 300); libStatus(); onChange && onChange(); };
+  const persist = () => { clearTimeout(timer); timer = setTimeout(() => save(state, store), 300); libStatus(); onChange && onChange(); };
 
   // ---- chart library: named charts saved in this browser, plus default charts shipped in defaults/
   const charts = () => lib[team] || [];
@@ -103,7 +103,7 @@ export function createBuilder(root, { onChange }) {
     return migrateKeys(j.sets);
   }
   const withDefaults = (sets) => Object.fromEntries(BLOCKS.map((b) => [b, { ...tpl[team].defaults[b], ...(sets[b] || {}) }]));
-  function markCurrent(kind, id, name) { cur[team] = { kind, id, name, snap: snapOf() }; saveKey(LIBCUR, cur); }
+  function markCurrent(kind, id, name) { cur[team] = { kind, id, name, snap: snapOf() }; saveKey(libcur, cur); }
   function libBar() {
     const c = cur[team] || {};
     const saved = charts().slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -158,8 +158,8 @@ export function createBuilder(root, { onChange }) {
       // the chart's Set A goes into the set that is open; the other sets stay as they are
       state[team][block] = { ...tpl[team].defaults[block], ...(sets.A || {}) };
       if (block === 'A' && BLOCKS.slice(1).every((x) => JSON.stringify(state[team][x]) === JSON.stringify(withDefaults(sets)[x]))) markCurrent(kind, id, name);
-      else { delete cur[team]; saveKey(LIBCUR, cur); }
-      save(state); render(); onChange && onChange();
+      else { delete cur[team]; saveKey(libcur, cur); }
+      save(state, store); render(); onChange && onChange();
       const el = root.querySelector('#vz-libstat'); if (el && !cur[team]) el.textContent = `Loaded "${name}" into Set ${block}`;
     } catch (err) { render(); libMsg(err.message); }
   }
@@ -263,7 +263,7 @@ export function createBuilder(root, { onChange }) {
   function draw() {
     const d = tpl[team].descs[block].tables;
     const teamFields = d.team.map((f) => `<label title="${esc(HELP[f.header] || '')}">${esc(f.header)}${input(f, vals()[f.key] ?? f.def)}</label>`).join('');
-    const tabs = document.getElementById('builderTabs');               // Sets A / B / C as tabs on the chart card, in their chart colours
+    const tabs = tabsEl || document.getElementById('builderTabs');               // Sets A / B / C as tabs on the chart card, in their chart colours
     if (tabs) {
       tabs.innerHTML = BLOCKS.map((b) => `<button data-block="${b}" class="${block === b ? 'on' : ''}">Set ${b}${b === 'A' ? '' : ' <span class="muted">(optional)</span>'}</button>`).join('');
       if (!tabs.dataset.wired) { tabs.dataset.wired = '1'; tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-block]'); if (b) { block = b.dataset.block; render(); } }); }
@@ -352,12 +352,12 @@ export function createBuilder(root, { onChange }) {
       const c = cur[team]; if (!c || c.kind !== 'saved') return;
       if (!confirm(`Delete the saved chart "${c.name}"? The chart stays on the page as an unsaved working copy.`)) return;
       lib[team] = charts().filter((y) => y.id !== c.id); saveKey(LIB, lib);
-      delete cur[team]; saveKey(LIBCUR, cur); render(); return;
+      delete cur[team]; saveKey(libcur, cur); render(); return;
     }
     if (act === 'libnew') {
       if (dirty() && !confirm('Start a new chart? Unsaved changes on the page will be lost (save them first if you want to keep them).')) return;
       state[team] = withDefaults({});
-      delete cur[team]; saveKey(LIBCUR, cur); block = 'A'; save(state); render(); onChange && onChange(); return;
+      delete cur[team]; saveKey(libcur, cur); block = 'A'; save(state, store); render(); onChange && onChange(); return;
     }
     if (act === 'lockchart') {
       if (locked()) delete vals()[LOCK]; else vals()[LOCK] = true;
@@ -387,7 +387,7 @@ export function createBuilder(root, { onChange }) {
       if (j.app !== 'verzikSim' || !j.sets) throw new Error("That file isn't a saved chart from this page");
       if (j.team !== team) throw new Error(`That file is a ${j.team}-man chart - switch Scale to ${j.team}-man first`);
       state[team] = withDefaults(migrateKeys(j.sets));
-      delete cur[team]; saveKey(LIBCUR, cur);
+      delete cur[team]; saveKey(libcur, cur);
       // files saved with each player's gear (gear: 1): it goes into the Gear sets the blocks use, so the run plays
       // with the file's prayer / armour / blowpipe / 3-tick weapon rather than whatever this browser had
       const into = [];
@@ -417,13 +417,15 @@ export function createBuilder(root, { onChange }) {
       const ws = overlaySheet(tpl[t].ws, tpl[t].descs, state[t]);
       return { sheetnames: [`${t}-man`], load: async () => ws };
     },
+    /** The set being shown (A / B / C). */
+    curBlock: () => block,
     /** Put values (e.g. a Verz Solver setup) into one set of the builder; that set is shown next time. */
     async setSet(t, b, values) {
       migrateKeys(values);
       await ensure(t);
       state[t][b] = { ...tpl[t].defaults[b], ...values };
       block = b;                                                       // show the set that was just filled
-      save(state); onChange && onChange();
+      save(state, store); onChange && onChange();
     },
     /** Save values as a named chart (Set A) in this browser's chart library. Returns false if the user said no. */
     async saveChart(t, name, values) {
@@ -442,8 +444,8 @@ export function createBuilder(root, { onChange }) {
       await ensure(t);
       const ws = await wb.load(`${t}-man`);
       state[t] = Object.fromEntries(BLOCKS.map((b) => [b, { ...tpl[t].defaults[b], ...readValues(ws, describe(ws, t, b)) }]));
-      delete cur[t]; saveKey(LIBCUR, cur);
-      save(state);
+      delete cur[t]; saveKey(libcur, cur);
+      save(state, store);
     },
   };
 }

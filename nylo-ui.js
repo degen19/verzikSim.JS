@@ -26,9 +26,9 @@ const fsB = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floo
 const seqKey = (s) => s.join('+') || 'none';
 const LEGEND = "Grey: his melee form · green: ranged · blue: magic · slightly lighter: under him · his attacks: hover for the target, takeoff, accuracy, damage and veng · tome borders: pink spec hit, black missed, red buffed auto · zombie (bottom right): a melee thrall hit";
 
-export function createNylo(host, { getTeam }) {
-  let state = loadKey(STORE);
-  const persist = () => saveKey(STORE, state);
+export function createNylo(host, { getTeam, store = STORE, embed = false }) {
+  let state = loadKey(store);
+  const persist = () => saveKey(store, state);
   const team = () => Number(getTeam()) || 4;
   host.innerHTML = `<div data-small></div><div data-main>${settingsCard('Nylocas settings', '<div data-cfg></div>')}
     ${tabsHtml([['rep', 'Report'], ['opt', 'Optimizer'], ['solve', 'Solver']])}
@@ -95,6 +95,9 @@ export function createNylo(host, { getTeam }) {
   // room options from the settings: takeoffs, off-prayer vengs (solos: off by default), restore doses (duos / solos)
   const roomOpts = (st) => ({ takeoffs: st.takeoffs !== false, offPrayVeng: st.offPrayVeng ?? team() !== 1, restores: Number(st.restores ?? 8) });
   const playersNow = (st) => { const gp = gearOf(st.gearSet); return st.players.map((p, k) => { const { predictFlip, ...plan } = p; return { name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k), plan }; }); };   // (predictions by HP: retired - the default prediction)
+  /** Set k as the Full raid plays it ({players, opts}; its wave times if it has them on). */
+  const setupOf = (k) => { const st = setOf(k); if (!st) return null; const wave = st.wave && st.wave.on ? parseWaveTimes(st.wave.rows) : null;
+    return { players: playersNow(st), opts: { ...roomOpts(st), plans: { backup: team() === 1 ? null : st.backup }, ...(wave && !wave.error ? { waveDist: wave.dist } : {}) }, thr: null }; };
 
   function render() {
     const t = team(), small = host.querySelector('[data-small]'), main = host.querySelector('[data-main]');
@@ -490,5 +493,5 @@ export function createNylo(host, { getTeam }) {
   const procedure = (el, { cfg, names, run }, bps = []) => { el.innerHTML = `${procHtml(cfg, names, run.players.map((q) => q.gear))}${raidBar(run, bps)}`; if (!el.dataset.wired) { el.dataset.wired = '1'; el.addEventListener('click', (e) => { const b = e.target.closest('button[data-nraid]'); if (b && !host.contains(b)) showRaid(Number(b.dataset.nraid)); }); } };
 
   function refreshAll() { render(); showRep(); showSol(); }
-  return { refresh: () => { state = loadKey(STORE); refreshAll(); }, api: { fullRaidSolve, fullRaidShow, procedure, reportHtml, team } };
+  return { refresh: () => { state = loadKey(store); refreshAll(); }, api: { getSet: (k) => (setOf(k) ? structuredClone(setOf(k)) : null), putSet: (st) => { const r = root(); r.sets[r.cur] = structuredClone(st); persist(); refreshAll(); }, fullRaidSolve, fullRaidShow, procedure, reportHtml, team, setupOf, curSet: () => root().cur, hasSet: (k) => !!root().sets[k], setLabel } };
 }

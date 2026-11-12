@@ -33,8 +33,8 @@ import { pickRaid, timelineHtml, successSteps, failSteps, raidNav } from './raid
 
 const STORE = 'verzikSim.sote.v1';             // {team: {gearSet, surgeLimit, lbRings, players: [{startSpec, surge, lbCycles, pnecks, sharks, rests, restores, prefire, mazes: [first, second]}]}}  · solve: {surgeLimit, ...}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
-const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch { /* storage off: kept for this page */ } };
+const load = (key = STORE) => { try { return JSON.parse(localStorage.getItem(key)) || {}; } catch { return {}; } };
+const save = (s, key = STORE) => { try { localStorage.setItem(key, JSON.stringify(s)); } catch { /* storage off: kept for this page */ } };
 
 /** Prefire choices: [value, label, weapon it needs]. */
 export const PREFIRES = [
@@ -53,8 +53,8 @@ const blank = () => ({ startSpec: 100, surge: false, lbCycles: 0, pnecks: 2, sha
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
 
-export function createSote(host, { getTeam }) {
-  let state = load();
+export function createSote(host, { getTeam, store = STORE, embed = false }) {
+  let state = load(store);
   host.innerHTML = `${settingsCard('Sotetseg settings', '<div data-cfg></div>')}
     ${tabsHtml([['rep', 'Report'], ['opt', 'Optimizer'], ['solve', 'Solver']])}
     ${pane('rep', 'data-rep', `
@@ -149,7 +149,7 @@ export function createSote(host, { getTeam }) {
   const loadSaved = () => { try { return JSON.parse(localStorage.getItem(SAVED)) || {}; } catch { return {}; } };
   let saved = loadSaved(), savedPick = '', setMsg = '';
   const when = (ms) => new Date(ms).toLocaleDateString();
-  const persist = () => save(state);
+  const persist = () => save(state, store);
 
   /** Sets A / B / C (switch, copy to another), and sets saved in this browser or to a file. */
   function setBar() {
@@ -856,5 +856,6 @@ export function createSote(host, { getTeam }) {
     }
   }
   function refreshAll() { render(); showRep(); showOpt(); showSol(); }
-  return { refresh: () => { state = load(); saved = loadSaved(); refreshAll(); }, api: { fullRaidSolve, fullRaidShow, team, fullProcedure } };
+  return { refresh: () => { state = load(store); saved = loadSaved(); refreshAll(); }, api: { getSet: (k) => (setOf(k) ? structuredClone(setOf(k)) : null), putSet: (st) => { const r = rootState(); r.sets[r.cur] = structuredClone(st); persist(); refreshAll(); }, fullRaidSolve, fullRaidShow, team, fullProcedure, curSet: () => rootState().cur, hasSet: (k) => !!rootState().sets[k],
+    setupOf: (k) => { const st = setOf(k); return st ? { players: playersNow(st), entry: Number(st.entry) || 0, opts: { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF } } : null; } } };
 }

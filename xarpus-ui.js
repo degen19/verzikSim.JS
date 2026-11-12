@@ -28,9 +28,9 @@ const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {};
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const pick = () => `<label class="pick" style="flex-direction:row;gap:6px;align-items:center"`;
 
-export function createXarpus(host, { getTeam }) {
-  let state = loadKey(STORE), saved = loadKey(SAVED), savedPick = '', setMsg = '';
-  const persist = () => saveKey(STORE, state);
+export function createXarpus(host, { getTeam, store = STORE, embed = false }) {
+  let state = loadKey(store), saved = loadKey(SAVED), savedPick = '', setMsg = '';
+  const persist = () => saveKey(store, state);
   const team = () => Number(getTeam()) || 4;
   host.innerHTML = `${settingsCard('Xarpus settings', '<div data-cfg></div>')}
     ${tabsHtml([['rep', 'Report'], ['solve', 'Solver']])}
@@ -549,5 +549,5 @@ export function createXarpus(host, { getTeam }) {
   /** Full raid: show setups (best first) in this tab's Solver results. */
   const fullRaidShow = (items, bps) => { vresults = { groups: [{ k: rootState().cur, label: 'Full raid', items }], bps, t: team() }; showResults(); };
   function refreshAll() { render(); showRep(); showSol(); }
-  return { refresh: () => { state = loadKey(STORE); saved = loadKey(SAVED); refreshAll(); }, api: { rootState, setOf, cur, playersNow, optsOf, team, persist, render: refreshAll, repState, fullRaidSolve, fullRaidShow, procHtml, procedure, reportRaids } };
+  return { refresh: () => { state = loadKey(store); saved = loadKey(SAVED); refreshAll(); }, api: { getSet: (k) => (setOf(k) ? structuredClone(setOf(k)) : null), putSet: (st) => { const r = rootState(); r.sets[r.cur] = structuredClone(st); persist(); refreshAll(); }, setupOf: (k) => { const st = setOf(k); return st ? { players: playersNow(st), opts: optsOf(st) } : null; }, curSet: () => rootState().cur, hasSet: (k) => !!rootState().sets[k], rootState, setOf, cur, playersNow, optsOf, team, persist, render: refreshAll, repState, fullRaidSolve, fullRaidShow, procHtml, procedure, reportRaids } };
 }
