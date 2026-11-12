@@ -57,9 +57,10 @@ export class SolverPool {
   // ---- the evaluator interface solveRoom uses (same calls as localEvaluator)
   async eval(kind, list, team, n, seed, bps) {
     if (this.local) return localEvaluator.eval(kind, list, team, n, seed, bps);
-    const parts = Math.max(1, Math.min(this.n, Math.ceil(n / 40)));      // ranges of at least ~40 raids
+    // ranges of at least ~40 raids (more of them when something's watching the raids go by: progress mid-batch)
+    const parts = Math.max(1, Math.min(this.onRaids ? this.n * 4 : this.n, Math.ceil(n / 40)));
     const ranges = Array.from({ length: parts }, (_, i) => [Math.floor(n * i / parts), Math.floor(n * (i + 1) / parts)]);
-    const res = await Promise.all(ranges.map(([from, to]) => this.task({ cmd: 'eval', kind, list, team, from, to, seed, bps })));
+    const res = await Promise.all(ranges.map(([from, to]) => this.task({ cmd: 'eval', kind, list, team, from, to, seed, bps }).then((x) => { if (this.onRaids) this.onRaids((to - from) * list.length); return x; })));
     return list.map((_, v) => mergeCounts(res.map((r) => r[v])));
   }
   /** The same for a list of raid indices (the per-Dawn ring pass: only that branch's raids). */

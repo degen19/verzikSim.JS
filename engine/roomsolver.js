@@ -308,7 +308,8 @@ const pctl = (ends, fs) => { const e = [...ends].filter((x) => x >= 0).sort((x, 
 /**
  * Search. o: {rings, horns, bpsFull (full-room seconds; [] = rank by success), rankBy ('bp' index into bpsFull, or
  *   'success'), minSuccess (0-1), bps (P2-end seconds for the early stages; worked out when not given), sbOwner,
- *   p1Top, p1Beam, n1, keep1, n2, keepP2, n3, keep2, nFinal, top, seed, log(text), progress({stage, raids})}.
+ *   p1Top, p1Beam, n1, keep1, n2, keepP2, n3, keep2, nFinal, top, seed, log(text), progress({stage, raids, frac, expect})}
+ *   (frac: roughly how far through the stage, 0-1; expect: the raids the stage plays, when that's known up front).
  * ev = evaluator (localEvaluator or the page's worker pool).
  * Returns {top: [{cfg, purple, c, p1}], stats, gap, fallback, bps}.
  */
@@ -327,14 +328,16 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   base = base.map((c) => ({ ...c, ...p1Rules }));
   if (o.seeds) o = { ...o, seeds: o.seeds.map((sd) => ({ ...sd, cfg: sd.cfg.map((c) => ({ ...c, ...p1Rules })) })) };
   const T = (k, t0) => { stats.t[k] = (stats.t[k] || 0) + (Date.now() - t0) / 1000; };
-  let stage = '';
-  const step = (s) => { stage = s; o.progress && o.progress({ stage, raids: stats.raids }); };
+  let stage = '', sfrac = 0;
+  const emit = (x = {}) => o.progress && o.progress({ stage, raids: stats.raids, frac: sfrac, ...x });
+  const step = (s) => { stage = s; sfrac = 0; emit(); };
+  const at = (f) => { if (f > sfrac) { sfrac = Math.min(1, f); emit(); } };
   /** Run a batch of setups on the same raids. */
   const run = async (kind, list, n, tag) => {
     if (!list.length) return [];
     const out = await ev.eval(kind, list, team, n, `${seed}:${tag}`, kind === 'full' ? bpsFull : bps);
     stats.raids += n * list.length;
-    o.progress && o.progress({ stage, raids: stats.raids });
+    emit();
     return out;
   };
 
@@ -622,7 +625,9 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     if (any) stats.duoChanged = (stats.duoChanged || 0) + 1;
     return any ? ringPass(s) : s;
   };
-  const s2 = (await Promise.all(keep1.map(async (x) => hornP2Pass(await tomePass(await duoPasses(await purplePass(await ringPass(x)))))))).map((x) => ({ ...x, c: x.c2 }));
+  let rdone = 0; const rtick = (x) => { at(++rdone / (keep1.length * 5)); return x; };   // (progress: 5 passes per setup)
+  const s2 = (await Promise.all(keep1.map(async (x) => rtick(await hornP2Pass(rtick(await tomePass(rtick(await duoPasses(rtick(await purplePass(rtick(await ringPass(x)))))))))))))
+    .map((x) => ({ ...x, c: x.c2 }));
   s2.sort((a, b) => rank(b.c, true) - rank(a.c, true));
   T('rings', t0);
   log(`  ring swaps: ${keep1.length} setups, ${stats.ringTried} values tried, ${stats.ringSame} identical to another, ${stats.ringCamp} camp-LB, ${stats.ringClaw} broke the claw rule`
@@ -673,9 +678,12 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     stats.hornP3Changed++;
     return dcPairs(cur);
   };
+  let ddone = 0; const dtick = (k) => { ddone += k; at(0.75 * ddone / (top2.length * 2)); };   // (progress: the pairs, then the P3 horns)
   let s3 = (await Promise.all(top2.map(async (x) => {
     const pairs = (await dcPairs(x)).sort((a, b) => rank(b.c, true) - rank(a.c, true));
-    return o.horns && pairs.length ? [...pairs, ...(await hornP3Pass(pairs[0]))] : pairs;
+    if (!(o.horns && pairs.length)) { dtick(2); return pairs; }
+    dtick(1); const h = await hornP3Pass(pairs[0]); dtick(1);
+    return [...pairs, ...h];
   }))).flat();
   const bar3 = clawRule ? Math.max(...s3.map((x) => clawRate(x.c))) - CLAW_TOL.early : -Infinity;
   stats.dcClaw = s3.filter((x) => clawRate(x.c) < bar3 - 1e-9).length;
@@ -709,6 +717,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
       s3.push({ ...from[i], cfg: list[i], c });
     });
     s3.sort((a, b) => rank(b.c, true) - rank(a.c, true));
+    at(0.85);
   }
   // Dawn branches: P1 can die in fewer Dawn specs than charted, and the best ring swap can differ by branch (Ring % by
   // Dawns). For the best few setups, each Lightbearer player's swap for each branch (every Dawn count P1 died in on 1%+
@@ -718,7 +727,8 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   if (team > 2 && (o.dawnRingTop ?? 4) > 0) {
     const tops = [], seenC = new Set();
     for (const x of s3) { const k = coreKey(x.cfg); if (seenC.has(k)) continue; seenC.add(k); tops.push(x); if (tops.length >= (o.dawnRingTop ?? 4)) break; }
-    for (const x0 of tops) {
+    for (const [ti, x0] of tops.entries()) {
+      at(0.85 + 0.15 * ti / tops.length);
       let x = x0;
       const seen = {}; for (let i = 0; i < 500; i++) { const d = run_p1(x.cfg, team, new Rng(`dawns#${i}`)).dawns; seen[d] = (seen[d] || 0) + 1; }
       const branches = Object.keys(seen).map(Number).filter((d) => d > 0 && seen[d] >= 5).sort((a, b) => b - a);
@@ -736,7 +746,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
           if (ev.evalIdx) {                                           // only this branch's raids: exact, far less work
             const [was, ...now] = idx.length ? await ev.evalIdx('full', [x.cfg, ...list], team, idx, `${seed}:full`, bpsFull) : [null];
             res = idx.length ? now.map((c) => swapCounts(x.c, idx, was, c)) : list.map(() => x.c);
-            stats.raids += idx.length * (list.length + 1); o.progress && o.progress({ stage, raids: stats.raids });
+            stats.raids += idx.length * (list.length + 1); emit();
           } else res = await run('full', list, o.n3, 'full');
           stats.dawnRingTried = (stats.dawnRingTried || 0) + list.length;
           let best = -1; res.forEach((r, i) => { if (okSucc(r) && rank(r, true) > rank(best < 0 ? x.c : res[best], true) + 1e-12) best = i; });
@@ -765,6 +775,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     }
     fin.push({ ...sd, asCharted: true });
   }
+  emit({ expect: fin.length * o.nFinal });
   (await run('full', fin.map((x) => x.cfg), o.nFinal, 'final')).forEach((c, i) => { fin[i].c = c; });
   // setups that play out identically on every final raid (e.g. a horn that never goes off): keep the simplest one
   // your charts as charted: kept out of the merging and filters below (they're the reference), ranked with the rest

@@ -130,21 +130,26 @@ export function neighbours(cfg, ctx) {
  *  run(configs, from, to, seed) -> Promise<[{totals, kills}]>. Returns [{cfg, score, totals, kills}] best first. */
 export async function solveNylo(ctx, run, progress = () => {}, stopped = () => false) {
   const { bps = [], stages = [[60, 0.2], [240, 4], [1000, 1]], rounds = 8, finalRaids = 2000, top = 10 } = ctx;
+  // progress: most searches settle in about half their rounds - counted as that many until they go on longer (the bar
+  // then waits for them to catch up)
+  const D = (round) => Math.min(rounds, Math.max(Math.ceil(rounds / 2), round + 1));
   const seen = new Map();
   const note = (cfg, score, raids) => { const k = keyOf(cfg), o = seen.get(k); if (!o || raids >= o.raids) seen.set(k, { cfg, score, raids }); };
   const bigN = stages[stages.length - 1][0];
+  // progress: the search (each start setup an equal share) is the first 80%, the final checks the rest
+  const nStarts = 1 + (ctx.restarts || []).length, sf = (si0, f) => 0.8 * (si0 + f) / nStarts;
   for (const [si0, st0] of [ctx.start, ...(ctx.restarts || [])].entries()) {
     if (stopped()) break;
     let cur = { ...st0, players: st0.players.map(canonPlan) };
     // a start they couldn't afford: trim its damage specs from the end until they can
     cur.players = cur.players.map((p) => { const q = { ...p, specs: [...p.specs] }; while (!feasible(q) && q.specs.length) q.specs.pop(); if (!feasible(q)) q.open = 'none'; return q; });
-    if (si0) progress(`Restart ${si0}: from another starting setup`, 0);
+    if (si0) progress(`Restart ${si0}: from another starting setup`, sf(si0, 0));
     for (let round = 1; round <= rounds && !stopped(); round++) {
       let pool = neighbours(cur, ctx);
       const seed = `nround${round}`;
       for (let si = 0; si < stages.length && pool.length && !stopped(); si++) {
         const [n, keep] = stages[si];
-        progress(`Round ${round}: trying ${pool.length} change${pool.length === 1 ? '' : 's'} on ${n.toLocaleString()} raids each`, (round - 1 + si / stages.length) / rounds);
+        progress(`Round ${round}: trying ${pool.length} change${pool.length === 1 ? '' : 's'} on ${n.toLocaleString()} raids each`, sf(si0, (round - 1 + si / stages.length) / D(round)), sf(si0, (round - 1 + (si + 1) / stages.length) / D(round)));
         const res = await run(pool, 0, n, seed);
         const scored = pool.map((c, i) => ({ c, s: scoreOf(res[i].totals, bps) })).sort((a, b) => (better(a.s, b.s) ? -1 : better(b.s, a.s) ? 1 : 0));
         if (si === stages.length - 1) { scored.forEach((x) => note(x.c, x.s, n)); pool = scored.map((x) => x.c); break; }
@@ -154,22 +159,23 @@ export async function solveNylo(ctx, run, progress = () => {}, stopped = () => f
       const [cr] = await run([cur], 0, bigN, seed), cs = scoreOf(cr.totals, bps);
       note(cur, cs, bigN);
       const best = pool[0], bs = seen.get(keyOf(best)).score;
-      if (!better(bs, cs)) { progress(`Round ${round}: no change beats the current setup - done`, 1); break; }
+      if (!better(bs, cs)) { progress(`Round ${round}: no change beats the current setup - done`, sf(si0, 1)); break; }
       cur = { ...best, what: undefined };
-      progress(`Round ${round}: kept "${best.what}"`, round / rounds);
+      progress(`Round ${round}: kept "${best.what}"`, sf(si0, round / D(round)));
     }
   }
   const ranked = [...seen.values()].sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0)).slice(0, top);
   if (stopped() || !ranked.length) return [];
-  progress(`Playing the top ${ranked.length} setups on ${finalRaids.toLocaleString()} raids each...`, 1);
+  progress(`Playing the top ${ranked.length} setups on ${finalRaids.toLocaleString()} raids each...`, 0.8);
   const res = await run(ranked.map((x) => x.cfg), 0, finalRaids, 'nfinal');
   const outv = ranked.map((x, i) => ({ cfg: x.cfg, score: scoreOf(res[i].totals, bps), totals: res[i].totals, kills: res[i].kills }))
     .sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));
   if (ctx.allow.surge && !stopped()) for (let i = 0; i < Math.min(3, outv.length); i++) {   // surges that pay for nothing come out
+    progress(`Taking out surges that pay for nothing: setup ${i + 1}`, 0.85 + 0.03 * i);
     const p = await pruneSurges(outv[i], async (c) => { const [r] = await run([c], 0, finalRaids, 'nfinal'); return { totals: r.totals, kills: r.kills }; }, (t) => scoreOf(t, bps), (c, k) => { const q = { ...c.players[k], specs: [...c.players[k].specs] }; while (!feasible(q) && q.specs.length) q.specs.pop(); if (!feasible(q)) q.open = 'none'; return { ...c, players: c.players.map((p, j) => (j === k ? canonPlan(q) : p)) }; }, stopped);   // (without the surge: the specs it paid for trimmed from the end)
     if (p !== outv[i]) outv[i] = p;
   }
-  if (ctx.allow.start && !stopped()) { const p = await polishStarts(outv[0], run, finalRaids, 'nfinal', bps, (c) => c.players.every(feasible), progress); if (p !== outv[0]) outv.unshift(p); }
+  if (ctx.allow.start && !stopped()) { const p = await polishStarts(outv[0], run, finalRaids, 'nfinal', bps, (c) => c.players.every(feasible), (t) => progress(t, 0.95)); if (p !== outv[0]) outv.unshift(p); }
   // setups that play out the same on every raid (e.g. a second spec that never goes off) are one: the first kept
   const same = new Set();
   return outv.filter((r) => { const k = r.totals.join(','); if (same.has(k)) return false; same.add(k); return true; });

@@ -3,6 +3,7 @@
 import { groupsOf } from './engine/symmetry.js';
 import { breath, whenFree } from './engine/pause.js';
 import { activeNow } from './engine/pause.js';
+import { progressBar } from './progressbar.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { blankPlayer } from './engine/loadout.js';
 import { newXarpusResult, addXarpusRaids, xarpusReportHtml, xarpusReportPage } from './engine/xarpusreport.js';
@@ -299,9 +300,11 @@ export function createXarpus(host, { getTeam, store = STORE, embed = false }) {
     const runs = keys.map((k) => { const st = setOf(k); return { players: playersNow(st), opts: optsOf(st), res: newXarpusResult() }; });
     const labels = keys.map((k) => (r.labels[k] || '').trim() || `Set ${k}`);
     job = { stop: false }; const me = job; btn('run').disabled = true; btn('stop').disabled = false;
+    const pb = progressBar(status); pb.start();
     let i = 0;
     const step = () => {
       if (me.stop || i >= n) {
+        if (me.stop) pb.stop(); else pb.done();
         job = null; btn('run').disabled = false; btn('stop').disabled = true;
         if (!runs[0].res.runs) { status.textContent = 'Stopped.'; return; }
         const opts = { breakpoints: bps, labels }, all = runs.map((x) => x.res);
@@ -314,7 +317,7 @@ export function createXarpus(host, { getTeam, store = STORE, embed = false }) {
       }
       const to = Math.min(n, i + Math.max(25, Math.floor(200 / runs.length)));
       try { for (const x of runs) addXarpusRaids(x.res, x.players, t, i, to, { seed, ...x.opts }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
-      i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`;
+      i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`; pb.set(i / n);
       whenFree(() => setTimeout(step, 0));   // paused: the next step waits for resume
     };
     step();
@@ -497,10 +500,11 @@ export function createXarpus(host, { getTeam, store = STORE, embed = false }) {
     const t = team(), ef = EFFORT[v.effort] || EFFORT.normal, sr = v.search || {};
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
-    const t1 = activeNow(), groups = [];
+    const t1 = activeNow(), groups = [], pb = progressBar(status); pb.start();
     try {
       for (const [n, k] of keys.entries()) {
         if (me.stopped) break;
+        const part = pb.part(n / keys.length, (n + 1) / keys.length);
         const st = setOf(k), all = playersNow(st), pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '';
         const base = all.map((p) => ({ name: p.name, gear: p.gear, rangePot: normRangePot(p.rangePot) })), names = all.map((p) => p.name);   // range pot: kept as set, not searched
         const planOf = (p) => Object.fromEntries(PLAN.map((f) => [f, f === 'startSpec' ? (p.startSpec === 95 ? 95 : 100) : f === 'lbCycles' ? Number(p.lbCycles || 0) : f === 'horn' ? (hornN(p) === 2 ? 2 : hornN(p) === 1) : f === 'surge' ? !!p[f] : p[f]]));
@@ -511,13 +515,13 @@ export function createXarpus(host, { getTeam, store = STORE, embed = false }) {
         try {
           const items = await solveXarpus({ start, gear: all.map((p) => p.gear), allow: { ...v.allow }, surgeLimit: Number(st.surgeLimit) || 0, lbRings: Number(st.lbRings ?? t),
             swaps: !!sr.swaps, roles: sr.roles !== false, restarts, bps, ...ef, top: 10 }, (...args) => me.pool.run(...args),
-          (txt) => { status.textContent = `${pre}${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; }, () => me.stopped);
+          (txt, f, f1) => { status.textContent = `${pre}${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; if (f != null) part(f); if (me.pool) me.pool.onPart = f1 != null && f != null ? (x) => part(f + (f1 - f) * x) : null; }, () => me.stopped);
           groups.push({ k, label: setLabel(k), items: items.map((r) => ({ ...r, set: k, names, run: { players: base.map((b, j) => ({ ...b, ...r.cfg.players[j] })), opts: { heals: Number(st.heals) || 0, exactHeals: !!st.exactHeals, ...r.cfg } } })) });
         } finally { me.pool.stop(); }
         vresults = { groups: [...groups], bps, t }; showResults();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
-    } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`; if (me.stopped) pb.stop(); else pb.done();
+    } catch (x) { pb.stop(); status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
     finally { vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
 

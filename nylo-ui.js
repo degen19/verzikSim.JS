@@ -4,6 +4,7 @@
 import { groupsOf } from './engine/symmetry.js';
 import { breath, whenFree } from './engine/pause.js';
 import { activeNow } from './engine/pause.js';
+import { progressBar } from './progressbar.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
 import { blankPlayer } from './engine/loadout.js';
 import { parseBreakpoints } from './engine/optimize.js';
@@ -291,10 +292,11 @@ export function createNylo(host, { getTeam, store = STORE, embed = false }) {
     }
     const me = repJob = { stop: false }, go = rep.querySelector('[data-act="run"]'), stopB = rep.querySelector('[data-act="stop"]');
     go.disabled = true; stopB.disabled = false;
+    const pb = progressBar(status); pb.start();
     try {
-      out.innerHTML = await reportMulti(list, { n, seed, bps, stopped: () => me.stop, prog: (d, k) => { status.textContent = `Running ${keys.length > 1 ? `set ${k}: ` : ''}${d} / ${n}`; } });
-      status.textContent = `Done: ${n.toLocaleString()} raids (seed ${seed}).`;
-    } catch (x) { if (me.stop) status.textContent = 'Stopped.'; else err.textContent = `Couldn't run: ${x.message}`; }
+      out.innerHTML = await reportMulti(list, { n, seed, bps, stopped: () => me.stop, prog: (d, k) => { status.textContent = `Running ${keys.length > 1 ? `set ${k}: ` : ''}${d} / ${n}`; pb.set((keys.indexOf(k) + d / n) / keys.length); } });
+      status.textContent = `Done: ${n.toLocaleString()} raids (seed ${seed}).`; pb.done();
+    } catch (x) { pb.stop(); if (me.stop) status.textContent = 'Stopped.'; else err.textContent = `Couldn't run: ${x.message}`; }
     finally { repJob = null; go.disabled = false; stopB.disabled = true; }
   });
 
@@ -368,7 +370,10 @@ export function createNylo(host, { getTeam, store = STORE, embed = false }) {
     const start = { players: st.players.map((p) => ({ open: p.open, specs: [...p.specs], clawMode: 'gain', startSpec: p.startSpec === 95 ? 95 : 100, surge: !!p.surge, tomeTickFix: p.tomeTickFix !== false, healer: t === 2 && !!p.healer, maxSwitches: normSwitches(p.maxSwitches) })), backup: st.backup && t > 1 ? { ...st.backup } : null };
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
-    const t1 = activeNow(), say = (txt) => { status.textContent = `${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; };
+    // progress: the search, then (when asked) the top 3 setups' thresholds - a share each
+    const pb = progressBar(status), thrOn = !!(v.search.thr && t > 1), solveTo = thrOn ? 0.7 : 1; pb.start();
+    // (f1: the share this step reaches when it's done - the pool's pieces coming back move the bar between the two)
+    const t1 = activeNow(), sayTo = (bar) => (txt, f, f1) => { status.textContent = `${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; if (f != null) bar(f); if (me.pool) me.pool.onPart = f1 != null && f != null ? (x) => bar(f + (f1 - f) * x) : null; }, say = sayTo(pb.part(0, solveTo));
     try {
       me.pool = new NyloPool(base, t, opts);
       const run = (...args) => me.pool.run(...args);
@@ -381,11 +386,12 @@ export function createNylo(host, { getTeam, store = STORE, embed = false }) {
         const none = (thr) => thr.map((x) => ({ ...x, best: { 1: null, 2: null, 3: null } }));
         for (let i = 0; i < Math.min(3, vres.items.length) && !me.stopped; i++) {
           const c0 = vres.items[i].cfg, tag = i ? `setup ${i + 1}: ` : '';
-          const thr = await rangedThresholds(c0, gear, run, ef.thrRaids, (m) => say(`${tag}${m}`), () => me.stopped);
+          const part = pb.part(0.7 + 0.1 * i, 0.7 + 0.1 * (i + 1)), sayT = sayTo((f) => part(0.85 * f));
+          const thr = await rangedThresholds(c0, gear, run, ef.thrRaids, (m, f) => sayT(`${tag}${m}`, f), () => me.stopped);
           if (me.stopped) break;
           let keepThr = none(thr), comb = null;
           if (thr.some((x) => [1, 2, 3].some((k) => x.best[k] != null))) {
-            say(`${tag}All the thresholds together`); comb = await pairedChange(c0, withThresholds(c0, thr), run, ef.thrRaids);
+            sayT(`${tag}All the thresholds together`, 1); comb = await pairedChange(c0, withThresholds(c0, thr), run, ef.thrRaids);
             if (comb.d < -comb.ci) keepThr = thr;
           }
           if (keepThr === thr) {
@@ -399,8 +405,8 @@ export function createNylo(host, { getTeam, store = STORE, embed = false }) {
         const top3 = vres.items.slice(0, 3).sort((x, y) => (x.score && y.score ? (scoreBetter(x.score, y.score) ? -1 : scoreBetter(y.score, x.score) ? 1 : 0) : 0));
         vres.items.splice(0, top3.length, ...top3); const c = vres.items[0].cfg; if (c.thr) { vres.thr = c.thr; vres.comb = c.comb || null; vres.thrSolo = c.thrSolo || null; } showResults();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
-    } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`; if (me.stopped) pb.stop(); else pb.done();
+    } catch (x) { pb.stop(); status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
     finally { if (me.pool) me.pool.stop(); vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
 
@@ -433,25 +439,28 @@ export function createNylo(host, { getTeam, store = STORE, embed = false }) {
     const cfgNow = { players: st.players.map((p) => structuredClone(p)), backup: t > 1 && st.backup ? { ...st.backup } : null };
     ojob = { stopped: false, pool: null }; const me = ojob;
     obtn('run').disabled = true; obtn('stop').disabled = false;
-    const t1 = activeNow(), say = (txt) => { status.textContent = `${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; };
+    // progress: each part asked for an equal share (the backup BGS, the thresholds), then all of them together
+    const pb = progressBar(status), parts = [want('bgs') && t > 1, want('thr') && t > 1].filter(Boolean).length || 1; pb.start();
+    const t1 = activeNow(), sayTo = (bar) => (txt, f) => { status.textContent = `${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; if (f != null) bar(f); };
+    let pi = 0; const sayP = () => { const k = pi++; return sayTo(pb.part(0.9 * k / parts, 0.9 * (k + 1) / parts)); }, say = sayTo(pb.part(0.9, 1));
     ores = { n, names, bgs: null, thr: null }; showOpt();
     try {
       me.pool = new NyloPool(base, t, roomOpts(st));
       const run = (...x) => me.pool.run(...x);
-      if (want('bgs') && t > 1 && !me.stopped) { ores.bgs = await backupThresholds(cfgNow, gear, run, n, say, () => me.stopped); showOpt(); }
-      if (want('thr') && t > 1 && !me.stopped) { ores.thr = await rangedThresholds(cfgNow, gear, run, n, say, () => me.stopped); showOpt(); }
+      if (want('bgs') && t > 1 && !me.stopped) { ores.bgs = await backupThresholds(cfgNow, gear, run, n, sayP(), () => me.stopped); showOpt(); }
+      if (want('thr') && t > 1 && !me.stopped) { ores.thr = await rangedThresholds(cfgNow, gear, run, n, sayP(), () => me.stopped); showOpt(); }
       // everything it recommends, played together against your setup
       const bb = ores.bgs && ores.bgs.best, anyThr = ores.thr && ores.thr.some((r) => Object.values(r.best).some((x) => x != null));
       if ((bb || anyThr) && !me.stopped) {
-        say('All the recommendations together');
+        say('All the recommendations together', 0);
         let all = anyThr ? withThresholds(cfgNow, ores.thr) : cfgNow;
         if (bb) all = { ...all, backup: { p: bb.p, at: bb.at } };
         ores.comb = await pairedChange(cfgNow, all, run, n);
         ores.combWhat = [bb ? `backup BGS: ${names[bb.p]} at Defence ${bb.at}+` : '', anyThr ? 'every player\'s thresholds below' : ''].filter(Boolean).join(' + ');
         showOpt();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
-    } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't optimize: ${x.message}`; }
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`; if (me.stopped) pb.stop(); else pb.done();
+    } catch (x) { pb.stop(); status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't optimize: ${x.message}`; }
     finally { if (me.pool) me.pool.stop(); ojob = null; obtn('run').disabled = false; obtn('stop').disabled = true; }
   });
 

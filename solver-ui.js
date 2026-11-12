@@ -2,6 +2,7 @@
 // picks start specs, Lightbearers, ring swap %, the purple / reds DCs and the horns (engine/roomsolver.js).
 // The inputs come from the chart template's own fields (engine/chartform.js), so defaults match the chart.
 import { activeNow } from './engine/pause.js';
+import { progressBar } from './progressbar.js';
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart, ringByDawnsText, run_p1 } from './engine/sim.js';
 import { Rng } from './engine/rng.js';
@@ -56,6 +57,21 @@ const HELP = {
   'Brew sips': 'Saradomin brew sips the whole team brings', 'SCB sips': 'Super combat potion sips the whole team brings',
   'Restore sips': 'Super restore sips the whole team brings', Sharks: 'Sharks the whole team brings',
 };
+
+/** The Verzik room solver's progress as a share of the whole solve: each stage's share of the time (as measured on a
+ *  4-man Quick solve: the ring swaps about a third, the reds DCs two fifths, the final check a quarter), the solver's
+ *  own estimate within a stage, and the final check's raids as they come back. -> (progress event) => fraction. */
+export function solverProgress(pool) {
+  const AT = { Planning: [0, 0.005], 'P1 charts': [0.005, 0.01], 'Editing your chart': [0.01, 0.012], Screening: [0.012, 0.02],
+    'Ring swaps, purple and P2 horns': [0.02, 0.36], 'Reds DCs and P3 horns': [0.36, 0.76], 'Final check': [0.76, 1], Done: [1, 1] };
+  let fin = null;
+  return (p) => {
+    const [a, b] = AT[p.stage] || [0, 0];
+    if (p.stage === 'Final check' && p.expect && !fin) { fin = { want: p.expect, got: 0 }; pool.onRaids = (n) => { fin.got += n; }; }
+    const f = p.stage === 'Final check' && fin ? fin.got / fin.want : p.frac || 0;
+    return a + (b - a) * Math.min(1, f);
+  };
+}
 
 export function createSolver(root, { getTeam, toBuilder = null, saveChart = null, getWorkbook = null }) {
   let tplWb = null, team = 0, pool = null, running = false, results = null, sortCol = null, sortDir = 1, open = {}, lastValues = null;
@@ -385,15 +401,13 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     const depth = ROOM_DEPTHS[s.depth] || ROOM_DEPTHS.standard;
     running = true; root.querySelector('#sv-go').disabled = true; root.querySelector('#sv-stop').disabled = false;
     const status = root.querySelector('#sv-status'), bar = root.querySelector('#sv-prog');
-    const STAGES = ['Planning', 'P1 charts', 'Editing your chart', 'Screening', 'Ring swaps, purple and P2 horns', 'Reds DCs and P3 horns', 'Final check', 'Done'];
-    const t0 = activeNow();
+    const t0 = activeNow(), pb = progressBar(bar.parentElement); pb.start();
     pool = new SolverPool();
     let last = { stage: 'Planning', raids: 0 };
     const tick = setInterval(() => show(last), 1000);
+    const at = solverProgress(pool);
     function show(p) {
-      last = p;
-      const i = Math.max(0, STAGES.indexOf(p.stage));
-      bar.style.width = `${(i / (STAGES.length - 1) * 100).toFixed(0)}%`;
+      last = p; pb.set(at(p));
       status.textContent = `${p.stage}${p.stage === 'Done' ? '' : '...'} · ${p.raids.toLocaleString()} raids · ${Math.round((activeNow() - t0) / 1000)}s`;
     }
     try {
@@ -406,9 +420,9 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       const mine = Object.fromEntries(seeds.map((sd) => [sd.label, { values: sd.values, diff: formDiff(sd.values, lastValues) }]));
       results = { ...res, bps, team, names: names(), minSucc: s.minSucc, ofKills: s.bpBasis === 'kills', secs: (activeNow() - t0) / 1000, values: lastValues, mine, skipped };
       sortCol = null; sortDir = 1; shownSetups.clear();
-      show({ stage: 'Done', raids: res.stats.raids });
-      bar.style.width = '100%';
+      show({ stage: 'Done', raids: res.stats.raids }); pb.done();
     } catch (e) {
+      pb.stop();
       if (e.message !== 'Solver stopped.') console.error(e.stack || e.message);
       err.textContent = e.message === 'Solver stopped.' ? 'Stopped.' : e.message;
     } finally {
@@ -593,12 +607,13 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
       }
     }
     const p = new SolverPool(); onPool(p);
+    const at = solverProgress(p);
     const timer = setInterval(() => { if (stopped()) p.stop(); }, 300);
     try {
       const depth = ROOM_DEPTHS[effort] || ROOM_DEPTHS.standard;
       const res = await solveRoom(cfgs, team, {
         rings: lbRings, lbOwners, horns: team === 2 ? 0 : (hornLimit ?? 0), hornOwners, bpsFull: bps, rankBy: bps.length ? '0' : 'success', minSuccess: 0,
-        sbOwner: null, ...depth, top: 10, seed: `full${Date.now()}`, progress: (x) => say(`${x.stage} · ${x.raids.toLocaleString()} raids`),
+        sbOwner: null, ...depth, top: 10, seed: `full${Date.now()}`, progress: (x) => say(`${x.stage} · ${x.raids.toLocaleString()} raids`, at(x)),
         shadowSearch: team !== 2 && shadowOwners.some(Boolean), sideSearch: team !== 2, ebtSearch: false,
         seeds, onlySeeds: seeds.length > 0 && !isWarm, warm: isWarm,
       }, p);

@@ -11,6 +11,7 @@
 import { groupsOf } from './engine/symmetry.js';
 import { breath, whenFree } from './engine/pause.js';
 import { activeNow } from './engine/pause.js';
+import { progressBar } from './progressbar.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS, putGearSet } from './engine/gearstore.js';
 import { bestWorn, bonuses, blankPlayer } from './engine/loadout.js';
 import { newSoteResult, addSoteRaids, soteReportHtml, soteReportPage } from './engine/sotereport.js';
@@ -416,10 +417,12 @@ export function createSote(host, { getTeam, store = STORE, embed = false }) {
     const seed = String(r.seed || '').trim() || `r${Date.now()}`;
     job = { stop: false }; const me = job;
     btn('run').disabled = true; btn('stop').disabled = false;
+    const pb = progressBar(status); pb.start();
     let i = 0;
     const step = () => {
       if (me.stop || i >= n) {
         job = null; btn('run').disabled = false; btn('stop').disabled = true;
+        if (me.stop) pb.stop(); else pb.done();
         if (!runs[0].res.runs) { status.textContent = 'Stopped.'; return; }
         const opts = { breakpoints: bps, entries: runs.map((x) => Number(x.st.entry) || 0), labels }, all = runs.map((x) => x.res);
         out.innerHTML = soteReportHtml(all, t, opts); lastPage = soteReportPage(all, t, opts); btn('dl').disabled = false;
@@ -436,7 +439,7 @@ export function createSote(host, { getTeam, store = STORE, embed = false }) {
       }
       const to = Math.min(n, i + Math.max(10, Math.floor(50 / runs.length)));
       try { for (const x of runs) addSoteRaids(x.res, x.players, t, i, to, { seed, ...x.opts }); } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
-      i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`;
+      i = to; status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`; pb.set(i / n);
       whenFree(() => setTimeout(step, 0));   // paused: the next step waits for resume
     };
     step();
@@ -496,8 +499,10 @@ export function createSote(host, { getTeam, store = STORE, embed = false }) {
     const seed = String(o.seed || '').trim() || `o${Date.now()}`;
     ojob = { stop: false }; const me = ojob;
     obtn('run').disabled = true; obtn('stop').disabled = false;
+    const pb = progressBar(status); pb.start();
     let si = 0, entry = 0, i = 0;
     const finish = () => {
+      if (me.stop) pb.stop(); else pb.done();
       ojob = null; obtn('run').disabled = false; obtn('stop').disabled = true;
       const groups = runs.map((x) => {
         const rows = x.res.map((r, k) => {
@@ -522,6 +527,7 @@ export function createSote(host, { getTeam, store = STORE, embed = false }) {
       const x = runs[si], to = Math.min(n, i + 50);
       try { addSoteRaids(x.res[entry], x.players, t, i, to, { seed, entry, ...x.opts }); } catch (y) { err.textContent = `Couldn't run set ${x.k}: ${y.message}`; me.stop = true; }
       i = to; if (i >= n) { entry++; i = 0; if (entry > 3) { entry = 0; si++; } }
+      pb.set(((si * 4 + entry) * n + i) / (runs.length * 4 * n));
       status.textContent = si >= runs.length ? 'Ranking...' : `Running${runs.length > 1 ? ` set ${runs[si].k} (${si + 1} of ${runs.length})` : ''}... i${entry}: ${i.toLocaleString()} / ${n.toLocaleString()} raids`;
       whenFree(() => setTimeout(step, 0));   // paused: the next step waits for resume
     };
@@ -811,17 +817,17 @@ export function createSote(host, { getTeam, store = STORE, embed = false }) {
     const t = team();
     vjob = { stopped: false, pool: null }; const me = vjob;
     vbtn('run').disabled = true; vbtn('stop').disabled = false;
-    const t1 = activeNow(), groups = [];
+    const t1 = activeNow(), groups = [], pb = progressBar(status); pb.start();
     try {
       for (const [n, k] of keys.entries()) {
         if (me.stopped) break;
-        const pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '';
-        const items = await solveSet(k, v, bps, me, (txt) => { status.textContent = `${pre}${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; });
+        const pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '', part = pb.part(n / keys.length, (n + 1) / keys.length);
+        const items = await solveSet(k, v, bps, me, (txt, f, f1) => { status.textContent = `${pre}${txt} (${Math.round((activeNow() - t1) / 1000)}s)`; if (f != null) part(f); if (me.pool) me.pool.onPart = f1 != null && f != null ? (x) => part(f + (f1 - f) * x) : null; });
         groups.push({ k, label: setLabel(k), items });
         vresults = { groups: [...groups], bps, t }; showResults();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`;
-    } catch (x) { status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${Math.round((activeNow() - t1) / 1000)}s.`; if (me.stopped) pb.stop(); else pb.done();
+    } catch (x) { pb.stop(); status.textContent = me.stopped ? 'Stopped.' : ''; if (!me.stopped) err.textContent = `Couldn't solve: ${x.message}`; }
     finally { vjob = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
 

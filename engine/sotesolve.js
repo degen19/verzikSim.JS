@@ -193,6 +193,9 @@ export function pruneUnfired(cfg, events, raids = 0) {
  */
 export async function solveSote(ctx, run, progress = () => {}, stopped = () => false) {
   const { bps = [], stages = [[60, 0.2], [240, 4], [1000, 1]], rounds = 8, finalRaids = 2000, top = 10 } = ctx;
+  // progress: most searches settle in about half their rounds - counted as that many until they go on longer (the bar
+  // then waits for them to catch up)
+  const D = (round) => Math.min(rounds, Math.max(Math.ceil(rounds / 2), round + 1));
   const seen = new Map();                                            // key -> {cfg, score, raids}
   const note = (cfg, score, raids) => { const k = keyOf(cfg), o = seen.get(k); if (!o || raids >= o.raids) seen.set(k, { cfg, score, raids }); };
   let cur = { entry: ctx.start.entry ?? 0, backupDef: ctx.start.backupDef, players: ctx.start.players };
@@ -206,17 +209,19 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
   }
   const bigN = stages[stages.length - 1][0];
   const starts = [cur, ...(ctx.restarts || []).map((x) => ({ entry: cur.entry, backupDef: cur.backupDef, players: x.players })).map((x) => (ctx.noLateSurge ? noLateSurges(x, ctx.mustSurge) : x))];   // restarts: other starting setups
+  // progress: the search (each start setup an equal share) to 70%, checking the top setups the rest
+  const sf = (si0, f) => (ctx.solveEntry ? 0.02 : 0) + (ctx.solveEntry ? 0.68 : 0.7) * (si0 + f) / starts.length;
   for (const [si0, st0] of starts.entries()) {
   if (stopped()) break;
   cur = st0;
-  if (si0) progress(`Restart ${si0}: from another starting setup`, 0);
+  if (si0) progress(`Restart ${si0}: from another starting setup`, sf(si0, 0));
   for (let round = 1; round <= rounds && !stopped(); round++) {
     let cands = neighbours(cur, ctx).map((c) => ({ ...c, entry: cur.entry }));
     const seed = `round${round}`;
     let pool = cands;
     for (let si = 0; si < stages.length && pool.length && !stopped(); si++) {
       const [n, keep] = stages[si];
-      progress(`Round ${round}: trying ${pool.length} change${pool.length === 1 ? '' : 's'} on ${n.toLocaleString()} raids each`, (round - 1 + si / stages.length) / rounds);
+      progress(`Round ${round}: trying ${pool.length} change${pool.length === 1 ? '' : 's'} on ${n.toLocaleString()} raids each`, sf(si0, (round - 1 + si / stages.length) / D(round)), sf(si0, (round - 1 + (si + 1) / stages.length) / D(round)));
       const res = await run(pool, 0, n, seed, cur.entry);
       const scored = pool.map((c, i) => ({ c, s: scoreOf(res[i].totals, bps) })).sort((a, b) => (better(a.s, b.s) ? -1 : better(b.s, a.s) ? 1 : 0));
       if (si === stages.length - 1) { scored.forEach((x) => note(x.c, x.s, n)); pool = scored.map((x) => x.c); break; }
@@ -227,9 +232,9 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
     const [curRes] = await run([cur], 0, bigN, seed, cur.entry), curScore = scoreOf(curRes.totals, bps);
     note(cur, curScore, bigN);
     const bestC = pool[0], bestS = seen.get(keyOf(bestC)).score;
-    if (!better(bestS, curScore)) { progress(`Round ${round}: no change beats the current setup - done`, 1); break; }
+    if (!better(bestS, curScore)) { progress(`Round ${round}: no change beats the current setup - done`, sf(si0, 1)); break; }
     cur = { entry: cur.entry, backupDef: bestC.backupDef, players: bestC.players, what: [...(cur.what || []), bestC.what] };
-    progress(`Round ${round}: kept "${bestC.what}"`, round / rounds);
+    progress(`Round ${round}: kept "${bestC.what}"`, sf(si0, round / D(round)));
   }
   }
   // the best setups seen, played at every entry instance (or the one searched on) and ranked
@@ -238,7 +243,7 @@ export async function solveSote(ctx, run, progress = () => {}, stopped = () => f
   const out = [];
   for (const [i, x] of ranked.entries()) {
     if (stopped()) break;
-    progress(`Checking the top setups at ${entries.length > 1 ? 'every entry instance' : 'the entry instance'}: ${i + 1} / ${ranked.length}`, 1);
+    progress(`Checking the top setups at ${entries.length > 1 ? 'every entry instance' : 'the entry instance'}: ${i + 1} / ${ranked.length}`, 0.7 + 0.3 * i / ranked.length);
     const rs = await Promise.all(entries.map((e) => run([x.cfg], 0, finalRaids, 'final', e)));
     const byEntry = entries.map((e, j) => ({ entry: e, score: scoreOf(rs[j][0].totals, bps), totals: rs[j][0].totals, split: rs[j][0].split, events: rs[j][0].events || {} }));
     let b = byEntry.reduce((m, y) => (better(y.score, m.score) ? y : m)), cfg = x.cfg;

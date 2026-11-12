@@ -15,6 +15,7 @@ import { parseBreakpoints } from './engine/optimize.js';
 import { parseWaveTimes, fmtWave } from './engine/nylo.js';
 import { ALL_ROOMS, surgersOf, fullScore } from './engine/fullraid.js';
 import { activeNow, breath } from './engine/pause.js';
+import { progressBar } from './progressbar.js';
 
 const KEY = 'verzikSim.fullraidReport.v1';     // {team: {on, src, gearSet, cd, doses, wave, raids, seed, bps}}
 const CUSTOM = { solo: 'verzikSim.frCustom.solo.v1', nylo: 'verzikSim.frCustom.nylo.v1', sote: 'verzikSim.frCustom.sote.v1', xarpus: 'verzikSim.frCustom.xarpus.v1', verzik: 'verzikSim.frCustom.verzik.v1' };
@@ -216,13 +217,15 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
     const go = form.querySelector('[data-rpact="run"]'), stopB = form.querySelector('[data-rpact="stop"]'); go.disabled = true; stopB.disabled = false;
     const t1 = activeNow(), outs = setups.map(() => ({ totals: [], ends: pk.ks.map(() => []), p3: [], late: cd.map(() => 0), reachedV: 0 })), CH = 1000;
     const timer = setInterval(() => { if (me.stopped) pool.stop(); }, 300);
+    const pb = progressBar(status); pb.start();
     try {
       for (let a = 0; a < n && !me.stopped; a += CH) {
-        const rs = await pool.run(setups, a, Math.min(n, a + CH), seed);
+        const b = Math.min(n, a + CH), rs = await pool.run(setups, a, b, seed, (f) => pb.set((a + f * (b - a)) / n));
         rs.forEach((r, i) => { const o = outs[i]; o.totals.push(...r.totals); r.ends.forEach((x, j) => o.ends[j].push(...x)); o.p3.push(...r.p3); (r.late || []).forEach((x, k) => { o.late[k] += x; }); o.reachedV += r.reachedV || 0; });
         status.textContent = `Playing whole raids... ${outs[0].totals.length.toLocaleString()} / ${n.toLocaleString()}${setups.length > 1 ? ` (each of ${setups.length} sets)` : ''} (${Math.round((activeNow() - t1) / 1000)}s)`;
         await breath();
       }
+      if (me.stopped) pb.stop(); else pb.done();
       if (!outs[0].totals.length) { status.textContent = 'Stopped.'; return; }
       const how = { mode: 'total', total: bps, rooms: pk.ks.map(() => null), rankBy: 'goal' };
       const names = Array.from({ length: t }, (_, k) => ((gp(s) || [])[k] && gp(s)[k].name) || `Player ${k + 1}`);
@@ -234,6 +237,7 @@ export function createFullRaidReport(el, { getTeam, rooms, getWorkbook, setLabel
         title: `${t}-man Full raid: report`, ranked, how, t, kinds: pk.ks, names, ctx, seed, raids: outs[0].totals.length, vBps: [], chartNeeds: null, wave: null });
       status.textContent = `${me.stopped ? 'Stopped' : 'Done'} in ${Math.round((activeNow() - t1) / 1000)}s: ${outs[0].totals.length.toLocaleString()} raids${setups.length > 1 ? ` x ${setups.length} sets` : ''}.`;
     } catch (x) {
+      pb.stop();
       status.textContent = me.stopped ? 'Stopped.' : '';
       if (!me.stopped) err.textContent = `Couldn't run: ${x.message}`;
     } finally { clearInterval(timer); pool.stop(); job = null; go.disabled = false; stopB.disabled = true; }

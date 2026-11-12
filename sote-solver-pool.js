@@ -40,13 +40,16 @@ export class SotePool {
   async run(configs, from, to, seed, entry) {
     const common = { base: this.base, team: this.team, seed, entry, opts: this.opts };
     if (this.local) { await breath(); return evalConfigs(configs, this.base, this.team, from, to, seed, entry, this.opts); }
+    // onPart (when set): the share of this batch done, as its pieces come back (then 3 pieces per worker, not 1)
+    const k = this.onPart ? 3 : 1; let nP = 0, dP = 0;
+    const piece = (msg) => { nP++; return this.task(msg).then((x) => { dP++; if (this.onPart) this.onPart(dP / nP); return x; }); };
     if (configs.length >= this.n) {                                  // by setup
-      const per = Math.ceil(configs.length / this.n), parts = [];
-      for (let i = 0; i < configs.length; i += per) parts.push(this.task({ ...common, configs: configs.slice(i, i + per), from, to }));
+      const per = Math.ceil(configs.length / (this.n * k)), parts = [];
+      for (let i = 0; i < configs.length; i += per) parts.push(piece({ ...common, configs: configs.slice(i, i + per), from, to }));
       return (await Promise.all(parts)).flat();
     }
-    const per = Math.ceil((to - from) / this.n), parts = [];            // by raid range
-    for (let a = from; a < to; a += per) parts.push(this.task({ ...common, configs, from: a, to: Math.min(to, a + per) }));
+    const per = Math.ceil((to - from) / (this.n * k)), parts = [];            // by raid range
+    for (let a = from; a < to; a += per) parts.push(piece({ ...common, configs, from: a, to: Math.min(to, a + per) }));
     const res = await Promise.all(parts);
     return configs.map((_, i) => {
       const out = { totals: [], split: { p1: [], maze1: [], p2: [], maze2: [], p3: [] }, events: {} };

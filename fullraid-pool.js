@@ -33,11 +33,12 @@ export class FullRaidPool {
       this.jobs.set(id, t); w.postMessage({ ...t.msg, id });
     }
   }
-  /** Play `combos` on raids [from, to): [{totals, ends}] in order. */
-  async run(combos, from, to, seed) {
+  /** Play `combos` on raids [from, to): [{totals, ends}] in order. onProgress(share of the raids done). */
+  async run(combos, from, to, seed, onProgress = null) {
     if (this.local) { await breath(); return evalFull(combos, this.ctx, from, to, seed); }
     const chunk = Math.max(25, Math.ceil((to - from) / (this.n * 4))), parts = [];   // 4 pieces per worker: a pause lands sooner
-    for (let a = from; a < to; a += chunk) parts.push(this.task({ combos, ctx: this.ctx, from: a, to: Math.min(to, a + chunk), seed }));
+    let done = 0;
+    for (let a = from; a < to; a += chunk) { const b = Math.min(to, a + chunk); parts.push(this.task({ combos, ctx: this.ctx, from: a, to: b, seed }).then((x) => { done += b - a; if (onProgress) onProgress(done / (to - from)); return x; })); }
     const res = await Promise.all(parts);
     return combos.map((_, i) => {
       const out = { totals: [], ends: res[0][i].ends.map(() => []), p3: [], late: (res[0][i].late || []).map(() => 0), reachedV: 0 };

@@ -76,6 +76,9 @@ export function neighbours(s, ctx) {
  *  -> Promise<[{totals, split}]>. Returns [{s, score, totals, split}] best first. */
 export async function solveSolo(ctx, run, progress = () => {}, stopped = () => false) {
   const { bps = [], targets = [], stages = [[60, 0.25], [240, 4], [800, 1]], rounds = 8, finalRaids = 2000, top = 10 } = ctx;
+  // progress: most searches settle in about half their rounds - counted as that many until they go on longer (the bar
+  // then waits for them to catch up)
+  const D = (round) => Math.min(rounds, Math.max(Math.ceil(rounds / 2), round + 1));
   const seen = new Map();
   const note = (s, score, raids) => { const k = keyOf(s), o = seen.get(k); if (!o || raids >= o.raids) seen.set(k, { s, score, raids }); };
   let cur = { ...ctx.start };
@@ -85,7 +88,7 @@ export async function solveSolo(ctx, run, progress = () => {}, stopped = () => f
     const seed = `solo-round${round}`;
     for (let si = 0; si < stages.length && pool.length && !stopped(); si++) {
       const [n, keep] = stages[si];
-      progress(`Round ${round}: trying ${pool.length} change${pool.length === 1 ? '' : 's'} on ${n.toLocaleString()} raids each`, (round - 1 + si / stages.length) / rounds);
+      progress(`Round ${round}: trying ${pool.length} change${pool.length === 1 ? '' : 's'} on ${n.toLocaleString()} raids each`, 0.85 * (round - 1 + si / stages.length) / D(round), 0.85 * (round - 1 + (si + 1) / stages.length) / D(round));
       const res = await run(pool, 0, n, seed);
       const scored = pool.map((c, i) => ({ c, s: scoreOf(res[i].totals, bps, res[i].downs, targets) })).sort((a, b) => (better(a.s, b.s) ? -1 : better(b.s, a.s) ? 1 : 0));
       if (si === stages.length - 1) { scored.forEach((x) => note(x.c, x.s, n)); pool = scored.map((x) => x.c); break; }
@@ -95,13 +98,13 @@ export async function solveSolo(ctx, run, progress = () => {}, stopped = () => f
     const [cr] = await run([cur], 0, bigN, seed), cs = scoreOf(cr.totals, bps, cr.downs, targets);
     note(cur, cs, bigN);
     const best = pool[0], bs = seen.get(keyOf(best)).score;
-    if (!better(bs, cs)) { progress(`Round ${round}: no change beats the current setup - done`, 1); break; }
+    if (!better(bs, cs)) { progress(`Round ${round}: no change beats the current setup - done`, 0.85); break; }
     cur = { ...best, what: undefined };
-    progress(`Round ${round}: kept "${best.what}"`, round / rounds);
+    progress(`Round ${round}: kept "${best.what}"`, 0.85 * round / D(round));
   }
   const ranked = [...seen.values()].sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0)).slice(0, top);
   if (stopped() || !ranked.length) return [];
-  progress(`Playing the top ${ranked.length} setups on ${finalRaids.toLocaleString()} raids each...`, 1);
+  progress(`Playing the top ${ranked.length} setups on ${finalRaids.toLocaleString()} raids each...`, 0.85);
   const res = await run(ranked.map((x) => x.s), 0, finalRaids, 'solo-final');
   return ranked.map((x, i) => ({ s: x.s, score: scoreOf(res[i].totals, bps, res[i].downs, targets), totals: res[i].totals, downs: res[i].downs, split: res[i].split }))
     .sort((a, b) => (better(a.score, b.score) ? -1 : better(b.score, a.score) ? 1 : 0));

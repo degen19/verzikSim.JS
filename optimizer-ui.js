@@ -2,6 +2,7 @@
 import { parse_chart, surge_tick } from './engine/sim.js';
 import { threadCount, workersAvailable } from './pool.js';
 import { whenFree, activeNow } from './engine/pause.js';
+import { progressBar } from './progressbar.js';
 import { catalog, applyCombo, validCfgs, dawnsOk, dawnShortfalls, enumerate, DEPTHS, planRaids, score, finalScore, parseBreakpoints, mergeCounts, cfgsToFields } from './engine/optimize.js';
 import { withGear } from './engine/gearstore.js';
 import { verzikTreeHtml, profileChunks } from './engine/vtree.js';
@@ -200,11 +201,8 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     const combos = enumerate(sweep());
     let total = planRaids(combos.length, $('o-depth').value) * sets.length;
     let doneBefore = 0, stageLabel = '';
-    const prog = (d) => {
-      const done = doneBefore + d, el = (activeNow() - t0) / 1000;
-      $('o-prog').style.width = `${Math.min(100, done / total * 100).toFixed(1)}%`;
-      if (done > total * 0.03 && el > 3) $('o-status').textContent = `${stageLabel} · about ${dur(el / done * (total - done))} left`;
-    };
+    const pb = progressBar($('o-prog').parentElement); pb.start();
+    const prog = (d) => pb.set((doneBefore + d) / total);
     stopped = false; $('o-go').disabled = true; $('o-stop').disabled = false;
     pool = makePool();
     const seed = Math.floor(Math.random() * 1e8);
@@ -281,12 +279,13 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       const res = await stage(finals, 0, depth.n[2], seed + 7777777, 'Final round (fresh raids)');
       finals.forEach((x, i) => { x.counts = res[i]; });
       perSet = perSet.map((l) => l.slice().sort((a, c) => fsc(c.counts, metric) - fsc(a.counts, metric)));
-      $('o-prog').style.width = '100%';
+      pb.done();
       const secs = (activeNow() - t0) / 1000;
       if (secs > 20) { rate = total / secs; keepRate(rateId(), rate); }      // better estimates next time
       $('o-status').textContent = `Done in ${dur((activeNow() - t0) / 1000)} · final round: ${depth.n[2].toLocaleString()} fresh raids per setup.`;
       renderResults(perSet, metric, ofK);
     } catch (e) {
+      pb.stop();
       $('o-err').textContent = e.message;
     } finally {
       pool.forEach((w) => w.terminate()); pool = null;

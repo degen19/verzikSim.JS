@@ -1,5 +1,6 @@
 // Browser front end: chart source (import or build on the page), Run report, Optimizer, What's new.
 import { activeNow } from './engine/pause.js';
+import { progressBar } from './progressbar.js';
 import { readXlsx } from './engine/xlsx.js';
 import { parse_chart } from './engine/sim.js';
 import { mergeResults, reportHtml, reportPage, REPORT_CSS } from './engine/report.js';
@@ -279,19 +280,19 @@ $('go').addEventListener('click', async () => {
     const scope = $('scope').value;
     for (const s of sets) s[1] = s[1].map((c) => ({ ...c, scope }));                // phases to simulate (see simulate.js)
     const labels = sets.map(([b]) => $(`lab${b}`).value || (b === 'A' ? `${t}-man` : `${t}-man set ${b}`));
-    const res = [];
+    const res = [], pb = progressBar($('prog').parentElement); pb.start();
     const t0 = activeNow();
     for (let k = 0; k < sets.length; k++) {
       $('runStatus').textContent = `Running ${labels[k]} (${k + 1} of ${sets.length})...`;
       try {
         res.push(await runWorkers(sets[k][1], t, runs, seed, (f) => {
-          $('prog').style.width = `${((k + f) / sets.length * 100).toFixed(1)}%`;
+          pb.set((k + f) / sets.length);
         }));
       } catch (e) {
         throw new Error(`Set ${sets[k][0]} (${labels[k]}): ${e.message}`);
       }
     }
-    $('prog').style.width = '100%';
+    pb.done();
     const secs = (activeNow() - t0) / 1000;
     $('err').textContent = notes.length ? `Chart notes:\n${notes.join('\n')}` : '';
     $('runStatus').textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * sets.length / secs).toLocaleString()} raids/s · ${lastInfo ? lastInfo.mode : ''} (seed ${seed}).`;
@@ -300,6 +301,7 @@ $('go').addEventListener('click', async () => {
     lastPage = reportPage(res, labels, t, runs, { breakpoints });
     $('dl').disabled = false;
   } catch (err) {
+    if ($('prog').parentElement.__pbar) $('prog').parentElement.__pbar.stop();
     $('err').textContent = err.message;
     $('runStatus').textContent = '';
   } finally {

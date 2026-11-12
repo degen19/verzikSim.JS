@@ -2,6 +2,7 @@
 // Sets A / B / C (switch, copy, save in this browser or to a file), a Report comparing the ticked sets, and the Solver
 // (Commit % for each spec level, and optionally the shadow mode, Ayak P2, godbook and Lightbearer cycles). Gear: the Gear tab.
 import { activeNow } from './engine/pause.js';
+import { progressBar } from './progressbar.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS, putGearSet } from './engine/gearstore.js';
 import { applyToCfg, blankPlayer, BOTH_AMULETS } from './engine/loadout.js';
 import { reportHtml, reportPage } from './engine/report.js';
@@ -232,19 +233,19 @@ export function createSolo(host, { store = STORE } = {}) {
     const runs = Math.max(100, Number(r.raids) || 5000), seed = String(r.seed || '').trim() || Math.floor(Math.random() * 1e9);
     const labels = keys.map((k) => (r.labels[k] || '').trim() || `Set ${k}`);
     running = true; btn('run').disabled = true; btn('stop').disabled = false;
-    const res = [], t0 = activeNow();
+    const res = [], t0 = activeNow(), pb = progressBar(prog.parentElement); pb.start();
     try {
       for (let i = 0; i < keys.length; i++) {
         const cfgs = [{ ...cfgOfSet(setOf(keys[i])), scope: r.scope }];
         status.textContent = `Running ${labels[i]} (${i + 1} of ${keys.length})...`;
-        res.push(await pool.run(cfgs, 1, runs, seed, { onProgress: (f) => { prog.style.width = `${((i + f) / keys.length * 100).toFixed(1)}%`; } }));
+        res.push(await pool.run(cfgs, 1, runs, seed, { onProgress: (f) => pb.set((i + f) / keys.length) }));
       }
-      prog.style.width = '100%';
+      pb.done();
       const ropts = { breakpoints: bps, markSets: marks };
       out.innerHTML = reportHtml(res, labels, 1, runs, ropts); lastPage = reportPage(res, labels, 1, runs, ropts); btn('dl').disabled = false;
       const secs = (activeNow() - t0) / 1000;
       status.textContent = `Done in ${secs.toFixed(1)}s · ${Math.round(runs * keys.length / secs).toLocaleString()} raids/s (seed ${seed}).`;
-    } catch (x) { err.textContent = x.message; status.textContent = ''; }
+    } catch (x) { pb.stop(); err.textContent = x.message; status.textContent = ''; }
     finally { running = false; btn('run').disabled = false; btn('stop').disabled = true; }
   });
 
@@ -303,22 +304,23 @@ export function createSolo(host, { store = STORE } = {}) {
     const eff = EFFORT[v.effort] || EFFORT.normal, scope = v.scope === 'p2' ? 'p2' : 'full';
     solver = { stopped: false, pool: null }; const me = solver;
     vbtn('run').disabled = true; vbtn('stop').disabled = false; out.innerHTML = ''; lastBps = bps; lastDowns = downs; lastScope = scope;
-    const t0 = activeNow(), groups = [];
+    const t0 = activeNow(), groups = [], pb = progressBar(status); pb.start();
     try {
       for (const [n, k] of keys.entries()) {
         if (me.stopped) break;
+        const part = pb.part(n / keys.length, (n + 1) / keys.length);
         const st = setOf(k), c = cfgOfSet(st), base = { ...c, scope }, start = settingsOf(st, c, v.allow);
         const pre = keys.length > 1 ? `Set ${k} (${n + 1} of ${keys.length}): ` : '';
         me.pool = new SoloPool(base);
         try {
           const list = await solveSolo({ start, allow: { commit: true, ...v.allow }, hasShadow: !!c.hasShadow, hasAyak: !!c.hasAyak, bps, targets: downs, rounds: eff.rounds, stages: eff.stages, finalRaids: eff.final, top: 10 },
-            (cfgs, from, to, seed) => me.pool.run(cfgs, from, to, seed), (m) => { status.textContent = pre + m; }, () => me.stopped);
+            (cfgs, from, to, seed) => me.pool.run(cfgs, from, to, seed), (m, f, f1) => { status.textContent = pre + m; if (f != null) part(f); if (me.pool) me.pool.onPart = f1 != null && f != null ? (x) => part(f + (f1 - f) * x) : null; }, () => me.stopped);
           groups.push({ k, label: setLabel(k), items: list.map((r) => ({ ...r, set: k, hasShadow: !!c.hasShadow, hasAyak: !!c.hasAyak })) });
         } finally { me.pool.stop(); }
         results = [...groups]; showResults();
       }
-      status.textContent = me.stopped ? 'Stopped.' : `Done in ${((activeNow() - t0) / 1000).toFixed(0)}s.`;
-    } catch (x) { if (!me.stopped) err.textContent = x.message; else status.textContent = 'Stopped.'; }
+      status.textContent = me.stopped ? 'Stopped.' : `Done in ${((activeNow() - t0) / 1000).toFixed(0)}s.`; if (me.stopped) pb.stop(); else pb.done();
+    } catch (x) { pb.stop(); if (!me.stopped) err.textContent = x.message; else status.textContent = 'Stopped.'; }
     finally { solver = null; vbtn('run').disabled = false; vbtn('stop').disabled = true; }
   });
   function showResults() {
