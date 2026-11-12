@@ -36,6 +36,12 @@ const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {};
 const save = (v) => { try { localStorage.setItem(STORE, JSON.stringify(v)); } catch { /* storage off */ } };
 /** Use my P1 chart: an earlier surge's cooldown has to be up at least this many ticks before the chart needs the surge. */
 const CHART_MARGIN = 5;
+/** Exhaustive with warm starts: the best this many plans are solved from scratch too (their Verzik), to check. */
+const WARM_CHECK = 3;
+/** Exhaustive: warm-start each plan's Verzik from the best plan so far (off - no faster in testing, less accurate). */
+const WARM_V = false;
+/** Exhaustive: cooldowns into a room are rounded to this many ticks (25: 15s) - each case is solved once. */
+const CD_STEP = 25;
 const fsec = (x) => { const s = x * 0.6; return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
 const fsB = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floor(b / 60)}:${r < 10 ? '0' : ''}${r}`; };
 /** m:ss (or seconds) -> ticks, rounded up: 1:04 -> 107 (1:04.2 - the cooldown is surely up by then). */
@@ -305,7 +311,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         return clean({ kind: 'sote', list: it, setups: it.slice(0, ef.keep).map((x, i) => ({ i, setup: { players: x.replay.players, entry: x.replay.entry, opts: x.replay.opts } })), med: it.length ? medOf(it[0].totals) : 0 }, cd); };
       const xSolve = async (cd, tag, must = null) => { const it = await rooms.xarpus.fullRaidSolve({ ...common, mustSurge: must, heals: s.xarpus.heals, exactHeals: !!s.xarpus.exactHeals, rangePots: s.xarpus.rangePots, surgeCd: cd, bps: bpOf('xarpus') != null ? [bpOf('xarpus')] : [], say: say(`Xarpus ${tag}`) });
         return clean({ kind: 'xarpus', list: it, setups: it.slice(0, ef.keep).map((x, i) => ({ i, setup: x.run })), med: it.length ? medOf(it[0].totals) : 0 }, cd); };
-      const vSolve = async (cd, tag, bps) => { const r = await rooms.verzik.fullRaidSolve({ ...common, hornOwners, supplies: vSup, effort: ef.verz, chart: s.useChart ? chartOf(s, t) : null, surgeCd: cd, bps, say: say(`Verzik ${tag}`) });
+      const vSolve = async (cd, tag, bps, warm = null) => { const r = await rooms.verzik.fullRaidSolve({ ...common, hornOwners, supplies: vSup, effort: ef.verz, chart: s.useChart ? chartOf(s, t) : null, warm, surgeCd: cd, bps, say: say(`Verzik ${tag}${warm ? ' (warm start)' : ''}`) });
         return clean({ kind: 'verzik', res: r, list: r.top || [], setups: (r.top || []).slice(0, ef.keep).map((x, i) => ({ i, setup: { cfgs: x.cfg } })) }, cd); };
       const stop = () => { if (me.stopped) throw new Error('stopped'); };
       /** A solve's setups without the surges its blocked players (cooldown 99999) can't take. */
@@ -335,7 +341,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       const inputsOf = (kind) => [common, kind === 'nylo' ? [ef.keep, s.nylo.maxSwitches, s.nylo.healer, s.nylo.restores, wave && wave.dist, bpOf('nylo')]
         : kind === 'sote' ? [soteSup, !!s.sote.noLateSurge, bpOf('sote')] : kind === 'xarpus' ? [s.xarpus.heals, !!s.xarpus.exactHeals, s.xarpus.rangePots, bpOf('xarpus')]
           : [vSup, hornOwners, ef.verz, s.useChart ? chartOf(s, t) : null]];
-      const solveRaw = (kind, cd, tag, must = null) => (kind === 'nylo' ? nSolve(cd, tag, must) : kind === 'sote' ? soteSolve(cd, tag, must) : kind === 'xarpus' ? xSolve(cd, tag, must) : vSolve(cd, tag, vBps));
+      const solveRaw = (kind, cd, tag, must = null, warm = null) => (kind === 'nylo' ? nSolve(cd, tag, must) : kind === 'sote' ? soteSolve(cd, tag, must) : kind === 'xarpus' ? xSolve(cd, tag, must) : vSolve(cd, tag, vBps, warm));
       // every room solve goes through here: players identical in every input are interchangeable, so a solve is made for
       // their cooldowns in one order and the setup's plans moved to fit (solved once for every arrangement); a solve with
       // exactly these inputs already made (this run, or saved in this browser from an earlier run) is reused; each room's
@@ -343,10 +349,13 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       const memo = new Map();
       // Nylocas: a cooldown that's up before the shortest wave ends is the same as none (a surge comes after a spec on him)
       const minWave = wave && wave.dist && wave.dist.length ? Math.min(...wave.dist.map(([x]) => x)) : 0;
-      const solveOf = async (kind, cd0_, tag, must = null) => {
+      const solveOf = async (kind, cd0_, tag, must = null, warm = null) => {
         const cd = kind === 'nylo' ? cd0_.map((c) => (c < 99999 && c <= minWave ? 0 : c)) : cd0_;
         const { cd: cdC, perm } = canonCd(cd, groups), mustC = must ? cdC.map((c, k) => (c < 99999 ? k : -1)).filter((k) => k >= 0) : null;
-        const key = JSON.stringify([kind, cdC, mustC, kind === 'verzik' ? vBps : null]);
+        // a warm start (Verzik): the other plan's setup in this solve's order of players
+        const invP = []; perm.forEach((o, k) => { invP[o] = k; });
+        const warmC = warm && kind === 'verzik' && !s.useChart ? relabelSetup('verzik', { cfgs: warm }, invP).cfgs : null;
+        const key = JSON.stringify([kind, cdC, mustC, kind === 'verzik' ? vBps : null, warmC ? warmC.map((c) => [c.actions, c.startSpec, !!c.lightbearerOn, c.dawnThr ?? null, c.customSurgeTick ?? null]) : null]);
         const sw = perm.some((o, k) => o !== k), stt = solveStats[kind];
         let p = memo.get(key);
         if (p) { if (sw) stt.swapped++; else stt.again++; }
@@ -355,7 +364,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
             const full = fp ? JSON.stringify([fp, t, gp, inputsOf(kind), key]) : null;
             const hit = full ? await getSolve(full).catch(() => null) : null;
             if (hit) { stt.saved++; return hit; }
-            const a = activeNow(), sv = await solveRaw(kind, cdC, tag, mustC);
+            const a = activeNow(), sv = await solveRaw(kind, cdC, tag, mustC, warmC);
             stt.n++; stt.ms += activeNow() - a;
             const keep = { kind: sv.kind, setups: sv.setups, med: sv.med, list: [] };   // (what the plans play; the solver's own list isn't kept)
             if (full && !me.stopped) putSolve(full, keep).catch(() => {});
@@ -391,13 +400,19 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         }
         const twins = twin.filter((x) => x >= 0).length;
         // solves, cached by room and the cooldowns in (99999: no surge in this room; else the ticks until it's up)
-        const solved = new Map(), q10 = (c) => (c >= 99999 ? 99999 : Math.round(c / 10) * 10);
+        // cooldowns in steps of CD_STEP ticks (a room is solved once per case; the whole raids carry the real cooldowns)
+        const solved = new Map(), q10 = (c) => (c >= 99999 ? 99999 : Math.round(c / CD_STEP) * CD_STEP);
         let nSolves = 0;
-        const solveRoom = async (r, cd) => {
-          const kind = KINDS[r], key = `${kind}|${cd.map(q10).join(',')}`;
+        const solveRoom = async (r, cdIn, warm = null) => {
+          const kind = KINDS[r];
+          // a cooldown that's still running when the room's slowest raid without surges is over can't be drunk there: the
+          // same as no surge in this room (exact - solved once, as the no-surge case)
+          let cd = cdIn;
+          if (kind !== 'verzik' && cd.some((c) => c < 99999)) { const none = await solveRoom(r, cd.map(() => 99999)); cd = cd.map((c) => (c < 99999 && c >= none.slow ? 99999 : c)); }
+          const key = `${kind}|${cd.map(q10).join(',')}${warm ? `|warm ${JSON.stringify(warm.map((c) => [c.actions, c.startSpec, !!c.lightbearerOn]))}` : ''}`;
           if (!solved.has(key)) {
             nSolves++; const who = cd.map((c, k) => (c < 99999 ? `P${k + 1}${c > 0 ? ` (cooldown ${fsec(c)})` : ''}` : null)).filter(Boolean);
-            const sv = await solveOf(kind, cd.map(q10), `#${nSolves}: ${who.length ? `${who.join(', ')} surge` : 'no surges'}`, cd.map((c, k) => (c < 99999 ? k : -1)).filter((k) => k >= 0)); stop();
+            const sv = await solveOf(kind, cd.map(q10), `#${nSolves}: ${who.length ? `${who.join(', ')} surge` : 'no surges'}`, cd.map((c, k) => (c < 99999 ? k : -1)).filter((k) => k >= 0), warm); stop();
             if (!sv.setups.length) throw new Error(`${KIND_NAME[kind]}: the solver found no setup that finishes.`);
             // literally this plan: exactly these players surge in this room - the solver's best setup that has all of
             // them surging, else its best with their surges put in (and nobody else's)
@@ -415,13 +430,13 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
             }
             const md = (a) => (a.length ? a.slice().sort((x, y) => x - y)[a.length >> 1] : null);
             const ok = ev.ends.filter((x) => x < 99999);
-            solved.set(key, { sv, setup, dist: distOf(ev.ends), med: md(ok) ?? 0, at: at.map(md), surgers: surgersOf(kind, setup) });
+            solved.set(key, { sv, setup, dist: distOf(ev.ends), med: md(ok) ?? 0, slow: ok.length ? Math.max(...ok) : 99999, at: at.map(md), surgers: surgersOf(kind, setup) });
           }
           return solved.get(key);
         };
         /** A plan through its rooms in order: each room's cooldowns in (from the earlier rooms' surge ticks and times),
          *  solved; verzikCd: override Verzik's cooldowns (bounds). -> [room results] */
-        const walk = async (pl, verzikCd = null, upto = R) => {
+        const walk = async (pl, verzikCd = null, upto = R, warm = null) => {
           const last = cd0.map(() => null), out = [];   // last: {r, at} of each player's last surge
           for (let r = 0; r < R; r++) {
             const cd = pl.map((rooms, k) => {
@@ -433,7 +448,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
             if (r === upto) return { out, cd };                         // stop here: the rooms before, and this room's cooldowns in
             // Verzik in total mode aims at what's left of the total after the rooms before (the first plan's)
             if (r === VI && !vBps.length) vBps = bpOf('verzik') != null ? [bpOf('verzik')] : total.map((b) => b - out.reduce((a, x) => a + x.med, 0) * 0.6).filter((b) => b > 0);
-            const res = await solveRoom(r, r === VI && verzikCd ? verzikCd(cd) : cd);
+            const res = await solveRoom(r, r === VI && verzikCd ? verzikCd(cd) : cd, r === VI ? warm : null);
             out.push(res);
             pl.forEach((rooms, k) => { if (rooms.includes(r) && res.at[k] != null) last[k] = { r, at: res.at[k] }; });
           }
@@ -446,7 +461,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
           for (const pl of plans) { stop(); const { cd } = await walk(pl, null, VI); if (chartOk(pl, cd)) ok.push(pl); else chartSkipped++; }
           plans = ok;
         }
-        let alive = plans, dropped = [];
+        let alive = plans, dropped = [], boundOf = null, canBeat = null, shareM = false;
         // ---- drop the plans that can't win, before their own Verzik solves. Verzik is solved once with every planned surge
         // ready; each plan's rooms before Verzik are solved exactly, and that Verzik setup is played with the plan's real
         // cooldowns (its surges after the cooldown at a custom timing): a lower bound on what the plan gets (its own solve
@@ -470,14 +485,40 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
           const keep = (x) => (shareMode
             ? x.hi[0] >= best[0] - noise(best[0]) && x.lo[0] >= best[0] - Math.max(0.05, noise(best[0]))
             : -x.hi[0] <= -best[0] + 3 && -x.lo[0] <= -best[0] + 10);
-          alive = B.filter(keep).map((x) => x.pl);
+          alive = B.filter(keep).map((x) => x.pl); boundOf = new Map(B.map((x) => [x.pl, x])); shareM = shareMode; canBeat = (x, best) => (shareMode ? x.hi[0] >= best[0] - noise(best[0]) : -x.hi[0] <= -best[0] + 3);
           dropped = B.filter((x) => !keep(x)).map((x) => ({ plan: x.pl, lo: x.lo, hi: x.hi, share: shareMode }));
+          if (!alive.length) { alive = plans; dropped = []; }   // (no bound to go on - e.g. no plan finishes with the ready setup: solve them all)
           say('Exhaustive')(`${alive.length} of ${plans.length} plans can still win - solving each one's Verzik exactly`);
         }
         // ---- every plan left, each room solved for it exactly
-        const exact = [];
-        for (const pl of alive) { stop(); const rs = await walk(pl); exact.push({ pl, rs, score: scoreOf(rs) }); }
-        exact.sort((x, y) => (fullBetter(x.score, y.score) ? -1 : fullBetter(y.score, x.score) ? 1 : 0));
+        // Branch and bound: the plans in order of their best case; once the best plan solved so far is beyond a
+        // plan's best case (by the same noise margin as the bounds), that plan isn't solved - it can't win.
+        // Warm start (off: WARM_V - tested no faster at Quick, and a worse winner; without your P1 chart): each plan's Verzik is solved from the best plan so far's setup - its
+        // P1 chart edited for this plan's cooldowns (no P1 search); the best few are then solved from scratch to check.
+        const exact = [], bnb = !!boundOf, warmOn = WARM_V && !s.useChart && VI >= 0;
+        const better = (x, y) => (fullBetter(x.score, y.score) ? -1 : fullBetter(y.score, x.score) ? 1 : 0);
+        const order = bnb ? alive.slice().sort((x, y) => (fullBetter(boundOf.get(x).hi, boundOf.get(y).hi) ? -1 : fullBetter(boundOf.get(y).hi, boundOf.get(x).hi) ? 1 : 0)) : alive;
+        let lead = null, cut = 0;
+        for (const [i, pl] of order.entries()) {
+          stop();
+          if (bnb && lead && !canBeat(boundOf.get(pl), lead.score)) { cut++; dropped.push({ plan: pl, lo: boundOf.get(pl).lo, hi: boundOf.get(pl).hi, share: shareM, bnb: true }); continue; }
+          say('Exhaustive')(`plan ${i + 1} of ${order.length}${cut ? ` (${cut} can't win - not solved)` : ''}`);
+          const warm = warmOn && lead ? lead.rs[VI].setup.cfgs : null;
+          const rs = await walk(pl, null, R, warm), x = { pl, rs, score: scoreOf(rs), warm: !!warm };
+          exact.push(x); if (!lead || better(x, lead) < 0) lead = x;
+        }
+        // warm starts checked: the best few solved from scratch (their Verzik), and kept if better
+        let rechecked = 0;
+        if (warmOn) {
+          exact.sort(better);
+          for (const [i, x] of exact.slice(0, WARM_CHECK).entries()) {
+            if (!x.warm) continue; stop();
+            say('Exhaustive')(`checking the warm starts: plan ${i + 1} of ${Math.min(WARM_CHECK, exact.length)} solved from scratch`);
+            const rs = await walk(x.pl), sc = scoreOf(rs); rechecked++;
+            if (fullBetter(sc, x.score)) Object.assign(x, { rs, score: sc, warm: false }); else x.checked = true;
+          }
+        }
+        exact.sort(better);
         // ---- as whole raids (the cooldowns carried for real); the same room setups twice are one plan
         const seenK = new Set(), top = [];
         for (const x of exact) { const k = JSON.stringify(x.rs.map((r) => r.setup)); if (seenK.has(k)) continue; seenK.add(k); top.push(x); }
@@ -491,7 +532,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
           // plans that play out the same on every raid (e.g. a planned surge the room's solver didn't take) are one
           .filter((r) => { const k = r.totals.join(','); if (sameRes.has(k)) return false; sameRes.add(k); return true; });
         minFirst(ranked);
-        results = { solveStats, chartNeeds: needs, chartSkipped, ranked, vBps, how, t, kinds: KINDS, wave, exhaustive: { plans: plans0, twins, alive: alive.length, solves: nSolves, dropped }, ctx: { team: t, surgeCd: cd0, doses: doses0 }, seed, names: gp.map((p, k) => p.name || `Player ${k + 1}`), raids: ef.raids, plans: plans.length, nVariants: nSolves }; charted = 0; autoReports(0);
+        results = { solveStats, chartNeeds: needs, chartSkipped, ranked, vBps, how, t, kinds: KINDS, wave, exhaustive: { plans: plans0, twins, alive: alive.length, solves: nSolves, dropped, cut, warm: warmOn, rechecked }, ctx: { team: t, surgeCd: cd0, doses: doses0 }, seed, names: gp.map((p, k) => p.name || `Player ${k + 1}`), raids: ef.raids, plans: plans.length, nVariants: nSolves }; charted = 0; autoReports(0);
         status.textContent = `Done in ${Math.round((activeNow() - t1) / 1000)}s: ${plans0} surge plans, ${alive.length} solved exactly. ${statsTxt(solveStats)}`; refreshSaved();
         return;
       }
@@ -676,7 +717,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     const roomsCol = how.mode === 'rooms' && how.rooms.some((b) => b != null), RNs = namesR(), R = RNs.length;
     const chartLine = results.chartNeeds ? `<div class="sub">Your P1 chart needs surges from ${results.chartNeeds.map((n, k) => (n == null ? null : `${esc(results.names[k] || `Player ${k + 1}`)} by ${fsec(n)} (tick ${n})`)).filter(Boolean).join(', ')}. ${results.chartSkipped ? `${results.chartSkipped.toLocaleString()} surge plan${results.chartSkipped === 1 ? '' : 's'} left out: an earlier-room surge would still be on cooldown then.` : 'No plan had to be left out for it.'}</div>` : '';
     out.innerHTML = `<div class="card"><div class="vz-report"><h3 style="margin-top:0">${results.t}-man Full raid: solver</h3>${chartLine}
-      <div class="sub">${results.exhaustive ? `Exhaustive: all ${results.exhaustive.plans.toLocaleString()} surge plans (who surges in which room, within their doses; every dose used, in whichever rooms; a later surge waits for the cooldown${results.exhaustive.twins ? '; players identical in every input are interchangeable, so a plan with their surges traded is counted once' : ''}). Each room solved for exactly each plan - who surges in it and the cooldowns they come in with (${results.exhaustive.solves} room solves, each case solved once); plans that couldn't win dropped first (bounds: Verzik solved with every planned surge ready, played with each plan's real cooldowns) - ${results.exhaustive.alive.toLocaleString()} left; the different ones (${results.ranked.length}) each played as ${raids.toLocaleString()} whole raids (the same raids for each), the cooldowns carried for real. Breakpoint columns and Finished are of every attempt; times are of the raids that finished.` : `Each room solved with surges allowed and with none (and re-solved for the best plan's surgers); every surge plan - the rooms each player surges in, any combination within their doses (a later surge waits for the cooldown) - scored from the rooms' own times (${results.plans.toLocaleString()} plans, ${results.nVariants} room setups and surge choices); the best ${ranked.length} played as ${raids.toLocaleString()} whole raids each (the same raids for each), surge cooldowns and doses carried room to room. Every dose is used, in whichever rooms make the whole raid fastest (a later surge waits for the cooldown). Breakpoint columns and Finished are of every attempt (a raid that fails anywhere, or finishes slower, counts against them); Verzik success is the raids that got to P3 (P2 down in reds), of the raids that reached Verzik; times (median, top 25% / 10%, fastest) are of the raids that finished, however slow. Each room's button opens its procedure, decision tree and example raids in that room's Solver (* played here without some of that setup's surges - hover for whose).`}</div>${results.solveStats ? `<div class="muted small">${statsTxt(results.solveStats)}</div>` : ''}
+      <div class="sub">${results.exhaustive ? `Exhaustive: all ${results.exhaustive.plans.toLocaleString()} surge plans (who surges in which room, within their doses; every dose used, in whichever rooms; a later surge waits for the cooldown${results.exhaustive.twins ? '; players identical in every input are interchangeable, so a plan with their surges traded is counted once' : ''}). Each room solved for exactly each plan - who surges in it and the cooldowns they come in with (${results.exhaustive.solves} room solves, each case solved once); plans that couldn't win dropped first (bounds: Verzik solved with every planned surge ready, played with each plan's real cooldowns) - ${results.exhaustive.alive.toLocaleString()} left;${results.exhaustive.cut ? ` ${results.exhaustive.cut.toLocaleString()} of those not solved (they couldn't beat the best plan solved);` : ''}${results.exhaustive.warm ? ` Verzik warm-started from the best plan so far, the best ${results.exhaustive.rechecked} also solved from scratch to check;` : ''} the different ones (${results.ranked.length}) each played as ${raids.toLocaleString()} whole raids (the same raids for each), the cooldowns carried for real. Breakpoint columns and Finished are of every attempt; times are of the raids that finished.` : `Each room solved with surges allowed and with none (and re-solved for the best plan's surgers); every surge plan - the rooms each player surges in, any combination within their doses (a later surge waits for the cooldown) - scored from the rooms' own times (${results.plans.toLocaleString()} plans, ${results.nVariants} room setups and surge choices); the best ${ranked.length} played as ${raids.toLocaleString()} whole raids each (the same raids for each), surge cooldowns and doses carried room to room. Every dose is used, in whichever rooms make the whole raid fastest (a later surge waits for the cooldown). Breakpoint columns and Finished are of every attempt (a raid that fails anywhere, or finishes slower, counts against them); Verzik success is the raids that got to P3 (P2 down in reds), of the raids that reached Verzik; times (median, top 25% / 10%, fastest) are of the raids that finished, however slow. Each room's button opens its procedure, decision tree and example raids in that room's Solver (* played here without some of that setup's surges - hover for whose).`}</div>${results.solveStats ? `<div class="muted small">${statsTxt(results.solveStats)}</div>` : ''}
       <div class="scroll"><table class="sortlist"><tr><th>#</th><th title="Median total of the raids that finished">Total</th><th title="Of the raids that finished">Top 25%</th><th title="Of the raids that finished">Top 10%</th><th>Fastest</th>${roomsCol ? `<th>Every room at its breakpoint (${how.rooms.map((b) => (b == null ? '-' : fsB(b))).join(' / ')})</th>${how.rooms.map((b, j) => (b == null ? '' : `<th>${RNs[j]} ${fsB(b)} or faster</th>`)).join('')}` : total.map((b) => `<th>${fsB(b)} or faster</th>`).join('')}<th title="Raids that finished every room, of every attempt">Finished</th>${kindsR().includes('verzik') ? '<th title="Raids that got to P3 (P2 down in reds), of the raids that reached Verzik">Verzik success</th>' : ''}${RNs.map((x) => `<th>${x}</th>`).join('')}<th title="Who has a surge planned in each room (doses permitting: a player out of doses doesn't surge)">Surges</th><th>Rooms</th></tr>
       ${ranked.slice(0, 10).map((r, ci) => { const v = okOf(r.totals).sort((a, b) => a - b), n = r.totals.length;
         return `<tr${ci === 0 ? ' style="font-weight:700"' : ''}><td>${ci + 1}</td><td>${ft(v[v.length >> 1])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.25) - 1)])}</td><td>${ft(v[Math.max(0, Math.floor(v.length * 0.1) - 1)])}</td><td>${ft(v[0])}</td>

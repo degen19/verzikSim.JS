@@ -578,8 +578,11 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     if (!seeds.length) return null;
     return chartSurges(seeds[0].cfg).map((x) => x.latest);
   }
-  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, hornOwners = null, supplies = {}, chartSet = null, chart = null, bps = [], effort = 'standard', surgeCd = [], say = () => {}, stopped = () => false, onPool = () => {} }) {
+  async function fullRaidSolve({ gearSet: gs, lbRings, lbOwners = null, hornLimit = null, hornOwners = null, supplies = {}, chartSet = null, chart = null, warm = null, bps = [], effort = 'standard', surgeCd = [], say = () => {}, stopped = () => false, onPool = () => {} }) {
     const { cfgs, seeds, gp, shadowOwners } = await fullCfgs({ gearSet: gs, supplies, chartSet, chart, surgeCd });
+    // warm start (Full raid, exhaustive): another plan's best setup - its P1 chart edited for these cooldowns, no P1 search
+    const isWarm = !!(warm && !seeds.length);
+    if (isWarm) seeds.push({ cfg: cfgs.map((c, k) => ({ ...c, actions: { ...(warm[k].actions || {}) }, startSpec: warm[k].startSpec, lightbearerOn: warm[k].lightbearerOn, dawnThr: warm[k].dawnThr, customSurgeTick: warm[k].customSurgeTick ?? null, forceSurge: !!warm[k].forceSurge })), label: 'The best plan so far (warm start)' });
     // your chart, and (when it moves any) your chart with its P surges as late as its specs allow: the solver keeps the better
     if (seeds.length) {
       const sg = chartSurges(seeds[0].cfg.map((c) => ({ ...c, surgeCdTicks: 0 })));
@@ -597,7 +600,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
         rings: lbRings, lbOwners, horns: team === 2 ? 0 : (hornLimit ?? 0), hornOwners, bpsFull: bps, rankBy: bps.length ? '0' : 'success', minSuccess: 0,
         sbOwner: null, ...depth, top: 10, seed: `full${Date.now()}`, progress: (x) => say(`${x.stage} · ${x.raids.toLocaleString()} raids`),
         shadowSearch: team !== 2 && shadowOwners.some(Boolean), sideSearch: team !== 2, ebtSearch: false,
-        seeds, onlySeeds: seeds.length > 0,
+        seeds, onlySeeds: seeds.length > 0 && !isWarm, warm: isWarm,
       }, p);
       return { ...res, names: (gp || []).map((g, k) => g.name || `Player ${k + 1}`) };
     } finally { clearInterval(timer); p.stop(); }

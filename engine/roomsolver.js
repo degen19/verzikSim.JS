@@ -370,8 +370,9 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const nBP = Math.max(1, Math.min(team, o.nBP ?? base.filter((c) => c.hasBP !== false).length));
   const bpSets = o.bpSearch && nBP < team ? combos(team, nBP).map((ks) => base.map((_, k) => ks.includes(k))) : [base.map((c) => c.hasBP !== false)];
   const jobs = [];
-  // o.onlySeeds (Full raid "Use my Verzik P1 chart"): no P1 search - your chart's P1 as it is, everything else searched
-  if (!o.onlySeeds) for (const bp of bpSets) {
+  // o.onlySeeds (Full raid "Use my Verzik P1 chart"): no P1 search - your chart's P1 as it is, everything else searched.
+  // o.warm (Full raid, warm start): no P1 search either - the seeds' P1 charts are edited (below) and everything else searched
+  if (!o.onlySeeds && !o.warm) for (const bp of bpSets) {
     const b2 = base.map((c, k) => ({ ...c, hasBP: bp[k] }));
     for (const lb of lbAssignments(b2, o.rings, o.lbOwners)) jobs.push({ bp, lb, b2 });
   }
@@ -384,7 +385,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     log(`  LB ${jobs[i].lb.map((x) => (x ? 1 : 0)).join('')}${bpSets.length > 1 ? ` BP ${jobs[i].bp.map((x) => (x ? 1 : 0)).join('')}` : ''}: ${r.charts} P1 charts`);
   });
   T('p1', t0);
-  if (!cands.length && !(o.onlySeeds && (o.seeds || []).length)) return { top: [], stats, gap, fallback: false, bps: [] };
+  if (!cands.length && !((o.onlySeeds || o.warm) && (o.seeds || []).length)) return { top: [], stats, gap, fallback: false, bps: [] };
 
   // P2-end breakpoints for the early stages (10th / 25th / 50th percentile of a first setup), unless given
   let bps = o.bps && o.bps.length ? o.bps : [];
