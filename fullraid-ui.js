@@ -40,7 +40,7 @@ const CHART_MARGIN = 5;
 const WARM_CHECK = 3;
 /** Exhaustive: warm-start each plan's Verzik from the best plan so far (off - no faster in testing, less accurate). */
 const WARM_V = false;
-/** Exhaustive: cooldowns into a room are rounded to this many ticks (25: 15s) - each case is solved once. */
+/** Exhaustive: cooldowns into Nylocas / Sotetseg / Xarpus are rounded to this many ticks (25: 15s; Verzik's to 10) - each case is solved once. */
 const CD_STEP = 25;
 const fsec = (x) => { const s = x * 0.6; return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
 const fsB = (b) => { const r = Math.round(b % 60 * 10) / 10; return `${Math.floor(b / 60)}:${r < 10 ? '0' : ''}${r}`; };
@@ -401,7 +401,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         const twins = twin.filter((x) => x >= 0).length;
         // solves, cached by room and the cooldowns in (99999: no surge in this room; else the ticks until it's up)
         // cooldowns in steps of CD_STEP ticks (a room is solved once per case; the whole raids carry the real cooldowns)
-        const solved = new Map(), q10 = (c) => (c >= 99999 ? 99999 : Math.round(c / CD_STEP) * CD_STEP);
+        const solved = new Map(), qOf = (kind) => (c) => (c >= 99999 ? 99999 : Math.round(c / (kind === 'verzik' ? 10 : CD_STEP)) * (kind === 'verzik' ? 10 : CD_STEP));
         let nSolves = 0;
         const solveRoom = async (r, cdIn, warm = null) => {
           const kind = KINDS[r];
@@ -409,10 +409,10 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
           // same as no surge in this room (exact - solved once, as the no-surge case)
           let cd = cdIn;
           if (kind !== 'verzik' && cd.some((c) => c < 99999)) { const none = await solveRoom(r, cd.map(() => 99999)); cd = cd.map((c) => (c < 99999 && c >= none.slow ? 99999 : c)); }
-          const key = `${kind}|${cd.map(q10).join(',')}${warm ? `|warm ${JSON.stringify(warm.map((c) => [c.actions, c.startSpec, !!c.lightbearerOn]))}` : ''}`;
+          const key = `${kind}|${cd.map(qOf(kind)).join(',')}${warm ? `|warm ${JSON.stringify(warm.map((c) => [c.actions, c.startSpec, !!c.lightbearerOn]))}` : ''}`;
           if (!solved.has(key)) {
             nSolves++; const who = cd.map((c, k) => (c < 99999 ? `P${k + 1}${c > 0 ? ` (cooldown ${fsec(c)})` : ''}` : null)).filter(Boolean);
-            const sv = await solveOf(kind, cd.map(q10), `#${nSolves}: ${who.length ? `${who.join(', ')} surge` : 'no surges'}`, cd.map((c, k) => (c < 99999 ? k : -1)).filter((k) => k >= 0), warm); stop();
+            const sv = await solveOf(kind, cd.map(qOf(kind)), `#${nSolves}: ${who.length ? `${who.join(', ')} surge` : 'no surges'}`, cd.map((c, k) => (c < 99999 ? k : -1)).filter((k) => k >= 0), warm); stop();
             if (!sv.setups.length) throw new Error(`${KIND_NAME[kind]}: the solver found no setup that finishes.`);
             // literally this plan: exactly these players surge in this room - the solver's best setup that has all of
             // them surging, else its best with their surges put in (and nobody else's)
@@ -815,7 +815,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
   /** Start the shown combination's reports in the background, one boss after another. */
   function autoReports(ci) {
     const res0 = results;
-    (async () => { for (const j of kindsR().keys()) { if (results !== res0) return; try { await buildReport(ci, j); } catch (x) { sayTo(ci, j).textContent = `Couldn't run the report: ${x.message}`; } } })();
+    (async () => { for (const j of kindsR().keys()) { if (results !== res0) return; try { await buildReport(ci, j); } catch (x) { if (results === res0) sayTo(ci, j).textContent = `Couldn't run the report: ${x.message}`; } } })();
   }
   async function showRoomReport(ci, j, b) {
     const box = () => host.querySelector(`[data-rout="rep|${ci}|${j}"]`);
