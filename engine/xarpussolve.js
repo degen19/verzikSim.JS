@@ -7,6 +7,7 @@
 // many (the same raids for each), and the best is kept if it beats the current setup. Repeat until nothing improves.
 // The best setups seen are then played on more raids and ranked: with breakpoints by the share finished at the fastest
 // one (then the next), otherwise by the median, then the top 10%.
+import { canonKeyOf } from './symmetry.js';
 import { pruneSurges } from './solvecheck.js';
 import { runXarpus, canDo, OPENERS, BACKUP_SPECS, DPS_SPECS, FIXES, DEF_TARGETS, CHALLY_ATS, openMaulers, hornN } from './xarpus.js';
 import { Rng } from './rng.js';
@@ -52,10 +53,12 @@ export const hasDefence = (cfg) => cfg.players.some((p) => p.open && p.open !== 
 /** The changes the ticked options allow. ctx: {gear: [gear], allow: {def, dps, fix, start, lb, surge, horn, defTarget,
  *  zcbBelow, chally}, surgeLimit, lbRings, swaps, roles}. */
 export function neighbours(cfg, ctx) {
-  const out = [], P = cfg.players, seen = new Set([keyOf(cfg)]);
+  // players identical in every input (ctx.groups): a change that only trades their plans is the same setup - one key
+  const K = ctx.groups ? (ctx.canonKey ||= canonKeyOf('xarpus', keyOf, ctx.groups)) : keyOf;
+  const out = [], P = cfg.players, seen = new Set([K(cfg)]);
   const add = (patches, setPatch, what) => {
     const c = normalizePlan({ ...cfg, ...setPatch, players: P.map((p, j) => (patches[j] ? { ...p, ...patches[j] } : p)), what });
-    const k = keyOf(c); if (!seen.has(k)) { seen.add(k); out.push(c); }
+    const k = K(c); if (!seen.has(k)) { seen.add(k); out.push(c); }
   };
   const ok = (k, v) => canDo(ctx.gear[k], v);
   const surges = P.filter((p) => p.surge).length, lbs = P.filter((p) => p.lbCycles > 0).length;

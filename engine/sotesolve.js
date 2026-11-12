@@ -7,6 +7,7 @@
 // improves (or the round limit). The best setups seen are then played at every entry instance and ranked.
 // Ranking: with breakpoints, the share of raids finished by the fastest breakpoint (then the next ...), then the
 // median; without, the median, then the top 25%, the top 10% and the mean.
+import { canonKeyOf } from './symmetry.js';
 import { pruneSurges } from './solvecheck.js';
 import { runSote, hornN, BACKUP_DEF, BACKUP_DEFS } from './sote.js';
 import { Rng } from './rng.js';
@@ -62,13 +63,15 @@ export const surgeInP1 = (p) => !p.surge || p.prefire === 'ZCB spec' || p.specs[
 /** The 'no P2 / P3 surges' rule: surges only for players whose first spec is in P1. */
 const noLateSurges = (cfg) => ({ ...cfg, players: cfg.players.map((p) => (surgeInP1(p) ? p : { ...p, surge: false })) });
 export function neighbours(cfg, ctx) {
-  const out = [], P = cfg.players, seen = new Set([keyOf(cfg)]);
+  // players identical in every input (ctx.groups): a change that only trades their plans is the same setup - one key
+  const K = ctx.groups ? (ctx.canonKey ||= canonKeyOf('sote', keyOf, ctx.groups)) : keyOf;
+  const out = [], P = cfg.players, seen = new Set([K(cfg)]);
   const own = (k, w) => (ctx.gear[k].weapons || []).includes(w);
   /** The spec choices a player can make (BGS as its own choice only if they also have a maul - otherwise Maul is it). */
   const specOk = (k, s) => s === 'none' || (s === 'bgs' ? own(k, 'Bandos godsword') && own(k, 'Elder maul') : (SPEC_NEEDS[s] || []).some((w) => own(k, w)));
   const many = (patches, what) => {                                  // patches: {player index: patch}
     const players = P.map((p, j) => (patches[j] ? { ...p, ...patches[j], specs: (patches[j].specs || p.specs).map((x) => ({ ...x })) } : p));
-    const c = { entry: cfg.entry, backupDef: cfg.backupDef, players, what }, k = keyOf(c);
+    const c = { entry: cfg.entry, backupDef: cfg.backupDef, players, what }, k = K(c);
     if (!seen.has(k)) { seen.add(k); out.push(c); }
   };
   const push = (k, patch, what) => many({ [k]: patch }, what);
@@ -80,7 +83,7 @@ export function neighbours(cfg, ctx) {
   // the team's 'no backup at or below this Defence' (only when someone backs up)
   if (ctx.allow.specs && P.some((p) => p.specs.some((x) => x.backup))) {
     const curD = cfg.backupDef ?? BACKUP_DEF;
-    for (const v of BACKUP_DEFS) if (v !== curD) { const c = { entry: cfg.entry, backupDef: v, players: P, what: v === 100 ? 'backups until her Defence is at the floor' : 'only back up if the primary maul misses' }, k = keyOf(c); if (!seen.has(k)) { seen.add(k); out.push(c); } }
+    for (const v of BACKUP_DEFS) if (v !== curD) { const c = { entry: cfg.entry, backupDef: v, players: P, what: v === 100 ? 'backups until her Defence is at the floor' : 'only back up if the primary maul misses' }, k = K(c); if (!seen.has(k)) { seen.add(k); out.push(c); } }
   }
   P.forEach((p, k) => {
     if (ctx.allow.prefire) for (const [v, need] of SOLVE_PREFIRES) if (v !== p.prefire && (!need || own(k, need))) push(k, { prefire: v }, `P${k + 1} prefire ${v || 'none'}`);

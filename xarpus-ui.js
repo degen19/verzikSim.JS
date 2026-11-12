@@ -1,5 +1,6 @@
 // Xarpus tab: per-player room settings for every scale (sets A / B / C, saved in this browser or to a file), a Report
 // comparing the ticked sets and the Solver. Gear comes from the Gear tab (the Gear set picked here).
+import { groupsOf } from './engine/symmetry.js';
 import { breath, whenFree } from './engine/pause.js';
 import { activeNow } from './engine/pause.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
@@ -539,7 +540,8 @@ export function createXarpus(host, { getTeam }) {
     const pool = new XarpusPool(base, t, hh); onPool(pool);
     try {
       const allow = Object.fromEntries(ALLOW.map((k) => [k, k !== 'surge' || (t > 0 && !mustSurge)]));
-      const items = await solveXarpus({ start, gear: all.map((p) => p.gear), allow, surgeLimit: t, lbRings, lbOwners, hornLimit, swaps: true, roles: true,
+      const groups = groupsOf(base.map((b, k) => JSON.stringify([{ ...b.gear, name: null }, b.surgeCd, b.rangePot, lbOwners ? !!lbOwners[k] : null])));   // (identical players: one key for their traded plans)
+      const items = await solveXarpus({ start, gear: all.map((p) => p.gear), allow, surgeLimit: t, lbRings, lbOwners, hornLimit, swaps: true, roles: true, groups,
         restarts: [], bps, ...(EFFORT[effort] || EFFORT.normal), top: 10 }, (...args) => pool.run(...args), say, stopped);
       return items.map((r) => ({ ...r, set: rootState().cur, names, run: { players: base.map((b, k) => ({ ...b, ...r.cfg.players[k] })), opts: { ...hh, ...r.cfg } } }));
     } finally { pool.stop(); }

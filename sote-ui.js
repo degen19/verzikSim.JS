@@ -8,6 +8,7 @@
 //    swap to Ultor (the regen timer restarts). The solver will pick Surge / Lightbearer cycles too.
 //  - Prefires with the Twisted bow / ZCB are made in their best ranged gear, Shadow / Shadow Barrage in their best magic
 //    gear (each slot: their ranged, magic or melee item, or nothing - loadout.js bestWorn).
+import { groupsOf } from './engine/symmetry.js';
 import { breath, whenFree } from './engine/pause.js';
 import { activeNow } from './engine/pause.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS, putGearSet } from './engine/gearstore.js';
@@ -772,7 +773,7 @@ export function createSote(host, { getTeam }) {
     if (full) start.players = fit(start.players).map((p, j) => (full.lbOwners && !full.lbOwners[j] ? { ...p, lbCycles: 0 } : p));   // the Full raid's Lightbearers / gear
     try {
       const res = await solveSote({ team: t, base, start, gear: all.map((p) => p.gear), allow: { ...Object.fromEntries(ALLOW.map((x) => [x, v.allow[x] !== false])) },
-        surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[full ? full.effort : v.effort] || EFFORT.normal), top: 10, ...(full ? { lbOwners: full.lbOwners, hornLimit: full.hornLimit } : {}), swaps: !!sr.swaps, pairs: !!sr.pairs, restarts, noLateSurge: !!sr.noLateSurge },
+        surgeLimit: sLim, lbRings: lbLim, bps, solveEntry: v.allow.entry !== false, ...(EFFORT[full ? full.effort : v.effort] || EFFORT.normal), top: 10, ...(full ? { lbOwners: full.lbOwners, hornLimit: full.hornLimit } : {}), groups: groupsOf(base.map((b, j) => JSON.stringify([{ ...b, name: null, gear: { ...b.gear, name: null } }, full && full.lbOwners ? !!full.lbOwners[j] : null]))), swaps: !!sr.swaps, pairs: !!sr.pairs, restarts, noLateSurge: !!sr.noLateSurge },
       (...args) => pool.run(...args), say, () => me.stopped);
       // Show raid: the final results were played on raids 'final#0..' at their entry instance - replayed from there
       const SPL = ['p1', 'maze1', 'p2', 'maze2', 'p3'];

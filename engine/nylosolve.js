@@ -7,6 +7,7 @@
 // Ranked by the share of raids at your breakpoints (if any), then the mean boss time, then the top 10%.
 // Then, for the best setup: each player's Twisted-bows-only thresholds for his green forms (ranged tick fix: 4 hits +
 // bow / bow, hit, bow / 3 hits + bow, by the boss HP) - rangedThresholds.
+import { canonKeyOf } from './symmetry.js';
 import { pruneSurges } from './solvecheck.js';
 import { runNylo, NEEDS, FAST, fastWeaponOf } from './nylo.js';
 import { Rng } from './rng.js';
@@ -87,11 +88,13 @@ export const better = (a, b) => { for (let i = 0; i < a.length; i++) { if (a[i] 
 
 /** The single changes allowed. ctx: {gear: [gear], allow: {open, specs, start, surge, backup}, surgeLimit, swaps, roles}. */
 export function neighbours(cfg, ctx) {
-  const out = [], P = cfg.players, seen = new Set([keyOf(cfg)]);
+  // players identical in every input (ctx.groups): a change that only trades their plans is the same setup - one key
+  const K = ctx.groups ? (ctx.canonKey ||= canonKeyOf('nylo', keyOf, ctx.groups)) : keyOf;
+  const out = [], P = cfg.players, seen = new Set([K(cfg)]);
   const add = (patches, setPatch, what) => {
     const c = { ...cfg, ...setPatch, players: P.map((p, j) => (patches[j] ? canonPlan({ ...p, ...patches[j] }) : p)), what };
     if (!c.players.every(feasible)) return;                       // a spec they'd never have the spec for
-    const k = keyOf(c); if (!seen.has(k)) { seen.add(k); out.push(c); }
+    const k = K(c); if (!seen.has(k)) { seen.add(k); out.push(c); }
   };
   const g = ctx.gear, A = ctx.allow, surges = P.filter((p) => p.surge).length;
   P.forEach((p, k) => {

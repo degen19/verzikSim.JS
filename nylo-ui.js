@@ -1,6 +1,7 @@
 // Nylocas tab (solo - 5s; duos: Healer Tech, solos: under him every form): per-player room settings (opening spec, damage specs, start spec, surge, tome tick fix,
 // Twisted-bows-only thresholds) and the team's backup BGS, saved in this browser; a Report (raids played, boss times,
 // Show raid) and the Solver (best spec setups, then each player's ranged tick fix thresholds). Gear from the Gear tab.
+import { groupsOf } from './engine/symmetry.js';
 import { breath, whenFree } from './engine/pause.js';
 import { activeNow } from './engine/pause.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
@@ -465,7 +466,8 @@ export function createNylo(host, { getTeam }) {
     const pool = new NyloPool(base, t, opts); onPool(pool);
     try {
       const ef = EFFORT[effort] || EFFORT.normal;
-      const items = await solveNylo({ start, gear, allow: Object.fromEntries(ALLOW.map((k) => [k, k !== 'surge' || !mustSurge])), surgeLimit: t, swaps: true, roles: true, bps, ...ef, top: 10 }, (...a) => pool.run(...a), say, stopped);
+      const groups = groupsOf(base.map((b, k) => JSON.stringify([{ ...b.gear, name: null }, b.surgeCd, extra(k)])));   // (identical players: one key for their traded plans)
+      const items = await solveNylo({ start, gear, allow: Object.fromEntries(ALLOW.map((k) => [k, k !== 'surge' || !mustSurge])), surgeLimit: t, swaps: true, roles: true, bps, ...ef, top: 10, groups }, (...a) => pool.run(...a), say, stopped);
       // each kept setup's ranged tick fix thresholds (Twisted bows only below them), as the Optimizer finds them - kept only
       // when they're clearly faster on the same raids
       const run = (cfgs, from, to, seed) => pool.run(cfgs, from, to, seed);
