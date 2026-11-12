@@ -140,8 +140,10 @@ export const raidRng = (seed, i) => new Rng(seed + i * 7919);
  * Run raids [from, to) for each variant. Returns per variant: {n, k, fastest, fastestN, under: [count per breakpoint]}.
  * Breakpoints are in seconds (tick times); a room counts if it finishes on the breakpoint or faster.
  */
-export function countBatch(variants, team, from, to, seed, bpSecs, onProgress = null) {
-  const total = variants.length * (to - from);
+export function countBatch(variants, team, from, to, seed, bpSecs, onProgress = null, idx = null) {
+  // idx (optional): just these raids (by index), instead of [from, to)
+  const raids = idx || Array.from({ length: Math.max(0, to - from) }, (_, j) => from + j);
+  const total = variants.length * raids.length;
   let done = 0;
   const out = variants.map(() => ({ n: 0, k: 0, fastest: null, fastestN: 0, under: bpSecs.map(() => 0), sig: 0 }));
   const add = (c, end) => {
@@ -158,7 +160,7 @@ export function countBatch(variants, team, from, to, seed, bpSecs, onProgress = 
   const groups = new Map();
   variants.forEach((cfgs, v) => { const key = p1Key(cfgs, team); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(v); });
   const plan = [...groups.values()].map((vs) => ({ vs, rep: variants[vs[0]], patch: vs.map((v) => playerPatch(variants[vs[0]], variants[v])) }));
-  for (let i = from; i < to; i++) {
+  for (const [ri, i] of raids.entries()) {
     for (const g of plan) {
       if (g.vs.length === 1) { add(out[g.vs[0]], runOne(g.rep, team, raidRng(seed, i))); done++; continue; }
       const rng = raidRng(seed, i), r1 = run_p1(g.rep, team, rng);
@@ -170,11 +172,19 @@ export function countBatch(variants, team, from, to, seed, bpSecs, onProgress = 
         done++;
       });
     }
-    if (onProgress && (i - from) % 20 === 19) onProgress(done, total);
+    if (onProgress && ri % 20 === 19) onProgress(done, total);
   }
   for (const c of out) c.sig = c.sig.toString(36);
   if (onProgress) onProgress(total, total);
   return out;
+}
+
+/** The raids in [from, to) by the Dawn specs P1 died in: {dawns: [raid index]}. P1 plays the same whatever a setup's
+ *  ring swap values after it, so a Dawn branch's ring % only changes the raids in its list. */
+export function raidsByDawns(cfgs, team, from, to, seed) {
+  const by = {};
+  for (let i = from; i < to; i++) (by[run_p1(cfgs, team, raidRng(seed, i)).dawns] ||= []).push(i);
+  return by;
 }
 
 export function mergeCounts(a, b) {

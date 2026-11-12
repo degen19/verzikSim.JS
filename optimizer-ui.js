@@ -38,7 +38,8 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       <label title="Breakpoint rates: share of all attempts (failed raids count, so success matters too) or share of the successful runs only (how fast the kills are)">Breakpoints count<select id="o-basis"><option value="all">All attempts</option><option value="kills">Successful runs only</option></select></label>
       <label>Search depth<select id="o-depth">${Object.entries(DEPTHS).map(([k, d]) => `<option value="${k}" ${k === 'standard' ? 'selected' : ''}>${d.label}</option>`).join('')}</select></label>
     </div>
-    <p class="muted small">Tick the inputs to vary and list the values to try. Every combination is tested on the same raids (same random rolls),
+    <p class="muted small">Tick the inputs to vary and list the values to try. Every combination is tested on the same raids (same random rolls) - except ring swap % and Ring % by Dawns,
+      which are tuned one at a time on the best setups, as the Solver does (a Dawn branch's value on just the raids where P1 died in that many Dawns) -
       weak setups are dropped early, and the finalists are re-run on fresh raids so the winner isn't just a lucky one. Breakpoint rates count all attempts (failed raids included) or only the successful runs - your choice above; success always counts all attempts.</p>
     <div id="o-opts"></div>
     <div class="row between" style="margin-top:12px">
@@ -75,7 +76,11 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     $('o-rank').title = b.length ? '' : 'Add breakpoints to rank by a room time';
   }
 
+  // ring swap % options have no values to type: the search finds the best (see search())
+  const RING_ALL = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
   function values(o) {
+    if (/^ring_/.test(o.id)) return RING_ALL;
+    if (/^ringD_/.test(o.id)) return ['auto'];
     const s = sel[o.id];
     if (o.kind === 'num') {
       return s.text.split(/[,\s]+/).filter(Boolean).map((x) => (x.toLowerCase() === 'off' ? 'off' : Number(x))).filter((x) => x === 'off' || Number.isFinite(x));
@@ -87,10 +92,20 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     return o.choices.filter((c) => s.picks.has(c));
   }
   const sweep = () => opts.filter((o) => sel[o.id]?.on).map((o) => ({ id: o.id, values: values(o) })).filter((s) => s.values.length);
+  // ring swap % (and Ring % by Dawns) aren't crossed with everything else: they're tuned one at a time on the best setups
+  // (as the Solver does) - see search()
+  const isRing = (id) => /^ringD?_/.test(id);
+  const gridSweep = () => sweep().filter((x) => !isRing(x.id)), ringSweep = () => sweep().filter((x) => isRing(x.id));
+  /** Raids the ring tuning plays, roughly (for the estimate): each value of each ring option on each finalist; a Dawn
+   *  branch's only on its raids (about a third). */
+  const ringRaids = (nSetups, depth) => {
+    const d = DEPTHS[depth], fins = Math.min(nSetups, d.keep[1]), rs = ringSweep();
+    return Math.round(fins * d.n[1] * rs.reduce((a, x) => a + (x.id.startsWith('ringD_') ? 8 / 3 : x.values.length * 1.5), 0));
+  };
   const nCombos = () => {
-    const n = sweep().reduce((m, s) => m * s.values.length, 1);
+    const n = gridSweep().reduce((m, s) => m * s.values.length, 1);
     if (n > 20000 || !cfgs) return n;                             // count only valid setups (shadow rules) when cheap to
-    return enumerate(sweep()).filter((c) => { const cf = applyCombo(cfgs, team, c); return validCfgs(cf) && dawnsOk(cf, cfgs); }).length;
+    return enumerate(gridSweep()).filter((c) => { const cf = applyCombo(cfgs, team, c); return validCfgs(cf) && dawnsOk(cf, cfgs); }).length;
   };
 
   function renderOpts() {
@@ -102,7 +117,8 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       return `<details class="ogroup" data-group="${esc(g)}" ${openGroups.has(g) ? 'open' : ''}><summary><h4 style="display:inline">${esc(g)}</h4> <span class="muted small">${n ? `${n} varied` : `${list.length} option${list.length === 1 ? '' : 's'}`}</span></summary>${list.map((o) => {
       const s = sel[o.id];
       const cur = `<span class="muted small">now: ${esc(o.current ?? '-')}</span>`;
-      const editor = o.kind === 'num' || o.kind === 'time'
+      const editor = /^ringD?_/.test(o.id) ? `<span class="muted small">${o.id.startsWith('ring_') ? 'finds the best (10-100%)' : 'finds the best (from the ring swap %, in steps of 10)'}</span>`
+        : o.kind === 'num' || o.kind === 'time'
         ? `<input data-text="${o.id}" value="${esc(s.text)}" ${s.on ? '' : 'disabled'} style="width:170px">`
         : o.choices.map((c) => `<label class="pick"><input type="checkbox" data-pick="${o.id}" value="${esc(c)}" ${s.picks.has(c) ? 'checked' : ''} ${s.on ? '' : 'disabled'}>${esc(c)}</label>`).join('');
       return `<div class="orow ${s.on ? 'on' : ''}"><label class="vary"><input type="checkbox" data-on="${o.id}" ${s.on ? 'checked' : ''}>${esc(o.label)}</label>${cur}<span class="oed">${editor}</span></div>`;
@@ -143,7 +159,7 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     if (!cfgs) { $('o-est').textContent = ''; return; }
     if (!rate) { try { await calibrate(); } catch (e) { $('o-err').textContent = e.message; return; } }
     const n = nCombos(), depth = $('o-depth').value, k = Math.max(1, sets.length);   // read after the speed test
-    const raids = planRaids(n, depth) * k;
+    const raids = (planRaids(n, depth) + ringRaids(n, depth)) * k;
     const sec = raids / rate;
     $('o-est').innerHTML = `<b>${n.toLocaleString()}</b> setup${n === 1 ? '' : 's'}${k > 1 ? ` × ${k} sets` : ''} · ${raids.toLocaleString()} raids · about <b>${dur(sec)}</b> on this computer (${CORES} cores)` +
       (n > 2000 ? ' - <span class="warn">a big search; untick some options or values to speed it up</span>' : '');
@@ -151,9 +167,10 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
 
   // ---- workers
   function makePool() { return Array.from({ length: CORES }, () => new Worker(new URL('./worker.js', import.meta.url), { type: 'module' })); }
-  function runBatch(variants, from, to, seed, onDone) {
+  /** Counts for each setup on raids [from, to) - or, with idx, on just those raids (by index). */
+  function runBatch(variants, from, to, seed, onDone, idx = null) {
     const own = !pool; const ws = pool || makePool();
-    const span = to - from, per = Math.ceil(span / ws.length);
+    const span = idx ? idx.length : to - from, per = Math.ceil(span / ws.length);
     const done = new Array(ws.length).fill(0);
     // each worker's share goes over in pieces of ~20,000 setup-raids, so Pause lands within a few seconds
     const step = Math.max(1, Math.floor(20000 / Math.max(1, variants.length)));
@@ -164,10 +181,10 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
         res(ev.data.result);
       };
       w.onerror = (ev) => rej(new Error(ev.message || 'worker failed'));
-      w.postMessage({ cmd: 'batch', variants, team, from: a, to: b, seed, bps: curBps });
+      w.postMessage({ cmd: 'batch', variants, team, seed, bps: curBps, ...(idx ? { from: 0, to: 0, idx: idx.slice(a, b) } : { from: from + a, to: from + b }) });
     }));
     return Promise.all(ws.map(async (w, i) => {
-      const a0 = from + per * i, b0 = Math.min(to, a0 + per);
+      const a0 = per * i, b0 = Math.min(span, a0 + per);
       if (a0 >= b0) return null;
       let acc = null;
       for (let a = a0; a < b0; a += step) {
@@ -180,6 +197,18 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
       parts = parts.filter(Boolean);
       return variants.map((_, v) => parts.reduce((acc, p) => mergeCounts(acc, p[v]), null));
     });
+  }
+  /** Each setup's raids [from, to) by the Dawn specs P1 died in ({dawns: [raid index]}), on the workers. */
+  function dawnsOf(list, from, to, seed) {
+    const ws = pool || makePool(), own = !pool;
+    const ask = (w, cfgs) => new Promise((res, rej) => whenFree(() => {
+      w.onmessage = (ev) => (ev.data.error ? rej(new Error(ev.data.error)) : ev.data.result ? res(ev.data.result) : null);
+      w.onerror = (ev) => rej(new Error(ev.message || 'worker failed'));
+      w.postMessage({ cmd: 'dawns', cfgs, team, from, to, seed });
+    }));
+    const out = new Array(list.length); let next = 0;
+    return Promise.all(ws.map(async (w) => { while (next < list.length) { const k = next++; out[k] = await ask(w, list[k]); } }))
+      .then(() => { if (own) ws.forEach((w) => w.terminate()); return out; });
   }
   let curBps = [];
 
@@ -198,8 +227,8 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     const ofK = $('o-basis').value === 'kills';
     const sc = (c, m) => score(c, m, ofK), fsc = (c, m) => finalScore(c, m, ofK);
     const depth = DEPTHS[$('o-depth').value];
-    const combos = enumerate(sweep());
-    let total = planRaids(combos.length, $('o-depth').value) * sets.length;
+    const combos = enumerate(gridSweep()), ringSw = ringSweep();
+    let total = (planRaids(combos.length, $('o-depth').value) + ringRaids(combos.length, $('o-depth').value)) * sets.length;
     let doneBefore = 0, stageLabel = '';
     const pb = progressBar($('o-prog').parentElement); pb.start();
     const prog = (d) => pb.set((doneBefore + d) / total);
@@ -209,12 +238,13 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
     var t0 = activeNow();
     try {
       // every chosen set gets the same combos; all sets' setups run together on the same raids, pruning is per set
-      const stage = async (list, from, to, sd, label) => {
-        stageLabel = `${label}: ${list.length.toLocaleString()} setup${list.length === 1 ? '' : 's'} × ${(to - from).toLocaleString()} raids`;
+      const stage = async (list, from, to, sd, label, idx = null) => {
+        const nR = idx ? idx.length : to - from;
+        stageLabel = `${label}: ${list.length.toLocaleString()} setup${list.length === 1 ? '' : 's'} × ${nR.toLocaleString()} raids`;
         $('o-status').textContent = `${stageLabel}...`;
-        const res = await runBatch(list.map((x) => x.cfgs), from, to, sd, (d) => prog(d));
+        const res = await runBatch(list.map((x) => x.cfgs), from, to, sd, (d) => prog(d), idx);
         if (stopped) throw new Error('Search stopped.');
-        doneBefore += list.length * (to - from);
+        doneBefore += list.length * nR;
         return res;
       };
       const isChart = (x) => Object.entries(x.combo).every(([id, v]) => { const o = x.set.opts.find((y) => y.id === id); return !o || String(o.current) === String(v); });
@@ -271,11 +301,72 @@ export function createOptimizer(root, { getWorkbook, getTeam, runReport, getLabe
         flat.forEach((x, i) => { x.counts = mergeCounts(x.counts, res[i]); });
         perSet = perSet.map((l) => best(l, depth.keep[1], sc));
       }
+      // ---- ring swap % (and Ring % by Dawns), as the Solver tunes them: on each setup left, one ring option at a time
+      // (each value you listed, the others held) on the same raids, the best kept; base ring % first (twice round if
+      // anything moved), then each Dawn branch's ring % on only the raids where P1 died in that many Dawns (a branch's
+      // value changes nothing else, so those raids decide it exactly)
+      if (ringSw.length) {
+        const nT = depth.n[1], sdT = seed + 3333333, fins = perSet.flat();
+        const optOf = (x, id) => x.set.opts.find((o) => o.id === id);
+        const cfOf = (x, c) => { const cf = applyCombo(scopedOf(x.set.cfgs), team, c); return validCfgs(cf) && dawnsOk(cf, scopedOf(x.set.cfgs)) ? cf : null; };
+        const cands = (x, sw, vals = sw.values) => {              // this setup with each value of option sw (its own value first)
+          const o = optOf(x, sw.id); if (!o) return [];
+          const cur = x.combo[sw.id] ?? o.current, out = [];
+          for (const v of [cur, ...vals.filter((y) => String(y) !== String(cur))]) { const c = { ...x.combo, [sw.id]: v }, cf = cfOf(x, c); if (cf) out.push({ x, combo: c, cfgs: cf, own: String(v) === String(cur) }); }
+          return out;
+        };
+        const keepBest = (list, res) => {                         // per setup: a value only replaces its own when it scores better
+          let moved = false;
+          list.forEach((y, i) => { y.counts = res[i]; });
+          for (const x of new Set(list.map((y) => y.x))) {
+            const ys = list.filter((y) => y.x === x), own = ys.find((y) => y.own) || ys[0];
+            const b = ys.reduce((m, y) => (sc(y.counts, metric) > sc(m.counts, metric) + 1e-12 ? y : m), own);
+            if (b !== own) { x.combo = b.combo; x.cfgs = b.cfgs; moved = true; }
+          }
+          return moved;
+        };
+        const base = ringSw.filter((x) => x.id.startsWith('ring_')), branch = ringSw.filter((x) => x.id.startsWith('ringD_'));
+        for (let pass = 0; pass < 2 && base.length; pass++) {
+          let moved = false;
+          for (const sw of base) {
+            const list = fins.flatMap((x) => cands(x, sw)); if (list.length <= fins.length) continue;
+            if (keepBest(list, await stage(list, 0, nT, sdT, `Ring swap % (${optOf(list[0].x, sw.id).group})`))) moved = true;
+          }
+          if (!moved) break;
+        }
+        if (branch.length) {
+          $('o-status').textContent = 'Ring % by Dawns: sorting the raids by the Dawns P1 died in...';
+          const by = await dawnsOf(fins.map((x) => x.cfgs), 0, nT, sdT);
+          for (const sw of branch) {
+            const d = Number(sw.id.split('_')[2]);
+            for (const [k, x] of fins.entries()) {
+              const idx = by[k][d] || [];
+              // (a branch under 1% of the raids - as the Solver's cutoff - is left as charted: a value picked on a handful of raids is luck)
+              if (idx.length < Math.max(2, nT * 0.01)) continue;
+              // from its value now (unset: the player's ring swap %, as tuned above), +-10 / +-20; a better one is kept and the next
+              // tried from it (as the Solver, but until nothing beats it)
+              const ringId = `ring_${sw.id.split('_')[1]}`, baseV = () => Number(x.combo[ringId] ?? optOf(x, ringId)?.current) || 100;
+              if (x.combo[sw.id] == null) { const c = { ...x.combo, [sw.id]: baseV() }, cf = cfOf(x, c); if (!cf) continue; x.combo = c; x.cfgs = cf; }
+              for (let step = 0; step < 9; step++) {
+                const cur = Number(x.combo[sw.id] ?? optOf(x, sw.id).current) || 100;
+                const list = cands(x, sw, [cur - 20, cur - 10, cur + 10, cur + 20].filter((v) => v >= 10 && v <= 100));
+                if (list.length < 2) break;
+                if (!keepBest(list, await stage(list, 0, 0, sdT, `Ring % if P1 dies in ${d} Dawns (${optOf(x, sw.id).group})`, idx))) break;
+              }
+              // the same as their ring swap %: not a change of its own
+              if (Number(x.combo[sw.id]) === baseV()) { const { [sw.id]: _, ...c } = x.combo, cf = cfOf(x, c); if (cf) { x.combo = c; x.cfgs = cf; } }
+            }
+          }
+        }
+        // setups the tuning made the same: one
+        perSet = perSet.map((l) => { const seen = new Set(); return l.filter((x) => { const k = JSON.stringify(x.combo); if (seen.has(k)) return false; seen.add(k); return true; }); });
+      }
       perSet.forEach((l, k) => {                                   // each set's own chart is always in its final round
         l.forEach((x) => { if (isChart(x)) x.base = true; });
         if (!l.some((x) => x.base)) l.push({ combo: {}, set: sets[k], cfgs: applyCombo(scopedOf(sets[k].cfgs), team, {}), base: true });
       });
       const finals = perSet.flat();
+      total = doneBefore + finals.length * depth.n[2];             // (the estimate of the steps before, settled)
       const res = await stage(finals, 0, depth.n[2], seed + 7777777, 'Final round (fresh raids)');
       finals.forEach((x, i) => { x.counts = res[i]; });
       perSet = perSet.map((l) => l.slice().sort((a, c) => fsc(c.counts, metric) - fsc(a.counts, metric)));
