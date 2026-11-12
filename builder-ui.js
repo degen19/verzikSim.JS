@@ -419,6 +419,8 @@ export function createBuilder(root, { onChange, store = STORE, libcur = LIBCUR, 
     },
     /** The set being shown (A / B / C). */
     curBlock: () => block,
+    /** Show set b (A / B / C). */
+    async showBlock(t, b) { team = t; block = b; await ensure(t); await fetchDefaults(); render(); },
     /** Put values (e.g. a Verz Solver setup) into one set of the builder; that set is shown next time. */
     async setSet(t, b, values) {
       migrateKeys(values);

@@ -856,6 +856,6 @@ export function createSote(host, { getTeam, store = STORE, embed = false }) {
     }
   }
   function refreshAll() { render(); showRep(); showOpt(); showSol(); }
-  return { refresh: () => { state = load(store); saved = loadSaved(); refreshAll(); }, api: { getSet: (k) => (setOf(k) ? structuredClone(setOf(k)) : null), putSet: (st) => { const r = rootState(); r.sets[r.cur] = structuredClone(st); persist(); refreshAll(); }, fullRaidSolve, fullRaidShow, team, fullProcedure, curSet: () => rootState().cur, hasSet: (k) => !!rootState().sets[k],
+  return { refresh: () => { state = load(store); saved = loadSaved(); refreshAll(); }, api: { selectSet: (k) => { const r = rootState(); r.cur = k; r.sets[k] ||= structuredClone({ gearSet: tstate().gearSet, players: [] }); persist(); refreshAll(); }, getSet: (k) => (setOf(k) ? structuredClone(setOf(k)) : null), putSet: (st) => { const r = rootState(); r.sets[r.cur] = structuredClone(st); persist(); refreshAll(); }, fullRaidSolve, fullRaidShow, team, fullProcedure, curSet: () => rootState().cur, hasSet: (k) => !!rootState().sets[k],
     setupOf: (k) => { const st = setOf(k); return st ? { players: playersNow(st), entry: Number(st.entry) || 0, opts: { clawBelow: st.clawBelow ?? CLAW_BELOW, splitBall: st.splitBall !== false, stallTick: !!st.stallTick, backupDef: st.backupDef ?? BACKUP_DEF } } : null; } } };
 }
