@@ -762,7 +762,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
    *  combination - the raids that got to the room) and Show procedure (its setup and decision tree; Verzik: the P1 chart). */
   function roomsHtml(ci) {
     const r = results.ranked[ci];
-    return `<h3>Combination #${ci + 1}: each boss</h3><div class="sub">Show procedure: the room's setup and decision tree, as its own Solver shows them. Show report: that procedure through the room's Run report (${REPORT_RAIDS.toLocaleString()} raids). Both with the surge cooldown and doses each player comes into the room with. The full raid's charts are below.</div>
+    return `<h3>${results.report ? 'Your raid' : `Combination #${ci + 1}`}: each boss</h3><div class="sub">Show procedure: the room's setup and decision tree, as its own Solver shows them. Show report: that procedure through the room's Run report (${REPORT_RAIDS.toLocaleString()} raids). Both with the surge cooldown and doses each player comes into the room with. The full raid's charts are below.</div>
       ${namesR().map((rn, j) => `<div class="card" style="margin:8px 0;padding:8px 10px"><div class="row wrap" style="gap:8px;align-items:center"><b>${rn}</b>
         <button class="ghost sm" data-rrep="${ci}|${j}">Show report</button><button class="ghost sm" data-rproc="${ci}|${j}">Show procedure</button>
         ${r.vars[j].dropped.length ? `<span class="muted small">Played without ${r.vars[j].dropped.map((k) => esc(results.names[k])).join(', ')}'s surge (no dose left / not in the plan).</span>` : ''}
@@ -893,7 +893,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
     const tot = [{ total: ok(r.totals), runs: n, ofAll: true }], lab = [`#${ci + 1}`];
     const room = (j) => [{ total: ok(r.ends[j]), runs: n, ofAll: true }];
     const roomBp = (j) => (results.how.rooms[j] != null ? [results.how.rooms[j]] : []);
-    return `<div data-charts><h3>Combination #${ci + 1}: how often each total time happens (per second, % of all attempts)</h3><div class="scroll">${chartBox((rg) => histogramSvg(tot, lab, rg).replace('% of successful runs', '% of all attempts'))}</div>
+    return `<div data-charts><h3>${results.report ? 'Your raid' : `Combination #${ci + 1}`}: how often each total time happens (per second, % of all attempts)</h3><div class="scroll">${chartBox((rg) => histogramSvg(tot, lab, rg).replace('% of successful runs', '% of all attempts'))}</div>
       <h3>Finished the raid by this time or faster - % of all attempts</h3><div class="sub">${bps.length ? 'Vertical lines are your total-time breakpoints.' : 'Raids that failed count as attempts, so the line tops out at the share that finished.'}</div>
       <div class="scroll">${chartBox((rg) => cumulativeSvg(tot, lab, bps, rg).replace('% of successful runs finished by this time', '% of all attempts finished by this time'))}</div>
       <details style="margin-top:8px"><summary class="small" style="cursor:pointer">Each room's times (finished by this time or faster)</summary>
