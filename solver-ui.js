@@ -612,7 +612,14 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
   }
 
   return {
-    api: { fullRaidSolve, fullRaidShow, chartSurgeNeeds },
+    api: { fullRaidSolve, fullRaidShow, chartSurgeNeeds,
+      /** What a Full raid Verzik solve is built from (the chart configs the Gear set and supplies make, and your chart) -
+       *  the saved solves' key: a gear change Verzik never sees (a BGS, a maul, darts) keeps it. */
+      fullCfgsKey: async ({ gearSet: gs, supplies = {}, chart = null }) => {
+        const { cfgs, seeds, shadowOwners } = await fullCfgs({ gearSet: gs, supplies, chart });
+        const strip = (cf) => cf.map(({ weapons, hornPriority, ...c }) => c);   // (the weapons list itself: Verzik reads its has-flags - claws, ZCB, halberd, tome, shadow, blowpipe; horn priority: random when left blank)
+        return JSON.stringify([strip(cfgs), seeds.map((x) => strip(x.cfg)), shadowOwners]);
+      } },
     async refresh() {
       const t = getTeam();
       if (running && t !== team) return;                              // keep the running solve on screen

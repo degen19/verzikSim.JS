@@ -369,6 +369,8 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       // solves are counted and timed
       const memo = new Map();
       // Nylocas: a cooldown that's up before the shortest wave ends is the same as none (a surge comes after a spec on him)
+      let vKeyP = null;
+      const vKey = () => (vKeyP ||= rooms.verzik.fullCfgsKey({ gearSet: s.gearSet, supplies: vSup, chart: s.useChart ? chartOf(s, t) : null }).catch(() => JSON.stringify(gp)));
       const minWave = wave && wave.dist && wave.dist.length ? Math.min(...wave.dist.map(([x]) => x)) : 0;
       const solveOf = async (kind, cd0_, tag, must = null, warm = null) => {
         const cd = kind === 'nylo' ? cd0_.map((c) => (c < 99999 && c <= minWave ? 0 : c)) : cd0_;
@@ -382,7 +384,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
         if (p) { if (sw) stt.swapped++; else stt.again++; }
         else {
           p = (async () => {
-            const full = fp ? JSON.stringify([fp, t, gp, inputsOf(kind), key]) : null;
+            const full = fp ? JSON.stringify([fp, t, kind === 'verzik' ? await vKey() : gp, inputsOf(kind), key]) : null;   // (Verzik: only the gear it sees)
             const hit = full ? await getSolve(full).catch(() => null) : null;
             if (hit) { stt.saved++; return hit; }
             const a = activeNow(), sv = await solveRaw(kind, cdC, tag, mustC, warmC);
@@ -905,7 +907,7 @@ export function createFullRaid(host, { getTeam, rooms, goTo, getWorkbook = null,
       ${namesR().map((rn, j) => `<h4>${rn}</h4><div class="scroll">${chartBox((rg) => cumulativeSvg(room(j), [rn], roomBp(j), rg).replace('% of successful runs finished by this time', '% of all attempts finished by this time'))}</div>`).join('')}</details></div>`;
   }
 
-  if (typeof window !== 'undefined') { window.__fullRaidResults = () => results; window.__fullRaidSet = (x) => { results = x; charted = 0; autoReports(0); showResults(); }; }   // for tests
+  if (typeof window !== 'undefined') { window.__fullRaidVKey = (x) => rooms.verzik.fullCfgsKey(x); window.__fullRaidResults = () => results; window.__fullRaidSet = (x) => { results = x; charted = 0; autoReports(0); showResults(); }; }   // for tests
   const report = createFullRaidReport(repEl, { getTeam: team, rooms, getWorkbook, setLabel, onResults: (res) => setRes('rep', res) });
   showTab(tabNow);
   return { refresh: () => { render(); if (tabNow === 'rep') report.refresh(); } };
