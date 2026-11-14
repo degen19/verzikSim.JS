@@ -65,7 +65,7 @@ export function verzTrace(log, names, cfgs = null) {
         const k = line.match(/proc t(\d+)/), sh = line.match(/Shield r0-r(\d+)/); phase = 'Reds';
         if (k) trace.push({ t: +k[1], mark: 'Reds' });
         // her healing shield: from the tick after the proc (r1 - the first healing tick) to its last (rN); those ticks tinted
-        if (k && sh) { trace.push({ t: +k[1] + 1, mark: 'Healing Shield' }); for (let x = +k[1] + 1; x <= +k[1] + +sh[1]; x++) trace.push({ t: x, shade: 'shield' }); }
+        if (k && sh) { trace.push({ t: +k[1] + 1, mark: 'Healing Shield' }); for (let x = +k[1] + 1; x <= +k[1] + +sh[1]; x++) trace.push({ t: x, shade: 'sh' }); }
       }
       if (sec[1] === 'PHASE 3') { const k = line.match(/P3 tick 1 = t(\d+)/); phase = 'P3'; if (k) trace.push({ t: +k[1], mark: 'P3' }); }
       const h = line.match(/Verzik (\d+)/); if (h) hp = +h[1];
