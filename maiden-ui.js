@@ -9,7 +9,7 @@ import { parseBreakpoints } from './engine/optimize.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { Rng } from './engine/rng.js';
 import { timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
-import { runMaiden, defaultMaidenPlan, seqOf, canDo, ATTACKS, PREFIRES, MAIDEN_HP, PREFIRE_TICK } from './engine/maiden.js';
+import { runMaiden, defaultMaidenPlan, seqOf, canDo, ATTACKS, PREFIRES, MAIDEN_HP, PREFIRE_TICK, SPELLS, spellsOf } from './engine/maiden.js';
 
 const STORE = 'verzikSim.maiden.v1';           // {team: {cur, sets: {A, B?, C?}, report}}
 const SETS = ['A', 'B', 'C'];
@@ -20,6 +20,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
 const fsec = (x) => { const s2 = x * 0.6; return s2 >= 60 ? `${Math.floor(s2 / 60)}:${(s2 % 60).toFixed(1).padStart(4, '0')}` : `${s2.toFixed(1)}s`; };
+const SPELL_TIP = {
+  ancients: 'Ancients: they can freeze the crabs when they spawn (comes with the crabs)',
+  thralls: 'Thralls: their thrall hits her from 1-3 ticks after their first attack, then every 4 ticks (0-3 damage)',
+  dc: 'DC: Death Charge (comes with the later phases)',
+  veng: 'Veng: they cast Vengeance themselves - and Vengeance Other on a teammate without it',
+};
 const LEGEND = 'Maiden: the prefires (tick 5) to her 70s proc - the hit that takes her below 70% of her HP. Her attacks every 10 ticks from tick 9 land 5 ticks later (on the targeted player).';
 
 export function createMaiden(host, { getTeam }) {
@@ -54,8 +60,9 @@ export function createMaiden(host, { getTeam }) {
   const fix = (st) => {
     const d = defaultMaidenPlan(team());
     st.gearSet ||= 'A';
-    st.players = d.players.map((p, k) => { const o = (st.players || [])[k]; return o ? { startSpec: Number(o.startSpec ?? 100), seq: seqOf(o, k, team()) } : p; });
+    st.players = d.players.map((p, k) => { const o = (st.players || [])[k]; return o ? { startSpec: Number(o.startSpec ?? 100), seq: seqOf(o, k, team()), spells: spellsOf(o) } : { ...p, spells: spellsOf(p) }; });
     st.target = Math.min(team() - 1, Math.max(0, Number(st.target ?? d.target) || 0));
+    st.stall = st.stall !== false;
     return st;
   };
   const cur = () => { const r = root(); return fix(r.sets[r.cur]); };
@@ -86,6 +93,7 @@ export function createMaiden(host, { getTeam }) {
           ${j > 0 ? `<button class="ghost sm mx" data-del="${k}|${j}" title="Remove this hit">&times;</button>` : '<span class="mx"></span>'}</div>`).join('');
       return `<div class="mcol"><div class="mhead"><b>${esc(p.name)}</b>
           <label class="small muted" title="Spec energy coming into the room">Spec <select data-p="${k}|startSpec">${[100, 95].map((x) => `<option value="${x}" ${Number(p.startSpec) === x ? 'selected' : ''}>${x}%</option>`).join('')}</select></label></div>
+        <div class="mspells">${SPELLS.map(([sk, sl]) => `<label title="${SPELL_TIP[sk]}"><input type="checkbox" data-spell="${k}|${sk}" ${p.spells[sk] ? 'checked' : ''}>${sl}</label>`).join('')}</div>
         ${rows}<button class="ghost sm" data-add="${k}" style="margin-top:4px">+ Add hit</button></div>`;
     };
     const op = openOf(), sec = (k, title, body, off = false) => `<details class="msec${off ? ' off' : ''}" data-sec="${k}" ${op[k] === false || (off && op[k] !== true) ? '' : 'open'}><summary><h4>${title}</h4></summary>${body}</details>`;
@@ -94,9 +102,10 @@ export function createMaiden(host, { getTeam }) {
         .msec{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:10px}.msec>summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:8px}.msec>summary::-webkit-details-marker{display:none}
         .msec>summary::before{content:'▸';color:var(--ink2);font-size:12px;display:inline-block;transition:transform .15s}.msec[open]>summary::before{transform:rotate(90deg)}.msec>summary h4{margin:0;display:inline}.msec[open]>summary{margin-bottom:8px}.msec.off{opacity:.55}
         .mgrid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px}.mcol{min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:rgba(255,255,255,.02)}.mhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px 8px;margin-bottom:6px}
-        .mhead b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}@media (max-width:1000px){.mgrid[data-n="5"]{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (max-width:840px){.mgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:760px){.mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:460px){.mgrid{grid-template-columns:minmax(0,1fr)}}
+        .mhead b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}@media (max-width:1000px){.mgrid[data-n="5"]{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (max-width:840px){.mgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:760px){.mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:460px){.mgrid{grid-template-columns:minmax(0,1fr)}}
         .mhead label{flex-direction:row;align-items:center;gap:4px}.mrow{display:flex;gap:6px;align-items:center;margin-top:4px}.mrow select{flex:1;width:100%;max-width:none;min-width:0;font-size:13px;padding-left:6px;padding-right:2px}
-        .mrow select.bad{border-color:#d9534f}.mlab{font-size:11px;color:var(--ink2);margin-top:6px}.mx{width:26px;flex:none;padding:2px 0}</style>
+        .mrow select.bad{border-color:#d9534f}.mlab{font-size:11px;color:var(--ink2);margin-top:6px}
+        .mspells{display:grid;grid-template-columns:repeat(2,max-content);gap:2px 14px;font-size:12px}.mspells label{flex-direction:row;align-items:center;gap:4px;color:var(--ink2)}.mx{width:26px;flex:none;padding:2px 0}</style>
       <div class="row wrap" style="gap:10px;align-items:end;margin:0 0 10px">
         <div><div class="muted small">Copy set ${r0.cur} to</div>${SETS.filter((k) => k !== r0.cur).map((k) => `<button class="ghost sm" data-copyset="${k}" title="Replace set ${k} with a copy of set ${r0.cur}">Set ${k}</button>`).join(' ')}</div>
         <button class="ghost sm" data-clearset title="Start set ${r0.cur} over from the default plan (its Gear set stays)">Clear set ${r0.cur}</button>
@@ -112,6 +121,7 @@ export function createMaiden(host, { getTeam }) {
       <div class="row">
         <label>Gear<select data-s="gearSet">${GEAR_SETS.map((x) => `<option value="${x}" ${st.gearSet === x ? 'selected' : ''}>${esc(gearSetLabel(g, t, x))}</option>`).join('')}</select></label>
         <label title="Who her attacks go at (for now one player all room - her real targeting comes later)">Maiden targets<select data-s="target">${ps.map((p, k) => `<option value="${k}" ${st.target === k ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+        <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="The player she attacks, with Vengeance up, stalls her attack so it lands on the tick their next scythe lands - its Vengeance can't proc her on a tick of its own. From the start to her 30s proc (team-wide)"><input type="checkbox" data-s="stall" ${st.stall ? 'checked' : ''}>Stall Veng to prevent troll procs</label>
         <span class="muted small">HP ${MAIDEN_HP[t].toLocaleString()} · 70s proc below ${(MAIDEN_HP[t] * 0.7).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
       </div>
       ${sec('start', `Start <span class="muted small" style="font-weight:normal">- the prefires (Twisted bow tick ${PREFIRE_TICK.tbow}, ZCB tick ${PREFIRE_TICK.zcb}) to her 70s proc</span>`, `
@@ -172,8 +182,9 @@ export function createMaiden(host, { getTeam }) {
       } catch (x) { setMsg = `Couldn't open that file: ${x.message}`; }
       render(); return;
     }
-    if (el.dataset.s) { st[el.dataset.s] = el.dataset.s === 'target' ? Number(el.value) : el.value; }
+    if (el.dataset.s) { st[el.dataset.s] = el.type === 'checkbox' ? el.checked : el.dataset.s === 'target' ? Number(el.value) : el.value; }
     else if (el.dataset.p) { const [k, f] = el.dataset.p.split('|'); st.players[Number(k)][f] = f === 'startSpec' ? Number(el.value) : el.value; }
+    else if (el.dataset.spell) { const [k, sk] = el.dataset.spell.split('|'); st.players[Number(k)].spells[sk] = el.checked; }
     else if (el.dataset.seq) { const [k, j] = el.dataset.seq.split('|').map(Number); st.players[k].seq[j] = el.value; }
     persist(); render();
   });
@@ -193,7 +204,7 @@ export function createMaiden(host, { getTeam }) {
   // ---- the report
   let job = null;
   const draw = (run, i, title) => {
-    const trace = [], res = runMaiden(run.players, team(), new Rng(`${run.seed}#${i}`), null, { target: run.target, trace });
+    const trace = [], res = runMaiden(run.players, team(), new Rng(`${run.seed}#${i}`), null, { target: run.target, stall: run.stall, trace });
     return timelineHtml({ trace, names: run.players.map((p) => p.name), bossName: 'Maiden', end: res.proc ?? 60, title, legend: LEGEND, from: 1 });
   };
   /** One set's numbers. */
@@ -201,7 +212,7 @@ export function createMaiden(host, { getTeam }) {
     const raids = run.raids, ok = raids.filter((x) => x.total != null), N = raids.length, by = new Map();
     for (const x of ok) by.set(x.total, (by.get(x.total) || 0) + 1);
     const med = (a) => { const q = a.slice().sort((x, y) => x - y); return q[q.length >> 1]; };
-    return { N, ok, by, mean: ok.reduce((a, x) => a + x.total, 0) / Math.max(1, ok.length), hp: med(ok.map((x) => x.hp)), def: med(ok.map((x) => x.def)),
+    return { N, ok, by, median: (() => { const v = raids.map((x) => (x.total == null ? Infinity : x.total)).sort((a, b) => a - b), m = v[(N - 1) >> 1]; return Number.isFinite(m) ? m : null; })(), hp: med(ok.map((x) => x.hp)), def: med(ok.map((x) => x.def)),
       mauls: [0, 1, 2, 3, 4, 5].map((k) => raids.filter((x) => x.maulsLanded === k).length), nMaul: run.players.filter((p) => (p.seq || []).includes('maul')).length,
       vengs: raids.reduce((a, x) => a + x.vengs, 0) / Math.max(1, N), fails: N - ok.length,
       skips: (() => { const m = new Map(); for (const x of raids) for (const q of new Set((x.skipped || []).map((y) => `${y.i}|${y.a}`))) m.set(q, (m.get(q) || 0) + 1); return [...m.entries()]; })() };
@@ -236,10 +247,11 @@ export function createMaiden(host, { getTeam }) {
     runs.forEach((run, k) => {
       const N = run.raids.length; let held = 0; const pts = [];
       for (let t = 0; t < end; t++) { held += run.held[t] || 0; pts.push([X(t), Y(((run.hpSum[t] || 0) + held) / N / maxHp * 100)]); }
-      const c = SETCOL[run.k], m = S[k].mean;
+      const c = SETCOL[run.k], m = S[k].median;
       g += `<polyline fill="none" stroke="${c}" stroke-width="2" points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}"><title>${esc(run.label)}: her average HP</title></polyline>`;
-      g += `<line x1="${X(m)}" x2="${X(m)}" y1="${T}" y2="${T + ph}" stroke="${c}" stroke-width="1.5" stroke-dasharray="5 4"><title>${esc(run.label)}: average 70s proc ${fsec(m)}</title></line>`;
-      g += `<text x="${X(m) + 4}" y="${T + 12 + k * 14}" class="ax" fill="${c}" style="fill:${c}">avg 70s ${fsec(m)}</text>`;
+      if (m == null) return;
+      g += `<line x1="${X(m)}" x2="${X(m)}" y1="${T}" y2="${T + ph}" stroke="${c}" stroke-width="1.5" stroke-dasharray="5 4"><title>${esc(run.label)}: median 70s proc ${fsec(m)}</title></line>`;
+      g += `<text x="${X(m) + 4}" y="${T + 12 + k * 14}" class="ax" fill="${c}" style="fill:${c}">median 70s ${fsec(m)}</text>`;
     });
     g += `<text x="12" y="${T + ph / 2}" class="ax" transform="rotate(-90 12 ${T + ph / 2})" text-anchor="middle">her HP (average)</text>`;
     return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}</svg>`;
@@ -249,10 +261,10 @@ export function createMaiden(host, { getTeam }) {
     const pc = (n, N) => (n > 0 && n / N < 0.0005 ? '<0.1%' : `${(n / N * 100).toFixed(n / N < 0.1 ? 1 : 0)}%`);
     const times = [...new Set(S.flatMap((s) => [...s.by.keys()]))].sort((a, b) => a - b);
     const legend = one ? '' : `<div class="legend">${runs.map((x) => `<span><i style="background:${SETCOL[x.k]}"></i>${esc(x.label)}</span>`).join('')}</div>`;
-    const head = `<tr><th>70s proc</th>${runs.map((x) => `<th>${esc(x.label)}</th>`).join('')}</tr>`;
+    const head = `<tr><th>70s proc</th>${runs.map((x) => `<th>${esc(x.label)}<div class="small" style="font-weight:normal">this time (or faster)</div></th>`).join('')}</tr>`;
     const cum = S.map(() => 0);
-    const dist = times.map((x) => `<tr><td><b>${fsec(x)}</b> <span class="muted small">t${x}</span></td>${S.map((s, k) => { const n = s.by.get(x) || 0; cum[k] += n; return `<td>${n ? `<b>${pc(n, s.N)}</b>` : '-'} <span class="muted small" title="This time or faster">(${pc(cum[k], s.N)} by then)</span></td>`; }).join('')}</tr>`).join('');
-    const extra = `<tr><td>Average</td>${S.map((s) => `<td><b>${fsec(s.mean)}</b> <span class="muted small">t${s.mean.toFixed(1)}</span></td>`).join('')}</tr>`
+    const dist = times.map((x) => `<tr><td><b>${fsec(x)}</b> <span class="muted small">t${x}</span></td>${S.map((s, k) => { const n = s.by.get(x) || 0; cum[k] += n; return `<td title="This time: ${pc(n, s.N)} of raids · this time or faster: ${pc(cum[k], s.N)}"><b>${n ? pc(n, s.N) : '0%'}</b> <span class="muted">(${pc(cum[k], s.N)})</span></td>`; }).join('')}</tr>`).join('');
+    const extra = `<tr><td>Median</td>${S.map((s) => `<td>${s.median == null ? '-' : `<b>${fsec(s.median)}</b> <span class="muted small">t${s.median}</span>`}</td>`).join('')}</tr>`
       + [...bps].sort((x, y) => x - y).map((b) => { const T = Math.floor(b / 0.6 + 1e-9); return `<tr><td>By ${fsec(T)}</td>${S.map((s) => `<td><b>${pc(s.ok.filter((x) => x.total <= T).length, s.N)}</b></td>`).join('')}</tr>`; }).join('')
       + `<tr><td title="Damage carries over">HP left after the proc (median)</td>${S.map((s) => `<td>${s.hp == null ? '-' : s.hp.toLocaleString()}</td>`).join('')}</tr>`
       + `<tr><td>Her Defence then (median)</td>${S.map((s) => `<td>${s.def ?? '-'}</td>`).join('')}</tr>`
@@ -263,7 +275,7 @@ export function createMaiden(host, { getTeam }) {
     return `<div class="vz-report"><h3 style="margin:0 0 6px">70s proc - how often each time happens</h3>
       <div class="scroll"><table class="sortlist">${head}${dist}${extra}</table></div>
       <h3>How often each 70s proc time happens (% of raids)</h3>${legend}<div class="scroll">${barSvg(runs, S, times)}</div>
-      <h3>Her HP over time (average) - dotted: the average 70s proc</h3>${legend}<div class="sub">Each raid's HP is held at what it had after the 70s proc for now; the 50s and 30s procs come with those sections.</div><div class="scroll">${lineSvg(runs, S, maxHp)}</div></div>
+      <h3>Her HP over time (average) - dotted: the median 70s proc</h3>${legend}<div class="sub">Each raid's HP is held at what it had after the 70s proc for now; the 50s and 30s procs come with those sections.</div><div class="scroll">${lineSvg(runs, S, maxHp)}</div></div>
       <div class="row wrap" style="gap:6px;align-items:center;margin-top:10px"><b>Show raid</b>
         ${runs.map((x, j) => `<button class="ghost sm" data-mraid="${j}" data-setcol="${x.k}" title="Opens on the median raid; Previous / Next step through fastest, top 10%, top 25%, median, slowest and your breakpoints">${one ? 'View raids' : esc(x.label)}</button>`).join('')}</div>
       <div data-mraidout></div>`;
@@ -285,7 +297,10 @@ export function createMaiden(host, { getTeam }) {
     let bps = []; try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
     const keys = r.sets.filter((k) => setOf(k)); if (!keys.length) { err.textContent = 'Tick at least one set to run.'; return; }
     const n = Math.max(100, Number(r.raids) || 10000), t = team(), seed = String(r.seed || '').trim() || `m${Date.now()}`;
-    const runs = keys.map((k) => { const st = setOf(k); return { k, label: setLabel(k), players: playersNow(st), target: st.target, seed, raids: [] }; });
+    const runs = keys.map((k) => { const st = setOf(k); return { k, label: setLabel(k), players: playersNow(st), target: st.target, stall: st.stall, seed, raids: [] }; });
+    // every hit on every player's list needs its weapon in their Gear: no run until it's there (or the hit's changed)
+    const missing = runs.flatMap((x) => x.players.flatMap((p) => [...new Set(p.seq.filter((c) => !canDo(p.gear, c)))].map((c) => `${runs.length > 1 ? `${x.label}: ` : ''}${p.name} - ${ATTACKS[c].label} (no ${ATTACKS[c].weapon} in ${gearSetLabel(loadGear(), t, setOf(x.k).gearSet)})`)));
+    if (missing.length) { err.innerHTML = `Can't run - missing from the Gear tab:<br>${missing.map(esc).join('<br>')}<br><span class="muted">Add the item to that player's gear, or change the hit.</span>`; return; }
     job = { stop: false }; const me = job; btn('run').disabled = true; btn('stop').disabled = false;
     const pb = progressBar(status); pb.start();
     let i = 0;
@@ -301,7 +316,7 @@ export function createMaiden(host, { getTeam }) {
       const to = Math.min(n, i + Math.max(100, Math.floor(500 / runs.length)));
       try {
         for (; i < to; i++) for (const run of runs) {
-          const hps = [], x = runMaiden(run.players, t, new Rng(`${seed}#${i}`), null, { target: run.target, hps });
+          const hps = [], x = runMaiden(run.players, t, new Rng(`${seed}#${i}`), null, { target: run.target, stall: run.stall, hps });
           // her average HP by tick: each raid's HP up to its proc, then held at what it had then (later sections come next)
           run.hpSum ||= []; run.held ||= [];
           hps.forEach((h, k) => { run.hpSum[k] = (run.hpSum[k] || 0) + h; });

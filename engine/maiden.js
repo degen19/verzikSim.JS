@@ -7,9 +7,20 @@
 //  - First section: the prefires to her 70s proc - the tick a hit lands that takes her HP below 70% of her max (on that
 //    hit, not on her attack cycle). Damage carries over: that hit's full damage comes off, and the 70s phase starts
 //    from what's left.
-//  Later (the wishlist): crabs and her ramping when they leak, Dinhs / barrage / chinchompa AoE targeting, freezes
-//  (with / without a sceptre), crab spawn distances and clumping, scythe / Soulreaper axe... cleave on crabs, "add
-//  attack" per section (start, 70s, 50s, 30s, end), fail conditions, prefire options, stalling her auto, money raid.
+//  To do (the mechanics list):
+//   1. Her ramping when crabs leak (MAX_HIT by crabs leaked).
+//   2. Dinh's targeting (chunks?).  3. Barrage targeting.  4. Chinchompa AoE hits.
+//   5. Freeze timing with / without a sceptre, for each spell (Ancients toggle).
+//   6. Crab distance to her on spawn, and to clumping with other crabs.
+//   7. Scythe hitting several crabs / her (cleave).  8. Obligator the same.
+//   9. "Add attack" per section (start, 70s, 50s, 30s, end) - and how a player's hits change with the procs' timing
+//      (the sim's own behaviour, not more settings).
+//  10. Fail conditions.  11. Prefire options (ZCB auto / spec in; more to come).  12. Stalling her auto on the proc
+//      thresholds.  13. Money-raid Maiden with default decisions (Dinh's positioning, freezes, tbows...).
+//  14. Maiden targeting (her own: for now one player, the Maiden targets setting).
+//  15. Thralls change target when their player hits a crab (they follow their player's target).
+//  16. DC (Death Charge) - the toggle's kept for it.
+//  17. Stall Veng to prevent troll procs stops after her 30s proc (once the later sections are in).
 export const MAIDEN_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625, 1: 2625 };
 export const MAIDEN = {
   def: 200, magic: 350, magicAtk: 300,
@@ -49,6 +60,14 @@ export const procsOn = (team, pct, before, after) => !belowProc(team, pct, befor
 //    wearing, up to MAX_HIT on Protect from Magic (no crabs leaked yet). Everyone starts with Vengeance cast and its
 //    cooldown up: a hit of 1+ sends 75% (rounded down) back at her the same tick, and they recast straight away (no
 //    tick lost; 50-tick cooldown).
+//  - Spellbook toggles per player (all on by default): Veng - they cast Vengeance themselves (and Vengeance Other on a
+//    teammate without it; the caster's 50-tick cooldown); without anyone on Veng, no Vengeance. Ancients (freezing the
+//    crabs) and DC (Death Charge) are kept for what comes next. Thralls: their thrall's first hit lands 1-3 ticks after
+//    their first attack (random, per player), then every 4 ticks: 0-3 damage, always lands (as in the other rooms).
+//  - Stall Veng to prevent troll procs (a team-wide setting, on by default): the player she attacks, with Vengeance up, stalls
+//    her attack so it lands on the tick their next scythe lands (not scything: the next scythe anyone lands) - its
+//    Vengeance then can't proc her on a tick of its own. Her attack cycle itself doesn't move. From the start to her
+//    30s proc (only the Start section so far).
 //  - Within a tick: what lands first (in the order sent), then attacks. The 70s proc ends the section on its tick.
 //  Later: how a player's list changes with the procs' timing (e.g. barraging the next crabs straight away on a fast
 //  proc) is the sim's own behaviour, not more settings.
@@ -97,6 +116,10 @@ export function seqOf(p, k = 0, team = 4) {
   if (!PREFIRES.includes(s[0])) s.unshift('tbr');
   return s;
 }
+/** A player's spellbook toggles (each defaults on): ancients (freezes - with the crabs), thralls, dc (Death Charge),
+ *  veng (cast Vengeance themselves, and Vengeance Other on a teammate who can't). */
+export const SPELLS = [['ancients', 'Ancients'], ['thralls', 'Thralls'], ['dc', 'DC'], ['veng', 'Veng']];
+export const spellsOf = (c) => Object.fromEntries(SPELLS.map(([k]) => [k, !(c.spells && c.spells[k] === false)]));
 const own = (p, w) => (p.gear.weapons || []).includes(w);
 /** Can the player do this attack at all (the weapon's in their Gear)? */
 export const canDo = (gear, a) => (gear.weapons || []).includes(ATTACKS[a].weapon);
@@ -139,15 +162,27 @@ function clawRolls(ch, mx, rng) {
  * fill for Show raid), maxTick}. Returns {proc (tick, null if it never came), hp (after the proc's tick), def, specs
  * ({code: [used, landed]}), maulsLanded, vengs, skipped ([{i, a}] attacks skipped), dmg: {kind: total}}.
  */
-export function runMaiden(players, team, rng, log = null, { target = team - 1, trace = null, maxTick = 200, hps = null } = {}) {   // hps: [] for her HP at the end of each tick
+export function runMaiden(players, team, rng, log = null, { target = team - 1, trace = null, maxTick = 200, hps = null, stall = true } = {}) {   // hps: [] for her HP at the end of each tick
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const MAX = MAIDEN_HP[team] || 3500;
   let hp = MAX, def = MAIDEN.def, proc = null;
   const st = { specs: {}, maulsLanded: 0, vengs: 0, dmg: {}, skipped: [] };
   const ps = players.map((c, i) => {
     const seq = seqOf(c, i, team);
-    return { i, name: c.name || `P${i + 1}`, gear: c.gear, seq, spec: Number(c.startSpec ?? 100), step: 0, next: prefireTick(seq[0]), style: 'range', veng: true, vengReady: 0 };
+    const sp = spellsOf(c);
+    return { i, name: c.name || `P${i + 1}`, gear: c.gear, seq, spells: sp, spec: Number(c.startSpec ?? 100), step: 0, next: prefireTick(seq[0]), style: 'range', veng: false, vengReady: 0 };
   });
+  // Vengeance from the start: their own (Veng ticked), else a teammate's Vengeance Other (anyone with Veng)
+  const vengers = ps.filter((p) => p.spells.veng);
+  for (const p of ps) p.veng = vengers.length > 0;
+  /** Vengeance again after a proc: their own if they have it and it's off cooldown, else Vengeance Other from a teammate
+   *  whose cooldown is up (the caster's cooldown). No tick lost either way. */
+  const recast = (p, t) => {
+    const by = p.spells.veng && t >= p.vengReady ? p : vengers.find((q) => q !== p && t >= q.vengReady);
+    if (!by) return;
+    p.veng = true; by.vengReady = t + VENG_CD;
+    L.on && L(`t${t} ${by === p ? `${p.name} recasts Vengeance` : `${by.name} casts Vengeance Other on ${p.name}`}`);
+  };
   const tgt = ps[Math.min(ps.length - 1, Math.max(0, Number(target) || 0))];
   const hits = [];                                     // {t, p, a, amt?, tr?, label, ok?}
   const damage = (t, amt, label, kind) => {
@@ -157,6 +192,20 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
     if (proc == null && procsOn(team, 70, before, hp)) { proc = t; L.on && L(`t${t} *** 70s proc (below ${(MAX * 0.7).toFixed(1)}) ***`); }
   };
   const lowerDef = (t, what, by) => { if (by <= 0 || def <= 0) return; def = Math.max(0, def - by); L.on && L(`t${t} ${what} lowers her Defence -> ${def}`); };
+  /** The tick a stalled attack lands: the target's next scythe landing (queued, or their next swing if it's a scythe),
+   *  else the next scythe anyone has queued; null: none coming. */
+  const stallTo = (p, t) => {
+    const mine = hits.filter((x) => x.p === p && x.a === 'scythe' && x.t >= t).map((x) => x.t);
+    if (mine.length) return Math.min(...mine);
+    if (p.seq[Math.min(p.step, p.seq.length - 1)] === 'scythe' && own(p, 'Scythe of vitur')) return Math.max(p.next, t) + 1;
+    const any = hits.filter((x) => x.a === 'scythe' && x.t >= t).map((x) => x.t);
+    return any.length ? Math.min(...any) : null;
+  };
+  /** A player's thrall hit landing on tick `at` (0-3 damage, as in the other rooms). */
+  const thrall = (p, at) => {
+    const d = rng.randint(0, 3), tr = trace ? { t: at - 1, i: p.i, thrall: true, dmg: d, icon: 'Greater_ghost' } : null;
+    hits.push({ t: at, p, a: 'thrall', amt: d, tr }); if (tr) trace.push(tr);
+  };
   const used = (a, ok) => { const x = (st.specs[a] ||= [0, 0]); x[0]++; if (ok) x[1]++; };
   /** The player's next attack: their list in turn (the last repeats), skipping what they can't do. */
   const nextAct = (p) => {
@@ -173,18 +222,31 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
     for (const h of hits.filter((x) => x.t === t)) {
       hits.splice(hits.indexOf(h), 1);
       if (h.a === 'auto') {
+        // Stall Veng to prevent troll procs: with Vengeance up, the target stalls her attack so it lands with their next scythe
+        // (or, not scything, the next scythe anyone lands) - its Vengeance then lands with a scythe, not on a tick of its own
+        if (stall && !h.stalled && h.p.veng && h.p.lastScy !== t) {
+          const T = stallTo(h.p, t);
+          if (T != null && T > t) { h.stalled = t; h.t = T; hits.push(h); L.on && L(`t${t} ${h.p.name} stalls her attack to t${T} (Vengeance up)`); continue; }
+        }
         const p = h.p, ch = autoChance(p, p.style), d = rng.random() < ch ? rng.randint(0, MAX_HIT.on[0]) : 0;
         L.on && L(`t${t} her attack on ${p.name}: ${d}`);
-        if (h.tr) h.tr.tip = `Her attack on ${p.name}: ${d} (landed t${t})${d >= 1 && p.veng ? ' - Vengeance' : ''}`;
+        if (h.tr) h.tr.tip = `Her attack on ${p.name}: ${d} (landed t${t}${h.stalled != null ? `, stalled from t${h.stalled}` : ''})${d >= 1 && p.veng ? ' - Vengeance' : ''}`;
         if (d >= 1 && p.veng) {
           const v = Math.floor(d * 0.75); p.veng = false; st.vengs++;
           if (trace) trace.push({ t, i: p.i, veng: v });
           damage(t, v, `${p.name} Vengeance`, 'veng');
-          if (t >= p.vengReady) { p.veng = true; p.vengReady = t + VENG_CD; L.on && L(`t${t} ${p.name} recasts Vengeance`); }
+          recast(p, t);
         }
         continue;
       }
+      if (h.a === 'thrall') {                          // a thrall: 0-3, always lands; the next 4 ticks later
+        if (h.tr) h.tr.landed = t;
+        damage(t, h.amt, `${h.p.name} thrall`, 'thrall');
+        thrall(h.p, t + 4);
+        continue;
+      }
       if (h.tr) h.tr.landed = t;
+      if (h.a === 'scythe') h.p.lastScy = t;
       if (h.a === 'ralos') {                           // two rolls; a hit (1+) drains before the second
         const parts = [], d0 = def, accs = [], exps = [];
         for (let k = 0; k < 2; k++) {
@@ -215,7 +277,9 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
     // ---- attacks
     for (const p of ps) {
       if (t < p.next) continue;
-      const first = p.step === 0, a = nextAct(p), A = ATTACKS[a], tr = trace ? { t, i: p.i, code: A.code } : null;
+      const first = p.step === 0 && !p.started; p.started = true;
+      if (first && p.spells.thralls) thrall(p, t + rng.randint(1, 3));   // their thrall's first hit: 1-3 ticks after their first attack
+      const a = nextAct(p), A = ATTACKS[a], tr = trace ? { t, i: p.i, code: A.code } : null;
       const go = (h) => { hits.push({ t: t + A.delay, p, a, tr, label: A.label, ...h }); if (tr) trace.push(tr); };
       const tag = first ? ' (prefire)' : '';
       if (A.spec) { p.spec -= A.spec; L.on && L(`t${t} ${p.name} ${A.label} (${p.spec}% left)`); }
