@@ -195,6 +195,11 @@ export function createMaiden(host, { getTeam }) {
   };
   rep.addEventListener('change', (e) => {
     const r = root().report, el = e.target;
+    if (el.dataset.condense != null) {
+      r.condense = el.checked; persist();
+      const out = rep.querySelector('[data-rout]'); if (out.__run) out.innerHTML = results(out.__run.runs, out.__run.bps);
+      return;
+    }
     if (el.dataset.r) r[el.dataset.r] = el.value;
     if (el.dataset.rsetRun) { const k = el.dataset.rsetRun; r.sets = SETS.filter((x) => (x === k ? el.checked : r.sets.includes(x))); }
     if (el.dataset.rlabel != null) r.labels[el.dataset.rlabel] = el.value;
@@ -262,8 +267,24 @@ export function createMaiden(host, { getTeam }) {
     const times = [...new Set(S.flatMap((s) => [...s.by.keys()]))].sort((a, b) => a - b);
     const legend = one ? '' : `<div class="legend">${runs.map((x) => `<span><i style="background:${SETCOL[x.k]}"></i>${esc(x.label)}</span>`).join('')}</div>`;
     const head = `<tr><th>70s proc</th>${runs.map((x) => `<th>${esc(x.label)}<div class="small" style="font-weight:normal">this time (or faster)</div></th>`).join('')}</tr>`;
+    // Condense list: times only thralls or a Vengeance on a tick of its own ever proc her on go into one row per gap
+    // between the times player attacks (or a stalled Vengeance) proc her on
+    const main = new Set(runs.flatMap((x) => x.raids.filter((y) => y.total != null && y.procBy === 'attack').map((y) => y.total)));
+    const condense = root().report.condense !== false, groups = [];
+    for (const x of times) {
+      const last = groups[groups.length - 1];
+      if (condense && !main.has(x) && last && last.odd) last.ts.push(x); else groups.push({ ts: [x], odd: !main.has(x) });
+    }
     const cum = S.map(() => 0);
-    const dist = times.map((x) => `<tr><td><b>${fsec(x)}</b> <span class="muted small">t${x}</span></td>${S.map((s, k) => { const n = s.by.get(x) || 0; cum[k] += n; return `<td title="This time: ${pc(n, s.N)} of raids · this time or faster: ${pc(cum[k], s.N)}"><b>${n ? pc(n, s.N) : '0%'}</b> <span class="muted">(${pc(cum[k], s.N)})</span></td>`; }).join('')}</tr>`).join('');
+    const dist = groups.map((gp) => {
+      const a = gp.ts[0], b = gp.ts[gp.ts.length - 1], many = gp.ts.length > 1;
+      const lab = many ? `<b>${fsec(a)}-${fsec(b)}</b> <span class="muted small">t${a}-${b}</span>` : `<b>${fsec(a)}</b> <span class="muted small">t${a}</span>`;
+      const tip = gp.odd ? ' title="Only thralls or a Vengeance on a tick of its own proc her on this time"' : '';
+      return `<tr${gp.odd ? ' class="muted"' : ''}><td${tip}>${lab}${gp.odd ? ' <span class="small">(thralls / Vengeance)</span>' : ''}</td>${S.map((s, k) => {
+        const n = gp.ts.reduce((q, x) => q + (s.by.get(x) || 0), 0); cum[k] += n;
+        return `<td title="This time: ${pc(n, s.N)} of raids · this time or faster: ${pc(cum[k], s.N)}"><b>${n ? pc(n, s.N) : '0%'}</b> <span class="muted">(${pc(cum[k], s.N)})</span></td>`;
+      }).join('')}</tr>`;
+    }).join('');
     const extra = `<tr><td>Median</td>${S.map((s) => `<td>${s.median == null ? '-' : `<b>${fsec(s.median)}</b> <span class="muted small">t${s.median}</span>`}</td>`).join('')}</tr>`
       + [...bps].sort((x, y) => x - y).map((b) => { const T = Math.floor(b / 0.6 + 1e-9); return `<tr><td>By ${fsec(T)}</td>${S.map((s) => `<td><b>${pc(s.ok.filter((x) => x.total <= T).length, s.N)}</b></td>`).join('')}</tr>`; }).join('')
       + `<tr><td title="Damage carries over">HP left after the proc (median)</td>${S.map((s) => `<td>${s.hp == null ? '-' : s.hp.toLocaleString()}</td>`).join('')}</tr>`
@@ -273,6 +294,7 @@ export function createMaiden(host, { getTeam }) {
       + (S.some((s) => s.skips.length) ? `<tr><td title="Not in their Gear, or not enough spec energy">Hits skipped</td>${S.map((s, j) => `<td class="small">${s.skips.length ? s.skips.map(([q, n]) => { const [i, a] = q.split('|'); return `<span class="err">${esc(runs[j].players[Number(i)].name)} ${esc(ATTACKS[a].label)}</span> ${pc(n, s.N)}`; }).join('<br>') : '-'}</td>`).join('')}</tr>` : '')
       + (S.some((s) => s.fails) ? `<tr><td>No proc</td>${S.map((s) => `<td class="err">${s.fails ? pc(s.fails, s.N) : '-'}</td>`).join('')}</tr>` : '');
     return `<div class="vz-report"><h3 style="margin:0 0 6px">70s proc - how often each time happens</h3>
+      <label class="pick" style="flex-direction:row;gap:6px;align-items:center;margin:0 0 6px" title="Times that only thralls or a Vengeance on a tick of its own proc her on go into one row between the times player attacks proc her on"><input type="checkbox" data-condense ${condense ? 'checked' : ''}>Condense list</label>
       <div class="scroll"><table class="sortlist">${head}${dist}${extra}</table></div>
       <h3>How often each 70s proc time happens (% of raids)</h3>${legend}<div class="scroll">${barSvg(runs, S, times)}</div>
       <h3>Her HP over time (average) - dotted: the median 70s proc</h3>${legend}<div class="sub">Each raid's HP is held at what it had after the 70s proc for now; the 50s and 30s procs come with those sections.</div><div class="scroll">${lineSvg(runs, S, maxHp)}</div></div>
@@ -320,7 +342,7 @@ export function createMaiden(host, { getTeam }) {
           // her average HP by tick: each raid's HP up to its proc, then held at what it had then (later sections come next)
           run.hpSum ||= []; run.held ||= [];
           hps.forEach((h, k) => { run.hpSum[k] = (run.hpSum[k] || 0) + h; });
-          run.held[hps.length] = (run.held[hps.length] || 0) + hps[hps.length - 1]; run.raids.push({ i, total: x.proc, key: String(x.maulsLanded), hp: x.hp, def: x.def, maulsLanded: x.maulsLanded, vengs: x.vengs, skipped: x.skipped }); }
+          run.held[hps.length] = (run.held[hps.length] || 0) + hps[hps.length - 1]; run.raids.push({ i, total: x.proc, procBy: x.procBy, key: String(x.maulsLanded), hp: x.hp, def: x.def, maulsLanded: x.maulsLanded, vengs: x.vengs, skipped: x.skipped }); }
       } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`; pb.set(i / n);
       whenFree(() => setTimeout(step, 0));

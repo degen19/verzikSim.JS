@@ -21,6 +21,10 @@
 //  15. Thralls change target when their player hits a crab (they follow their player's target).
 //  16. DC (Death Charge) - the toggle's kept for it.
 //  17. Stall Veng to prevent troll procs stops after her 30s proc (once the later sections are in).
+//  18. Check that players have the spec energy their hits need (like the missing-gear check before a report runs) -
+//      for now a spec they can't afford is just skipped.
+//  19. Backup Defence specs: when the opening Defence specs miss (e.g. a maul), backups (BGS / Ralos / maul again...)
+//      to get her Defence down, as on Xarpus.
 export const MAIDEN_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625, 1: 2625 };
 export const MAIDEN = {
   def: 200, magic: 350, magicAtk: 300,
@@ -159,7 +163,8 @@ function clawRolls(ch, mx, rng) {
 
 /**
  * One raid's opening, to the 70s proc. players: [{name, gear, seq, startSpec}]; opts: {target (player index), trace ([] to
- * fill for Show raid), maxTick}. Returns {proc (tick, null if it never came), hp (after the proc's tick), def, specs
+ * fill for Show raid), maxTick}. Returns {proc (tick, null if it never came), procBy ('attack': a player's attack or a
+ * stalled Vengeance landing with a scythe; 'thrall'; 'veng': a Vengeance on a tick of its own), hp (after the proc's tick), def, specs
  * ({code: [used, landed]}), maulsLanded, vengs, skipped ([{i, a}] attacks skipped), dmg: {kind: total}}.
  */
 export function runMaiden(players, team, rng, log = null, { target = team - 1, trace = null, maxTick = 200, hps = null, stall = true } = {}) {   // hps: [] for her HP at the end of each tick
@@ -185,11 +190,12 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
   };
   const tgt = ps[Math.min(ps.length - 1, Math.max(0, Number(target) || 0))];
   const hits = [];                                     // {t, p, a, amt?, tr?, label, ok?}
-  const damage = (t, amt, label, kind) => {
+  let procBy = null;                                   // what procced her: a player's attack (or a stalled Vengeance landing with a scythe) / 'thrall' / 'veng'
+  const damage = (t, amt, label, kind, stalled = false) => {
     if (amt <= 0) { L.on && L(`t${t} ${label} 0`); return; }
     const before = hp; hp -= amt; st.dmg[kind] = (st.dmg[kind] || 0) + amt;
     L.on && L(`t${t} ${label} ${amt} -> Maiden ${hp}`);
-    if (proc == null && procsOn(team, 70, before, hp)) { proc = t; L.on && L(`t${t} *** 70s proc (below ${(MAX * 0.7).toFixed(1)}) ***`); }
+    if (proc == null && procsOn(team, 70, before, hp)) { proc = t; procBy = kind === 'thrall' || (kind === 'veng' && !stalled) ? kind : 'attack'; L.on && L(`t${t} *** 70s proc (below ${(MAX * 0.7).toFixed(1)}) ***`); }
   };
   const lowerDef = (t, what, by) => { if (by <= 0 || def <= 0) return; def = Math.max(0, def - by); L.on && L(`t${t} ${what} lowers her Defence -> ${def}`); };
   /** The tick a stalled attack lands: the target's next scythe landing (queued, or their next swing if it's a scythe),
@@ -234,7 +240,7 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
         if (d >= 1 && p.veng) {
           const v = Math.floor(d * 0.75); p.veng = false; st.vengs++;
           if (trace) trace.push({ t, i: p.i, veng: v });
-          damage(t, v, `${p.name} Vengeance`, 'veng');
+          damage(t, v, `${p.name} Vengeance`, 'veng', h.stalled != null);
           recast(p, t);
         }
         continue;
@@ -323,5 +329,5 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
     if (hps) hps.push(hp);
   }
   if (trace && proc != null) { trace.push({ t: proc, hp: Math.max(0, hp), phase: '70s' }); trace.push({ t: proc, mark: '70s' }); }
-  return { proc, hp, def, ...st, inFlight: hits.filter((h) => h.a !== 'auto').length };
+  return { proc, procBy, hp, def, ...st, inFlight: hits.filter((h) => h.a !== 'auto').length };
 }
