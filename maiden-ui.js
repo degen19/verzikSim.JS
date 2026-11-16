@@ -79,19 +79,20 @@ export function createMaiden(host, { getTeam }) {
     if (savedPick && !list.some((x) => x.id === savedPick)) savedPick = '';
     const opts = (codes, v, gear) => codes.map((a) => `<option value="${a}" ${a === v ? 'selected' : ''}>${esc(ATTACKS[a].label)}${canDo(gear, a) ? '' : ' (not in Gear)'}</option>`).join('');
     const col = (p, k) => {
-      const rows = p.seq.map((a, j) => `<div class="mrow">${j === 0 ? '<span class="mlab">Prefire</span>' : `<span class="mlab">${j}</span>`}
-          <select data-seq="${k}|${j}" class="${canDo(p.gear, a) ? '' : 'bad'}">${opts(j === 0 ? PREFIRES : Object.keys(ATTACKS), a, p.gear)}</select>
+      const rows = p.seq.map((a, j) => `${j === 0 ? '<div class="mlab">Prefire</div>' : j === 1 ? '<div class="mlab">Then</div>' : ''}<div class="mrow">
+          <select title="${j === 0 ? 'Prefire' : `Hit ${j}`}"  data-seq="${k}|${j}" class="${canDo(p.gear, a) ? '' : 'bad'}">${opts(j === 0 ? PREFIRES : Object.keys(ATTACKS), a, p.gear)}</select>
           ${j > 0 ? `<button class="ghost sm mx" data-del="${k}|${j}" title="Remove this hit">&times;</button>` : '<span class="mx"></span>'}</div>`).join('');
       return `<div class="mcol"><div class="mhead"><b>${esc(p.name)}</b>
-          <label class="small muted" title="Spec energy coming into the room">Start spec <select data-p="${k}|startSpec">${[100, 95].map((x) => `<option value="${x}" ${Number(p.startSpec) === x ? 'selected' : ''}>${x}%</option>`).join('')}</select></label></div>
+          <label class="small muted" title="Spec energy coming into the room">Spec <select data-p="${k}|startSpec">${[100, 95].map((x) => `<option value="${x}" ${Number(p.startSpec) === x ? 'selected' : ''}>${x}%</option>`).join('')}</select></label></div>
         ${rows}<button class="ghost sm" data-add="${k}" style="margin-top:4px">+ Add hit</button></div>`;
     };
     const later = ['70s', '50s', '30s', 'End'].map((x) => `<div class="msec off"><h4>${x}</h4><span class="muted small">comes later</span></div>`).join('');
     cfg.innerHTML = `<style>
         .msec{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:10px}.msec h4{margin:0 0 8px}.msec.off{opacity:.55;display:flex;gap:10px;align-items:baseline;padding:6px 12px}.msec.off h4{margin:0}
-        .mgrid{display:flex;gap:14px;flex-wrap:wrap}.mcol{min-width:220px;flex:1}.mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
-        .mhead label{flex-direction:row;align-items:center;gap:4px}.mrow{display:flex;gap:6px;align-items:center;margin-top:4px}.mrow select{flex:1;min-width:0}
-        .mrow select.bad{border-color:#d9534f}.mlab{width:46px;font-size:12px;color:var(--ink2)}.mx{width:28px;padding:2px 0}</style>
+        .mgrid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px}.mcol{min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:rgba(255,255,255,.02)}.mhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px 8px;margin-bottom:6px}
+        .mhead b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}@media (max-width:1000px){.mgrid[data-n="5"]{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (max-width:840px){.mgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:760px){.mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:460px){.mgrid{grid-template-columns:minmax(0,1fr)}}
+        .mhead label{flex-direction:row;align-items:center;gap:4px}.mrow{display:flex;gap:6px;align-items:center;margin-top:4px}.mrow select{flex:1;width:100%;max-width:none;min-width:0;font-size:13px;padding-left:6px;padding-right:2px}
+        .mrow select.bad{border-color:#d9534f}.mlab{font-size:11px;color:var(--ink2);margin-top:6px}.mx{width:26px;flex:none;padding:2px 0}</style>
       <div class="row wrap" style="gap:10px;align-items:end;margin:0 0 10px">
         <div><div class="muted small">Copy set ${r0.cur} to</div>${SETS.filter((k) => k !== r0.cur).map((k) => `<button class="ghost sm" data-copyset="${k}" title="Replace set ${k} with a copy of set ${r0.cur}">Set ${k}</button>`).join(' ')}</div>
         <button class="ghost sm" data-clearset title="Start set ${r0.cur} over from the default plan (its Gear set stays)">Clear set ${r0.cur}</button>
@@ -110,7 +111,7 @@ export function createMaiden(host, { getTeam }) {
         <span class="muted small">HP ${MAIDEN_HP[t].toLocaleString()} · 70s proc below ${(MAIDEN_HP[t] * 0.7).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
       </div>
       <div class="msec"><h4>Start <span class="muted small" style="font-weight:normal">- the prefires (Twisted bow tick ${PREFIRE_TICK.tbow}, ZCB tick ${PREFIRE_TICK.zcb}) to her 70s proc</span></h4>
-        <div class="mgrid">${ps.map(col).join('')}</div>
+        <div class="mgrid" data-n="${ps.length}" style="--n:${ps.length}">${ps.map(col).join('')}</div>
         <p class="muted small" style="margin:8px 0 0">Each hit goes as soon as their attack timer allows; their last hit repeats until the 70s proc.
           A hit they can't do (not in their Gear, or not enough spec) is skipped. Ranged gear on Rigour at 112 Ranged, melee gear on their prayer (Zeal unless set in the Gear tab) at 118; Vengeance up from the start.</p></div>
       ${later}`;
