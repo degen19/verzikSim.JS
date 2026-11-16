@@ -198,22 +198,61 @@ export function createMaiden(host, { getTeam }) {
   };
   /** One set's numbers. */
   function statsOf(run) {
-    const raids = run.raids, ok = raids.filter((x) => x.total != null), N = raids.length, v = ok.map((x) => x.total).sort((a, b) => a - b);
-    const at = (f) => v[Math.min(v.length - 1, Math.max(0, Math.floor(N * f) - 1))];
+    const raids = run.raids, ok = raids.filter((x) => x.total != null), N = raids.length, by = new Map();
+    for (const x of ok) by.set(x.total, (by.get(x.total) || 0) + 1);
     const med = (a) => { const q = a.slice().sort((x, y) => x - y); return q[q.length >> 1]; };
-    return { N, ok, v, rows: { Fastest: v[0], 'Top 10%': at(0.1), 'Top 25%': at(0.25), Median: v[N >> 1], 'Bottom 25%': at(0.75), Slowest: v[v.length - 1] },
-      mean: v.reduce((a, b) => a + b, 0) / Math.max(1, v.length), hp: med(ok.map((x) => x.hp)), def: med(ok.map((x) => x.def)),
+    return { N, ok, by, mean: ok.reduce((a, x) => a + x.total, 0) / Math.max(1, ok.length), hp: med(ok.map((x) => x.hp)), def: med(ok.map((x) => x.def)),
       mauls: [0, 1, 2, 3, 4, 5].map((k) => raids.filter((x) => x.maulsLanded === k).length), nMaul: run.players.filter((p) => (p.seq || []).includes('maul')).length,
       vengs: raids.reduce((a, x) => a + x.vengs, 0) / Math.max(1, N), fails: N - ok.length,
-      skips: (() => { const by = new Map(); for (const x of raids) for (const q of new Set((x.skipped || []).map((y) => `${y.i}|${y.a}`))) by.set(q, (by.get(q) || 0) + 1); return [...by.entries()]; })() };
+      skips: (() => { const m = new Map(); for (const x of raids) for (const q of new Set((x.skipped || []).map((y) => `${y.i}|${y.a}`))) m.set(q, (m.get(q) || 0) + 1); return [...m.entries()]; })() };
+  }
+  const COLS = ['#2a78d6', '#d64545', '#2f9e61'];
+  const SETCOL = { A: COLS[0], B: COLS[1], C: COLS[2] };
+  /** Bars: how often each 70s proc time happens, per set. */
+  function barSvg(runs, S, times) {
+    const W = Math.max(640, times.length * 46 + 70), H = 300, L = 46, B = 40, T = 16, R = 10, pw = W - L - R, ph = H - T - B;
+    const vals = S.map((s) => times.map((x) => (s.by.get(x) || 0) / s.N * 100)), top = Math.max(1, ...vals.flat()) * 1.12;
+    const slot = pw / times.length, bw = slot * 0.8 / runs.length;
+    let g = '';
+    for (let i = 0; i <= 4; i++) { const y = T + ph - ph * i / 4; g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" class="grid"/><text x="${L - 6}" y="${y + 4}" class="ax" text-anchor="end">${(top * i / 4).toFixed(0)}%</text>`; }
+    vals.forEach((ser, k) => ser.forEach((v, i) => {
+      if (!v) return;
+      const h = ph * v / top, x = L + i * slot + slot * 0.1 + k * bw;
+      g += `<rect x="${x.toFixed(1)}" y="${(T + ph - h).toFixed(1)}" width="${(bw * 0.92).toFixed(1)}" height="${h.toFixed(1)}" fill="${SETCOL[runs[k].k]}"><title>${esc(runs[k].label)} ${fsec(times[i])} - ${v.toFixed(1)}%</title></rect>`;
+      if (runs.length === 1 || bw > 26) g += `<text x="${(x + bw * 0.46).toFixed(1)}" y="${(T + ph - h - 4).toFixed(1)}" class="ax" text-anchor="middle">${v.toFixed(v < 10 ? 1 : 0)}%</text>`;
+    }));
+    times.forEach((x, i) => { g += `<text x="${(L + i * slot + slot / 2).toFixed(1)}" y="${H - B + 16}" class="ax" text-anchor="middle">${fsec(x)}</text>`; });
+    g += `<text x="12" y="${T + ph / 2}" class="ax" transform="rotate(-90 12 ${T + ph / 2})" text-anchor="middle">% of raids</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}</svg>`;
+  }
+  /** Lines: her average HP (% of max) by time, per set, and a dotted line at each set's average proc. */
+  function lineSvg(runs, S, maxHp) {
+    const end = Math.max(...runs.map((r) => r.hpSum.length)), W = 900, H = 320, L = 46, B = 40, T = 18, R = 14, pw = W - L - R, ph = H - T - B;
+    const lo = 60, X = (t) => L + pw * t / Math.max(1, end - 1), Y = (pct) => T + ph * (100 - pct) / (100 - lo);
+    let g = '';
+    for (let p = lo; p <= 100; p += 10) g += `<line x1="${L}" x2="${W - R}" y1="${Y(p)}" y2="${Y(p)}" class="grid"/><text x="${L - 6}" y="${Y(p) + 4}" class="ax" text-anchor="end">${p}%</text>`;
+    for (let sec = 0; sec * 0.6 <= (end - 1) * 0.6 + 1e-9; sec += 5) { const t = sec / 0.6; if (t > end - 1) break; g += `<text x="${X(t)}" y="${H - B + 16}" class="ax" text-anchor="middle">${sec}s</text>`; }
+    g += `<line x1="${L}" x2="${W - R}" y1="${Y(70)}" y2="${Y(70)}" stroke="#999" stroke-dasharray="2 4"/><text x="${W - R - 2}" y="${Y(70) - 4}" class="ax" text-anchor="end">70%</text>`;
+    runs.forEach((run, k) => {
+      const N = run.raids.length; let held = 0; const pts = [];
+      for (let t = 0; t < end; t++) { held += run.held[t] || 0; pts.push([X(t), Y(((run.hpSum[t] || 0) + held) / N / maxHp * 100)]); }
+      const c = SETCOL[run.k], m = S[k].mean;
+      g += `<polyline fill="none" stroke="${c}" stroke-width="2" points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}"><title>${esc(run.label)}: her average HP</title></polyline>`;
+      g += `<line x1="${X(m)}" x2="${X(m)}" y1="${T}" y2="${T + ph}" stroke="${c}" stroke-width="1.5" stroke-dasharray="5 4"><title>${esc(run.label)}: average 70s proc ${fsec(m)}</title></line>`;
+      g += `<text x="${X(m) + 4}" y="${T + 12 + k * 14}" class="ax" fill="${c}" style="fill:${c}">avg 70s ${fsec(m)}</text>`;
+    });
+    g += `<text x="12" y="${T + ph / 2}" class="ax" transform="rotate(-90 12 ${T + ph / 2})" text-anchor="middle">her HP (average)</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}</svg>`;
   }
   function results(runs, bps) {
-    const S = runs.map(statsOf), one = runs.length === 1;
-    const pc = (n, N) => `${(n / N * 100).toFixed(n / N < 0.1 ? 1 : 0)}%`;
-    const head = `<tr><th></th>${runs.map((x) => `<th data-setcol="${x.k}">${esc(x.label)}</th>`).join('')}</tr>`;
-    const cell = (x) => (x == null ? '-' : `<b>${fsec(x)}</b> <span class="muted small">t${x}</span>`);
-    const rowsHtml = Object.keys(S[0].rows).map((l) => `<tr><td>${l}</td>${S.map((s) => `<td>${cell(s.rows[l])}</td>`).join('')}</tr>`).join('')
-      + `<tr><td>Mean</td>${S.map((s) => `<td><b>${fsec(s.mean)}</b> <span class="muted small">t${s.mean.toFixed(1)}</span></td>`).join('')}</tr>`
+    const S = runs.map(statsOf), one = runs.length === 1, maxHp = MAIDEN_HP[team()];
+    const pc = (n, N) => (n > 0 && n / N < 0.0005 ? '<0.1%' : `${(n / N * 100).toFixed(n / N < 0.1 ? 1 : 0)}%`);
+    const times = [...new Set(S.flatMap((s) => [...s.by.keys()]))].sort((a, b) => a - b);
+    const legend = one ? '' : `<div class="legend">${runs.map((x) => `<span><i style="background:${SETCOL[x.k]}"></i>${esc(x.label)}</span>`).join('')}</div>`;
+    const head = `<tr><th>70s proc</th>${runs.map((x) => `<th>${esc(x.label)}</th>`).join('')}</tr>`;
+    const cum = S.map(() => 0);
+    const dist = times.map((x) => `<tr><td><b>${fsec(x)}</b> <span class="muted small">t${x}</span></td>${S.map((s, k) => { const n = s.by.get(x) || 0; cum[k] += n; return `<td>${n ? `<b>${pc(n, s.N)}</b>` : '-'} <span class="muted small" title="This time or faster">(${pc(cum[k], s.N)} by then)</span></td>`; }).join('')}</tr>`).join('');
+    const extra = `<tr><td>Average</td>${S.map((s) => `<td><b>${fsec(s.mean)}</b> <span class="muted small">t${s.mean.toFixed(1)}</span></td>`).join('')}</tr>`
       + [...bps].sort((x, y) => x - y).map((b) => { const T = Math.floor(b / 0.6 + 1e-9); return `<tr><td>By ${fsec(T)}</td>${S.map((s) => `<td><b>${pc(s.ok.filter((x) => x.total <= T).length, s.N)}</b></td>`).join('')}</tr>`; }).join('')
       + `<tr><td title="Damage carries over">HP left after the proc (median)</td>${S.map((s) => `<td>${s.hp == null ? '-' : s.hp.toLocaleString()}</td>`).join('')}</tr>`
       + `<tr><td>Her Defence then (median)</td>${S.map((s) => `<td>${s.def ?? '-'}</td>`).join('')}</tr>`
@@ -221,8 +260,10 @@ export function createMaiden(host, { getTeam }) {
       + `<tr><td>Vengeance procs a raid</td>${S.map((s) => `<td>${s.vengs.toFixed(2)}</td>`).join('')}</tr>`
       + (S.some((s) => s.skips.length) ? `<tr><td title="Not in their Gear, or not enough spec energy">Hits skipped</td>${S.map((s, j) => `<td class="small">${s.skips.length ? s.skips.map(([q, n]) => { const [i, a] = q.split('|'); return `<span class="err">${esc(runs[j].players[Number(i)].name)} ${esc(ATTACKS[a].label)}</span> ${pc(n, s.N)}`; }).join('<br>') : '-'}</td>`).join('')}</tr>` : '')
       + (S.some((s) => s.fails) ? `<tr><td>No proc</td>${S.map((s) => `<td class="err">${s.fails ? pc(s.fails, s.N) : '-'}</td>`).join('')}</tr>` : '');
-    return `<div class="vz-report"><h3 style="margin:0 0 6px">70s proc</h3>
-      <div class="scroll"><table class="sortlist">${head}${rowsHtml}</table></div></div>
+    return `<div class="vz-report"><h3 style="margin:0 0 6px">70s proc - how often each time happens</h3>
+      <div class="scroll"><table class="sortlist">${head}${dist}${extra}</table></div>
+      <h3>How often each 70s proc time happens (% of raids)</h3>${legend}<div class="scroll">${barSvg(runs, S, times)}</div>
+      <h3>Her HP over time (average) - dotted: the average 70s proc</h3>${legend}<div class="sub">Each raid's HP is held at what it had after the 70s proc for now; the 50s and 30s procs come with those sections.</div><div class="scroll">${lineSvg(runs, S, maxHp)}</div></div>
       <div class="row wrap" style="gap:6px;align-items:center;margin-top:10px"><b>Show raid</b>
         ${runs.map((x, j) => `<button class="ghost sm" data-mraid="${j}" data-setcol="${x.k}" title="Opens on the median raid; Previous / Next step through fastest, top 10%, top 25%, median, slowest and your breakpoints">${one ? 'View raids' : esc(x.label)}</button>`).join('')}</div>
       <div data-mraidout></div>`;
@@ -259,7 +300,12 @@ export function createMaiden(host, { getTeam }) {
       }
       const to = Math.min(n, i + Math.max(100, Math.floor(500 / runs.length)));
       try {
-        for (; i < to; i++) for (const run of runs) { const x = runMaiden(run.players, t, new Rng(`${seed}#${i}`), null, { target: run.target }); run.raids.push({ i, total: x.proc, key: String(x.maulsLanded), hp: x.hp, def: x.def, maulsLanded: x.maulsLanded, vengs: x.vengs, skipped: x.skipped }); }
+        for (; i < to; i++) for (const run of runs) {
+          const hps = [], x = runMaiden(run.players, t, new Rng(`${seed}#${i}`), null, { target: run.target, hps });
+          // her average HP by tick: each raid's HP up to its proc, then held at what it had then (later sections come next)
+          run.hpSum ||= []; run.held ||= [];
+          hps.forEach((h, k) => { run.hpSum[k] = (run.hpSum[k] || 0) + h; });
+          run.held[hps.length] = (run.held[hps.length] || 0) + hps[hps.length - 1]; run.raids.push({ i, total: x.proc, key: String(x.maulsLanded), hp: x.hp, def: x.def, maulsLanded: x.maulsLanded, vengs: x.vengs, skipped: x.skipped }); }
       } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
       status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`; pb.set(i / n);
       whenFree(() => setTimeout(step, 0));

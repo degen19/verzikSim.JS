@@ -139,7 +139,7 @@ function clawRolls(ch, mx, rng) {
  * fill for Show raid), maxTick}. Returns {proc (tick, null if it never came), hp (after the proc's tick), def, specs
  * ({code: [used, landed]}), maulsLanded, vengs, skipped ([{i, a}] attacks skipped), dmg: {kind: total}}.
  */
-export function runMaiden(players, team, rng, log = null, { target = team - 1, trace = null, maxTick = 200 } = {}) {
+export function runMaiden(players, team, rng, log = null, { target = team - 1, trace = null, maxTick = 200, hps = null } = {}) {   // hps: [] for her HP at the end of each tick
   const L = log ? (s) => log.push(s) : () => {}; L.on = !!log;
   const MAX = MAIDEN_HP[team] || 3500;
   let hp = MAX, def = MAIDEN.def, proc = null;
@@ -206,7 +206,7 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
       }
       damage(t, h.amt, `${h.p.name} ${h.label}`, h.a);
     }
-    if (proc != null) break;
+    if (proc != null) { if (hps) hps.push(hp); break; }
     // ---- her attack
     if (isAttackTick(t)) {
       const tr = trace ? { t, boss: 'Attack', kind: 'attack', tip: `Her attack on ${tgt.name} (lands t${t + AUTO_DELAY})`, short: '' } : null;
@@ -256,6 +256,7 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
       p.style = A.style; p.next = t + A.speed;
     }
     if (trace) trace.push({ t, hp: Math.max(0, hp), phase: 'to 70s' });
+    if (hps) hps.push(hp);
   }
   if (trace && proc != null) { trace.push({ t: proc, hp: Math.max(0, hp), phase: '70s' }); trace.push({ t: proc, mark: '70s' }); }
   return { proc, hp, def, ...st, inFlight: hits.filter((h) => h.a !== 'auto').length };
