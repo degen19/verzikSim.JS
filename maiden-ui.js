@@ -11,6 +11,7 @@ import { timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
 import { runMaiden, defaultMaidenPlan, seqOf, canDo, ATTACKS, PREFIRES, MAIDEN_HP, PREFIRE_TICK } from './engine/maiden.js';
 
 const STORE = 'verzikSim.maiden.v1';           // {team: {set, report}}
+const SAVED = 'verzikSim.maidenSaved.v1';      // {team: [{id, name, saved, set}]}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
 const saveKey = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } };
@@ -18,7 +19,7 @@ const fsec = (x) => { const s2 = x * 0.6; return s2 >= 60 ? `${Math.floor(s2 / 6
 const LEGEND = 'Maiden: the prefires (tick 5) to her 70s proc - the hit that takes her below 70% of her HP. Her attacks every 10 ticks from tick 9 land 5 ticks later (on the targeted player).';
 
 export function createMaiden(host, { getTeam }) {
-  let state = loadKey(STORE);
+  let state = loadKey(STORE), saved = loadKey(SAVED), savedPick = '', setMsg = '';
   const persist = () => saveKey(STORE, state);
   const team = () => Number(getTeam()) || 4;
   host.innerHTML = `${settingsCard('Maiden settings', '<div data-cfg></div>')}
@@ -48,7 +49,8 @@ export function createMaiden(host, { getTeam }) {
   const playersNow = (st) => { const gp = gearOf(st); return st.players.map((p, k) => ({ ...p, name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k) })); };
 
   function render() {
-    const st = cur(), ps = playersNow(st), t = team(), g = loadGear();
+    const st = cur(), ps = playersNow(st), t = team(), g = loadGear(), list = saved[t] || [];
+    if (savedPick && !list.some((x) => x.id === savedPick)) savedPick = '';
     const opts = (codes, v, gear) => codes.map((a) => `<option value="${a}" ${a === v ? 'selected' : ''}>${esc(ATTACKS[a].label)}${canDo(gear, a) ? '' : ' (not in Gear)'}</option>`).join('');
     const col = (p, k) => {
       const rows = p.seq.map((a, j) => `<div class="mrow">${j === 0 ? '<span class="mlab">Prefire</span>' : `<span class="mlab">${j}</span>`}
@@ -64,6 +66,16 @@ export function createMaiden(host, { getTeam }) {
         .mgrid{display:flex;gap:14px;flex-wrap:wrap}.mcol{min-width:220px;flex:1}.mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
         .mhead label{flex-direction:row;align-items:center;gap:4px}.mrow{display:flex;gap:6px;align-items:center;margin-top:4px}.mrow select{flex:1;min-width:0}
         .mrow select.bad{border-color:#d9534f}.mlab{width:46px;font-size:12px;color:var(--ink2)}.mx{width:28px;padding:2px 0}</style>
+      <div class="row wrap" style="gap:10px;align-items:end;margin:0 0 10px">
+        <label>Saved setups<select data-saved="pick"><option value="">(choose a setup)</option>${list.map((x) => `<option value="${x.id}" ${x.id === savedPick ? 'selected' : ''}>${esc(x.name)} · ${new Date(x.saved).toLocaleDateString()}</option>`).join('')}</select></label>
+        <button class="ghost sm" data-setact="load" ${savedPick ? '' : 'disabled'}>Load</button>
+        <button class="ghost sm" data-setact="del" ${savedPick ? '' : 'disabled'}>Delete</button>
+        <label>Name<input data-saved="name" placeholder="e.g. creepy maiden" style="width:150px"></label>
+        <button class="sm" data-setact="save">Save setup</button>
+        <button class="ghost sm" data-setact="file">Save to file</button>
+        <label class="ghost sm filebtn">Open file<input type="file" accept=".json" data-saved="file" hidden></label>
+        <span class="muted small">${esc(setMsg)}</span>
+      </div>
       <div class="row">
         <label>Gear<select data-s="gearSet">${GEAR_SETS.map((x) => `<option value="${x}" ${st.gearSet === x ? 'selected' : ''}>${esc(gearSetLabel(g, t, x))}</option>`).join('')}</select></label>
         <label title="Who her attacks go at (for now one player all room - her real targeting comes later)">Maiden targets<select data-s="target">${ps.map((p, k) => `<option value="${k}" ${st.target === k ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
@@ -78,13 +90,41 @@ export function createMaiden(host, { getTeam }) {
   cfg.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const st = cur();
-    if (b.dataset.add) { const q = st.players[Number(b.dataset.add)].seq; q.push(q.length > 1 ? q[q.length - 1] : 'tbr'); }
-    else if (b.dataset.del) { const [k, j] = b.dataset.del.split('|').map(Number); st.players[k].seq.splice(j, 1); }
-    else return;
-    persist(); render();
+    if (b.dataset.add) { const q = st.players[Number(b.dataset.add)].seq; q.push(q.length > 1 ? q[q.length - 1] : 'tbr'); persist(); render(); return; }
+    if (b.dataset.del) { const [k, j] = b.dataset.del.split('|').map(Number); st.players[k].seq.splice(j, 1); persist(); render(); return; }
+    // saved setups (this browser, per scale) and files
+    const act = b.dataset.setact; if (!act) return;
+    const t = team(), list = (saved[t] ||= []);
+    if (act === 'save') {
+      const name = (cfg.querySelector('[data-saved="name"]').value || '').trim() || list.find((x) => x.id === savedPick)?.name || '';
+      if (!name) { setMsg = 'Type a name for the setup first.'; render(); return; }
+      const old = list.find((x) => x.name === name), entry = { id: old ? old.id : `s${Date.now()}`, name, saved: Date.now(), set: structuredClone(st) };
+      if (old) Object.assign(old, entry); else list.push(entry);
+      savedPick = entry.id; setMsg = saveKey(SAVED, saved) ? `Saved "${name}".` : 'Could not save (browser storage is off).';
+    } else if (act === 'load' || act === 'del') {
+      const x = list.find((y) => y.id === savedPick); if (!x) return;
+      if (act === 'load') { root().set = structuredClone(x.set); persist(); setMsg = `Loaded "${x.name}".`; }
+      else { if (!confirm(`Delete the saved setup "${x.name}"?`)) return; saved[t] = list.filter((y) => y !== x); savedPick = ''; saveKey(SAVED, saved); setMsg = `Deleted "${x.name}".`; }
+    } else if (act === 'file') {
+      const a = document.createElement('a'), nm = (cfg.querySelector('[data-saved="name"]').value || '').trim() || list.find((x) => x.id === savedPick)?.name || '';
+      a.href = URL.createObjectURL(new Blob([JSON.stringify({ app: 'verzikSim', kind: 'maidenSet', team: t, name: nm, set: st }, null, 1)], { type: 'application/json' }));
+      a.download = `maiden_${t}man_${(nm || 'setup').replace(/[^a-z0-9]+/gi, '_')}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); return;
+    }
+    render();
   });
-  cfg.addEventListener('change', (e) => {
+  cfg.addEventListener('change', async (e) => {
     const el = e.target, st = cur();
+    if (el.dataset.saved === 'pick') { savedPick = el.value; setMsg = ''; render(); return; }
+    if (el.dataset.saved === 'name') return;
+    if (el.dataset.saved === 'file') {
+      try {
+        const j = JSON.parse(await el.files[0].text());
+        if (j.kind !== 'maidenSet' || !j.set) throw new Error('not a saved Maiden setup');
+        if (Number(j.team) !== team()) throw new Error(`it's a ${j.team}-man setup - pick that scale first`);
+        root().set = j.set; persist(); setMsg = `Opened ${el.files[0].name}.`;
+      } catch (x) { setMsg = `Couldn't open that file: ${x.message}`; }
+      render(); return;
+    }
     if (el.dataset.s) { st[el.dataset.s] = el.dataset.s === 'target' ? Number(el.value) : el.value; }
     else if (el.dataset.p) { const [k, f] = el.dataset.p.split('|'); st.players[Number(k)][f] = f === 'startSpec' ? Number(el.value) : el.value; }
     else if (el.dataset.seq) { const [k, j] = el.dataset.seq.split('|').map(Number); st.players[k].seq[j] = el.value; }
@@ -159,7 +199,7 @@ export function createMaiden(host, { getTeam }) {
     step();
   });
 
-  const refresh = () => { render(); showRep(); };
+  const refresh = () => { state = loadKey(STORE); saved = loadKey(SAVED); setMsg = ''; render(); showRep(); };
   refresh();
   return { refresh };
 }
