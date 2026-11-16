@@ -1,5 +1,6 @@
-// Maiden tab (first section: the prefires to the 70s proc): per-player settings for each scale (saved in this browser),
-// and a Report - the 70s proc's time over many raids, with Show raid. Gear comes from the Gear tab (the Gear set picked here).
+// Maiden tab (first section: the prefires to the 70s proc): per-player settings for each scale (sets A / B / C, saved in
+// this browser by name or to a file), and a Report - the 70s proc's time over many raids for the ticked sets (the same
+// raids for each), with Show raid. Gear comes from the Gear tab (the Gear set picked here).
 import { whenFree, breath } from './engine/pause.js';
 import { progressBar } from './progressbar.js';
 import { loadGear, gearSet, gearSetLabel, playersOf, GEAR_SETS } from './engine/gearstore.js';
@@ -10,7 +11,8 @@ import { Rng } from './engine/rng.js';
 import { timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
 import { runMaiden, defaultMaidenPlan, seqOf, canDo, ATTACKS, PREFIRES, MAIDEN_HP, PREFIRE_TICK } from './engine/maiden.js';
 
-const STORE = 'verzikSim.maiden.v1';           // {team: {set, report}}
+const STORE = 'verzikSim.maiden.v1';           // {team: {cur, sets: {A, B?, C?}, report}}
+const SETS = ['A', 'B', 'C'];
 const SAVED = 'verzikSim.maidenSaved.v1';      // {team: [{id, name, saved, set}]}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
@@ -30,6 +32,7 @@ export function createMaiden(host, { getTeam }) {
       <div class="row" style="margin-top:10px">
         <label>Raids<input data-r="raids" type="number" min="100" step="1000" style="width:90px"></label>
         <label>Seed (optional)<input data-r="seed" placeholder="random" style="width:100px"></label>
+        <div data-rsets></div>
         <label title="Target 70s proc times (m:ss), rounded down to a tick">Breakpoints (optional)<input data-r="bps" placeholder="m:ss, comma-separated" style="width:190px"></label>
         <button data-act="run">Run</button><button data-act="stop" class="ghost" disabled>Stop</button><button data-pause class="ghost" disabled title="Pause this run (and any other run on the page)">Pause</button>
       </div>
@@ -38,18 +41,41 @@ export function createMaiden(host, { getTeam }) {
   wireSubtabs(host, 'verzikSim.maidenTabs.v1');
   const cfg = host.querySelector('[data-cfg]'), rep = host.querySelector('[data-rep]');
 
-  const root = () => { const t = team(); state[t] ||= {}; const r = state[t]; r.set ||= { gearSet: 'A', ...defaultMaidenPlan(t) }; r.report ||= { raids: 10000, seed: '', bps: '' }; return r; };
-  const cur = () => {
-    const st = root().set, d = defaultMaidenPlan(team());
+  const blankSet = () => ({ gearSet: 'A', ...defaultMaidenPlan(team()) });
+  const root = () => {
+    const t = team(); state[t] ||= {}; const r = state[t];
+    r.sets ||= {}; if (r.set) { r.sets.A ||= r.set; delete r.set; }   // (one setup before sets A / B / C: set A)
+    r.cur = SETS.includes(r.cur) ? r.cur : 'A'; r.sets[r.cur] ||= blankSet();
+    r.report ||= { raids: 10000, seed: '', bps: '' }; r.report.sets ||= ['A']; r.report.labels ||= {};
+    return r;
+  };
+  const fix = (st) => {
+    const d = defaultMaidenPlan(team());
+    st.gearSet ||= 'A';
     st.players = d.players.map((p, k) => { const o = (st.players || [])[k]; return o ? { startSpec: Number(o.startSpec ?? 100), seq: seqOf(o, k, team()) } : p; });
     st.target = Math.min(team() - 1, Math.max(0, Number(st.target ?? d.target) || 0));
     return st;
   };
+  const cur = () => { const r = root(); return fix(r.sets[r.cur]); };
+  const setOf = (k) => { const r = root(); return r.sets[k] ? fix(r.sets[k]) : null; };
+  const setLabel = (k) => { const l = String(root().report.labels[k] || '').trim(); return l ? `Set ${k}: ${l}` : `Set ${k}`; };
+  function setTabs() {
+    const r = root(), tb = host.querySelector('[data-settabs]');
+    tb.innerHTML = SETS.map((k) => `<button data-set="${k}" class="${k === r.cur ? 'on' : ''}" title="${r.sets[k] ? `Set ${k}` : 'Empty - opens a new set'}">Set ${k}${r.sets[k] ? '' : ' <span class="muted">(empty)</span>'}</button>`).join('');
+    host.querySelector('[data-setcard]').dataset.setcol = r.cur;
+  }
+  host.querySelector('[data-settabs]').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-set]'); if (!b) return;
+    const r = root(), gs = cur().gearSet; r.cur = b.dataset.set;
+    if (!r.sets[r.cur]) { r.sets[r.cur] = { ...blankSet(), gearSet: gs }; if (!r.report.sets.includes(r.cur)) r.report.sets = SETS.filter((x) => x === r.cur || r.report.sets.includes(x)); }
+    setMsg = ''; persist(); refreshAll();
+  });
   const gearOf = (st) => { const set = gearSet(loadGear(), team(), st.gearSet); return set ? playersOf(set, team()) : null; };
   const playersNow = (st) => { const gp = gearOf(st); return st.players.map((p, k) => ({ ...p, name: (gp && gp[k] && gp[k].name) || `Player ${k + 1}`, gear: (gp && gp[k]) || blankPlayer(k) })); };
 
   function render() {
-    const st = cur(), ps = playersNow(st), t = team(), g = loadGear(), list = saved[t] || [];
+    setTabs();
+    const st = cur(), r0 = root(), ps = playersNow(st), t = team(), g = loadGear(), list = saved[t] || [];
     if (savedPick && !list.some((x) => x.id === savedPick)) savedPick = '';
     const opts = (codes, v, gear) => codes.map((a) => `<option value="${a}" ${a === v ? 'selected' : ''}>${esc(ATTACKS[a].label)}${canDo(gear, a) ? '' : ' (not in Gear)'}</option>`).join('');
     const col = (p, k) => {
@@ -67,8 +93,10 @@ export function createMaiden(host, { getTeam }) {
         .mhead label{flex-direction:row;align-items:center;gap:4px}.mrow{display:flex;gap:6px;align-items:center;margin-top:4px}.mrow select{flex:1;min-width:0}
         .mrow select.bad{border-color:#d9534f}.mlab{width:46px;font-size:12px;color:var(--ink2)}.mx{width:28px;padding:2px 0}</style>
       <div class="row wrap" style="gap:10px;align-items:end;margin:0 0 10px">
+        <div><div class="muted small">Copy set ${r0.cur} to</div>${SETS.filter((k) => k !== r0.cur).map((k) => `<button class="ghost sm" data-copyset="${k}" title="Replace set ${k} with a copy of set ${r0.cur}">Set ${k}</button>`).join(' ')}</div>
+        <button class="ghost sm" data-clearset title="Start set ${r0.cur} over from the default plan (its Gear set stays)">Clear set ${r0.cur}</button>
         <label>Saved setups<select data-saved="pick"><option value="">(choose a setup)</option>${list.map((x) => `<option value="${x.id}" ${x.id === savedPick ? 'selected' : ''}>${esc(x.name)} · ${new Date(x.saved).toLocaleDateString()}</option>`).join('')}</select></label>
-        <button class="ghost sm" data-setact="load" ${savedPick ? '' : 'disabled'}>Load</button>
+        <button class="ghost sm" data-setact="load" ${savedPick ? '' : 'disabled'}>Load into set ${r0.cur}</button>
         <button class="ghost sm" data-setact="del" ${savedPick ? '' : 'disabled'}>Delete</button>
         <label>Name<input data-saved="name" placeholder="e.g. creepy maiden" style="width:150px"></label>
         <button class="sm" data-setact="save">Save setup</button>
@@ -92,6 +120,16 @@ export function createMaiden(host, { getTeam }) {
     const st = cur();
     if (b.dataset.add) { const q = st.players[Number(b.dataset.add)].seq; q.push(q.length > 1 ? q[q.length - 1] : 'tbr'); persist(); render(); return; }
     if (b.dataset.del) { const [k, j] = b.dataset.del.split('|').map(Number); st.players[k].seq.splice(j, 1); persist(); render(); return; }
+    const r = root();
+    if (b.dataset.copyset) {
+      const k = b.dataset.copyset; r.sets[k] = structuredClone(st);
+      if (!r.report.sets.includes(k)) r.report.sets = SETS.filter((x) => x === k || r.report.sets.includes(x));
+      setMsg = `Copied set ${r.cur} to set ${k}.`; persist(); refreshAll(); return;
+    }
+    if (b.dataset.clearset !== undefined) {
+      if (!confirm(`Clear set ${r.cur}? Its hits go back to the default plan (its Gear set stays).`)) return;
+      r.sets[r.cur] = { ...blankSet(), gearSet: st.gearSet }; setMsg = `Set ${r.cur} cleared.`; persist(); refreshAll(); return;
+    }
     // saved setups (this browser, per scale) and files
     const act = b.dataset.setact; if (!act) return;
     const t = team(), list = (saved[t] ||= []);
@@ -103,7 +141,7 @@ export function createMaiden(host, { getTeam }) {
       savedPick = entry.id; setMsg = saveKey(SAVED, saved) ? `Saved "${name}".` : 'Could not save (browser storage is off).';
     } else if (act === 'load' || act === 'del') {
       const x = list.find((y) => y.id === savedPick); if (!x) return;
-      if (act === 'load') { root().set = structuredClone(x.set); persist(); setMsg = `Loaded "${x.name}".`; }
+      if (act === 'load') { r.sets[r.cur] = structuredClone(x.set); persist(); setMsg = `Loaded "${x.name}" into set ${r.cur}.`; }
       else { if (!confirm(`Delete the saved setup "${x.name}"?`)) return; saved[t] = list.filter((y) => y !== x); savedPick = ''; saveKey(SAVED, saved); setMsg = `Deleted "${x.name}".`; }
     } else if (act === 'file') {
       const a = document.createElement('a'), nm = (cfg.querySelector('[data-saved="name"]').value || '').trim() || list.find((x) => x.id === savedPick)?.name || '';
@@ -121,7 +159,7 @@ export function createMaiden(host, { getTeam }) {
         const j = JSON.parse(await el.files[0].text());
         if (j.kind !== 'maidenSet' || !j.set) throw new Error('not a saved Maiden setup');
         if (Number(j.team) !== team()) throw new Error(`it's a ${j.team}-man setup - pick that scale first`);
-        root().set = j.set; persist(); setMsg = `Opened ${el.files[0].name}.`;
+        const r = root(); r.sets[r.cur] = j.set; persist(); setMsg = `Opened ${el.files[0].name} into set ${r.cur}.`;
       } catch (x) { setMsg = `Couldn't open that file: ${x.message}`; }
       render(); return;
     }
@@ -130,8 +168,18 @@ export function createMaiden(host, { getTeam }) {
     else if (el.dataset.seq) { const [k, j] = el.dataset.seq.split('|').map(Number); st.players[k].seq[j] = el.value; }
     persist(); render();
   });
-  const showRep = () => { const r = root().report; for (const k of ['raids', 'seed', 'bps']) rep.querySelector(`[data-r="${k}"]`).value = r[k] ?? ''; };
-  rep.addEventListener('change', (e) => { const k = e.target.dataset.r; if (!k) return; root().report[k] = e.target.value; persist(); });
+  const showRep = () => {
+    const rs = root(), r = rs.report;
+    for (const k of ['raids', 'seed', 'bps']) rep.querySelector(`[data-r="${k}"]`).value = r[k] ?? '';
+    rep.querySelector('[data-rsets]').innerHTML = `<div class="muted small">Sets to run (compared on the same raids)</div><div class="row" style="gap:8px">${SETS.map((k) => `<label class="pick" style="flex-direction:row;gap:4px;align-items:center" data-setcol="${k}"><input type="checkbox" data-rset-run="${k}" ${rs.sets[k] ? '' : 'disabled'} ${rs.sets[k] && r.sets.includes(k) ? 'checked' : ''}>${k}</label><input data-rlabel="${k}" placeholder="Set ${k} label" value="${esc(r.labels[k] || '')}" style="width:110px" ${rs.sets[k] ? '' : 'disabled'}>`).join('')}</div>`;
+  };
+  rep.addEventListener('change', (e) => {
+    const r = root().report, el = e.target;
+    if (el.dataset.r) r[el.dataset.r] = el.value;
+    if (el.dataset.rsetRun) { const k = el.dataset.rsetRun; r.sets = SETS.filter((x) => (x === k ? el.checked : r.sets.includes(x))); }
+    if (el.dataset.rlabel != null) r.labels[el.dataset.rlabel] = el.value;
+    persist();
+  });
 
   // ---- the report
   let job = null;
@@ -139,35 +187,45 @@ export function createMaiden(host, { getTeam }) {
     const trace = [], res = runMaiden(run.players, team(), new Rng(`${run.seed}#${i}`), null, { target: run.target, trace });
     return timelineHtml({ trace, names: run.players.map((p) => p.name), bossName: 'Maiden', end: res.proc ?? 60, title, legend: LEGEND, from: 1 });
   };
-  function results(run, raids, bps) {
-    const ok = raids.filter((x) => x.total != null), N = raids.length, v = ok.map((x) => x.total).sort((a, b) => a - b);
+  /** One set's numbers. */
+  function statsOf(run) {
+    const raids = run.raids, ok = raids.filter((x) => x.total != null), N = raids.length, v = ok.map((x) => x.total).sort((a, b) => a - b);
     const at = (f) => v[Math.min(v.length - 1, Math.max(0, Math.floor(N * f) - 1))];
-    const mean = v.reduce((a, b) => a + b, 0) / Math.max(1, v.length);
-    const pc = (n) => `${(n / N * 100).toFixed(n / N < 0.1 ? 1 : 0)}%`;
-    const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
-    const rows = [['Fastest', v[0]], ['Top 10%', at(0.1)], ['Top 25%', at(0.25)], ['Median', v[N >> 1]], ['Bottom 25%', at(0.75)], ['Slowest', v[v.length - 1]]];
-    const mauls = Array.from({ length: 3 }, (_, k) => raids.filter((x) => x.maulsLanded === k).length);
-    const nMaul = run.players.filter((p) => (p.seq || []).includes('maul')).length;
+    const med = (a) => { const q = a.slice().sort((x, y) => x - y); return q[q.length >> 1]; };
+    return { N, ok, v, rows: { Fastest: v[0], 'Top 10%': at(0.1), 'Top 25%': at(0.25), Median: v[N >> 1], 'Bottom 25%': at(0.75), Slowest: v[v.length - 1] },
+      mean: v.reduce((a, b) => a + b, 0) / Math.max(1, v.length), hp: med(ok.map((x) => x.hp)), def: med(ok.map((x) => x.def)),
+      mauls: [0, 1, 2, 3, 4, 5].map((k) => raids.filter((x) => x.maulsLanded === k).length), nMaul: run.players.filter((p) => (p.seq || []).includes('maul')).length,
+      vengs: raids.reduce((a, x) => a + x.vengs, 0) / Math.max(1, N), fails: N - ok.length,
+      skips: (() => { const by = new Map(); for (const x of raids) for (const q of new Set((x.skipped || []).map((y) => `${y.i}|${y.a}`))) by.set(q, (by.get(q) || 0) + 1); return [...by.entries()]; })() };
+  }
+  function results(runs, bps) {
+    const S = runs.map(statsOf), one = runs.length === 1;
+    const pc = (n, N) => `${(n / N * 100).toFixed(n / N < 0.1 ? 1 : 0)}%`;
+    const head = `<tr><th></th>${runs.map((x) => `<th data-setcol="${x.k}">${esc(x.label)}</th>`).join('')}</tr>`;
+    const cell = (x) => (x == null ? '-' : `<b>${fsec(x)}</b> <span class="muted small">t${x}</span>`);
+    const rowsHtml = Object.keys(S[0].rows).map((l) => `<tr><td>${l}</td>${S.map((s) => `<td>${cell(s.rows[l])}</td>`).join('')}</tr>`).join('')
+      + `<tr><td>Mean</td>${S.map((s) => `<td><b>${fsec(s.mean)}</b> <span class="muted small">t${s.mean.toFixed(1)}</span></td>`).join('')}</tr>`
+      + [...bps].sort((x, y) => x - y).map((b) => { const T = Math.floor(b / 0.6 + 1e-9); return `<tr><td>By ${fsec(T)}</td>${S.map((s) => `<td><b>${pc(s.ok.filter((x) => x.total <= T).length, s.N)}</b></td>`).join('')}</tr>`; }).join('')
+      + `<tr><td title="Damage carries over">HP left after the proc (median)</td>${S.map((s) => `<td>${s.hp == null ? '-' : s.hp.toLocaleString()}</td>`).join('')}</tr>`
+      + `<tr><td>Her Defence then (median)</td>${S.map((s) => `<td>${s.def ?? '-'}</td>`).join('')}</tr>`
+      + (S.some((s) => s.nMaul) ? `<tr><td>Elder mauls landed</td>${S.map((s) => `<td class="small">${s.nMaul ? s.mauls.map((n, k) => (k <= s.nMaul && n ? `<b>${k}</b> ${pc(n, s.N)}` : '')).filter(Boolean).join(', ') : '-'}</td>`).join('')}</tr>` : '')
+      + `<tr><td>Vengeance procs a raid</td>${S.map((s) => `<td>${s.vengs.toFixed(2)}</td>`).join('')}</tr>`
+      + (S.some((s) => s.skips.length) ? `<tr><td title="Not in their Gear, or not enough spec energy">Hits skipped</td>${S.map((s, j) => `<td class="small">${s.skips.length ? s.skips.map(([q, n]) => { const [i, a] = q.split('|'); return `<span class="err">${esc(runs[j].players[Number(i)].name)} ${esc(ATTACKS[a].label)}</span> ${pc(n, s.N)}`; }).join('<br>') : '-'}</td>`).join('')}</tr>` : '')
+      + (S.some((s) => s.fails) ? `<tr><td>No proc</td>${S.map((s) => `<td class="err">${s.fails ? pc(s.fails, s.N) : '-'}</td>`).join('')}</tr>` : '');
     return `<div class="vz-report"><h3 style="margin:0 0 6px">70s proc</h3>
-      <div class="scroll"><table class="sortlist"><tr><th></th><th>Time</th><th>Tick</th></tr>
-        ${rows.map(([l, x]) => `<tr><td>${l}</td><td><b>${x == null ? '-' : fsec(x)}</b></td><td>${x ?? '-'}</td></tr>`).join('')}
-        <tr><td>Mean</td><td><b>${fsec(mean)}</b></td><td>${mean.toFixed(1)}</td></tr></table></div>
-      ${bps.length ? `<p style="margin:8px 0 0">${[...bps].sort((x, y) => x - y).map((b) => `By ${fsec(Math.floor(b / 0.6))}: <b>${pc(ok.filter((x) => x.total <= Math.floor(b / 0.6 + 1e-9)).length)}</b>`).join(' · ')}</p>` : ''}
-      <p class="small" style="margin:8px 0 0">HP left after the proc's tick (damage carries over): median <b>${med(ok.map((x) => x.hp)).toLocaleString()}</b> ·
-        her Defence then: median <b>${med(ok.map((x) => x.def))}</b> ·
-        ${nMaul ? `Elder mauls landed: ${mauls.map((n, k) => (k <= nMaul && n ? `<b>${k}</b> ${pc(n)}` : '')).filter(Boolean).join(', ')} · ` : ''}
-        Vengeance procs: ${(raids.reduce((a, x) => a + x.vengs, 0) / N).toFixed(2)} a raid${N - ok.length ? ` · <span class="err">no proc in ${pc(N - ok.length)}</span>` : ''}</p></div>
+      <div class="scroll"><table class="sortlist">${head}${rowsHtml}</table></div></div>
       <div class="row wrap" style="gap:6px;align-items:center;margin-top:10px"><b>Show raid</b>
-        <button class="ghost sm" data-mraid="succ" title="Opens on the median raid; Previous / Next step through fastest, top 10%, top 25%, median, slowest and your breakpoints">View raids</button></div>
+        ${runs.map((x, j) => `<button class="ghost sm" data-mraid="${j}" data-setcol="${x.k}" title="Opens on the median raid; Previous / Next step through fastest, top 10%, top 25%, median, slowest and your breakpoints">${one ? 'View raids' : esc(x.label)}</button>`).join('')}</div>
       <div data-mraidout></div>`;
   }
   rep.addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const status = rep.querySelector('[data-rstatus]'), err = rep.querySelector('[data-rerr]'), out = rep.querySelector('[data-rout]');
     const btn = (x) => rep.querySelector(`[data-act="${x}"]`);
-    if (b.dataset.mraid && out.__run) {
-      const { run, raids, bps } = out.__run, ok = raids.filter((x) => x.total != null), steps = successSteps(ok, raids.length, raids.length, bps);
-      raidNav(out.querySelector('[data-mraidout]'), steps, steps.findIndex((z) => /Median/.test(z.label)), (s) => draw(run, s.pick.i, `${s.label} raid (Maiden, to 70s) - 70s proc at ${fsec(s.pick.total)} · ${s.freq}`));
+    if (b.dataset.mraid != null && out.__run) {
+      const { runs, bps } = out.__run, run = runs[Number(b.dataset.mraid)], raids = run.raids, ok = raids.filter((x) => x.total != null), steps = successSteps(ok, raids.length, raids.length, bps);
+      const who = runs.length > 1 ? `${run.label}: ` : '';
+      raidNav(out.querySelector('[data-mraidout]'), steps, steps.findIndex((z) => /Median/.test(z.label)), (s) => draw(run, s.pick.i, `${who}${s.label} raid (Maiden, to 70s) - 70s proc at ${fsec(s.pick.total)} · ${s.freq}`));
       return;
     }
     const a = b.dataset.act;
@@ -175,8 +233,9 @@ export function createMaiden(host, { getTeam }) {
     if (a !== 'run' || job) return;
     const r = root().report; err.textContent = '';
     let bps = []; try { bps = String(r.bps || '').trim() ? parseBreakpoints(r.bps) : []; } catch (x) { err.textContent = x.message; return; }
-    const st = cur(), n = Math.max(100, Number(r.raids) || 10000), t = team(), seed = String(r.seed || '').trim() || `m${Date.now()}`;
-    const run = { players: playersNow(st), target: st.target, seed }, raids = [];
+    const keys = r.sets.filter((k) => setOf(k)); if (!keys.length) { err.textContent = 'Tick at least one set to run.'; return; }
+    const n = Math.max(100, Number(r.raids) || 10000), t = team(), seed = String(r.seed || '').trim() || `m${Date.now()}`;
+    const runs = keys.map((k) => { const st = setOf(k); return { k, label: setLabel(k), players: playersNow(st), target: st.target, seed, raids: [] }; });
     job = { stop: false }; const me = job; btn('run').disabled = true; btn('stop').disabled = false;
     const pb = progressBar(status); pb.start();
     let i = 0;
@@ -184,22 +243,23 @@ export function createMaiden(host, { getTeam }) {
       if (me.stop || i >= n) {
         if (me.stop) pb.stop(); else pb.done();
         job = null; btn('run').disabled = false; btn('stop').disabled = true;
-        if (!raids.length) { status.textContent = 'Stopped.'; return; }
-        out.__run = { run, raids, bps }; out.innerHTML = results(run, raids, bps);
-        status.textContent = `${me.stop ? 'Stopped at' : 'Done:'} ${raids.length.toLocaleString()} raids (seed ${seed}).`;
+        if (!runs[0].raids.length) { status.textContent = 'Stopped.'; return; }
+        out.__run = { runs, bps }; out.innerHTML = results(runs, bps);
+        status.textContent = `${me.stop ? 'Stopped at' : 'Done:'} ${runs[0].raids.length.toLocaleString()} raids${runs.length > 1 ? ' per set' : ''} (seed ${seed}).`;
         return;
       }
-      const to = Math.min(n, i + 500);
+      const to = Math.min(n, i + Math.max(100, Math.floor(500 / runs.length)));
       try {
-        for (; i < to; i++) { const x = runMaiden(run.players, t, new Rng(`${seed}#${i}`), null, { target: run.target }); raids.push({ i, total: x.proc, key: String(x.maulsLanded), hp: x.hp, def: x.def, maulsLanded: x.maulsLanded, vengs: x.vengs, specs: x.specs, skipped: x.skipped.length }); }
+        for (; i < to; i++) for (const run of runs) { const x = runMaiden(run.players, t, new Rng(`${seed}#${i}`), null, { target: run.target }); run.raids.push({ i, total: x.proc, key: String(x.maulsLanded), hp: x.hp, def: x.def, maulsLanded: x.maulsLanded, vengs: x.vengs, skipped: x.skipped }); }
       } catch (x) { err.textContent = `Couldn't run: ${x.message}`; me.stop = true; }
-      status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids`; pb.set(i / n);
+      status.textContent = `Running... ${i.toLocaleString()} / ${n.toLocaleString()} raids${runs.length > 1 ? ` (${runs.length} sets)` : ''}`; pb.set(i / n);
       whenFree(() => setTimeout(step, 0));
     };
     step();
   });
 
-  const refresh = () => { state = loadKey(STORE); saved = loadKey(SAVED); setMsg = ''; render(); showRep(); };
+  const refreshAll = () => { render(); showRep(); };
+  const refresh = () => { state = loadKey(STORE); saved = loadKey(SAVED); setMsg = ''; refreshAll(); };
   refresh();
   return { refresh };
 }
