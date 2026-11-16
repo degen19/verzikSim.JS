@@ -13,6 +13,8 @@ import { runMaiden, defaultMaidenPlan, seqOf, canDo, ATTACKS, PREFIRES, MAIDEN_H
 
 const STORE = 'verzikSim.maiden.v1';           // {team: {cur, sets: {A, B?, C?}, report}}
 const SETS = ['A', 'B', 'C'];
+const OPEN = 'verzikSim.maidenOpen.v1';        // {section: false} for the sections collapsed (this browser)
+const openOf = () => loadKey(OPEN);
 const SAVED = 'verzikSim.maidenSaved.v1';      // {team: [{id, name, saved, set}]}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const loadKey = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
@@ -86,9 +88,11 @@ export function createMaiden(host, { getTeam }) {
           <label class="small muted" title="Spec energy coming into the room">Spec <select data-p="${k}|startSpec">${[100, 95].map((x) => `<option value="${x}" ${Number(p.startSpec) === x ? 'selected' : ''}>${x}%</option>`).join('')}</select></label></div>
         ${rows}<button class="ghost sm" data-add="${k}" style="margin-top:4px">+ Add hit</button></div>`;
     };
-    const later = ['70s', '50s', '30s', 'End'].map((x) => `<div class="msec off"><h4>${x}</h4><span class="muted small">comes later</span></div>`).join('');
+    const op = openOf(), sec = (k, title, body, off = false) => `<details class="msec${off ? ' off' : ''}" data-sec="${k}" ${op[k] === false || (off && op[k] !== true) ? '' : 'open'}><summary><h4>${title}</h4></summary>${body}</details>`;
+    const later = ['70s', '50s', '30s', 'End'].map((x) => sec(x, x, '<p class="muted small" style="margin:6px 0 0">Comes later.</p>', true)).join('');
     cfg.innerHTML = `<style>
-        .msec{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:10px}.msec h4{margin:0 0 8px}.msec.off{opacity:.55;display:flex;gap:10px;align-items:baseline;padding:6px 12px}.msec.off h4{margin:0}
+        .msec{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:10px}.msec>summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:8px}.msec>summary::-webkit-details-marker{display:none}
+        .msec>summary::before{content:'▸';color:var(--ink2);font-size:12px;display:inline-block;transition:transform .15s}.msec[open]>summary::before{transform:rotate(90deg)}.msec>summary h4{margin:0;display:inline}.msec[open]>summary{margin-bottom:8px}.msec.off{opacity:.55}
         .mgrid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px}.mcol{min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:rgba(255,255,255,.02)}.mhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:4px 8px;margin-bottom:6px}
         .mhead b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}@media (max-width:1000px){.mgrid[data-n="5"]{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (max-width:840px){.mgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:760px){.mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:460px){.mgrid{grid-template-columns:minmax(0,1fr)}}
         .mhead label{flex-direction:row;align-items:center;gap:4px}.mrow{display:flex;gap:6px;align-items:center;margin-top:4px}.mrow select{flex:1;width:100%;max-width:none;min-width:0;font-size:13px;padding-left:6px;padding-right:2px}
@@ -110,12 +114,16 @@ export function createMaiden(host, { getTeam }) {
         <label title="Who her attacks go at (for now one player all room - her real targeting comes later)">Maiden targets<select data-s="target">${ps.map((p, k) => `<option value="${k}" ${st.target === k ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
         <span class="muted small">HP ${MAIDEN_HP[t].toLocaleString()} · 70s proc below ${(MAIDEN_HP[t] * 0.7).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
       </div>
-      <div class="msec"><h4>Start <span class="muted small" style="font-weight:normal">- the prefires (Twisted bow tick ${PREFIRE_TICK.tbow}, ZCB tick ${PREFIRE_TICK.zcb}) to her 70s proc</span></h4>
+      ${sec('start', `Start <span class="muted small" style="font-weight:normal">- the prefires (Twisted bow tick ${PREFIRE_TICK.tbow}, ZCB tick ${PREFIRE_TICK.zcb}) to her 70s proc</span>`, `
         <div class="mgrid" data-n="${ps.length}" style="--n:${ps.length}">${ps.map(col).join('')}</div>
         <p class="muted small" style="margin:8px 0 0">Each hit goes as soon as their attack timer allows; their last hit repeats until the 70s proc.
-          A hit they can't do (not in their Gear, or not enough spec) is skipped. Ranged gear on Rigour at 112 Ranged, melee gear on their prayer (Zeal unless set in the Gear tab) at 118; Vengeance up from the start.</p></div>
+          A hit they can't do (not in their Gear, or not enough spec) is skipped. Ranged gear on Rigour at 112 Ranged, melee gear on their prayer (Zeal unless set in the Gear tab) at 118; Vengeance up from the start.</p>`)}
       ${later}`;
   }
+  cfg.addEventListener('toggle', (e) => {
+    const d = e.target; if (!d.dataset || !d.dataset.sec) return;
+    const o = openOf(); o[d.dataset.sec] = d.open; saveKey(OPEN, o);
+  }, true);
   cfg.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const st = cur();
