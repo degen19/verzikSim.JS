@@ -26,6 +26,8 @@
 //  19. Backup Defence specs: when the opening Defence specs miss (e.g. a maul), backups (BGS / Ralos / maul again...)
 //      to get her Defence down, as on Xarpus.
 //  20. Report: Vengeance damage - average a raid (total).
+//  21. Prayer on her attacks: off-prayer Vengeance for now (PRAYING = false: her max 36, not 18) - when players pray
+//      or tank off prayer to change with the fight (crabs leaked, HP, the phase).
 export const MAIDEN_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625, 1: 2625 };
 export const MAIDEN = {
   def: 200, magic: 350, magicAtk: 300,
@@ -62,7 +64,7 @@ export const procsOn = (team, pct, before, after) => !belowProc(team, pct, befor
 //  - Gear: their ranged gear (elite void) on Rigour at 112 Ranged; melee gear on their prayer (Zeal by default) at 118.
 //  - Her attack every 10 ticks from tick 9, on one player (the Maiden targets setting: player 4 in a 4s for now),
 //    landing 5 ticks later: her accuracy (Magic 350, +300 magic attack) against their magic defence in what they're
-//    wearing, up to MAX_HIT on Protect from Magic (no crabs leaked yet). Everyone starts with Vengeance cast and its
+//    wearing, up to MAX_HIT off Protect from Magic (36 with no crabs leaked - an off-prayer Vengeance; PRAYING). Everyone starts with Vengeance cast and its
 //    cooldown up: a hit of 1+ sends 75% (rounded down) back at her the same tick, and they recast straight away (no
 //    tick lost; 50-tick cooldown).
 //  - Spellbook toggles per player (all on by default): Veng - they cast Vengeance themselves (and Vengeance Other on a
@@ -101,6 +103,9 @@ export const ATTACKS = {
 /** What can be a prefire, and the first tick it can go. */
 export const PREFIRES = ['tbr', 'tba', 'zcb', 'zcbs'];
 const prefireTick = (a) => (ATTACKS[a].weapon === 'Twisted bow' ? PREFIRE_TICK.tbow : PREFIRE_TICK.zcb);
+/** The player she attacks prays Protect from Magic? Not for now: off prayer, so the Vengeance hits harder (her max
+ *  36 with no crabs leaked, not 18). */
+export const PRAYING = false;
 export const AUTO_DELAY = 5, VENG_CD = 50, RUBY = 0.066;
 const RANGED = 112, MELEE = 118, MAGIC_LVL = 99, DEF_LVL = 118;
 const PRAY = { Piety: [1.20, 1.23], Zeal: [1.25, 1.28] };
@@ -235,7 +240,7 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
           const T = stallTo(h.p, t);
           if (T != null && T > t) { h.stalled = t; h.t = T; hits.push(h); L.on && L(`t${t} ${h.p.name} stalls her attack to t${T} (Vengeance up)`); continue; }
         }
-        const p = h.p, ch = autoChance(p, p.style), d = rng.random() < ch ? rng.randint(0, MAX_HIT.on[0]) : 0;
+        const p = h.p, ch = autoChance(p, p.style), d = rng.random() < ch ? rng.randint(0, MAX_HIT[PRAYING ? 'on' : 'off'][0]) : 0;
         L.on && L(`t${t} her attack on ${p.name}: ${d}`);
         if (h.tr) h.tr.tip = `Her attack on ${p.name}: ${d} (landed t${t}${h.stalled != null ? `, stalled from t${h.stalled}` : ''})${d >= 1 && p.veng ? ' - Vengeance' : ''}`;
         if (d >= 1 && p.veng) {
