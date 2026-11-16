@@ -195,8 +195,9 @@ export function createMaiden(host, { getTeam }) {
   };
   rep.addEventListener('change', (e) => {
     const r = root().report, el = e.target;
-    if (el.dataset.condense != null) {
-      r.condense = el.checked; persist();
+    if (el.dataset.condense != null || el.dataset.hideodd != null) {
+      if (el.dataset.condense != null) r.condense = el.checked; else r.hideOdd = el.checked;
+      persist();
       const out = rep.querySelector('[data-rout]'); if (out.__run) out.innerHTML = results(out.__run.runs, out.__run.bps);
       return;
     }
@@ -275,8 +276,10 @@ export function createMaiden(host, { getTeam }) {
       const last = groups[groups.length - 1];
       if (condense && !main.has(x) && last && last.odd) last.ts.push(x); else groups.push({ ts: [x], odd: !main.has(x) });
     }
+    const hide = !!root().report.hideOdd, hidden = S.map(() => 0);
     const cum = S.map(() => 0);
     const dist = groups.map((gp) => {
+      if (hide && gp.odd) { S.forEach((s, k) => { const n = gp.ts.reduce((q, x) => q + (s.by.get(x) || 0), 0); cum[k] += n; hidden[k] += n; }); return ''; }
       const a = gp.ts[0], b = gp.ts[gp.ts.length - 1], many = gp.ts.length > 1;
       const lab = many ? `<b>${fsec(a)}-${fsec(b)}</b> <span class="muted small">t${a}-${b}</span>` : `<b>${fsec(a)}</b> <span class="muted small">t${a}</span>`;
       const tip = gp.odd ? ' title="Only thralls or a Vengeance on a tick of its own proc her on this time"' : '';
@@ -288,14 +291,13 @@ export function createMaiden(host, { getTeam }) {
     const extra = `<tr><td>Median</td>${S.map((s) => `<td>${s.median == null ? '-' : `<b>${fsec(s.median)}</b> <span class="muted small">t${s.median}</span>`}</td>`).join('')}</tr>`
       + [...bps].sort((x, y) => x - y).map((b) => { const T = Math.floor(b / 0.6 + 1e-9); return `<tr><td>By ${fsec(T)}</td>${S.map((s) => `<td><b>${pc(s.ok.filter((x) => x.total <= T).length, s.N)}</b></td>`).join('')}</tr>`; }).join('')
       + `<tr><td title="Damage carries over">HP left after the proc (median)</td>${S.map((s) => `<td>${s.hp == null ? '-' : s.hp.toLocaleString()}</td>`).join('')}</tr>`
-      + `<tr><td>Her Defence then (median)</td>${S.map((s) => `<td>${s.def ?? '-'}</td>`).join('')}</tr>`
-      + (S.some((s) => s.nMaul) ? `<tr><td>Elder mauls landed</td>${S.map((s) => `<td class="small">${s.nMaul ? s.mauls.map((n, k) => (k <= s.nMaul && n ? `<b>${k}</b> ${pc(n, s.N)}` : '')).filter(Boolean).join(', ') : '-'}</td>`).join('')}</tr>` : '')
-      + `<tr><td>Vengeance procs a raid</td>${S.map((s) => `<td>${s.vengs.toFixed(2)}</td>`).join('')}</tr>`
       + (S.some((s) => s.skips.length) ? `<tr><td title="Not in their Gear, or not enough spec energy">Hits skipped</td>${S.map((s, j) => `<td class="small">${s.skips.length ? s.skips.map(([q, n]) => { const [i, a] = q.split('|'); return `<span class="err">${esc(runs[j].players[Number(i)].name)} ${esc(ATTACKS[a].label)}</span> ${pc(n, s.N)}`; }).join('<br>') : '-'}</td>`).join('')}</tr>` : '')
       + (S.some((s) => s.fails) ? `<tr><td>No proc</td>${S.map((s) => `<td class="err">${s.fails ? pc(s.fails, s.N) : '-'}</td>`).join('')}</tr>` : '');
     return `<div class="vz-report"><h3 style="margin:0 0 6px">70s proc - how often each time happens</h3>
-      <label class="pick" style="flex-direction:row;gap:6px;align-items:center;margin:0 0 6px" title="Times that only thralls or a Vengeance on a tick of its own proc her on go into one row between the times player attacks proc her on"><input type="checkbox" data-condense ${condense ? 'checked' : ''}>Condense list</label>
-      <div class="scroll"><table class="sortlist">${head}${dist}${extra}</table></div>
+      <div class="row" style="gap:16px;margin:0 0 6px">
+        <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Times that only thralls or a Vengeance on a tick of its own proc her on go into one row between the times player attacks proc her on"><input type="checkbox" data-condense ${condense ? 'checked' : ''} ${hide ? 'disabled' : ''}>Condense list</label>
+        <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="Hide the times only thralls, or a Vengeance not stalled to land with a scythe, proc her on. The (or faster) shares still count them"><input type="checkbox" data-hideodd ${hide ? 'checked' : ''}>Hide non-player procs</label></div>
+      <div class="scroll"><table class="sortlist">${head}${hide && hidden.some((n) => n) ? `<tr class="muted"><td title="Thralls, or a Vengeance not stalled to land with a scythe">Hidden: non-player procs</td>${S.map((s, k) => `<td>${hidden[k] ? pc(hidden[k], s.N) : '-'}</td>`).join('')}</tr>` : ''}${dist}${extra}</table></div>
       <h3>How often each 70s proc time happens (% of raids)</h3>${legend}<div class="scroll">${barSvg(runs, S, times)}</div>
       <h3>Her HP over time (average) - dotted: the median 70s proc</h3>${legend}<div class="sub">Each raid's HP is held at what it had after the 70s proc for now; the 50s and 30s procs come with those sections.</div><div class="scroll">${lineSvg(runs, S, maxHp)}</div></div>
       <div class="row wrap" style="gap:6px;align-items:center;margin-top:10px"><b>Show raid</b>

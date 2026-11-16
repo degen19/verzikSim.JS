@@ -25,6 +25,7 @@
 //      for now a spec they can't afford is just skipped.
 //  19. Backup Defence specs: when the opening Defence specs miss (e.g. a maul), backups (BGS / Ralos / maul again...)
 //      to get her Defence down, as on Xarpus.
+//  20. Report: Vengeance damage - average a raid (total).
 export const MAIDEN_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625, 1: 2625 };
 export const MAIDEN = {
   def: 200, magic: 350, magicAtk: 300,
