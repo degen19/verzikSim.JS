@@ -49,7 +49,8 @@ export const RALOS_DRAIN = Math.floor(XARPUS.magic / 8);
 //        spec is done, without waiting on the ones before it. A backup whose player hasn't the spec when its turn comes is
 //        passed over; a maul backup is skipped once 2 mauls have landed (then it's flat Defence reduction).
 //    A maul / BGS lowers his Defence as the attack is made (PID); a Ralos Spec when it lands. No Defence floor.
-//  - Damage specs (after the player's own Defence specs): ZCB (75%) - held for the screech (Hold ZCBs: their first attack
+//  - Damage specs (after the player's own Defence specs): ZCB (75%) - never before the opening Defence specs (and any
+//    re-mauls) have all gone off and landed; held for the screech (Hold ZCBs: their first attack
 //    from it, nobody waits for anyone) or else once the mauls are settled - while his HP is at or above the ZCB -> claws
 //    HP (below it: claws instead, if they have them); Claws (50%) once no Defence spec is still to come. As often as their
 //    spec allows. A Claw spec tick fix goes before a held ZCB.
@@ -262,6 +263,8 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
   const remaulOpen = () => remaulers == null || ps.some((p) => p.remaulDue) || hits.some((h) => h.role === 'remaul');
   /** The mauls are settled: the opening mauls have swung and landed and any re-mauls have too. */
   const settled = () => maulers.every((p) => p.openDone) && !remaulOpen();
+  /** The opening Defence specs (mauls, BGS / Ralos openers) and any re-mauls have all gone off and landed. */
+  const startDefDone = () => ps.every((p) => p.openDone) && !remaulOpen() && !defFlying();
   const canSpec = (p) => p.used < CAP;
   /** The most a backup could take off his Defence from `d`. */
   const maxDrain = (b, d) => {
@@ -318,6 +321,7 @@ export function runXarpus(players, team, rng, log = null, { heals = HEALS_DEFAUL
     if (p.dps === 'none' || !ownDefDone(p) || t < p.dpsFrom) return null;   // their own Defence specs first; held until dpsFrom
     if (p.dps === 'zcb') {
       if (hp < zcbBelow) return !defOpen() && has(p, 'Dragon claws') && p.spec >= 50 ? 'claw' : null;
+      if (!startDefDone()) return null;                               // never ahead of the opening Defence specs (and re-mauls)
       if (zcbAsap) return p.spec >= ZCB_SPEC ? 'zcb' : null;        // ZCB As Soon As Available: no waiting on the mauls or the screech
       if (holdZcb) return screech != null && t >= screech && p.spec >= ZCB_SPEC ? 'zcb' : null;   // held for the screech
       return settled() && p.spec >= ZCB_SPEC ? 'zcb' : null;        // else: once the mauls are settled

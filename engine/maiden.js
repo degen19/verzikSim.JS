@@ -28,11 +28,77 @@
 //  20. Report: Vengeance damage - average a raid (total).
 //  21. Prayer on her attacks: off-prayer Vengeance for now (PRAYING = false: her max 36, not 18) - when players pray
 //      or tank off prayer to change with the fight (crabs leaked, HP, the phase).
+//  22. (Down the road) "Render Video" on a raid's recap: a 3D replay of that one raid's room, made on request.
+//      With it: player deaths (from incoming damage - their attacks/specs stop, room effects follow) and Dawnbringer
+//      passing (drop on a tick, the receiver walks to the tile, picks it up, equips, specs).
+//      Boss spots: Bloat walks/runs the track around the centre tank (and stops after a while); Nylo boss and Xarpus
+//      in the exact centre; Sotetseg at the end opposite the red gate; Verzik P1 on the throne (end centre); P3
+//      spawns in the centre, follows a tank drag pre-webs, and walks back to the centre for webs.
+//      Verzik pillars: they fall after P1 or once they've taken enough damage (matters in solos) - not modelled yet.
+//  23. (Down the road, after 22) Practice mode: set the other players' behaviour and your own target plan, then
+//      play your player live (0.6s ticks, clicks to walk/attack, keys for prayers/spec/swaps) in the rendered room.
+//      Graded against your target plan per tick (attacks on time, right target, specs, freezes, prayers): a score
+//      plus a timeline of where you drifted and what it cost. Maiden first.
 export const MAIDEN_HP = { 5: 3500, 4: 3062, 3: 2625, 2: 2625, 1: 2625 };
 export const MAIDEN = {
   def: 200, magic: 350, magicAtk: 300,
   dfn: { stab: 0, slash: 0, crush: 0, light: 0, standard: 0, heavy: 0, magic: 0 },
 };
+// ---------------------------------------------------------------- the room and her crabs (Nylocas Matomenos)
+//  Tiles as Blert draws the room (x east, y south - north at the top): 28 x 24. Maiden 6x6 with her NW tile at (2, 9),
+//  so her SW tile is (2, 14). Crabs are 2x2; a spawn is the crab's NW tile.
+//  At each proc (70s / 50s / 30s) up to 2 crabs per player spawn (10 in a 5s - every spawn; under 5s, random spawns).
+//  A crab walks 1 tile a tick: diagonally (west, and toward her SW tile's row) until its SW tile is on her SW tile's
+//  row, then straight west; it leaks when it's next to her, and she heals 2x its HP left on the next tick.
+//  Ticks to reach her: N1 / S1 6, N2 / S2 9, N3 / S3 13, N4a / N4b / S4a / S4b 17.
+//  Crab stats: HP 100 in 5s, scaled like the bosses (87 in 4s, 75 in 3s / duos / solos); Magic 100, Defence 100,
+//  every defence bonus 0. A freeze can't miss when the caster's magic accuracy roll is at least (their base Magic
+//  level + 9) * 204 - 22,032 at 99 Magic (the Nylocas Matomenos wiki); below that, the usual roll against their Magic.
+//  Crabs don't block each other (or anything): each one paths on its own, and they can stack on the same tiles.
+//  Chunks (8x8, from the world grid - they decide the order AoE attacks pick targets in): if her SW tile is world
+//  (3162, 4444), chunk lines run at x = 0 / 8 / 16 / 24 and between rows 2|3, 10|11, 18|19 (N4a / N4b and S4a / S4b
+//  are in different chunks). To confirm.
+//  AoE targets (Dinh's, barrage, chinchompas): the chunks around the centre (Dinh's: the player) are checked in order
+//    7 4 1
+//    8 5 2      (the centre in chunk 5; the check starts in chunk 1, then 2, ... 9)
+//    9 6 3
+//  up to the attack's max targets; within a chunk, the NPC that entered it last goes first; NPCs that entered it on the
+//  same tick, lowest NPC index first. A target must also be in the attack's area (Dinh's: 11x11 around the player).
+//  NPC index: random for now (a new one each spawn).
+//  Barrage: the area is the 3x3 centred on the primary target's SW tile; it hits the NPCs whose SW tile is in it (up to
+//  the target cap) - a crab one tile off the edge with only its other tiles inside isn't hit.
+//  Black chinchompas: the same area (the NPCs whose SW tile is in the 3x3 centred on the target's SW tile), up to 12
+//  targets. +80 ranged attack, +30 ranged strength, heavy. Short fuse 4 ticks (+3 effective Ranged), medium 3, long 4.
+//  One accuracy roll (the primary target's, against heavy ranged defence) decides every target: all hit or all miss.
+//  Accuracy by distance to the target's closest tile - short 100 / 75 / 50%, medium 75 / 100 / 75%, long 50 / 75 / 100%
+//  at 0-3 / 4-6 / 7+ tiles. At Maiden: always medium fuse (3 ticks), thrown from 4-5 tiles (100% accuracy), landing 2
+//  ticks later.
+//  Dinh's bulwark: special attack only. The area is the 11x11 centred on the player's tile; up to 10 hits. The primary
+//  target (the one the spec was used on) always takes the first hit, then the other 9 go by the chunk order and NPC
+//  index above - so the primary target can be picked again and take 2 of the 10.
+//  Stats: +124 crush attack, +38 strength (defence +106 / +109 / +109 / -10 magic / +148 ranged); 5 ticks; Pummel is
+//  crush, accurate (+3 Attack). Pummel's strength passive: extra strength = max(0, (stab + slash + crush + ranged
+//  defence - 800) / 12 - 38) - nothing extra while the average of those four is under 314.
+//  Shield Bash (the spec): 50% energy, +20% accuracy, rolled against the target's crush defence. (The wiki's "the
+//  target is always hit twice, up to 10 enemies" is superseded by the rule above: the primary takes the first hit
+//  and only takes a second if the chunk order picks it again.) A successful hit also drains the NPC's highest
+//  offensive stat by 5% - ignored here (crabs don't attack; Maiden's max hit goes by the crabs).
+//  Freezes: Ice Barrage 32 ticks (35 with an ancient sceptre), Burst 16 (17), Blitz 24 (26), Rush 8 (8); then 5 ticks
+//  immune - a 32-tick freeze: frozen ticks 1-32, immune 33-37, can be frozen again on 38.
+export const ROOM = { w: 28, h: 24 };
+export const CHUNK = { x0: 0, y0: 3, size: 8 };   // a chunk line west of x = 0, 8, 16, 24 and north of y = 3, 11, 19 (see above)
+export const MAIDEN_TILE = { x: 2, y: 9, size: 6 };
+export const SPAWNS = { N1: [13, 1], N2: [17, 1], N3: [21, 1], N4a: [25, 1], N4b: [25, 3], S1: [13, 21], S2: [17, 21], S3: [21, 21], S4a: [25, 21], S4b: [25, 19] };
+export const CRAB_HP = { 5: 100, 4: 87, 3: 75, 2: 75, 1: 75 };
+export const CRAB = { size: 2, magic: 100, def: 100 };
+export const FREEZE = { barrage: [32, 35], burst: [16, 17], blitz: [24, 26], rush: [8, 8] };   // [ticks, with an ancient sceptre]
+export const FREEZE_IMMUNE = 5;
+export const DINHS = { range: 11, maxHits: 10, crush: 124, str: 38, speed: 5, specCost: 50, specAcc: 1.2, def: { stab: 106, slash: 109, crush: 109, magic: -10, ranged: 148 } };
+/** Pummel's extra strength from the player's total stab + slash + crush + ranged defence. */
+export const dinhsStr = (stab, slash, crush, ranged) => Math.max(0, Math.floor((stab + slash + crush + ranged - 800) / 12 - 38));   // 11x11 around the player; primary first, then 9 by chunk order (primary can repeat)
+export const CHIN = { atk: 80, rstr: 30, speed: 3, delay: 2, maxTargets: 12 };   // medium fuse, 4-5 tiles away (100%)
+/** The magic accuracy roll a caster needs for a freeze that can't miss: (their base Magic level + 9) * 204. */
+export const freezeSure = (baseMagic) => (baseMagic + 9) * 204;
 /** The first room tick each prefire can go off. */
 export const PREFIRE_TICK = { tbow: 5, zcb: 6 };
 /** Her attacks: every ATTACK_EVERY ticks from FIRST_ATTACK. */
