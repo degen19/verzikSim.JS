@@ -99,9 +99,10 @@ export const dinhsStr = (stab, slash, crush, ranged) => Math.max(0, Math.floor((
 export const CHIN = { atk: 80, rstr: 30, speed: 3, delay: 2, maxTargets: 12 };   // medium fuse, 4-5 tiles away (100%)
 /** The magic accuracy roll a caster needs for a freeze that can't miss: (their base Magic level + 9) * 204. */
 export const freezeSure = (baseMagic) => (baseMagic + 9) * 204;
-/** The first room tick each prefire can go off: running in (2 tiles a tick from 20 tiles out), the tick they're in range -
- *  Twisted bow 10 tiles (5), ZCB 8 (6), Ralos 7 on Rapid (7) or 9 on Longrange (6 - a tick sooner, but a 7-tick attack). */
-export const PREFIRE_TICK = { tbow: 5, zcb: 6, ralos: 7, ralosl: 6 };
+/** The first room tick each prefire can go off: running in, 2 tiles a tick, a prefire goes on the tick its drag puts
+ *  them in range (9 tiles out on tick 5, 7 on tick 6) - Twisted bow (10) and long range Ralos (9) on 5; ZCB (8) and
+ *  Rapid Ralos (7) on 6. Long range's attack takes a tick longer (7 ticks, not 6). */
+export const PREFIRE_TICK = { tbow: 5, zcb: 6, ralos: 6, ralosl: 5 };
 /** Her attacks: every ATTACK_EVERY ticks from FIRST_ATTACK. */
 export const FIRST_ATTACK = 9, ATTACK_EVERY = 10;
 export const isAttackTick = (t) => t >= FIRST_ATTACK && (t - FIRST_ATTACK) % ATTACK_EVERY === 0;
