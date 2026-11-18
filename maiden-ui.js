@@ -26,7 +26,7 @@ const SPELL_TIP = {
   dc: 'DC: Death Charge (comes with the later phases)',
   veng: 'Veng: they cast Vengeance themselves - and Vengeance Other on a teammate without it',
 };
-const LEGEND = 'Maiden: the prefires (tick 5) to her 70s proc - the hit that takes her below 70% of her HP. Her attacks every 10 ticks from tick 9 land 5 ticks later (on the targeted player).';
+const LEGEND = `Maiden: the prefires (Twisted bow tick ${PREFIRE_TICK.tbow}, ZCB ${PREFIRE_TICK.zcb}, Ralos ${PREFIRE_TICK.ralosl} long range / ${PREFIRE_TICK.ralos} rapid) to her 70s proc - the hit that takes her below 70% of her HP. Her attacks every 10 ticks from tick 9 land 5 ticks later (on the targeted player).`;
 
 export function createMaiden(host, { getTeam }) {
   let state = loadKey(STORE), saved = loadKey(SAVED), savedPick = '', setMsg = '';
