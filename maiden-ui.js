@@ -124,7 +124,7 @@ export function createMaiden(host, { getTeam }) {
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="The player she attacks, with Vengeance up, stalls her attack so it lands on the tick their next scythe lands - its Vengeance can't proc her on a tick of its own. From the start to her 30s proc (team-wide)"><input type="checkbox" data-s="stall" ${st.stall ? 'checked' : ''}>Stall Veng to prevent troll procs</label>
         <span class="muted small">HP ${MAIDEN_HP[t].toLocaleString()} · 70s proc below ${(MAIDEN_HP[t] * 0.7).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
       </div>
-      ${sec('start', `Start <span class="muted small" style="font-weight:normal">- the prefires (Twisted bow tick ${PREFIRE_TICK.tbow}, ZCB tick ${PREFIRE_TICK.zcb}) to her 70s proc</span>`, `
+      ${sec('start', `Start <span class="muted small" style="font-weight:normal">- the prefires (Twisted bow tick ${PREFIRE_TICK.tbow}, ZCB tick ${PREFIRE_TICK.zcb}, Ralos tick ${PREFIRE_TICK.ralos} rapid / ${PREFIRE_TICK.ralosl} long range) to her 70s proc</span>`, `
         <div class="mgrid" data-n="${ps.length}" style="--n:${ps.length}">${ps.map(col).join('')}</div>
         <p class="muted small" style="margin:8px 0 0">Each hit goes as soon as their attack timer allows; their last hit repeats until the 70s proc.
           A hit they can't do (not in their Gear, or not enough spec) is skipped. Ranged gear on Rigour at 112 Ranged, melee gear on their prayer (Zeal unless set in the Gear tab) at 118; Vengeance up from the start.</p>`)}

@@ -99,8 +99,9 @@ export const dinhsStr = (stab, slash, crush, ranged) => Math.max(0, Math.floor((
 export const CHIN = { atk: 80, rstr: 30, speed: 3, delay: 2, maxTargets: 12 };   // medium fuse, 4-5 tiles away (100%)
 /** The magic accuracy roll a caster needs for a freeze that can't miss: (their base Magic level + 9) * 204. */
 export const freezeSure = (baseMagic) => (baseMagic + 9) * 204;
-/** The first room tick each prefire can go off. */
-export const PREFIRE_TICK = { tbow: 5, zcb: 6 };
+/** The first room tick each prefire can go off: running in (2 tiles a tick from 20 tiles out), the tick they're in range -
+ *  Twisted bow 10 tiles (5), ZCB 8 (6), Ralos 7 on Rapid (7) or 9 on Longrange (6 - a tick sooner, but a 7-tick attack). */
+export const PREFIRE_TICK = { tbow: 5, zcb: 6, ralos: 7, ralosl: 6 };
 /** Her attacks: every ATTACK_EVERY ticks from FIRST_ATTACK. */
 export const FIRST_ATTACK = 9, ATTACK_EVERY = 10;
 export const isAttackTick = (t) => t >= FIRST_ATTACK && (t - FIRST_ATTACK) % ATTACK_EVERY === 0;
@@ -160,15 +161,16 @@ export const ATTACKS = {
   ax: { label: 'Ascension xbows', weapon: 'Ascension crossbows', style: 'range', speed: 2, delay: 3, code: 'AX' },
   zcb: { label: 'ZCB', weapon: 'Zaryte crossbow', style: 'range', speed: 5, delay: 3, code: 'Z' },
   zcbs: { label: 'ZCB spec', weapon: 'Zaryte crossbow', style: 'range', speed: 5, delay: 3, spec: 75, code: 'ZCB' },
-  ralos: { label: 'Ralos spec', weapon: 'Tonalztics of Ralos', style: 'range', speed: 6, delay: 3, spec: 50, code: 'Ra' },
+  ralos: { label: 'Ralos spec (rapid)', weapon: 'Tonalztics of Ralos', style: 'range', speed: 6, delay: 3, spec: 50, code: 'Ra' },
+  ralosl: { label: 'Ralos spec (long range)', weapon: 'Tonalztics of Ralos', style: 'range', speed: 7, delay: 3, spec: 50, code: 'Ra' },   // range 9 (Rapid 7): +1 tick to its attack
   maul: { label: 'Elder maul spec', weapon: 'Elder maul', style: 'melee', speed: 6, delay: 1, spec: 50, code: 'EM' },
   bgs: { label: 'BGS spec', weapon: 'Bandos godsword', style: 'melee', speed: 6, delay: 1, spec: 50, code: 'BGS' },
   claws: { label: 'Claw spec', weapon: 'Dragon claws', style: 'melee', speed: 4, delay: 1, spec: 50, code: 'C' },
   scythe: { label: 'Scythe', weapon: 'Scythe of vitur', style: 'melee', speed: 5, delay: 1, code: 'S' },
 };
 /** What can be a prefire, and the first tick it can go. */
-export const PREFIRES = ['tbr', 'tba', 'zcb', 'zcbs'];
-const prefireTick = (a) => (ATTACKS[a].weapon === 'Twisted bow' ? PREFIRE_TICK.tbow : PREFIRE_TICK.zcb);
+export const PREFIRES = ['tbr', 'tba', 'zcb', 'zcbs', 'ralos', 'ralosl'];
+const prefireTick = (a) => (a === 'ralos' || a === 'ralosl' ? PREFIRE_TICK[a] : ATTACKS[a].weapon === 'Twisted bow' ? PREFIRE_TICK.tbow : PREFIRE_TICK.zcb);
 /** The player she attacks prays Protect from Magic? Not for now: off prayer, so the Vengeance hits harder (her max
  *  36 with no crabs leaked, not 18). */
 export const PRAYING = false;
@@ -358,7 +360,7 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
       const first = p.step === 0 && !p.started; p.started = true;
       if (first && p.spells.thralls) thrall(p, t + rng.randint(1, 3));   // their thrall's first hit: 1-3 ticks after their first attack
       const a = nextAct(p), A = ATTACKS[a], tr = trace ? { t, i: p.i, code: A.code } : null;
-      const go = (h) => { hits.push({ t: t + A.delay, p, a, tr, label: A.label, ...h }); if (tr) trace.push(tr); };
+      const go = (h) => { hits.push({ t: t + A.delay, p, a: a === 'ralosl' ? 'ralos' : a, tr, label: A.label, ...h }); if (tr) trace.push(tr); };
       const tag = first ? ' (prefire)' : '';
       if (A.spec) { p.spec -= A.spec; L.on && L(`t${t} ${p.name} ${A.label} (${p.spec}% left)`); }
       if (a === 'tbr' || a === 'tba' || a === 'bp') {
@@ -378,7 +380,7 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
         if (tr) tr.acc = ch;
         if (ok) go({ ruby: true, acc: ch, label: `ZCB spec${tag}` });
         else { if (tr) Object.assign(tr, { dmg: 0, exp: [0, 0], what: `ZCB spec${tag} misses` }); go({ amt: 0, label: 'ZCB spec misses' }); }
-      } else if (a === 'ralos') {
+      } else if (a === 'ralos' || a === 'ralosl') {
         go({});
       } else if (a === 'maul' || a === 'bgs') {
         const [ch, mx0] = a === 'maul' ? melee(p, A.weapon, 2, def, 1.25) : melee(p, A.weapon, 1, def, 2), mx = a === 'maul' ? mx0 : Math.floor(Math.floor(mx0 * 1.1) * 1.1);
