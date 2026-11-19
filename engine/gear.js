@@ -78,10 +78,15 @@ export const ITEMS = {
   'Zaryte crossbow':      item('weapon', [0, 0, 0, 0, 110], undefined, { speed: 5, crossbow: true }),
   'Scythe of vitur':      item('weapon', [70, 125, 30, -6, 0], undefined, { str: 75, speed: 5, two_handed: true }),   // attack stats as the sim uses them
   'Dragon claws':         item('weapon', [41, 57, -4, 0, 0], undefined, { str: 56, speed: 4, spec: 50 }),
+  'Crystal halberd':      item('weapon', [85, 110, 5, -4, 0], undefined, { str: 118, speed: 7, two_handed: true, spec: 30 }),   // Sweep: 110% damage; a large target is hit twice (the second at 75% accuracy)
+  'Ice ancient sceptre':  item('weapon', [20, -1, 50, 20, 0], [2, 3, 1, 15, 0], { str: 60, mdmg: 10, pray: -1, speed: 5 }),   // ice spells freeze 10% longer (see maiden.js FREEZE)
+  'Kodai wand':           item('weapon', [0, 0, 0, 28, 0], [0, 0, 0, 20, 0], { mdmg: 15, speed: 5 }),   // Ice Barrage (the freezes)
+  "Dinh's bulwark":       item('weapon', [0, 0, 124, 0, 0], [106, 109, 109, -10, 148], { str: 38, speed: 5, two_handed: true, spec: 50 }),   // Shield Bash (see maiden.js)
+  'Black chinchompa':     item('weapon', [0, 0, 0, 0, 80], undefined, { rstr: 30, speed: 3, two_handed: true }),   // medium fuse (rapid)
   'Elder maul':           item('weapon', [0, 0, 135, 0, 0], undefined, { str: 147, speed: 6, two_handed: true, spec: 50 }),   // Pulverize: +25% accuracy, -35% Defence on a hit
   'Bandos godsword':      item('weapon', [0, 132, 80, 0, 0], undefined, { str: 132, speed: 6, two_handed: true, spec: 50 }),   // Warstrike: 2x accuracy (vs slash), max x1.1 x1.1, drains Defence (then other stats) by the damage
   'Sulphur blades':       item('weapon', [11, 72, 0, 0, 0], undefined, { str: 64, speed: 4 }),
-  'Obligator':            item('weapon', [0, 0, 120, 0, 0], undefined, { str: 40, speed: 3 }),   // formerly "Breaker"
+  'Obligator':            item('weapon', [22, -8, 120, 0, 0], [0, 16, 0, 3, 8], { str: 40, pray: 3, speed: 3, two_handed: true }),   // formerly "Breaker". Smash (3t) only; the charged 5t Thrust (up to 3 targets in a line, best of 2+ rolls, +20% on size-2 targets) is a to-do
   'Swift blade':          item('weapon', undefined, undefined, { speed: 3 }),
 };
 // elite void set effects (all four pieces): ranged +10% accuracy, +12.5% damage

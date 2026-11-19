@@ -159,11 +159,11 @@ export function raidNav(box, steps, start, draw) {
 const CODE_COL = {
   S: '#9aa3b5', TB: '#7bd88f', Z: '#e8d27a', ZCB: '#ffd54a', SB: '#6fd3e8', TS: '#6fd3e8', EM: '#c79bff', BGS: '#5fd0c0',
   C: '#ff9f5a', Ch: '#ff7ab8', H: '#ff6b6b', BP: '#b9e07a', R: '#ff9f9f', D: '#c79bff', P: '#ff66cc', SH: '#6fd3e8',
-  E: '#8fb8ff', SuB: '#ffcf70', T: '#ff8a8a', Cs: '#d9a37a', Sh: '#6fd3e8', F: '#c0c4d0', '3t': '#c0c4d0', Zt: '#c9b98f',
+  E: '#8fb8ff', IB: '#8fd8ff', SuB: '#ffcf70', T: '#ff8a8a', Cs: '#d9a37a', Sh: '#6fd3e8', F: '#c0c4d0', '3t': '#c0c4d0', Zt: '#c9b98f',
 };
 const CODE_NAME = { S: 'Scythe', TB: 'Twisted bow', Z: 'ZCB', ZCB: 'ZCB spec', SB: 'Shadow Barrage', TS: "Tumeken's shadow", EM: 'Elder maul spec',
   BGS: 'BGS spec', C: 'Claw spec', Ch: 'Crystal halberd spec', H: 'Soulflame horn', BP: 'Blowpipe', D: 'Dawnbringer spec', P: 'Surge pot', SH: 'Shadow',
-  E: 'Eye of ayak', SuB: 'Sulphur blades', T: 'Sang', Zt: "Zorya's tome", AX: 'Ascension crossbows', DD: 'Dragon dart', R: 'Forced spec regen', Cs: 'Claw scratch', Sh: 'Shadow', F: 'Tick fill', '3t': '3-tick weapon', Ra: 'Ralos spec' };
+  E: 'Eye of ayak', SuB: 'Sulphur blades', T: 'Sang', Zt: "Zorya's tome", AX: 'Ascension crossbows', DD: 'Dragon dart', R: 'Forced spec regen', Cs: 'Claw scratch', IB: 'Ice barrage', Sh: 'Shadow', F: 'Tick fill', '3t': '3-tick weapon', Ra: 'Ralos spec' };
 // weapon icons: the OSRS Wiki's item images, downloaded once into img/icons (tools/fetch-icons.mjs) and served from
 // the site - never loaded from the wiki. The text code shows for any icon that isn't there.
 const ICONS = 'img/icons/';

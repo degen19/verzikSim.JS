@@ -1,0 +1,394 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+  body{margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#fff}
+  #hud{position:absolute;left:14px;top:12px;width:440px;font-size:18px;text-shadow:0 1px 2px #000}
+  #hud .t{font-size:21px;font-weight:600}
+  #bar{height:16px;background:#3a0d0d;border:1px solid #000;margin:6px 0 2px;position:relative}
+  #bar i{position:absolute;left:0;top:0;bottom:0;background:#2fbf4a}
+  #bar b{position:absolute;top:0;bottom:0;width:1px;background:#fff}
+  #title{position:absolute;right:14px;top:12px;font-size:17px;text-align:right;text-shadow:0 1px 2px #000;max-width:420px}
+  #log{position:absolute;left:14px;bottom:12px;font-size:15px;line-height:1.35;text-shadow:0 1px 2px #000;max-width:720px}
+  #log div{opacity:.95}
+  .hs{position:absolute;width:48px;height:46px;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;font:bold 21px Arial,sans-serif;color:#fff;text-shadow:1px 1px 0 #000;image-rendering:pixelated;background-size:100% 100%;z-index:5}
+  #legend{position:absolute;right:14px;bottom:12px;font-size:15px;text-align:right;text-shadow:0 1px 2px #000}
+  .sw{display:inline-block;width:10px;height:10px;margin:0 4px 0 10px;vertical-align:-1px}
+  #ctl{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:10px;align-items:center;background:rgba(0,0,0,.6);padding:8px 12px;border-radius:8px;z-index:30;font-size:14px}
+  #ctl button,#ctl select{background:#222;color:#fff;border:1px solid #555;border-radius:5px;padding:4px 10px;font:inherit;cursor:pointer}
+  #ctl input{width:min(46vw,520px)}
+  #log{bottom:64px}#legend{bottom:64px}
+</style></head><body>
+<div id="loading" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:18px;opacity:.8">Loading models...</div>
+<div id="ctl"><button id="pp">Pause</button><input id="seek" type="range" min="0" value="0"><span id="tt"></span><select id="spd"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select><span id="ql"></span></div>
+<div id="hud"><div class="t" id="tick"></div><div id="hp"></div><div id="bar"><i></i><b style="left:70%"></b><b style="left:50%"></b><b style="left:30%"></b></div><div id="phase" style="opacity:.85"></div><div id="healed" style="color:#ff8a8a;font-weight:600"></div></div>
+<div id="title"></div><div id="log"></div>
+<div id="legend"><span class="sw" style="background:#5fd0ff"></span>frozen<span class="sw" style="background:#ffd54a"></span>immune<span class="sw" style="background:#ff5a5a"></span>walking</div>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<script type="module">
+import * as THREE from "three";
+import { loadPak, arr } from "./pak.js";
+const q = new URLSearchParams(location.search);
+const KITN = ["melee_claws", "melee_halberd", "mage_sceptre", "mage_ayak", "mage_ayakblitz", "void_tbow", "void_xbow", "void_ralos", "void_bp", "void_chin", "void_scythe", "void_zcbspec", "melee_dinhs", "mage_kodai", "melee_tbow", "melee_zcbspec", "melee_maul", "melee_scythe"];
+// the raid: from the page that opened this player (window.__maidenReplay on the parent), or ?data=<url> (testing)
+const R = q.get("data") ? await fetch(q.get("data")).then((r) => r.json()) : await new Promise((res) => { const p = window.parent !== window ? window.parent : window.opener; if (p && p.__maidenReplay) return res(p.__maidenReplay); addEventListener("message", (e) => { if (e.data && e.data.room) res(e.data); }, { once: true }); });
+const QUAL = q.get("q") || "medium", FPS = QUAL === "low" ? 30 : 60;
+const prog = document.getElementById("loading");
+let nDone = 0; const NAMES = ["maiden_room", "crab", "maiden_npc", "crab_anims", "spots", "thrall", "maidenproj", ...KITN.map((k) => `kit_${k}`)];
+const [room, crabM, MN, CA, SP, TH, MPJ, ...kitM] = await Promise.all(NAMES.map((u) => loadPak(`assets/${u}.pak`).then((x) => { nDone++; if (prog) prog.textContent = `Loading models ${nDone} / ${NAMES.length}`; return x; })));
+if (prog) prog.remove();
+document.getElementById("title").innerHTML = R.title || q.get("title") || "";
+let W = innerWidth, H = innerHeight;
+const r = new THREE.WebGLRenderer({ antialias: QUAL !== "low", preserveDrawingBuffer: true }); r.setPixelRatio(QUAL === "low" ? 1 : Math.min(2, devicePixelRatio || 1)); r.setSize(W, H); document.body.prepend(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0);
+const geo = (pos, col) => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(arr(pos)), 3)); if (col) g.setAttribute("color", new THREE.BufferAttribute(Float32Array.from(arr(col)), 3)); g.computeVertexNormals(); return g; };
+const ground = new THREE.Mesh(geo(room.gpos, room.gcol), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 8 }));
+scene.add(ground);
+scene.add(new THREE.Mesh(geo(room.pos, room.col), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })));
+const tl = new THREE.LineSegments(geo(room.lines), new THREE.LineBasicMaterial({ color: 0x9ffaf4, depthTest: false, transparent: true })); tl.renderOrder = 11; scene.add(tl);
+scene.add(new THREE.AmbientLight(0xffffff, 1.1)); const dl = new THREE.DirectionalLight(0xffffff, 2.4); dl.position.set(-40, 70, 30); scene.add(dl);
+const cam = new THREE.PerspectiveCamera(45, W / H, 1, 300);
+const [tx, ty, d] = (q.get("cam") || "37,31.5,25.5").split(",").map(Number), el = 54 * Math.PI / 180, az = -12 * Math.PI / 180;
+cam.position.set(tx + d * Math.cos(el) * Math.sin(az), d * Math.sin(el), -ty + d * Math.cos(el) * Math.cos(az)); cam.lookAt(tx, 0, -ty);
+// ground height under a tile (raycast once per tile)
+const rc = new THREE.Raycaster(), hc = new Map();
+const gh = (x, y) => { const k = `${x},${y}`; if (hc.has(k)) return hc.get(k); rc.set(new THREE.Vector3(x, 50, -y), new THREE.Vector3(0, -1, 0)); const h = rc.intersectObject(ground)[0]; const v = h ? h.point.y : 0; hc.set(k, v); return v; };
+// Blert grid (x east, y south; a crab's tile is its NW) -> region-local tiles (Maiden SW = local 26, 28)
+const L = (bx, by) => [bx + 24, 42 - by];
+const tileQuad = (w, color, op) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, depthTest: false, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.renderOrder = 10; return m; };
+const tileEdge = (w, color) => { const g = new THREE.EdgesGeometry(new THREE.PlaneGeometry(w, w)); const m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true })); m.rotation.x = -Math.PI / 2; m.renderOrder = 12; return m; };
+const crabGeos = (crabM.frames || [crabM.pos]).map((f) => geo(f, crabM.col)), crabGeo = crabGeos[0];
+// animations from the game: {geos, lengths (20ms client cycles), ms}; play(an, ms) - looped, hold(an, ms) - held on its last frame
+const geoC = (pos, cAttr) => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(arr(pos), 3)); g.setAttribute("color", cAttr); return g; };   // shared colours; flat shading needs no normals
+// a model's frames, built on first use (only the frames shown cost memory)
+const lazyGeos = (frames, cA) => new Proxy([], { get: (o, k) => (k === "length" ? frames.length : typeof k === "string" && /^\d+$/.test(k) ? (o[k] ||= geoC(frames[k], cA)) : o[k]) });
+const mkAnim = (A, col) => { const cA = new THREE.BufferAttribute(Float32Array.from(arr(col)), 3); return { geos: lazyGeos(A.frames, cA), lengths: A.lengths, ms: A.lengths.reduce((x, y) => x + y, 0) * 20 }; };
+const play = (an, ms) => { let m = ((ms % an.ms) + an.ms) % an.ms; for (let k = 0; k < an.geos.length; k++) { m -= an.lengths[k] * 20; if (m < 0) return an.geos[k]; } return an.geos[an.geos.length - 1]; };
+const hold = (an, ms) => (ms >= an.ms ? an.geos[an.geos.length - 1] : play(an, Math.max(0, ms)));
+// Maiden: her model by phase (100 / 70 / 50 / 30%, then the corpse), idle 8090, blood attack 8091, death 8093 -> 8094
+const MA = Object.fromEntries(Object.entries(MN).map(([ph, P]) => [ph, Object.fromEntries(Object.entries(P.anims).map(([k, A]) => [k, mkAnim(A, P.col)]))]));
+const maidenMesh = new THREE.Mesh(MA[100].idle.geos[0], new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
+maidenMesh.position.set(29, 2.141, -31); scene.add(maidenMesh);
+{ const mt = tileEdge(6, 0x9ffaf4); mt.position.set(29, gh(29, 31) + 0.06, -31); scene.add(mt); }
+const DEATH_MS = MA[30].death.ms + MA[30].death2.ms;
+// her attacks (every 10 ticks from 9) and who each goes to (from where it lands, or is stalled, 5 ticks on)
+const herAtk = []; for (let a = 9; a < (R.dead ?? 1e9); a += 10) { const e = (R.ev[a + 5] || []).map((x) => /^her attack on (Player \d)|^(Player \d) stalls her attack/.exec(x)).find(Boolean); herAtk.push({ t: a, to: e ? R.names.indexOf(e[1] || e[2]) : -1 }); }
+// her attack's projectile: the game's MAIDEN_SHADOW_PROJ (spotanim 1577, model 35398, animation 8100) - flies ball first, tendrils trailing
+const PROJ = mkAnim(MPJ["1577"], MPJ["1577"].col);
+const blood = new THREE.Mesh(PROJ.geos[0], new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })); blood.visible = false; scene.add(blood);
+const UP = new THREE.Vector3(0, 1, 0), prevB = new THREE.Vector3();
+// crabs: stand 8096, walk 8095, death 8097
+const CRAB = Object.fromEntries(Object.entries(CA.anims).map(([k, A]) => [k, mkAnim(A, CA.col)]));
+// spell effects: Vengeance (726) on the caster, Vengeance Other (725) on the target
+const SPA = Object.fromEntries(Object.entries(SP).map(([id, A]) => [id, mkAnim(A, A.col)]));
+const casts = [], tastes = [], summons = [], thrallHits = [];
+const THA = Object.fromEntries(Object.entries(TH.anims).map(([k, A]) => [k, mkAnim(A, TH.col)]));
+// Protect from Magic over their head: on her target while it's in the air (taken praying), and on a flincher
+const pfm = [];
+for (const [ts, evs] of Object.entries(R.ev)) for (const e of evs) { let m;
+  if ((m = /^her attack on (Player \d) \(praying\)/.exec(e))) { const L0 = +ts, st0 = Object.entries(R.ev).find(([, es]) => es.some((x) => x.startsWith(m[1] + " stalls her attack to t" + L0))); pfm.push({ i: R.names.indexOf(m[1]), from: (st0 ? +st0[0] : L0) - 5, to: L0 }); }
+  else if ((m = /^(Player \d) flinches/.exec(e))) pfm.push({ i: R.names.indexOf(m[1]), from: +ts - 1, to: +ts + 5 }); }
+const pfmTex = new THREE.TextureLoader().load("assets/headicon_440_2.png"); pfmTex.magFilter = THREE.NearestFilter;
+for (const [ts, evs] of Object.entries(R.ev)) for (const e of evs) { let m;
+  if ((m = /^(Player \d) recasts Vengeance/.exec(e))) casts.push({ t: +ts, by: R.names.indexOf(m[1]), on: R.names.indexOf(m[1]), anim: "veng", spot: "726" });
+  else if ((m = /^(Player \d) casts Vengeance Other on (Player \d)/.exec(e))) casts.push({ t: +ts, by: R.names.indexOf(m[1]), on: R.names.indexOf(m[2]), anim: "vengo", spot: "725" });
+  else if ((m = /^(Player \d) Vengeance \d+/.exec(e))) tastes.push({ t: +ts, i: R.names.indexOf(m[1]) });
+  else if ((m = /^(Player \d) summons a thrall/.exec(e))) { summons.push({ t: +ts, i: R.names.indexOf(m[1]) }); casts.push({ t: +ts, by: R.names.indexOf(m[1]), on: -1, anim: "summon" }); }
+  else if ((m = /^(Player \d) thrall (?:on (\S+) )?(\d+)/.exec(e))) thrallHits.push({ t: +ts, i: R.names.indexOf(m[1]), tgt: m[2] || "maiden", d: +m[3] }); }
+const crabs = {};
+const crabFor = (key, id) => { if (crabs[key]) return crabs[key];
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+  const g = new THREE.Group(), mesh = new THREE.Mesh(crabGeo, mat), fill = tileQuad(2, 0xff5a5a, 0.18), edge = tileEdge(2, 0xff5a5a);
+  const lab = label(id, "#fff", 0.9); lab.position.y = 2.3;
+  g.add(mesh, fill, edge, lab); g.visible = false; scene.add(g);
+  return (crabs[key] = { g, mesh, mat, fill, edge });
+};
+function label(text, color, s = 1) {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 64; const x = c.getContext("2d");
+  x.font = "bold 40px system-ui"; x.textAlign = "center"; x.lineWidth = 8; x.strokeStyle = "#000"; x.strokeText(text, 128, 46); x.fillStyle = color; x.fillText(text, 128, 46);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true })); sp.scale.set(2.4 * s, 0.6 * s, 1); sp.renderOrder = 20; return sp;
+}
+// players: a coloured true tile, a post and a name
+const FACE = q.get("face") ? Number(q.get("face")) : -Math.PI / 2;   // turn the models to face her (west)
+const PCOL = ["#4fc3ff", "#7bd88f", "#ffb347", "#d18cff", "#ff6b6b"];
+// ---- player movement, by the game's rules (Blert tiles: x east, y south). Each tick a player heads for what their next
+// attack needs - a tile (Dinh's spot, their tbow spot, their melee spot on her), a crab in reach (melee: a tile on one
+// of its sides, not diagonal; chinchompas 5; the 30s clump barrage 1) - pathed by the client's BFS (W, E, S, N, SW, SE,
+// NW, NE; no cutting a corner past a blocked tile), running 2 tiles a tick. Her 6x6 blocks; crabs don't.
+const ROW = [10, 13, 12, 15, 9];
+const SPOT = { 0: [8, 11], 1: [8, 12], 2: [7, 8], 3: [5, 15], 4: [6, 8] };
+if (R.sides) R.sides.forEach((sd, i) => { if (sd === 'N') SPOT[i] = [7 - (i % 2), 8]; else if (sd === 'S') SPOT[i] = [5 + (i % 2), 15]; else if (sd === 'E') SPOT[i] = [8, 13]; });   // the sim's sides (on her: north / south)   // P3 / P5 north, P4 south (the S1 player)   // on her: the Dinh's players north, the other south, freezers east
+const roomAt = new Map(R.room.map((s) => [s.t, s])), lastRoom = R.room[R.room.length - 1];
+const RW = 28, RH = 24, blocked = (x, y) => x < 0 || y < 0 || x >= RW || y >= RH || (x >= 2 && x <= 7 && y >= 9 && y <= 14);
+const DIRS = [[-1, 0], [1, 0], [0, 1], [0, -1], [-1, 1], [1, 1], [-1, -1], [1, -1]];
+const canStep = (x, y, dx, dy) => !blocked(x + dx, y + dy) && (!dx || !dy || (!blocked(x + dx, y) && !blocked(x, y + dy)));
+function bfs(sx, sy, ok) {
+  if (ok(sx, sy)) return [];
+  const prev = new Map([[sx + "," + sy, null]]), q = [[sx, sy]];
+  for (let h = 0; h < q.length; h++) { const [x, y] = q[h];
+    for (const [dx, dy] of DIRS) { if (!canStep(x, y, dx, dy)) continue; const nx = x + dx, ny = y + dy, k = nx + "," + ny; if (prev.has(k)) continue; prev.set(k, [x, y]);
+      if (ok(nx, ny)) { const out = [[nx, ny]]; let c = [x, y]; while (!(c[0] === sx && c[1] === sy)) { out.unshift(c); c = prev.get(c[0] + "," + c[1]); } return out; }
+      q.push([nx, ny]); } }
+  return null;
+}
+const crabAt = (t, key) => (roomAt.get(t) || lastRoom).crabs.find((c) => c.key === key && c.alive);
+const crabById = (t, id) => (roomAt.get(t) || lastRoom).crabs.filter((c) => c.id === id && c.alive).pop();
+const cheb = (x, y, c) => Math.max(Math.max(c.x - x, x - (c.x + 1), 0), Math.max(c.y - y, y - (c.y + 1), 0));
+const side = (x, y, c) => (x >= c.x && x <= c.x + 1 && (y === c.y - 1 || y === c.y + 2)) || (y >= c.y && y <= c.y + 1 && (x === c.x - 1 || x === c.x + 2));
+const herSide = (x, y) => (x >= 2 && x <= 7 && (y === 8 || y === 15)) || (y >= 9 && y <= 14 && (x === 1 || x === 8));   // a tile on one of her sides (melee)
+const herDist = (x, y) => Math.max(Math.max(2 - x, x - 7, 0), Math.max(9 - y, y - 14, 0));
+const tileIs = ([gx, gy]) => (x, y) => x === gx && y === gy;
+const atkBy0 = R.names.map((_, i) => R.atk.filter((a) => a.i === i).sort((x, y) => x.t - y.t));
+const ralosT = R.names.map((_, i) => (R.atk.find((a) => a.i === i && a.code === "Ra") || {}).t);
+const rangedTile = (i, t) => (ralosT[i] == null || t <= ralosT[i]) ? [12, ROW[i]] : i === 0 && R.proc50 != null && t > R.proc50 ? [17, ROW[i]] : i === 0 || t > R.proc ? [14, ROW[i]] : [17, ROW[i]];
+/** What this attack needs, as a test on a tile (at tick t: crabs move). */
+const PRE_RANGE = { TB: 10, ZCB: 8, Z: 8, Ra: 9 };   // prefires: from the weapon's max range (dragged into it on the prefire tick)
+const need = (i, a, t) => {
+  if (a === atkBy0[i][0] && PRE_RANGE[a.code]) return { ok: tileIs([7 + PRE_RANGE[a.code], ROW[i]]), reach: (x, y) => herDist(x, y) <= PRE_RANGE[a.code], face: "maiden" };
+  if (a.code === "DB" && a.pos) return { ok: tileIs(a.pos), face: a.tgt };
+  if (a.tgt && (a.code === "S" || a.code === "C" || a.code === "CH" || a.code === "HB")) { const c = crabAt(t, a.tgt); if (!c) return null; return { ok: a.code === "S" || a.code === "C" || a.code === "HB" ? (x, y) => side(x, y, c) : (x, y) => cheb(x, y, c) <= 5, face: a.tgt }; }
+  if (a.code === "IR") { const c = a.tgt ? crabAt(Math.min(t, a.t), a.tgt) : null; return { ok: tileIs(rangedTile(i, t)), reach: c ? (x, y) => cheb(x, y, c) <= 10 : null, face: a.tgt }; }
+  if (/^IB/.test(a.code)) {
+    const e = (R.ev[a.t] || []).find((x) => x.match(new RegExp("^" + R.names[i] + " Ice (barrage|blitz|burst) on"))), m = e && /on (\w+)(?: \(through (\w+)\))?/.exec(e), id = m ? m[2] || m[1] : null;
+    const c = id ? crabById(Math.min(t, a.t), id) : null;
+    if (c && (a.pos || (R.proc30 != null && a.t > R.proc30 && i === 0 && ["S2", "S3", "N3", "S4a", "S4b", "N4a", "N4b"].includes(id)))) return { ok: (x, y) => cheb(x, y, c) <= 1, face: c.key };   // 30s: right by the clump
+    return { ok: tileIs(i >= 2 ? SPOT[i] : rangedTile(i, t)), reach: c ? (x, y) => cheb(x, y, c) <= 10 : null, face: c ? c.key : null };
+  }
+  if (a.code === "HB") return { ok: tileIs(SPOT[i]), reach: (x, y) => herDist(x, y) <= 2 && herDist(x, y) >= 1, face: "maiden" };   // halberd: 2 tiles
+  if (a.code === "S" || a.code === "EM" || (i >= 2 && a.code !== "TB")) return { ok: tileIs(SPOT[i]), reach: a.code === "Z" || a.code === "ZCB" ? (x, y) => herDist(x, y) <= 10 : (x, y) => herSide(x, y), face: "maiden" };
+  if (a.code === "TB") { const T = i === 2 ? [5, 0] : i === 4 ? [6, 0] : i < 2 ? [17, ROW[i]] : null; if (T) return { ok: tileIs(T), reach: (x, y) => herDist(x, y) <= 10, face: "maiden" }; }   // tbows: P1/P2 from max distance, P3 the north edge, P5 the south edge
+  return { ok: tileIs(i >= 2 ? SPOT[i] : rangedTile(i, t)), reach: (x, y) => herDist(x, y) <= 10, face: "maiden" };   // ranged at her: anywhere in range (prefires on the run)
+};
+const END = R.room[R.room.length - 1].t + 6, misses = [];
+const THR_RANGE = 7;   // mage thralls hit from up to 7 tiles: they only move to get in range of their target
+const thrStp = R.names.map(() => []);
+const flinchAt = R.names.map((n) => new Set(Object.entries(R.ev).filter(([, es]) => es.some((e) => e.startsWith(n + " flinches"))).map(([t]) => +t)));
+const stp = R.names.map(() => []), faceOf = R.names.map(() => []);
+R.names.forEach((_, i) => {
+  let x = 26, y = 10 + (i % 4);   // just inside the gate: running in, they cross into their prefire range on the prefire tick
+  for (let t = 0; t <= END; t++) {
+    const at = atkBy0[i].find((a) => a.t === t), pre = at && at === atkBy0[i][0];
+    if (at) { const nd = need(i, at, t); if (nd && !(nd.reach || nd.ok)(x, y)) misses.push(`t${t} ${R.names[i]} ${at.code}${at.tgt ? " " + at.tgt : ""} from (${x},${y})`); }
+    const nxt = atkBy0[i].find((a) => a.t > t) || atkBy0[i][atkBy0[i].length - 1], nd = nxt ? need(i, nxt, t + 1) : null;
+    let st;
+    if (flinchAt[i].has(t + 1)) {   // a flinch: two tiles back from her by her attack tick (when she picks), then back in
+      const dx = Math.abs(x - 5) >= Math.abs(y - 11) ? Math.sign(x - 5) || 1 : 0, dy = dx ? 0 : Math.sign(y - 11) || 1;
+      st = [[x, y]]; for (let k = 0; k < 2; k++) { const [px, py] = st[st.length - 1]; if (canStep(px, py, dx, dy)) st.push([px + dx, py + dy]); }
+    } else if (at && !pre) st = [[x, y]];   // they attack this tick (clicking on, if they move on) - they start moving the tick after
+    else { const route = nd ? bfs(x, y, nd.ok) || [] : []; st = [[x, y], ...route.slice(0, 2)]; }
+    stp[i][t] = st; faceOf[i][t] = (at && need(i, at, t)?.face) || (nd && nd.face) || "maiden";
+    [x, y] = st[st.length - 1];
+  }
+});
+R.names.forEach((_, i) => {
+  const sm = summons.find((x) => x.i === i); if (!sm) return;
+  let [x, y] = stp[i][sm.t][0]; x += 1;
+  for (let t = sm.t; t <= END; t++) {
+    const hits = thrallHits.filter((h) => h.i === i), h = hits.filter((q) => q.t <= t + 1).pop() || hits.find((q) => q.t > t);
+    const c = h && h.tgt !== "maiden" ? crabAt(t, h.tgt) : null, far = c ? cheb(x, y, c) > THR_RANGE : herDist(x, y) > THR_RANGE;
+    const route = far ? bfs(x, y, c ? (a, b) => cheb(a, b, c) <= THR_RANGE : (a, b) => herDist(a, b) <= THR_RANGE) || [] : [];
+    thrStp[i][t] = [[x, y], ...route.slice(0, 2)]; [x, y] = thrStp[i][t][thrStp[i][t].length - 1];
+  }
+});
+window.STP = stp; window.FACE = faceOf; window.THR = thrStp; window.SUMMONS = summons;
+if (misses.length) console.log("attacks before reaching range:", misses.length, misses.slice(0, 20).join(" | "));
+window.misses = misses;
+const path = stp.map((ps) => ps.map((s) => s[0]));
+const spotAt = (i, t, f) => { const s = stp[i][Math.min(t, END)], n = s.length - 1; if (!n) return s[0]; const g = Math.min(f, 0.9999) * n, k = Math.floor(g), u = g - k; return [s[k][0] + (s[k + 1][0] - s[k][0]) * u, s[k][1] + (s[k + 1][1] - s[k][1]) * u]; };
+const yaw = R.names.map(() => null), lastMs = R.names.map(() => null);
+const TURN = (2 * Math.PI) / 1.28;   // the game's turn rate: 32 / 2048 of a turn per 20ms client cycle
+const faceAt = (key, t) => { if (key === "maiden") return [5, 12]; const c = crabAt(t, key); return c ? [c.x + 1, c.y + 1] : [5, 12]; };
+// each kit: {stand, attack} -> {geos, lengths (client ticks of 20ms)}
+const kit = (M) => { const cA = new THREE.BufferAttribute(Float32Array.from(arr(M.col)), 3); return Object.fromEntries(Object.entries(M.anims).map(([k, a]) => [k, { geos: lazyGeos(a.frames, cA), lengths: a.lengths, ms: a.lengths.reduce((x, y) => x + y, 0) * 20 }])); };
+const kitGeos = Object.fromEntries(KITN.map((k, j) => [k, kit(kitM[j])]));
+// a player's action, over their head for a moment
+const ACTN = { IR: "Ice rush", DB: "Dinh's spec", CH: "Chinchompa", TB: "Tbow", AX: "Ascension xbows", Z: "ZCB", ZCB: "ZCB spec", Ra: "Ralos spec", EM: "Elder maul spec", S: "Scythe", IB: "Ice barrage", IBS: "Ice barrage", IBU: "Ice burst", IBL: "Ice blitz", HB: "Halberd spec", BP: "Blowpipe", AY: "Eye of ayak", C: "Claw spec" };
+const actTex = new Map();
+const actTexture = (text, color) => { const k = text + color; if (actTex.has(k)) return actTex.get(k); const c = document.createElement("canvas"); c.width = 512; c.height = 72; const x = c.getContext("2d");
+  x.font = "bold 40px system-ui"; x.textAlign = "center"; x.lineWidth = 8; x.strokeStyle = "#000"; x.strokeText(text, 256, 50); x.fillStyle = color; x.fillText(text, 256, 50); const tx2 = new THREE.CanvasTexture(c); actTex.set(k, tx2); return tx2; };
+// what each attack code holds: the weapon (and so the kit) shown
+const WEAP = { IR: "kodai", DB: "dinhs", CH: "chin", TB: "tbow", AX: "bp", Z: "xbow", ZCB: "zcbspec", Ra: "ralos", EM: "maul", S: "scythe", IB: "kodai", IBS: "sceptre", IBU: "ayak", IBL: "ayakblitz", HB: "halberd", BP: "bp", AY: "ayak", C: "claws" };
+const kitOf = (i, w) => { const arm = ["kodai", "sceptre", "ayak", "ayakblitz"].includes(w) ? "mage" : ["scythe", "maul", "dinhs", "halberd", "claws"].includes(w) ? "melee" : "void"; const k = `${arm}_${w}`; return kitGeos[k] ? k : arm === "void" ? (w === "zcbspec" ? "void_xbow" : "void_tbow") : w === "xbow" ? "melee_zcbspec" : "melee_scythe"; };
+const frameAt = (an, ms) => { let m = ((ms % an.ms) + an.ms) % an.ms; for (let k = 0; k < an.geos.length; k++) { m -= an.lengths[k] * 20; if (m < 0) return an.geos[k]; } return an.geos[an.geos.length - 1]; };
+const atkBy = R.names.map((_, i) => R.atk.filter((a) => a.i === i).sort((x, y) => x.t - y.t));
+const players = R.names.map((n, i) => {
+  const g = new THREE.Group(), col = new THREE.Color(PCOL[i]), kit = i < 2 ? "void" : "melee";
+  const post = new THREE.Mesh(kitGeos[i < 2 ? "void_tbow" : "melee_tbow"].stand.geos[0], new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
+  post.rotation.y = FACE;
+  g.add(post, tileQuad(1, col, 0.3), tileEdge(1, col)); const lb = label(R.labels ? `P${i + 1} ${R.labels[i]}` : n.replace("Player ", "P"), PCOL[i], 0.8); lb.position.y = 2.6; g.add(lb);
+  const spot = new THREE.Mesh(SPA["726"].geos[0], new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, emissive: 0x222222 })); spot.visible = false; spot.position.y = 0.25; g.add(spot);   // the skull over their head
+  const say = new THREE.Sprite(new THREE.SpriteMaterial({ map: actTexture("Taste vengeance!", "#ffff00"), depthTest: false, transparent: true })); say.position.y = 4.25; say.scale.set(4.2, 0.6, 1); say.renderOrder = 22; say.visible = false; g.add(say);
+  const pray = new THREE.Sprite(new THREE.SpriteMaterial({ map: pfmTex, depthTest: false, transparent: true })); pray.position.y = 3.05; pray.scale.set(0.75, 0.75, 1); pray.renderOrder = 21; pray.visible = false; g.add(pray);
+  const act = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true })); act.position.y = 3.65; act.scale.set(4.2, 0.6, 1); act.renderOrder = 21; act.visible = false; g.add(act);
+  const th = new THREE.Mesh(THA.stand.geos[0], new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })); th.visible = false; scene.add(th);
+  scene.add(g); return { g, post, kit, act, spot, say, th, pray, thYaw: null };
+});
+// barrage splash: a 3x3 flash on landing
+const flashes = [];
+const flash = (x, y, at) => { const m = tileQuad(3, 0x8fd8ff, 0.55); m.position.set(x + 0.5, gh(x, y) + 0.05, -(y + 0.5)); scene.add(m); flashes.push({ m, at }); };
+const shots = [];
+const shot = (from, to, color, at) => { const g = new THREE.BufferGeometry().setFromPoints([from, to]); const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, depthTest: false })); l.renderOrder = 15; scene.add(l); shots.push({ l, at }); };
+const byT = new Map(R.room.map((s) => [s.t, s]));
+const LOGRX = /(barrage|blitz|burst) on .*:|Halberd spec on|leaks|proc|heals|crabs spawn|stands|Dinh's spec on|Chinchompa on|goes after|dead|scythe on [NS]/;
+const logs = [];
+// hitsplats, as in game: the game's own splat sprites (damage 1359, zero 1358, heal 1629), each shown for 50 client
+// cycles (1s) from the tick it lands, in up to 4 slots per NPC (middle, above, lower left, lower right)
+const SPL = { dmg: "assets/hitsplat_1359.png", zero: "assets/hitsplat_1358.png", heal: "assets/hitsplat_1629.png" };
+const SLOT = [[0, 0], [0, -40], [-30, -20], [30, -20]];
+const splats = [];   // {t, who: "maiden" | crab key, n, kind}
+const prevCrabs = (t) => (byT.get(t - 1) || { crabs: [] }).crabs;
+for (const [ts, evs] of Object.entries(R.ev)) { const t = +ts;
+  for (const e of evs) {
+    let m;
+    if (/left\)|lowers|casts|recasts|stalls/.test(e)) continue;
+    if ((m = /^she heals (\d+)/.exec(e))) { splats.push({ t, who: "maiden", n: +m[1], kind: "heal" }); continue; }
+    if ((m = /^Player \d+ thrall on (\S+) (\d+)/.exec(e))) { splats.push({ t, who: m[1], n: +m[2], kind: +m[2] ? "dmg" : "zero" }); continue; }
+    if ((m = /lands: (.*)$/.exec(e))) {   // barrage: "S3 4, N3 9, S2 20" (old wave first when an id is on both)
+      const seen = {}, before = prevCrabs(t);
+      for (const part of m[1].split(", ")) { const [id, d] = part.split(" "); if (isNaN(+d)) continue;
+        if (id === "Maiden") { splats.push({ t, who: "maiden", n: +d, kind: +d ? "dmg" : "zero" }); continue; }
+        if (id.includes("@")) { splats.push({ t, who: id, n: +d, kind: +d ? "dmg" : "zero" }); continue; }
+        const ks = before.filter((c) => c.id === id && c.alive).map((c) => c.key);
+        const k = ks[seen[id] = (seen[id] ?? -1) + 1] ?? ks[ks.length - 1]; if (k) splats.push({ t, who: k, n: +d, kind: +d ? "dmg" : "zero" }); }
+      continue;
+    }
+    if ((m = /^Player \d+ (.+?) ((?:\d+\/)+\d+|\d+)(?: \d+)?(?: -> Maiden -?\d+)?$/.exec(e.replace(" *** dead ***", ""))) && !/barrage|Dinh|Chinch|scythe on [NS]|thrall on/.test(m[1]))
+      for (const d of m[2].split("/")) splats.push({ t, who: "maiden", n: +d, kind: +d ? "dmg" : "zero" });
+  }
+}
+splats.sort((a, b) => a.t - b.t);
+const hsLayer = document.createElement("div"); document.body.appendChild(hsLayer);
+const toScreen = (v) => { const p = v.clone().project(cam); return [(p.x + 1) / 2 * W, (1 - p.y) / 2 * H]; };
+const MAIDEN_AT = new THREE.Vector3(29, 3.6, -31);
+window.frame = (t, f) => {
+  const s = byT.get(t) || R.room[R.room.length - 1], n = byT.get(t + 1);
+  const cf = Math.floor(((t + f) * 600) / 100) % crabGeos.length;
+  for (const c of Object.values(crabs)) c.g.visible = false;
+  const now0 = (t + f) * 600;
+  for (const c of s.crabs) {
+    const withHer = R.dead != null && t + f >= R.dead && c.alive;   // she's dead: every crab left dies with her
+    if (withHer && t + f - R.dead >= 2) continue;
+    const dying = withHer || (!c.alive && c.died != null && c.leaked == null && t + f - c.died < 2);
+    const boomT = c.leaked != null ? c.leaked + 1 : null, booming = !c.alive && boomT != null && t + f < boomT + 1.6;   // reached her: stays by her, explodes the next tick
+    if (!c.alive && !dying && !booming) continue; const C = crabFor(c.key, c.id);
+    const nx = n && f > 0 ? n.crabs.find((x) => x.key === c.key) : null;
+    let bx = c.x, by = c.y; if (nx && (nx.alive || (nx.leaked != null && c.alive))) { bx += (nx.x - c.x) * f; by += (nx.y - c.y) * f; }
+    const [lx, ly] = L(bx, by + 1);
+    const off = c.key.charCodeAt(1) * 97 + c.wave * 13, walking = !c.frozen && nx && nx.alive && (nx.x !== c.x || nx.y !== c.y);
+    C.mesh.geometry = booming && t + f >= boomT ? hold(CRAB.death, (t + f - boomT) * 600) : booming ? CRAB.stand.geos[0] : dying ? hold(CRAB.death, (t + f - (withHer ? R.dead : c.died)) * 600) : c.frozen ? CRAB.stand.geos[0] : walking ? play(CRAB.walk, now0 + off) : play(CRAB.stand, now0 + off);
+    C.g.visible = true; C.g.position.set(lx + 1, gh(Math.round(lx), Math.round(ly)), -(ly + 1));
+    const col = c.frozen ? 0x5fd0ff : c.immune ? 0xffd54a : 0xff5a5a;
+    C.fill.material.color.set(col); C.edge.material.color.set(col); C.fill.material.opacity = c.frozen ? 0.35 : 0.18;
+    C.mat.color.set(c.frozen ? 0x9fdcff : 0xffffff);
+  }
+  const now = (t + f) * 600, tt = t + f;
+  { const ph = t < R.proc ? 100 : t < (R.proc50 ?? 1e9) ? 70 : t < (R.proc30 ?? 1e9) ? 50 : 30;
+    if (R.dead != null && tt >= R.dead) { const ms = (tt - R.dead) * 600; maidenMesh.geometry = ms < MA[30].death.ms ? hold(MA[30].death, ms) : hold(MA[30].death2, ms - MA[30].death.ms); }
+    else { const a = herAtk.filter((x) => x.t <= tt).pop(), since = a ? (tt - a.t) * 600 : Infinity; maidenMesh.geometry = since < MA[ph].attack.ms ? play(MA[ph].attack, since) : play(MA[ph].idle, now); }
+    const fly = herAtk.find((x) => x.to >= 0 && tt >= x.t + 0.6 && tt < x.t + 5);
+    if (fly) {   // a tornado: upright, travelling along the floor from her to her target (its own spin animation)
+      const P = players[fly.to].g.position, u = Math.min(1, Math.max(0, (tt - fly.t - 0.6) / 4.4)), x = 29 + (P.x - 29) * u, z = -31 + (P.z + 31) * u;
+      blood.position.set(x, gh(Math.round(x), Math.round(-z)) + 0.02, z); blood.quaternion.identity(); blood.geometry = play(PROJ, (tt - fly.t) * 600); blood.visible = true;
+    } else blood.visible = false; }
+  players.forEach((p, i) => {
+    const [bx, by] = spotAt(i, t, f), [x, y] = L(bx, by); p.g.position.set(x + 0.5, gh(Math.round(x), Math.round(y)) + 0.02, -(y + 0.5));
+    const sNow = stp[i][Math.min(t, END)], nSeg = sNow.length - 1, moving = nSeg > 0;
+    let want; if (moving) { const k = Math.min(nSeg - 1, Math.floor(Math.min(f, 0.9999) * nSeg)); want = Math.atan2(sNow[k + 1][0] - sNow[k][0], sNow[k + 1][1] - sNow[k][1]); }
+    else { const [fx, fy] = faceAt(faceOf[i][Math.min(t, END)], t); want = Math.atan2(fx - bx, fy - by); }
+    const ms = (t + f) * 600, dt = lastMs[i] == null ? Infinity : ms - lastMs[i]; lastMs[i] = ms;
+    if (yaw[i] == null || dt < 0 || dt > 700) yaw[i] = want;
+    else { let d = ((want - yaw[i] + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; const mx = TURN * dt / 1000; yaw[i] += Math.max(-mx, Math.min(mx, d)); }
+    p.post.rotation.y = yaw[i];
+    // the weapon held: the next attack's from a tick before it (the switch), else the last one's
+    const last = atkBy[i].filter((a) => a.t <= t).pop(), next = atkBy[i].find((a) => a.t > t);
+    const since = last ? now - last.t * 600 : Infinity, lk = last ? kitOf(i, WEAP[last.code] || "tbow") : null;
+    if (last && since < 1300) {
+      let txt = ACTN[last.code] || last.code;
+      if (/^IB/.test(last.code)) { const e = (R.ev[last.t] || []).find((x) => x.match(new RegExp("^" + R.names[i] + " Ice (barrage|blitz|burst) on"))); if (e) txt = /Ice (\w+)/.exec(e)[0] + " → " + /on ([\w@]+)/.exec(e)[1]; }
+      p.act.material.map = actTexture(txt, PCOL[i]); p.act.material.needsUpdate = true; p.act.visible = true;
+    } else p.act.visible = false;
+    const cast = casts.filter((c) => c.by === i && tt >= c.t).pop(), spotOn = casts.filter((c) => c.on === i && tt >= c.t).pop();
+    if (spotOn && spotOn.spot && (tt - spotOn.t) * 600 < SPA[spotOn.spot].ms) { p.spot.geometry = play(SPA[spotOn.spot], (tt - spotOn.t) * 600); p.spot.visible = true; } else p.spot.visible = false;
+    const taste = tastes.filter((x) => x.i === i && tt >= x.t).pop(); p.say.visible = !!taste && tt - taste.t < 3;
+    p.pray.visible = pfm.some((x) => x.i === i && tt >= x.from && tt < x.to + 1);
+    // their thrall: rises where it's summoned, then keeps a tile beside them a tick behind; attacks their last target
+    const sm = summons.find((x) => x.i === i);
+    if (sm && tt >= sm.t) {
+      const sT = thrStp[i][Math.min(t, END)] || [[0, 0]], nT = sT.length - 1, gT = Math.min(f, 0.9999) * nT, kT = Math.floor(gT), uT = gT - kT;
+      const ux = nT ? sT[kT][0] + (sT[kT + 1][0] - sT[kT][0]) * uT : sT[0][0], uy = nT ? sT[kT][1] + (sT[kT + 1][1] - sT[kT][1]) * uT : sT[0][1], [lx2, ly2] = L(ux, uy);
+      p.th.position.set(lx2 + 0.5, gh(Math.round(lx2), Math.round(ly2)) + 0.02, -(ly2 + 0.5));
+      const hit = thrallHits.filter((x) => x.i === i && tt >= x.t - 1).pop(), sinceSum = (tt - sm.t) * 600, sinceHit = hit ? (tt - hit.t + 1) * 600 : Infinity;
+      const mov = nT > 0;
+      p.th.geometry = sinceSum < THA.spawn.ms ? hold(THA.spawn, sinceSum) : sinceHit < THA.attack.ms ? play(THA.attack, sinceHit) : mov ? play(THA.walk, now) : play(THA.stand, now + i * 211);
+      const [fx, fy] = faceAt(hit ? hit.tgt : "maiden", t); p.th.rotation.y = Math.atan2(fx - ux, fy - uy); p.th.visible = true;
+      if (f === 0 && hit && hit.t - 1 === t) { const to = hit.tgt === "maiden" ? new THREE.Vector3(29, 3, -31) : (() => { const c = crabAt(t, hit.tgt); if (!c) return null; const [cx, cy] = L(c.x, c.y + 1); return new THREE.Vector3(cx + 1, gh(cx, cy) + 0.8, -(cy + 1)); })(); if (to) shot(p.th.position.clone().setY(p.th.position.y + 1), to, 0x9fe8ff, t); }
+    } else p.th.visible = false;
+    const Kc = lk ? kitGeos[lk] : kitGeos[kitOf(i, "tbow")];
+    if (lk && since < kitGeos[lk].attack.ms) p.post.geometry = frameAt(kitGeos[lk].attack, since);
+    else if (cast && Kc[cast.anim] && (tt - cast.t) * 600 < Kc[cast.anim].ms) p.post.geometry = frameAt(Kc[cast.anim], (tt - cast.t) * 600);
+    else {
+      const w = next && (next.t - (t + f) <= 1 || !last) ? WEAP[next.code] : last ? WEAP[last.code] : "tbow", K = kitGeos[kitOf(i, w || "tbow")];
+      p.post.geometry = moving ? frameAt(K.run, now) : frameAt(K.stand, now + i * 300);
+    }
+  });
+  if (f === 0) {
+    for (const a of R.atk.filter((a) => a.t === t)) {
+      const p = players[a.i];
+      const from = p.g.position.clone().setY(p.g.position.y + 1.2);
+      const evs = (R.ev[t] || []).find((e) => new RegExp("^" + R.names[a.i] + " Ice (barrage|blitz|burst) on").test(e));
+      if (/^IB/.test(a.code) && evs) { const mm = /on (\w+)(@\d+)?(?: \(through (\w+)\))?/.exec(evs), id = mm[3] || mm[1], c = mm[2] && !mm[3] ? s.crabs.find((x) => x.key === mm[1] + mm[2] && x.alive) : s.crabs.findLast((x) => x.id === id && x.alive); if (c) { const [lx, ly] = L(c.x, c.y + 1); shot(from, new THREE.Vector3(lx + 1, gh(lx, ly) + 0.8, -(ly + 1)), 0x8fd8ff, t); } }
+      else if (a.tgt && (a.code === "CH" || a.code === "DB" || a.code === "IR")) { const c = s.crabs.find((x) => x.key === a.tgt); if (c) { const [lx, ly] = L(c.x, c.y + 1); shot(from, new THREE.Vector3(lx + 1, gh(lx, ly) + 0.8, -(ly + 1)), a.code === "CH" ? 0xffa040 : a.code === "IR" ? 0x8fd8ff : 0xe0e0e0, t); } }
+      else if (["TB", "Z", "ZCB", "Ra", "BP", "AX"].includes(a.code)) shot(from, new THREE.Vector3(29, 2.5, -31), 0x7bd88f, t);
+    }
+    for (const e of R.ev[t] || []) {
+      const m = /Ice barrage on (\w+): (.*)/.exec(e);
+      if (m && !/gone/.test(m[2])) { const c = s.crabs.findLast((x) => x.id === m[1] && x.alive); if (c) { const [lx, ly] = L(c.x, c.y + 1); flash(lx, ly, t); } }
+      if (LOGRX.test(e) && !/Vengeance/.test(e)) logs.push(`t${t} ${e}`);
+    }
+  }
+  for (const x of flashes) { const a = t + f - x.at; x.m.visible = a < 2; x.m.material.opacity = 0.55 * Math.max(0, 1 - a / 2); }
+  for (const x of shots) { const a = t + f - x.at; x.l.visible = a >= 0 && a < 0.5; }
+  const hp = s.hp, pct = Math.max(0, hp) / R.max * 100;
+  document.getElementById("tick").textContent = `Tick ${t}  ·  ${(t * 0.6).toFixed(1)}s`;
+  document.getElementById("hp").textContent = `Maiden ${Math.max(0, hp).toLocaleString()} / ${R.max.toLocaleString()}  (${pct.toFixed(1)}%)`;
+  document.querySelector("#bar i").style.width = pct + "%";
+  { let healed = 0, leaks = 0; for (const [k, e] of Object.entries(R.ev)) if (+k <= t) for (const x of e) { const m = /^she heals (\d+)/.exec(x); if (m) healed += +m[1]; if (/ leaks \(/.test(x)) leaks++; } const he = document.getElementById("healed"); if (he) he.textContent = `Healed ${healed.toLocaleString()} · ${leaks} leak${leaks === 1 ? "" : "s"}`; }
+  document.getElementById("phase").textContent = t < R.proc ? "Start - to the 70s proc" : t < (R.proc50 ?? 1e9) ? `70s proc at ${(R.proc * 0.6).toFixed(1)}s - crabs out` : t < (R.proc30 ?? 1e9) ? `50s proc at ${(R.proc50 * 0.6).toFixed(1)}s - 2nd wave out` : t < (R.dead ?? 1e9) ? `30s proc at ${(R.proc30 * 0.6).toFixed(1)}s - 3rd wave out` : `Maiden dead at ${(R.dead * 0.6).toFixed(1)}s`;
+  document.getElementById("log").innerHTML = logs.slice(-6).map((l) => `<div>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>`).join("");
+  // hitsplats live for 1s from their tick; slots fill in order, the oldest gives way
+  const live = splats.filter((x) => tt >= x.t && tt < x.t + 1 / 0.6), slotsOf = {};
+  let html = "";
+  for (const x of live) {
+    const used = (slotsOf[x.who] ||= []); if (used.length >= 4) used.shift(); used.push(x);
+  }
+  for (const [who, list] of Object.entries(slotsOf)) {
+    let at; if (who === "maiden") at = MAIDEN_AT; else { const C = crabs[who]; if (!C || !C.g.visible) continue; at = C.g.position.clone().setY(C.g.position.y + 1.1); }
+    const [sx, sy] = toScreen(at);
+    list.forEach((x, k) => { const [dx, dy] = SLOT[k]; html += `<div class="hs" style="left:${sx + dx}px;top:${sy + dy}px;background-image:url(${SPL[x.kind]})">${x.n}</div>`; });
+  }
+  hsLayer.innerHTML = html;
+  r.render(scene, cam);
+};
+window.ready = true;
+// ---- playback: real time (a tick is 0.6s), Low at up to 30 frames a second, Medium at up to 60; seeking replays from
+// the start so every effect's state matches
+const PEND = R.dead != null ? R.dead + 8 : (R.proc30 ?? R.proc50 ?? R.room[R.room.length - 1].t) + 4;
+const seek = document.getElementById("seek"), pp = document.getElementById("pp"), spd = document.getElementById("spd"), ttEl = document.getElementById("tt");
+seek.max = PEND; document.getElementById("ql").textContent = QUAL === "low" ? "Low · 30 fps" : "Medium · 60 fps";
+let pos = Number(q.get("at") || 0), playing = q.get("play") !== "0", lastT = null, lastDraw = 0, drawnTick = -1;
+if (spd) spd.value = q.get("spd") || "1"; pp.textContent = playing ? "Pause" : "Play";
+// going back: start the player again at that tick (every effect's state built forward from the start, as in a recording)
+const rewind = (x, play) => { const u = new URL(location.href); u.searchParams.set("at", String(x)); u.searchParams.set("play", play ? "1" : "0"); u.searchParams.set("spd", spd.value); location.replace(u.href); };
+const show = (x) => { const t = Math.min(PEND, Math.floor(x)), f = Math.min(0.999, x - t);
+  for (let k = drawnTick + 1; k < t; k++) window.frame(k, 0);    // every tick in between (its events fire on it)
+  window.frame(t, t >= PEND ? 0 : f); drawnTick = t; seek.value = t; ttEl.textContent = `${(x * 0.6).toFixed(1)}s / ${(PEND * 0.6).toFixed(1)}s`; };
+pp.onclick = () => { if (!playing && pos >= PEND) return rewind(0, true); playing = !playing; pp.textContent = playing ? "Pause" : "Play"; };
+seek.oninput = () => { const x = Number(seek.value); if (x < drawnTick) return rewind(x, playing); pos = x; show(pos); };
+addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); pp.onclick(); } });
+addEventListener("resize", () => { W = innerWidth; H = innerHeight; r.setSize(W, H); cam.aspect = W / H; cam.updateProjectionMatrix(); show(pos); });
+const loop = (now) => {
+  requestAnimationFrame(loop);
+  if (lastT == null) lastT = now; const dt = (now - lastT) / 1000; lastT = now;
+  if (playing) { pos += dt / 0.6 * Number(spd.value); if (pos >= PEND) { pos = PEND; playing = false; pp.textContent = "Replay"; } }
+  if (now - lastDraw < 1000 / FPS - 2) return; lastDraw = now; show(pos);
+};
+requestAnimationFrame(loop);
+</script></body></html>

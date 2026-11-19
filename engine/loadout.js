@@ -38,9 +38,9 @@ export const CHOICES = {
 
 /** Weapons a player can bring, by style. Dawnbringer is the team's (passed around), not listed. */
 export const WEAPONS_OWNED = {
-  melee: ['Scythe of vitur', 'Dragon claws', 'Crystal halberd', 'Elder maul', 'Bandos godsword', 'Sulphur blades', 'Obligator', 'Swift blade'],
-  range: ['Toxic blowpipe', 'Dragon dart', 'Ascension crossbows', 'Zaryte crossbow', 'Twisted bow', 'Tonalztics of Ralos'],
-  mage: ["Tumeken's shadow", "Zorya's tome", 'Eye of ayak', 'Sanguinesti staff', 'Shadow ancient sceptre'],
+  melee: ['Scythe of vitur', 'Dragon claws', 'Crystal halberd', 'Elder maul', 'Bandos godsword', 'Sulphur blades', 'Obligator', 'Swift blade', "Dinh's bulwark"],
+  range: ['Toxic blowpipe', 'Dragon dart', 'Ascension crossbows', 'Zaryte crossbow', 'Twisted bow', 'Tonalztics of Ralos', 'Black chinchompa'],
+  mage: ["Tumeken's shadow", "Zorya's tome", 'Eye of ayak', 'Sanguinesti staff', 'Shadow ancient sceptre', 'Ice ancient sceptre', 'Kodai wand'],
 };
 export const ARROWS = ['Dragon arrow', 'Seeking dragon arrow'];
 export const BOLTS = ['Ruby dragon bolts (e)'];
