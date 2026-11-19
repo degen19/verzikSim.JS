@@ -90,7 +90,7 @@ export function createGear(root, { getTeam }) {
       <p class="muted small">What each player wears for melee, ranged and magic, slot by slot, and the weapons they bring. Ranged / Magic slots:
         <b>none</b> = no switch for that slot (they wear the other style's item if it has one, otherwise their melee item), <b>take off</b> = nothing in that slot.
         A two-handed weapon leaves the shield slot empty. P1 tick fixes are made in melee gear; the shadow and duo Dawn autos use the magic setup.
-        Lightbearer is set per room. Saved in this browser; importing a chart copies its gear into the Gear sets of the same letters.</p>
+        Lightbearer: only a player with it ticked here can start Verzik on it. Saved in this browser; importing a chart copies its gear into the Gear sets of the same letters.</p>
       <div class="row between" style="margin-bottom:8px">
         <div class="seg">${GEAR_SETS.map((g) => `<button data-gset="${g}" class="${g === gset ? 'on' : ''}" title="Gear set ${g}">${ts.sets[g] && ts.sets[g].name ? `${esc(ts.sets[g].name)} <span class="muted small">(${g})</span>` : `Gear set ${g}`}${ts.sets[g] ? '' : ' (empty)'}</button>`).join('')}</div>
         <label title="A name for Gear set ${gset} - the room tabs list it by this name">Gear set ${gset} name<input data-gsetname value="${esc((ts.sets[gset] && ts.sets[gset].name) || '')}" placeholder="optional" style="width:150px"></label>

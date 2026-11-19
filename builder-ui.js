@@ -177,6 +177,7 @@ export function createBuilder(root, { onChange, store = STORE, libcur = LIBCUR, 
     const g = gearOfSet(team, block), p = g && g[f.player];
     if (!p) return '';
     const letter = linkOf(loadGear(), team, block);
+    if (f.header === 'lightbearerOn' && !p.hasLB) return `No Lightbearer in Gear set ${letter} (Gear tab)`;
     if ((f.header === 'Shadow' || SHADOW_MODES.includes(f.header)) && !p.hasShadow) return `No Tumeken's shadow in Gear set ${letter} (Gear tab)`;
     if ((f.header === 'Tome Reds' || f.header === 'Scythe first hit after tome') && !p.hasTome) return `No Zorya's tome in Gear set ${letter} (Gear tab)`;
     if ((f.header === 'bloodFuryThreshold' || f.header === 'Blood fury in') && p.amulet !== 'Both') return `Needs Rancour + Blood fury in Gear set ${letter} (Gear tab)`;

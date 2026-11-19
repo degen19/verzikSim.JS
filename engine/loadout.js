@@ -129,6 +129,7 @@ const MAGE_DEFAULT = { head: 'Ancestral hat', body: 'Ancestral robe top', legs: 
 export function fromChartCfg(cfg, i) {
   const pl = blankPlayer(i);
   pl.name = cfg.name || pl.name;
+  pl.lightbearer = !!cfg.lightbearerOn;   // a Gear set seeded from a chart: Lightbearer for those who start on it
   pl.prayer = cfg.meleePrayer || 'Zeal';
   for (const [k, s] of [['helm', 'head'], ['body', 'body'], ['legs', 'legs']]) if (cfg[k]) pl.melee[s] = cfg[k];
   pl.melee.neck = AMULET_OF[cfg.amulet] || 'Amulet of rancour';
@@ -174,6 +175,8 @@ export function applyToCfg(cfg, pl) {
   out.mageGear = mageList(pl);
   out.hasShadow = (pl.weapons || []).includes("Tumeken's shadow");
   out.hasTome = (pl.weapons || []).includes("Zorya's tome");
+  out.hasLB = !!pl.lightbearer;
+  if (!out.hasLB) out.lightbearerOn = false;   // no Lightbearer in their Gear set: they start on Ultor
   if (!out.hasTome) { out.tomeReds = false; out.scytheAfterTome = false; }
   out.surgeInRing ??= true;                   // no tome: Tome Reds doesn't apply
   if (!out.hasShadow) Object.assign(out, { shadow: false, shadow31: false, shadowLB: false, shadowCamp: false, deepProc: false });   // no shadow: its settings don't apply

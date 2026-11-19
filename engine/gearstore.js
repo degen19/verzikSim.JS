@@ -54,6 +54,7 @@ export function withGearSet(cfgs, team, letter) {
   out.notes = [...(cfgs.notes || [])];
   // (a Shadow tick for a player with no shadow in the Gear set is ignored - the chart shows that box unticked and greyed out, so no note)
   const nm = (k) => cfgs[k].name || `P${k + 1}`;
+  cfgs.forEach((c, k) => { if (c.lightbearerOn && !ps[k].lightbearer) out.notes.push(`${nm(k)} starts on Ultor: no Lightbearer in Gear set ${letter} (Gear tab).`); });
   // tradeable items charted for a player who doesn't have one: they run, with a note to trade it over
   const owns = (k, w) => (ps[k].weapons || []).includes(w);
   const THREE = { Obligator: 'Obligator', Ayak: 'Eye of ayak', 'Swift blade': 'Swift blade' };
