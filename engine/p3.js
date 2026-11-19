@@ -282,7 +282,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
     }
     p.p3_n = 0;
     p.thrall_next = null;
-    p.veng_active = true;
+    p.veng_active = p.lunars !== false;   // no Lunars: no Vengeance
     p.veng_cast = -(10 ** 6);
     p.off_prayer = Math.trunc(Number(dget(cfgs[i], 'offPrayer', null) || 0));
     p.off_used = 0;
@@ -628,7 +628,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         L.on && L(msg);
       }
       p.pending = p.pending.filter((x) => x[0] !== t);
-      if (!p.veng_active && t - p.veng_cast >= 50) {
+      if (!p.veng_active && p.lunars !== false && t - p.veng_cast >= 50) {
         p.veng_active = true;
         p.veng_cast = t;
       }
@@ -876,7 +876,7 @@ export function run_p3(r_reds, cfgs, team, rng, log = null) {
         p.next_attack += 1;
         L.on && L(`t${rjust(t, 4)} ${p.name} (tank): 9th swing -> +1t (Ducktank)`);
       }
-      if (p.thrall_next === null) {
+      if (p.thrall_next === null && p.arceuus !== false) {
         p.thrall_next = t + rng.randint(1, 2);
       }
     }

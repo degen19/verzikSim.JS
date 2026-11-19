@@ -471,7 +471,7 @@ export function run_p2(p1, team, rng, log = null) {
             p.lb_p2 = ga(p, 'lb_p2', 0) + 1;
           }
           L.on && L(`t${rjust(t, 4)} ${p.name}: SHADOW [${sh_why}] (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + sh_delay}) -> ${d}`);
-          if (p.thrall_next == null) {
+          if (p.thrall_next == null && p.arceuus !== false) {
             p.thrall_next = t + rng.randint(1, 2);
           }
         } else if (verz_attack && p.mode === 'melee' && truthy(ga(p, 'shadow31', false)) && !p.ebt_chance) {
@@ -482,7 +482,7 @@ export function run_p2(p1, team, rng, log = null) {
           p.next_attack = t + 5;
           shadow_stats['casts'] += 1; shadow_stats['dmg'] += d;
           L.on && L(`t${rjust(t, 4)} ${p.name}: SHADOW [3:1] (acc ${fx(ch * 100, 1)}%, max ${mx}, ${expText(hitMV(ch, mx))}, lands t${t + SHADOW_DELAY_NEAR}) -> ${d}`);
-          if (p.thrall_next == null) {
+          if (p.thrall_next == null && p.arceuus !== false) {
             p.thrall_next = t + rng.randint(1, 2);
           }
         } else if (verz_attack && p.mode !== 'blowpipe' && !p.ebt_chance) {
@@ -529,7 +529,7 @@ export function run_p2(p1, team, rng, log = null) {
           if (p.ring === 'Lightbearer') {
             p.lb_p2 = ga(p, 'lb_p2', 0) + 1;
           }
-          if (p.thrall_next == null) {
+          if (p.thrall_next == null && p.arceuus !== false) {
             p.thrall_next = t + rng.randint(1, 2);
           }
           if (p.mode === 'purple_scythe') {

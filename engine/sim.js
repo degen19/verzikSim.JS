@@ -216,7 +216,7 @@ export function claw_priority_setup(players, L, t) {
   const pdc = players.find((p) => p.purple === true || pybool(p.purple)) ?? null;
   L.on && L(`t${rjust(t, 4)} 4 CLAW PRIORITY: P1 died after ${used} of ${total} Dawn specs - ${pri.name} (${fx(pri.spec)}%) `
     + `aims for both claws by reds r36, the others for one claw by r36`);
-  if (pdc && pdc !== pri && pri.has_bp) {                     // the purple needs a blowpipe to pop
+  if (pdc && pdc !== pri && pri.has_bp && pri.arceuus !== false) {                     // the purple needs a blowpipe to pop
     pdc.purple = false; pri.purple = true;
     L.on && L(`t${rjust(t, 4)} 4 CLAW PRIORITY: ${pri.name} takes the purple DC from ${pdc.name}`);
   }
@@ -382,6 +382,8 @@ export class Player {
     this.has_zcb = dget(cfg, 'hasZcb', true) !== false;     // no Zaryte crossbow (Gear tab): bounced -> the delay, no ZCB
     this.has_dc = dget(cfg, 'hasDc', true) !== false;       // no Dragon claws (Gear tab): a 3-tick hit / halberd fixes the reds cycle instead
     this.has_bp = dget(cfg, 'hasBP', true) !== false;   // no blowpipe: no B in P1, no blowpipe fills, can't pop the purple
+    this.lunars = dget(cfg, 'lunars', true) !== false;   // Lunars: Vengeance, Vengeance Other, Heal Other, Energy Transfer
+    this.arceuus = dget(cfg, 'arceuus', true) !== false;   // Arceuus: thralls, Death Charge
     this.purple2nd = dget(cfg, 'Purple2DC', false);
     this.has3 = dget(cfg, 'has3Tick') || false;
     if (this.has3 === 'Breaker') this.has3 = 'Obligator';   // its old name
@@ -638,13 +640,18 @@ export async function parse_chart(wb, team, tab = null, block = 'A', { deferBP =
         ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1'],
         ['horn', 'Horn'], ['hornP2', 'P2 horn'], ['hornP3', 'P3 horn'],
         ['eastBoak', 'East Boak'], ['westBoak', 'West Boak'], ['redemptionFlick', 'Redemption flick'], ['pneckP1', 'Pneck on P1'], ['passGreen', 'Pass green if death'],
-        ['hasBP', 'Has BP'], ['tomeReds', 'Tome Reds'], ['scytheAfterTome', 'Scythe first hit after tome'], ['surgeInRing', 'Count surge in ring swap']]) {
+        ['hasBP', 'Has BP'], ['tomeReds', 'Tome Reds'], ['scytheAfterTome', 'Scythe first hit after tome'], ['surgeInRing', 'Count surge in ring swap'], ['lunars', 'Lunars'], ['arceuus', 'Arceuus']]) {
         if (get(h) != null && pystr(get(h)).trim() !== '') cfgs[k][key] = yes(get(h));
       }
       // Has BP (blank / no column = has one): popping the purple crab needs a blowpipe
       if (!deferBP && cfgs[k].hasBP === false && (cfgs[k].PurpleDC || cfgs[k].Purple2DC)) {
         const nm = cfgs[k].name || `P${k + 1}`;
         throw new Error(`A blowpipe is required to pop the purple crab. Either change the player who DC's purple, or add a blowpipe to ${nm}`);
+      }
+      // Arceuus (blank / no column = has it): every death charge needs it
+      if (cfgs[k].arceuus === false && (cfgs[k].PurpleDC || cfgs[k].Purple2DC || cfgs[k].WestDC || cfgs[k].EastDC)) {
+        const nm = cfgs[k].name || `P${k + 1}`;
+        throw new Error(`${nm} has a death charge but no Arceuus. Either give the DC to a player on Arceuus, or tick Arceuus for ${nm}`);
       }
       // shadow modes need Shadow; Shadow camp takes over 3:1 / Shadow while LB. cfgs.notes tells the page what was ignored.
       const c = cfgs[k], nm = c.name || `P${k + 1}`, modes = [['shadowLB', 'Shadow while LB'], ['deepProc', 'Deep proc'], ['shadowCamp', 'Shadow camp'], ['shadow31', '3:1']];
@@ -1071,7 +1078,7 @@ export function run_p1(cfgs, team, rng, log = null) {
           vq.push([t + w.delay, rank.get(p), p, d, cap, lbl, k]);
         });
         L.on && L(`t${rjust(t, 3)} ${p.name}: ${w.name} queued, lands t${t + w.delay}` + (info ? ` (${info})` : ''));
-        if (p.thrall_next == null) p.thrall_next = t + rng.randint(1, 2);
+        if (p.thrall_next == null && p.arceuus !== false) p.thrall_next = t + rng.randint(1, 2);
       } else {
         flags.push(`t${t}: ${p.name} unknown code '${act}'`);
       }

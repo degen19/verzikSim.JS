@@ -500,7 +500,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             else p.tome_lock = 'range';
             L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - ${p.zcb_due ? 'ZCB auto' : 'tome / shadow from range'} next (t${p.next_attack})`);
           }
-          if (p.thrall_next == null) p.thrall_next = t + rng.randint(1, 2);
+          if (p.thrall_next == null && p.arceuus !== false) p.thrall_next = t + rng.randint(1, 2);
           continue;
         }
         if (r === BOUNCE_R && n === 2 && p.dist16) {
@@ -519,7 +519,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
           st['shadow'] += 1; st['shadow_dmg'] += d; rl(p, 'Sh', r);
           p.next_attack = t + 5; p.reds_n = n;
           L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: SHADOW on the collision tick (claw > scythe > shadow, acc ${fx(ch * 100, 1)}%, ${expText(hitMV(ch, mx))}) -> ${d}`);
-          if (p.thrall_next == null) {
+          if (p.thrall_next == null && p.arceuus !== false) {
             p.thrall_next = t + rng.randint(1, 2);
           }
           continue;
@@ -623,7 +623,7 @@ export function run_reds(p2, cfgs, team, rng, log = null) {
             L.on && L(`t${rjust(t, 4)} r${r} ${p.name}: bounced - +4t, back on t${p.next_attack}`);
           }
         }
-        if (p.thrall_next == null) {
+        if (p.thrall_next == null && p.arceuus !== false) {
           p.thrall_next = t + rng.randint(1, 2);
         }
       }

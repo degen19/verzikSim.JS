@@ -25,7 +25,7 @@ const save = (s) => { try { localStorage.setItem(STORE, JSON.stringify(s)); } ca
 
 // which template fields go where (the rest are decided by the solver, or not used)
 const PLAYER_SETUP = ['Name', 'meleePrayer', 'Custom Surge Timing'];
-const PLAYER_GEAR = ['helm', 'body', 'legs', 'amulet', 'bloodFuryThreshold', 'has3Tick', 'Has BP', 'Shadow', '3:1', 'Shadow while LB', 'Shadow camp', 'Deep proc', 'Tome Reds', 'Scythe first hit after tome'];
+const PLAYER_GEAR = ['helm', 'body', 'legs', 'amulet', 'bloodFuryThreshold', 'has3Tick', 'Has BP', 'Lunars', 'Arceuus', 'Shadow', '3:1', 'Shadow while LB', 'Shadow camp', 'Deep proc', 'Tome Reds', 'Scythe first hit after tome'];
 const ADV_GEAR = ['bouncedZCB', 'offPrayer', 'hornPriority', 'Phoenix necklaces', 'Pneck on P1', 'Redemption flick', 'Pass green if death'];
 // 3-5 man: the solver picks the Dawn threshold (1-6%)
 const TEAM_MAIN = ['Deep proc HP %', 'P2 Scythe last hit threshold', 'P3 halberd HP %'];
@@ -35,7 +35,7 @@ const DUO_MAIN = ['Number of Purples', 'Second purple %', 'Crab HP threshold', '
 const DUO_SOLVED = ['Dawn threshold %', 'P2 Scythe last hit threshold'];
 const LABEL = {
   Name: 'Name', meleePrayer: 'Prayer', 'Custom Surge Timing': 'Custom surge (m:ss)', helm: 'Helm', body: 'Body', legs: 'Legs', amulet: 'Amulet',
-  bloodFuryThreshold: 'Blood fury threshold', has3Tick: '3-tick weapon', 'Has BP': 'Has BP', bouncedZCB: 'Bounced ZCB', offPrayer: 'Off prayer (P3)',
+  bloodFuryThreshold: 'Blood fury threshold', has3Tick: '3-tick weapon', 'Has BP': 'Has BP', Lunars: 'Lunars', Arceuus: 'Arceuus', bouncedZCB: 'Bounced ZCB', offPrayer: 'Off prayer (P3)',
   hornPriority: 'Horn priority', 'Phoenix necklaces': 'Phoenix necklaces', 'Pneck on P1': 'Pneck on P1', 'Redemption flick': 'Redemption flick',
   'Pass green if death': 'Pass green if death', 'Tome Reds': 'Tome Reds', 'Scythe first hit after tome': 'Scythe first hit after tome', redCrab: 'Red crab', 'Brew sips': 'Brew sips', 'SCB sips': 'Super combat sips',
   'Restore sips': 'Restore sips', Sharks: 'Sharks', 'P2 Scythe last hit threshold': 'P2 halberd: scythe below HP %',
@@ -48,6 +48,8 @@ const HELP = {
   'P3 halberd HP %': 'P3 HP % at or below which players halberd', 'Deep proc HP %': 'Shadow from max distance below this P2 HP % (Deep proc players)',
   hornPriority: 'Who gets a horn buff first (1 = first). All blank: a random order each run, no two players sharing a number.',
   'Has BP': 'Has a blowpipe. Without one they can\'t take the purple DC.',
+  Lunars: 'Lunars (default): they can cast Vengeance, Vengeance Other, Heal Other and Energy Transfer. Unticked: no vengs (P3) and no Heal Others.',
+  Arceuus: 'Arceuus (default): thralls and Death Charge. Unticked: no thrall, and the solver never gives them a DC.',
   'Shadow while LB': 'Shadow while wearing Lightbearer, then scythe (or 3:1) after the swap. Needs Shadow.',
   '3:1': 'Scythe, but the attack that would collide with Verzik becomes a shadow. Needs Shadow.',
   'Deep proc': 'Shadow from max distance below the Deep proc HP %. Needs Shadow.',
@@ -345,7 +347,7 @@ export function createSolver(root, { getTeam, toBuilder = null, saveChart = null
     put('team', 'Dawn threshold %', null, x.cfg[0].dawnThr ?? '');
     if (team !== 2) put('team', 'East bounce tech', null, x.cfg[0].eastBounce || 0);
     x.cfg.forEach((c, k) => {
-      put('gear', 'Has BP', k, c.hasBP !== false);
+      put('gear', 'Has BP', k, c.hasBP !== false); put('gear', 'Lunars', k, c.lunars !== false); put('gear', 'Arceuus', k, c.arceuus !== false);
       put('gear', 'Tome Reds', k, !!c.tomeReds); put('gear', 'Scythe first hit after tome', k, !!c.scytheAfterTome);
       if (team === 2) return;
       put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB); put('gear', 'Deep proc', k, !!c.deepProc);

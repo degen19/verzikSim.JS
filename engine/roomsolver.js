@@ -153,7 +153,7 @@ export const evalFull = (cfgs, team, n, seed, bps) => evalRange('full', cfgs, te
 // ------------------------------------------------------------------ P1 candidates
 /** Players that are interchangeable (same gear, weapons, Boak side, reds DCs, surge timing, BP). */
 function twinKeys(cfgs) {
-  return cfgs.map((c) => JSON.stringify([c.helm, c.body, c.legs, c.amulet, c.meleePrayer, c.has3Tick, c.hasBP !== false,
+  return cfgs.map((c) => JSON.stringify([c.helm, c.body, c.legs, c.amulet, c.meleePrayer, c.has3Tick, c.hasBP !== false, c.lunars !== false, c.arceuus !== false,
     c.customSurgeTick ?? null, !!c.eastBoak, !!c.westBoak, c.eastPattern || 'A', !!c.WestDC, !!c.EastDC, !!c.shadow]));
 }
 
@@ -296,7 +296,7 @@ export const localEvaluator = {
 /** The settings that make a setup (everything the search chooses but the reds DCs). */
 const coreKey = (cfg) => JSON.stringify(cfg.map((c) => [c.lightbearerOn, c.PurpleDC, c.ringSwitch ?? null, c.ringByDawns ?? null, c.startSpec, c.actions,
   !!c.horn, !!c.hornP2, !!c.hornP3, !!c.Purple2DC, !!c.shadowCamp, !!c.shadow31, !!c.shadowLB, c.dawnThr ?? null, c.lastHitThr ?? null, c.eastBounce || 0,
-  !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null, c.hasBP !== false, !!c.shadow, !!c.deepProc, c.shadowSrc ?? null, !!c.tomeReds]));
+  !!c.eastBoak, c.eastBoak ? c.eastPattern || 'A' : null, c.hasBP !== false, !!c.shadow, !!c.deepProc, c.shadowSrc ?? null, !!c.tomeReds, c.lunars !== false, c.arceuus !== false]));
 /** Every k-player subset of 0..n-1 (sorted). */
 export const combos = (n, k) => { const out = []; const go = (s, acc) => { if (acc.length === k) { out.push(acc); return; } for (let i = s; i < n; i++) go(i + 1, [...acc, i]); }; go(0, []); return out; };
 const SHADOW_KEYS = ['shadow', 'shadow31', 'shadowLB', 'shadowCamp', 'deepProc', 'mage', 'mageGear'];
@@ -393,7 +393,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   // P2-end breakpoints for the early stages (10th / 25th / 50th percentile of a first setup), unless given
   let bps = o.bps && o.bps.length ? o.bps : [];
   if (!bps.length) {
-    const c0 = cands.length ? cands[0].cfg : o.seeds[0].cfg, bp0 = c0.findIndex((c) => c.hasBP !== false);
+    const c0 = cands.length ? cands[0].cfg : o.seeds[0].cfg, bp0 = c0.findIndex((c) => c.hasBP !== false && c.arceuus !== false);
     const [r] = await run('p2', [c0.map((c, k) => ({ ...c, PurpleDC: k === bp0 }))], Math.max(400, o.n1 * 2), 'p2bp');
     bps = pctl(r.ends, [0.10, 0.25, 0.50]);
     if (!bps.length) bps = [0];
@@ -434,7 +434,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   for (const cd of cands) {
     const tried = new Set(), ck = twinKeys(cd.cfg);
     for (let o2 = 0; o2 < team; o2++) {
-      if (cd.cfg[o2].hasBP === false) continue;
+      if (cd.cfg[o2].hasBP === false || cd.cfg[o2].arceuus === false) continue;
       const tk = ck[o2] + cd.lb[o2];                                  // identical players: one of them
       if (tried.has(tk)) continue; tried.add(tk);
       s1all.push({ ...cd, cfg: cd.cfg.map((c, k) => ({ ...c, PurpleDC: k === o2, Purple2DC: false })), purple: o2 });
@@ -509,7 +509,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   const purplePass = async (s) => {
     const sk = twinKeys(s.cfg), tried = new Set([sk[s.purple] + s.lb[s.purple]]), owners = [];
     for (let o2 = 0; o2 < team; o2++) {
-      if (s.cfg[o2].hasBP === false) continue;
+      if (s.cfg[o2].hasBP === false || s.cfg[o2].arceuus === false) continue;
       const tk = sk[o2] + s.lb[o2];
       if (tried.has(tk)) continue; tried.add(tk);
       owners.push(o2);
@@ -614,7 +614,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
     let s = s0, any = false;
     const n2 = Number(base[0].nPurples || 1) === 2;
     const passes = [
-      n2 ? [0, 1].filter((k) => s.cfg[k].hasBP !== false).map((k) => (cf) => cf.map((c, j) => ({ ...c, Purple2DC: j === k && !c.PurpleDC }))) : [],
+      n2 ? [0, 1].filter((k) => s.cfg[k].hasBP !== false && s.cfg[k].arceuus !== false).map((k) => (cf) => cf.map((c, j) => ({ ...c, Purple2DC: j === k && !c.PurpleDC }))) : [],
       mageK >= 0 ? [{ shadowCamp: true, shadow31: false, shadowLB: false }, { shadowCamp: false, shadow31: true, shadowLB: false },
         { shadowCamp: false, shadow31: false, shadowLB: true }, { shadowCamp: false, shadow31: true, shadowLB: true }]
         .map((m) => (cf) => cf.map((c, j) => (j === mageK ? { ...c, ...m } : c))) : [],
@@ -646,7 +646,7 @@ export async function solveRoom(base, team, o, ev = localEvaluator) {
   for (const x of s2) if (x.seedLabel && !top2.includes(x)) top2.push(x);
   const dcPairs = async (x) => {
     const pairs = [];
-    for (let w = 0; w < team; w++) for (let e = 0; e < team; e++) pairs.push([w, e]);
+    for (let w = 0; w < team; w++) for (let e = 0; e < team; e++) if (x.cfg[w].arceuus !== false && x.cfg[e].arceuus !== false) pairs.push([w, e]);   // a DC needs Arceuus
     const list = pairs.map(([w, e]) => x.cfg.map((c, k) => ({ ...c, WestDC: k === w, EastDC: k === e })));
     const res = await run('full', list, o.n3, 'full');
     stats.dcTried += res.length;

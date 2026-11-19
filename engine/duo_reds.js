@@ -364,7 +364,7 @@ export function run_duo_reds(p2r, cfgs, rng, log = null) {
           if (!has(st, 'lb_reds')) st['lb_reds'] = {};
           st['lb_reds'][p.name] = dget(st['lb_reds'], p.name, 0) + 1;
         }
-        if (p.thrall_next == null && r >= SHIELD && vq.slice(nq).some((h) => h[5] === p && h[6] === 'dmg')) {
+        if (p.thrall_next == null && p.arceuus !== false && r >= SHIELD && vq.slice(nq).some((h) => h[5] === p && h[6] === 'dmg')) {
           p.thrall_next = t + rng.randint(1, 2);
         }
       }

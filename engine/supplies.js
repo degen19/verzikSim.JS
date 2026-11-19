@@ -259,6 +259,7 @@ export function by_hp(players) {
 /** Under 30 HP, phoenix necklace left, magic >= 92: Heal Other onto the next-lowest teammate if it will proc
  *  their own necklace. `clear(p)` empties the caster's incoming damage queue. Returns true if cast. */
 export function heal_other(p, team_players, t, L, clear) {
+  if (p.lunars === false) return false;   // Heal Other is a Lunar spell
   if (p.dead || p.pneck <= 0 || p.hp >= HO_BELOW || p.mag < HO_MAGIC || p.hp < HO_MIN_HP) {
     return false;
   }

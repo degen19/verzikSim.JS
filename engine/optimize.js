@@ -228,7 +228,7 @@ export function cfgsToFields(cfgs, team) {
     { const tk = c.customSurgeTick; put('setup', 'Custom Surge Timing', k, tk == null ? '' : (() => { const sec = tk * 0.6, m = Math.floor(sec / 60); return `${m}:${(sec - m * 60).toFixed(1).padStart(4, '0')}`; })()); }
     if (c.customSurgeTick != null) for (let t = 1; t <= 140; t++) if (!c.actions || c.actions[t] !== 'P') put('chart', String(t), k, (c.actions && c.actions[t]) || '');   // its P taken off the chart
     if (c.amulet_mode || c.amulet) put('gear', 'amulet', k, c.amulet);
-    put('gear', 'Has BP', k, c.hasBP !== false);
+    put('gear', 'Has BP', k, c.hasBP !== false); put('gear', 'Lunars', k, c.lunars !== false); put('gear', 'Arceuus', k, c.arceuus !== false);
     put('gear', 'Shadow', k, !!c.shadow); put('gear', '3:1', k, !!c.shadow31); put('gear', 'Shadow while LB', k, !!c.shadowLB); put('gear', 'Tome Reds', k, !!c.tomeReds); put('gear', 'Scythe first hit after tome', k, !!c.scytheAfterTome); put('gear', 'Count surge in ring swap', k, c.surgeInRing !== false);
     put('gear', 'Shadow camp', k, !!c.shadowCamp); put('gear', 'Deep proc', k, !!c.deepProc);
     if ('pneckP1' in c) put('gear', 'Pneck on P1', k, !!c.pneckP1);
@@ -265,7 +265,8 @@ export function catalog(cfgs, team) {
   // death charges (team-wide: one owner each)
   // popping the purple needs a blowpipe: the blowpipe holders (everyone when they can be swept too - setups where the purple DC
   // has no blowpipe are skipped, see validCfgs)
-  const bpNames = names.filter((_, i) => cfgs[i].hasBP !== false).length < team ? names : names.filter((_, i) => cfgs[i].hasBP !== false);
+  const arcNames = names.filter((_, i) => cfgs[i].arceuus !== false);   // every DC needs Arceuus
+  const bpNames = (names.filter((_, i) => cfgs[i].hasBP !== false).length < team ? names : names.filter((_, i) => cfgs[i].hasBP !== false)).filter((n) => arcNames.includes(n));
   opts.push({ id: 'dc_p1', group: 'Death charges', label: team === 2 ? '1st purple DC' : 'Purple DC', kind: 'choice', choices: bpNames,
     current: who((c) => c.PurpleDC), apply: (cf, v) => cf.forEach((c, i) => { c.PurpleDC = names[i] === v; }) });
   if (team === 2) {
@@ -274,9 +275,9 @@ export function catalog(cfgs, team) {
       apply: (cf, v) => { const p1 = cf.find((c) => c.PurpleDC); cf.forEach((c, i) => { c.Purple2DC = names[i] === v && c !== p1; }); },
       after: 'dc_p1' });
   }
-  opts.push({ id: 'dc_w', group: 'Death charges', label: 'West crab DC (1st reds set)', kind: 'choice', choices: names,
+  opts.push({ id: 'dc_w', group: 'Death charges', label: 'West crab DC (1st reds set)', kind: 'choice', choices: arcNames,
     current: who((c) => c.WestDC), apply: (cf, v) => cf.forEach((c, i) => { c.WestDC = names[i] === v; }) });
-  opts.push({ id: 'dc_e', group: 'Death charges', label: 'East crab DC (1st reds set)', kind: 'choice', choices: names,
+  opts.push({ id: 'dc_e', group: 'Death charges', label: 'East crab DC (1st reds set)', kind: 'choice', choices: arcNames,
     current: who((c) => c.EastDC), apply: (cf, v) => cf.forEach((c, i) => { c.EastDC = names[i] === v; }) });
 
   // 3-5 man: who goes West / East for the purple (Boak sides; at least one player on each side), East bounce tech
@@ -425,7 +426,8 @@ export function dawnsOk(cfgs, base) {
 
 /** False when a setup breaks the shadow rules (Shadow camp together with 3:1 or Shadow while LB). */
 export const validCfgs = (cfgs) => cfgs.every((c) => !(c.shadowCamp && (c.shadow31 || c.shadowLB))
-  && !((c.PurpleDC || c.Purple2DC) && c.hasBP === false));         // the purple DC needs a blowpipe
+  && !((c.PurpleDC || c.Purple2DC) && c.hasBP === false)          // the purple DC needs a blowpipe
+  && !((c.PurpleDC || c.Purple2DC || c.WestDC || c.EastDC) && c.arceuus === false));   // every DC needs Arceuus
 
 /** All combinations of the chosen values: sweep = [{id, values: [...]}, ...]. */
 export function enumerate(sweep) {
