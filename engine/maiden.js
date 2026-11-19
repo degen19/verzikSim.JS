@@ -295,6 +295,8 @@ export function barrageOf(gear, weapon = 'Kodai wand', base = BARRAGE.base) {
   return { max: Math.floor(base * (100 + b.mdmg + BARRAGE.augury[1]) / 100), roll: (Math.floor(BARRAGE.magic * BARRAGE.augury[0]) + 9) * (b.atk[3] + 64) };
 }
 /** The freeze spells by list code: the spell (FREEZE's row), sceptre (its longer freeze), the weapon cast with, base max, 3x3 or not. */
+const SPELL_WEAPON = { IB: 'Kodai wand', IBS: 'Ice ancient sceptre', IBL: 'Eye of ayak', IBU: 'Eye of ayak', IR: 'Kodai wand', AY: 'Eye of ayak' };
+const ATTACKS_SPEC = new Set(['ZCB', 'C', 'HB', 'DB', 'EM', 'Ra', 'BGS']);
 export const FSPELL = {
   ib: { spell: 'barrage', name: 'Ice barrage', sc: 0, w: 'Kodai wand', base: 30, aoe: true },
   ibs: { spell: 'barrage', name: 'Ice barrage', sc: 1, w: 'Ice ancient sceptre', base: 30, aoe: true },
@@ -1165,7 +1167,7 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
     }
     const nm = FSPELL[h.k || 'ib'].name;
     L.on && L(`t${t} ${h.p.name} ${nm} on ${h.crab} lands: ${parts.join(', ')}`);
-    if (h.tr) Object.assign(h.tr, { dmg: 0, what: `${nm} → ${h.crab} (froze ${h.froze || 'none'}): ${parts.join(', ')}`, landed: t });
+    if (h.tr) Object.assign(h.tr, { dmg: parts.reduce((u, x) => u + (Number(String(x).split(' ')[1]) || 0), 0), crab: true, what: `${nm} → ${h.crab} (froze ${h.froze || 'none'}): ${parts.join(', ')}`, landed: t });
   };
   /** The scythe's arc (the community's best theory): 1x3 tiles across the line from the player to the primary's centre -
    *  $center (the tile in front of them), $left, $right. The primary takes the first hit (100%); then up to two more (50%,
@@ -1360,6 +1362,7 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
       hits.push({ t: t + AUTO_DELAY, p: on, a: 'auto', tr }); if (tr) trace.push(tr);
     }
     // ---- attacks
+    const tr0 = trace ? trace.length : 0, spec0 = ps.map((p) => p.spec);   // (the hover text: spec before / after this tick)
     for (const p of ps) {
       if (t >= p.regenAt) { p.spec = Math.min(100, p.spec + 10); p.regenAt += REGEN_EVERY; }
       if (st.dead != null) break;
@@ -1484,6 +1487,14 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
       p.style = A.style; p.next = t + A.speed;
     }
     if (trace) trace.push({ t, hp: Math.max(0, hp), phase: proc == null ? 'to 70s' : st.proc50 == null ? 'to 50s' : 'to 30s' });
+    if (trace) for (let k = tr0; k < trace.length; k++) {   // hover text on this tick's attacks, as in the other rooms: gear, target, spec
+      const x = trace[k], p = x.i != null && x.code ? ps[x.i] : null; if (!p || x.gear) continue;
+      const style = /^(IB|IBS|IBL|IBU|IR|AY)$/.test(x.code) ? 'mage' : /^(S|C|HB|DB|EM|BGS)$/.test(x.code) ? 'melee' : 'range';
+      const w = SPELL_WEAPON[x.code] || (Object.values(ATTACKS).find((a) => a.code === x.code && a.weapon) || {}).weapon || null;
+      const set = worn(p.gear, style, w || undefined); x.gear = Object.entries(set).filter(([, v]) => v && v !== 'none').map(([, v]) => v).join(', ');
+      x.target = x.tgt ? String(x.tgt).replace(/^([NS]\d[ab]?)@(\d+)$/, '$2s $1') : 'Maiden';
+      if (spec0[p.i] !== p.spec || ATTACKS_SPEC.has(x.code)) { x.spec = spec0[p.i]; x.specAfter = p.spec; x.regenIn = p.spec >= 100 ? null : Math.max(0, p.regenAt - t); }
+    }
     if (hps) hps.push(hp);
     if (room) room.push({ t, hp, crabs: crabs.map((c) => ({ id: c.id, wave: c.wave, key: c.key, x: c.x, y: c.y, hp: c.hp, alive: c.alive, frozen: t <= c.frozenTo, frozenTo: c.frozenTo, immune: t > c.frozenTo && t <= c.immuneTo, leaked: c.leaked, died: c.died })) });
   }

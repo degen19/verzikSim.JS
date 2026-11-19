@@ -171,12 +171,17 @@ const ICONS = 'img/icons/';
 const CODE_ICON = { S: 'Scythe_of_vitur', TB: 'Twisted_bow', Z: 'Zaryte_crossbow', ZCB: 'Zaryte_crossbow', TS: 'Tumekens_shadow',
   EM: 'Elder_maul', BGS: 'Bandos_godsword', C: 'Dragon_claws', Cs: 'Dragon_claws', Ch: 'Crystal_halberd', BP: 'Toxic_blowpipe', AX: 'Ascension_crossbows', DD: 'Dragon_dart',
   D: 'Dawnbringer', SuB: 'Sulphur_blades', T: 'Sanguinesti_staff', Sh: 'Tumekens_shadow', Shark: 'Shark', Redemption: 'Redemption',
-  H: 'Soulflame_horn', E: 'Eye_of_ayak', SB: 'Shadow_Barrage', V: 'Vengeance', Ra: 'Tonalztics_of_ralos', Zt: 'Zoryas_tome' };
+  H: 'Soulflame_horn', E: 'Eye_of_ayak', SB: 'Shadow_Barrage', V: 'Vengeance', Ra: 'Tonalztics_of_ralos', Zt: 'Zoryas_tome',
+  HB: 'Crystal_halberd', DB: 'Dinhs_bulwark', CH: 'Black_chinchompa', AY: 'Eye_of_ayak' };
+/** Freeze spells: the weapon cast with, with the spell's icon on it (one shared cell). */
+const SPELL_ICON = { IB: ['Kodai_wand', 'Ice_barrage'], IBS: ['Ice_ancient_sceptre', 'Ice_barrage'], IBL: ['Eye_of_ayak', 'Ice_blitz'], IBU: ['Eye_of_ayak', 'Ice_burst'], IR: ['Kodai_wand', 'Ice_rush'] };
 /** An icon by file name (nothing if the file isn't there). */
 const img = (name) => `<img src="${ICONS}${name}.png" alt="" onerror="this.remove()">`;
 // potions: their icons (sharing the cell like the shark); anything else stays a grey dot
 const POTS = [['brew', 'Saradomin_brew'], ['restore', 'Super_restore'], ['scb', 'Super_combat_potion'], ['surge', 'Spec_surge'], ['healother', 'Heal_other']];
-const icon = (code) => (CODE_ICON[code]
+const icon = (code) => (SPELL_ICON[code]
+  ? `<span class="spw"><img src="${ICONS}${SPELL_ICON[code][0]}.png" alt="${esc(code)}" onerror="this.replaceWith(document.createTextNode(this.alt))"><img class="spb" src="${ICONS}${SPELL_ICON[code][1]}.png" alt="" onerror="this.remove()"></span>`
+  : CODE_ICON[code]
   ? `<img src="${ICONS}${CODE_ICON[code]}.png" alt="${esc(code)}" onerror="this.replaceWith(document.createTextNode(this.alt))">`
   : esc(code));
 // her events: the colour by kind (her attacks red, purple crab, heals green, damage to her orange, lightning gold)
@@ -197,6 +202,7 @@ const CSS = `<style>
 .rv .tk.her{color:#fff;background:#b8323f;border-radius:3px}
 .rv .c{width:24px;height:24px;border-radius:4px;background:#22242f;display:flex;flex-wrap:wrap;align-content:center;align-items:center;justify-content:center;font-size:9px;font-weight:700;position:relative}
 .rv .c img{max-width:20px;max-height:20px;image-rendering:pixelated}
+.rv .c .spw{position:relative;display:inline-block;width:20px;height:20px}.rv .c .spw>img:first-child{max-width:20px;max-height:20px}.rv .c .spw>img.spb{position:absolute;right:-3px;bottom:-3px;max-width:12px;max-height:12px}
 .rv .c.v{background:#3a1830;border:1px solid #c2185b;color:#ff8fc0}
 .rv .c .dots{position:absolute;left:2px;top:3px;bottom:3px;display:flex;flex-direction:column;justify-content:center;gap:1px}
 .rv .c .dots i{width:5px;height:5px;border-radius:50%;display:block}
@@ -346,7 +352,7 @@ export function timelineHtml({ trace, names, bossName, end, title = '', perRow =
   const evTip = (e) => e.tip || e.boss;
   const S = (t) => (shade.has(t) ? ` ${shade.get(t)}` : '');          // a tinted tick (healing shield, a form's colour)
   const tickTip = (t) => { const h = hpAt.get(t); return [`Tick ${t} · ${roomTime(t)}${tickInfo ? ` · ${tickInfo(t)}` : ''}`, h ? `${bossName} ${h.phase} - ${h.hp.toLocaleString()} HP` : '', shade.get(t) === 'sh' ? 'Healing shield up' : '', ...(marks.get(t) || []).map((m) => m.tip), ...(boss.get(t) || []).map((e) => `${bossName}: ${evTip(e)}`)].filter(Boolean).join('\n'); };
-  const hitTip = (nm, x) => [`${nm} - tick ${x.t}: ${x.what || CODE_NAME[x.code] || x.code}${x.code === 'H' || x.code === 'R' ? '' : x.landed == null ? ' - never landed (a maze or the kill came first)' : x.dmg ? ` - ${x.dmg} damage${x.crab ? ' to a crab' : ''} (lands tick ${x.landed})` : ` - missed / 0 (tick ${x.landed})`}`,
+  const hitTip = (nm, x) => [`${nm} - tick ${x.t}: ${x.what || CODE_NAME[x.code] || x.code}${x.code === 'H' || x.code === 'R' ? '' : x.landed == null ? ' - never landed (a maze or the kill came first)' : x.dmg ? ` - ${x.dmg} damage${x.crab ? ' to crabs' : ''} (lands tick ${x.landed})` : ` - missed / 0 (tick ${x.landed})`}`,
     x.target ? `Target: ${x.target}` : '',
     x.gear ? `Gear: ${x.gear}` : '',
     x.stats ? `Stats: ${x.stats}` : '',

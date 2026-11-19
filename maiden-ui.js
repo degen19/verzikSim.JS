@@ -331,7 +331,7 @@ export function createMaiden(host, { getTeam }) {
         <div class="muted small" style="margin:-2px 0 10px"><b style="color:var(--ink)">${curTab[1]}${/^\d/.test(curTab[0]) ? ' proc' : ''}</b> - ${curTab[2]}</div>
         <div class="mgrid" data-n="${ps.length}" style="--n:${ps.length}">${body}</div>
         ${NOTE[curTab[0]] ? `<p class="muted small" style="margin:10px 0 0">${NOTE[curTab[0]]}</p>` : ''}`);
-    { const bl = rep.querySelector('[data-rblurb]'); if (bl) bl.textContent = isProc() ? 'The whole room, prefires to her death: the freezes, leaks and her heals, the DPS, specs and cleave on every wave - what the lists say, with the sim taking over where the procedure calls for it. The report adds where it went off the list.' : true ? 'The whole room, prefires to her death: every list in order (Start, 70s, 50s, 30s), the freezes, leaks and her heals. The 70s / 50s proc details are under the charts.' : 'The prefires to her 70s proc, then the 70s crabs (Ice barrage freezes, leaks and her heals) to her 50s proc - damage carries over. Chinchompas, Dinh\'s, scythe cleave and the later phases come next.'; }
+    { const bl = rep.querySelector('[data-rblurb]'); if (bl) bl.textContent = isProc() ? 'The whole room, prefires to her death: the freezes, leaks and her heals, the DPS, specs and cleave on every wave - what the lists say, with the sim taking over where the procedure calls for it. The report adds where it went off the list.' : true ? 'The whole room, prefires to her death: every list in order (Start, 70s, 50s, 30s), the freezes, leaks and her heals.' : 'The prefires to her 70s proc, then the 70s crabs (Ice barrage freezes, leaks and her heals) to her 50s proc - damage carries over. Chinchompas, Dinh\'s, scythe cleave and the later phases come next.'; }
     cfg.innerHTML = `<style>
         .msec{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:10px}.msec>summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:8px}.msec>summary::-webkit-details-marker{display:none}
         .msec>summary::before{content:'▸';color:var(--ink2);font-size:12px;display:inline-block;transition:transform .15s}.msec[open]>summary::before{transform:rotate(90deg)}.msec>summary h4{margin:0;display:inline}.msec[open]>summary{margin-bottom:8px}.msec.off{opacity:.55}
@@ -642,8 +642,7 @@ export function createMaiden(host, { getTeam }) {
       <div data-mraidout></div></div>`;
   }
   function results(runs, bps) {
-    if (isProc()) return procResults(runs, bps);
-    return procResults(runs, bps).replace(/<\/div>$/, `<details style="margin-top:14px"><summary><b>70s / 50s proc details</b></summary>${oldResults(runs, bps).split('<div class="row wrap" style="gap:6px;align-items:center;margin-top:10px"><b>Show raid</b>')[0]}</details></div>`);
+    return procResults(runs, bps);
   }
   function oldResults(runs, bps) {
     const S = runs.map(statsOf), one = runs.length === 1, maxHp = MAIDEN_HP[team()];
