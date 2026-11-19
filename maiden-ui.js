@@ -9,7 +9,7 @@ import { parseBreakpoints } from './engine/optimize.js';
 import { settingsCard, tabsHtml, pane, wireSubtabs } from './subtabs.js';
 import { Rng } from './engine/rng.js';
 import { timelineHtml, successSteps, failSteps, raidNav } from './raidview.js';
-import { runMaiden, defaultMaidenPlan, seqOf, canDo, ATTACKS, PREFIRES, MAIDEN_HP, PREFIRE_TICK, SPELLS, spellsOf, TBOW_FROM, tbowFromOf, scheduleOf, atkOf, crabOf, hitLabel, S70_HITS, PROC_ROLES, PROC_DEFAULT, PROC_HITS, roleDefault, procedureOf, procedureOpts, DEATH_TICKS } from './engine/maiden.js';
+import { runMaiden, defaultMaidenPlan, seqOf, canDo, ATTACKS, PREFIRES, MAIDEN_HP, PREFIRE_TICK, SPELLS, spellsOf, TBOW_FROM, tbowFromOf, scheduleOf, atkOf, crabOf, hitLabel, S70_HITS, PROC_ROLES, PROC_DEFAULT, PROC_HITS, roleDefault, procedureOf, procedureOpts, DEATH_TICKS , FREEZE, FSPELL } from './engine/maiden.js';
 
 const STORE = 'verzikSim.maiden.v1';           // {team: {cur, sets: {A, B?, C?}, report}}
 const SETS = ['A', 'B', 'C'];
@@ -33,6 +33,71 @@ const failOf = (f, x) => {
   const L = Object.entries(x.leakT || {}).filter(([k]) => (f.crabs || []).includes(k.replace(/[ab]@/, '@'))).sort((a, b) => a[1] - b[1]);
   return L.length ? `${L[0][0].replace(/[ab]@/, '@').replace(/@(\d+)/, ' ($1s)')} leaked` : null;
 };
+
+// ---- a list line as the page shows it: the attack, then its target (spells always; on 5s a crab for a melee / chin
+// hit too - the default is the sim's choice), then the weapon a spell is cast with. One code per line underneath.
+const pref0 = (a) => String(a).split(':')[0];
+const SPEC_CODES = new Set(['chally', 'challyf', 'claws', 'clawc', 'dinhs', 'maul', 'bgs', 'zcbs', 'ralos', 'ralosl']);
+/** The colour class of a line: spells blue, special attacks purple. */
+const hueOf = (a) => { const p = pref0(a); return ['ib', 'ibs', 'ibl', 'ibu', 'ir', 'barrage', 'blitz', 'burst', 'rush'].includes(p) ? 'hspell' : SPEC_CODES.has(p) || ['chally', 'claws', 'dinhs', 'maul', 'zcbs'].includes(p) ? 'hspec' : ''; };
+const SPELL_P = { ib: 'barrage', ibs: 'barrage', ibl: 'blitz', ibu: 'burst', ir: 'rush' };
+const ATK_GROUPS = [
+  ['Spells', [['barrage', 'Ice barrage'], ['blitz', 'Ice blitz'], ['burst', 'Ice burst'], ['rush', 'Ice rush']]],
+  ['Melee', [['scythe', 'Scythe'], ['chally', 'Halberd spec'], ['claws', 'Claw spec'], ['dinhs', "Dinh's spec"], ['maul', 'Elder maul spec']]],
+  ['Range', [['tbr', 'Tbow (rapid)'], ['tba', 'Tbow (accurate)'], ['bp', 'Blowpipe'], ['ax', 'Ascension xbows'], ['zcbs', 'ZCB spec'], ['ralos', 'Ralos spec (rapid)'], ['ralosl', 'Ralos spec (long range)'], ['chin', 'Chinchompa']]],
+  ['Other', [['surge', 'Surge potion (+25% spec)'], ['lose', 'Lose 1 tick']]],
+];
+const ATK_NAME = Object.fromEntries(ATK_GROUPS.flatMap(([, l]) => l));
+const niceT = (x) => String(x).replace(/^([NS]\d[ab]?)@(\d+)$/, '$2s $1').replace(/^pile$/, 'the older pile').replace(/^([34]s)$/, 'the $1');
+/** A code -> {atk, tgt, wpn, mode, n, hold} (atk: an ATK_NAME key, or the code itself when the page has no other way to show it). */
+function lineParts(code) {
+  const a = String(code), p = a.split(':')[0], rest = a.split(':').slice(1).join(':'); let m;
+  if (SPELL_P[p]) { const h = /\+(\d+)$/.exec(rest); return { atk: SPELL_P[p], tgt: rest.replace(/\+\d+$/, ''), wpn: p === 'ibs' ? 'sceptre' : p === 'ib' ? 'kodai' : p === 'ir' ? 'kodai' : 'ayak', hold: h ? Number(h[1]) : null }; }
+  if (a === 'scythe' || ['qscy', 'tdps', 'qs1', 'scyf', 'tclean'].includes(a)) return { atk: 'scythe', tgt: '' };
+  if ((m = /^scy[ck]:([^:|]+)/.exec(a))) return { atk: 'scythe', tgt: m[1] };
+  if (/^s1if:/.test(a)) return { atk: 'scythe', tgt: 'S1@70' };
+  if (/^(fin|qfin|finz)/.test(a)) return { atk: 'chally', tgt: '' };
+  if (a === 'chally' || a === 'challyf') return { atk: 'chally', tgt: '' };
+  if ((m = /^chally:(.+)$/.exec(a))) return { atk: 'chally', tgt: m[1] };
+  if (a === 'claws' || a === 'qspec') return { atk: 'claws', tgt: '' };
+  if ((m = /^clawc:(.+)$/.exec(a))) return { atk: 'claws', tgt: m[1] };
+  if (a === 'dinhs' || a === 'tdin' || a === 'tdin2') return { atk: 'dinhs', tgt: '' };
+  if ((m = /^dinhs:(.+)$/.exec(a))) return { atk: 'dinhs', tgt: m[1] };
+  if (['chinp', 'qchin'].includes(a)) return { atk: 'chin', tgt: '' };
+  if (a === 'chinpa') return { atk: 'chin', tgt: 'acc' };
+  if (a === 'chin') return { atk: 'chin', tgt: '3s' };
+  if (a === 'chin4') return { atk: 'chin', tgt: '4s' };
+  if (a === 'zcbg' || a === 'zcbx' || a === 'zcbf') return { atk: 'zcbs' };
+  return { atk: a };
+}
+/** The code for those parts (5s: a crab scythe is 'scyc', the trio / 4s lists only target spells). */
+function lineCode(P, five) {
+  const T = P.tgt || '';
+  switch (P.atk) {
+    case 'barrage': case 'blitz': case 'burst': case 'rush': {
+      const pre = P.atk === 'barrage' ? (P.wpn === 'sceptre' ? 'ibs' : 'ib') : P.atk === 'blitz' ? 'ibl' : P.atk === 'burst' ? 'ibu' : 'ir';
+      return `${pre}:${T || 'S1'}${P.hold ? `+${P.hold}` : ''}`; }
+    case 'scythe': if (!T) return 'scythe'; return five ? `scyc:${T}:25|scythe` : `scyk:${T}`;   // the crab while it's worth it, else her
+    case 'chally': return T ? `chally:${T}` : 'chally';
+    case 'claws': return T ? `clawc:${T}` : 'claws';
+    case 'dinhs': return 'dinhs';
+    case 'chin': return 'chinp';
+    default: return P.atk;
+  }
+}
+/** Spells: the crab (or clump) they're cast on. Melee specs and scythes: Maiden or a crab (CRAB_T) - the sim decides
+ *  when it's worth leaving her. Chinchompas (5s): which clump. */
+function targetsOf(atk, five) {
+  const crabs1 = five ? ['N1', 'N2', 'N3', 'N4', 'S1', 'S2', 'S3', 'S4'] : ['S1', 'N1', 'S2', 'N2'];
+  const waves = five ? ['N1@70', 'N2@70', 'S1@70', 'S2@70', 'N1@50', 'N2@50', 'S1@50', 'S2@50'] : [];
+  if (atk === 'barrage' || atk === 'burst') return [...crabs1, '3s', '4s', ...waves].map((x) => [x, niceT(x)]);
+  if (atk === 'blitz' || atk === 'rush') return [...crabs1, ...waves].map((x) => [x, niceT(x)]);
+  return null;
+}
+const CRAB_T = (five) => (five ? ['N1@70', 'N2@70', 'S1@70', 'S2@70', 'N1@50', 'N2@50', 'S1@50', 'S2@50', 'N1', 'N2', 'S1', 'S2', 'N3', 'S3', 'N4', 'S4'] : ['S1', 'N1', 'S2', 'N2']);
+const ON_CRAB = new Set(['scythe', 'chally', 'claws']);
+/** What a Start list can hold after the prefire (no crabs out yet). */
+const START_HITS = ['tbr', 'tba', 'bp', 'ax', 'zcb', 'zcbs', 'ralos', 'ralosl', 'maul', 'bgs', 'claws', 'chally', 'scythe', 'aya', 'surge', 'lose'];
 const fsec = (x) => { const s2 = x * 0.6; return s2 >= 60 ? `${Math.floor(s2 / 60)}:${(s2 % 60).toFixed(1).padStart(4, '0')}` : `${s2.toFixed(1)}s`; };
 const SPELL_TIP = {
   ancients: 'Ancients: they can freeze the crabs when they spawn (comes with the crabs)',
@@ -119,7 +184,7 @@ export function createMaiden(host, { getTeam }) {
     setTabs();
     const st = cur(), r0 = root(), ps = playersNow(st), t = team(), g = loadGear(), list = saved[t] || [];
     if (savedPick && !list.some((x) => x.id === savedPick)) savedPick = '';
-    const opts = (codes, v, gear) => codes.map((a) => `<option value="${a}" ${a === v ? 'selected' : ''}>${esc(hitLabel(a))}${canDo(gear, a) ? '' : ' (not in Gear)'}</option>`).join('');
+    const opts = (codes, v, gear) => codes.map((a) => `<option value="${a}" class="${hueOf(a)}" ${a === v ? 'selected' : ''}>${esc(hitLabel(a))}${canDo(gear, a) ? '' : ' (not in Gear)'}</option>`).join('');
     // when each hit fires and lands, and which tbow shots land on the same tick as another player's
     const sched = ps.map((p, k) => scheduleOf(p, k, t));
     const tbowLands = sched.map((sc) => sc.filter((x) => x.tbow).map((x) => x.land));
@@ -135,9 +200,9 @@ export function createMaiden(host, { getTeam }) {
         const x = sc[j] || {}, mates = x.tbow ? ps.filter((q, i) => i !== k && tbowLands[i].includes(x.land)).map((q) => q.name) : [];
         const txt = line(x, j === p.seq.length - 1, a) + (mates.length ? ` · same tick as ${mates.join(', ')}` : '');
         return `${j === 0 ? '<div class="mlab">Prefire</div>' : j === 1 ? '<div class="mlab">Then</div>' : ''}<div class="mrow">
-          <select title="${j === 0 ? 'Prefire' : `Hit ${j}`}"  data-seq="${k}|${j}" class="${canDo(p.gear, a) ? '' : 'bad'}">${opts(j === 0 ? PREFIRES : Object.keys(ATTACKS), a, p.gear)}</select>
+          <select title="${j === 0 ? 'Prefire' : `Hit ${j}`}"  data-seq="${k}|${j}" class="${canDo(p.gear, a) ? '' : 'bad'} ${hueOf(a)}">${opts(j === 0 ? PREFIRES : (START_HITS.includes(a) ? START_HITS : [a, ...START_HITS]), a, p.gear)}</select>
           ${j > 0 ? `<button class="ghost sm mx" data-del="${k}|${j}" title="Remove this hit">&times;</button>` : '<span class="mx"></span>'}</div>
-          <div class="mwhen${mates.length ? ' same' : x.skip ? ' skip' : ''}">${esc(txt)}</div>`;
+          ${x.skip ? `<div class="mwhen skip">skipped - ${esc(x.skip)}</div>` : ''}`;
       }).join('');
       const tbows = p.seq.slice(1).some((a) => a === 'tbr' || a === 'tba');
       const roleSel = isProc() ? `<label class="small muted mfrom" title="Their job after the 70s proc - the engine plays it (freezes by spawns and timing, DPS picks)">Role <select data-role="${k}">${PROC_ROLES[t].map(([r, l]) => `<option value="${r}" ${p.role === r ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : '';
@@ -177,9 +242,95 @@ export function createMaiden(host, { getTeam }) {
       return `<div class="mcol"><div class="mhead"><b>${esc(p.name)}</b><span class="small muted">${esc(role ? role[1] : '')}</span></div>${rows}<button class="ghost sm" data-addp="${k}|${ph}" style="margin-top:4px">+ Add line</button></div>`;
     };
     const DESC = { 70: 'from the 70s proc to her 50s proc', 50: 'from the 50s proc to her 30s proc', 30: 'from the 30s proc to her death' };
+    const procNote = (ph) => (ph === 70 ? `<p class="muted small" style="margin:8px 0 0">${t === 3 ? 'Mage: S1 > N1 > S2 > N2 (two a wave; all four out: S1, S2; no S1 / N1: ice rush the S2), then the 3s and 4s clumps; empty freeze slots get a tbow (70s) or a barrage on the older pile (50s / 30s); pulls up to the clump in the 50s / 30s. DPS: the 1s / 2s the mage won\'t freeze, then stragglers over the line.' : 'North: S1, N2, then the 3s and 4s; south: N1, then S2 a tick later (one freezer late: the clumps split - 1 tick late takes the 3s, 2+ the 4s). No N1 but an S2: the south ice rushes it. DPS: the thawed 1s / 2s on their side walking in over the line (melee N1s / N2s, range S1s / N2s).'} </p><p class="muted small" style="margin:4px 0 0">The sim takes over where the procedure calls for it: <b>Ice barrage → a crab</b> - the freezer's written order (a late freezer: the clumps split; no N1 but an S2: rushed); <b>Ice barrage → pile</b> - only if the leftover clump is worth it; <b>Scythe</b> (DPS) - her, or their side's thawed crab walking in over the line; <b>Scythe → S1</b> - the oldest S1 alive (70s first), else her; <b>Dinh's</b> - the sim picks the target and the swing (a 2nd only if it reaches 4+ crabs, else claws); <b>Chinchompa</b> lines - 3 or 5 at the clump by its HP; <b>ZCB</b> after the 30s (DPS) - else claws; <b>Surge</b> - drunk on the way to the next line (no tick lost). A spec without the energy for it (no surge, death charges short) becomes the best one they can do - a Dinh's or claws; a ZCB not reached before the next proc goes after their next freezes. The report lists where the sim went off the list.</p>` : '');
     const procSecs = isProc() ? [70, 50, 30].map((ph) => sec(`p${ph}`, `After the ${ph}s <span class="muted small" style="font-weight:normal">- ${DESC[ph]}: their list (the sim takes over where the proc calls for it)</span>`, `
         <div class="mgrid" data-n="${ps.length}" style="--n:${ps.length}">${ps.map(colPh(ph)).join('')}</div>
         ${ph === 70 ? `<p class="muted small" style="margin:8px 0 0">${t === 3 ? 'Mage: S1 > N1 > S2 > N2 (two a wave; all four out: S1, S2; no S1 / N1: ice rush the S2), then the 3s and 4s clumps; empty freeze slots get a tbow (70s) or a barrage on the older pile (50s / 30s); pulls up to the clump in the 50s / 30s. DPS: the 1s / 2s the mage won\'t freeze, then stragglers over the line.' : 'North: S1, N2, then the 3s and 4s; south: N1, then S2 a tick later (one freezer late: the clumps split - 1 tick late takes the 3s, 2+ the 4s). No N1 but an S2: the south ice rushes it. DPS: the thawed 1s / 2s on their side walking in over the line (melee N1s / N2s, range S1s / N2s).'} </p><p class="muted small" style="margin:4px 0 0">The sim takes over where the procedure calls for it: <b>Ice barrage → a crab</b> - the freezer's written order (a late freezer: the clumps split; no N1 but an S2: rushed); <b>Ice barrage → pile</b> - only if the leftover clump is worth it; <b>Scythe</b> (DPS) - her, or their side's thawed crab walking in over the line; <b>Scythe → S1</b> - the oldest S1 alive (70s first), else her; <b>Dinh's</b> - the sim picks the target and the swing (a 2nd only if it reaches 4+ crabs, else claws); <b>Chinchompa</b> lines - 3 or 5 at the clump by its HP; <b>ZCB</b> after the 30s (DPS) - else claws; <b>Surge</b> - drunk on the way to the next line (no tick lost). A spec without the energy for it (no surge, death charges short) becomes the best one they can do - a Dinh's or claws; a ZCB not reached before the next proc goes after their next freezes. The report lists where the sim went off the list.</p>` : ''}`)).join('') : '';
+
+    // ---- Phases: a tab per proc (Start, 70s, 50s, 30s, End), a column per player - their list, the weapon each freeze
+    // is cast with, when each hit goes (ticks after the proc), and the conditions on a conditional hit
+    const PT = op.ptab || '70', WAVES = { 70: 'the first crabs, to her 50s proc', 50: 'the second crabs, to her 30s proc', 30: 'the last crabs, to her death' };
+    const nice = (x) => String(x).replace(/^([NS]\d[ab]?)@(\d+)$/, '$2s $1');
+    const FZ_T = isProc() ? ['S1', 'N1', 'S2', 'N2', '3s', '4s', 'pile'] : ['N1', 'N2', 'N3', 'N4', 'S1', 'S2', 'S3', 'S4', '3s', '4s', 'N1@70', 'N2@70', 'S1@70', 'S2@70', 'N1@50', 'S1@50'];
+    const fzOpts = [['ib', 'Ice barrage'], ['ibl', 'Ice blitz'], ['ibu', 'Ice burst'], ['ir', 'Ice rush']].flatMap(([c, n]) => FZ_T.filter((x) => c !== 'ir' || !/^(3s|4s|pile)$/.test(x)).map((x) => [`${c}:${x}`, `${n} → ${nice(x)}`]));
+    const pref = (a) => String(a).split(':')[0], canon = (a) => (pref(a) === 'ibs' ? `ib:${String(a).slice(4)}` : String(a)).replace(/\+\d+$/, '');
+    const melee5 = isProc() ? [] : ['scyc:N1@70', 'scyc:S1@70', 'chally:N1@70', 'chally:S1@70', 'scyc:N1@70:25|scythe', 's1if:58', 'fin'];
+    const restOpts = [...new Set([...(isProc() ? PROC_HITS(t) : S70_HITS()).filter((a) => !/^(ib|ibs|ibl|ibu|ir)(:|$)/.test(a) && a !== 'ib'), ...melee5])];
+    const labOf = (a) => { const q = String(a); let m;
+      if ((m = /^scyc:([^:]+):(\d+)\|/.exec(q))) return `Scythe → ${nice(m[1])} ?`;
+      if ((m = /^scyc:([^:]+)(?::\d+)?$/.exec(q))) return `Scythe → ${nice(m[1])}`;
+      if (/^s1if:/.test(q)) return 'Scythe → 70s S1 ?';
+      if ((m = /^chally:(.+)$/.exec(q))) return `Halberd spec → ${nice(m[1])}`;
+      if (/^fin(:|$)/.test(q)) return 'Scythe, then the halberd as the last hit';
+      const fz = fzOpts.find(([v]) => v === canon(q)); if (fz) return fz[1];
+      return hitLabel(q).replace(/(→ )([NS]\d[ab]?)@(\d+)/, '$1$3s $2'); };
+    const lineOpts = (a, gear) => { const cur = canon(a), all = [...fzOpts.map(([v]) => v), ...restOpts]; if (!all.includes(cur)) all.unshift(cur);
+      return `<optgroup label="Freezes">${all.filter((v) => /^(ib|ibl|ibu|ir):/.test(v)).map((v) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(labOf(v))}</option>`).join('')}</optgroup>
+        <optgroup label="Hits">${all.filter((v) => !/^(ib|ibl|ibu|ir):/.test(v)).map((v) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(labOf(v))}${canDo(gear, v) ? '' : ' (not in Gear)'}</option>`).join('')}</optgroup>`; };
+    const condOf = (a) => { const q = String(a); let m;
+      if ((m = /^scyc:([^:]+):(\d+)\|/.exec(q))) return ['if', `${nice(m[1])} is over`, m[2], 'HP - else Maiden'];
+      if ((m = /^scyc:([^:]+):(\d+)$/.exec(q))) return ['', `once, while ${nice(m[1])} is over`, m[2], 'HP - skipped if it\'s dead'];
+      if ((m = /^s1if:(\d+)/.exec(q))) return ['if', 'Maiden is under', m[1], '% after their previous scythe'];
+      if ((m = /^ib[a-z]*:[^+]+\+(\d+)$/.exec(q))) return ['', 'held to +', m[1], 'after the proc'];
+      if ((m = /^fin:(\d+)$/.exec(q))) return ['', 'the halberd early at', m[1], '% or under'];
+      return null; };
+    const roleLine = (p) => {
+      if (isProc()) { const r = PROC_ROLES[t].find(([x]) => x === p.role); return r ? r[1] : ''; }
+      const fz = (ph) => (p[`s${ph}`] || { seq: [] }).seq.filter((a) => /^(ib|ibs|ibl|ibu|ir):/.test(a)).map((a) => nice(String(crabOf(a)).replace(/\+\d+$/, '')));
+      const f70 = fz(70), f50 = fz(50), mel = [p.s70, p.s50, p.s30].some((q) => q && q.seq.some((a) => /scy|chally|fin|scythe|s1if/.test(a)));
+      if (f70.length || f50.length) return `Freezer${mel ? ' + melee' : ''}${f70.length ? ` · ${f70.join(' / ')}` : ''}${f50.length ? ` · then ${f50.join(' / ')}` : ''}`;
+      return mel ? 'Melee' : 'Range'; };
+    const colPhase = (ph) => (p, k) => {
+      const q = (p[`s${ph}`] || { seq: [] }).seq, tbows = q.some((a) => a === 'tbr' || a === 'tba');
+      let off = 1, firstFz = true;
+      const five = !isProc();
+      const rows = q.map((a, j) => {
+        const A = atkOf(a) || {}, pr = pref(a), F = FSPELL[pr], hold = /\+(\d+)$/.exec(String(a)), last = j === q.length - 1, P = lineParts(a), key = `${k}|${ph}|${j}`;
+        if (hold) off = Math.max(off, Number(hold[1]));
+        let when = `+${off}`;
+        if (F || pr === 'ir') { const dur = pr === 'ir' ? FREEZE.rush[0] : FREEZE[F.spell][F.sc]; when += ` · ${dur} ticks`; }
+        if ((a === 'zcbs' || a === 'zcb') && A.delay != null) when += ` · lands +${off + A.delay}`;
+        if (last) when += ph === 30 ? ', then until she dies' : ', then until the proc';
+        const tick = (F || pr === 'ir') && firstFz && (off === 1 || off === 2) ? `<div class="pwhen"><b>${off === 1 ? 'First tick' : 'Second tick'}</b></div>` : '';
+        if (F || pr === 'ir') firstFz = false;
+        const known = ATK_NAME[P.atk] != null, atkSel = `<select title="Line ${j + 1} after the ${ph}s proc" data-patk="${key}" class="${canDo(p.gear, a) && (!(F || pr === 'ir') || p.spells.ancients) ? '' : 'bad'} ${hueOf(P.atk)}">${known ? '' : `<option value="${esc(P.atk)}" selected>${esc(hitLabel(a))}</option>`}${ATK_GROUPS.map(([g, l]) => `<optgroup label="${g}">${l.filter(([v]) => !(v === 'finz' && five)).map(([v, n]) => `<option value="${v}" class="${hueOf(v)}" ${v === P.atk ? 'selected' : ''}>${esc(n)}${canDo(p.gear, lineCode({ atk: v, tgt: (targetsOf(v, five) || [['']])[0][0], wpn: 'kodai' }, five)) ? '' : ' (not in Gear)'}</option>`).join('')}</optgroup>`).join('')}</select>`;
+        let sub = '';
+        const T = targetsOf(P.atk, five);
+        if (T) sub += `<div class="mrow psub"><span class="muted">→</span><select data-ptgt="${key}">${T.map(([v, l]) => `<option value="${esc(v)}" ${v === (P.tgt || '') ? 'selected' : ''}>${esc(l)}</option>`).join('')}${T.some(([v]) => v === (P.tgt || '')) ? '' : `<option selected>${esc(niceT(P.tgt))}</option>`}</select></div>`;
+        if (ON_CRAB.has(P.atk)) { const onC = !!P.tgt, CT = CRAB_T(five);
+          sub += `<div class="mrow psub"><span class="muted">→</span><select data-pkind="${key}"><option value="" ${onC ? '' : 'selected'}>Maiden</option><option value="crab" ${onC ? 'selected' : ''}>Crab</option></select></div>${onC ? `<div class="mrow psub" style="margin-left:22px"><span class="muted">→</span><select data-ptgt="${key}">${CT.map((x) => `<option value="${x}" ${x === P.tgt ? 'selected' : ''}>${esc(niceT(x))}</option>`).join('')}${CT.includes(P.tgt) ? '' : `<option selected>${esc(niceT(P.tgt))}</option>`}</select></div>` : ''}`; }
+        if (P.atk === 'barrage') sub += `<div class="mrow psub"><span class="muted">↳</span><select data-wpn="${key}"><option value="kodai" ${P.wpn !== 'sceptre' ? 'selected' : ''}>Kodai wand</option><option value="sceptre" ${P.wpn === 'sceptre' ? 'selected' : ''}>Ice ancient sceptre</option></select></div>`;
+        else if (P.atk === 'blitz' || P.atk === 'burst') sub += '<div class="mrow psub"><span class="muted">↳ Eye of Ayak</span></div>';
+        else if (P.atk === 'rush') sub += '<div class="mrow psub"><span class="muted">↳ Kodai wand</span></div>';
+        const out = `<div class="mrow">${atkSel}
+          ${q.length > 1 ? `<button class="ghost sm mx" data-delp="${key}" title="Remove this line">&times;</button>` : '<span class="mx"></span>'}</div>${sub}`;
+        off += Math.max(0, A.speed ?? 5);
+        return out;
+      }).join('');
+      return `<div class="mcol"><div class="mhead"><b>${esc(p.name)}</b><span class="small muted prole">${esc(roleLine(p))}</span>
+          ${tbows ? `<label class="small muted mfrom" title="Where they stand for their tbow shots in this phase - how many ticks the arrow takes to land">Tbow from <select data-pph="${k}|${ph}">${TBOW_FROM.map(([d, l]) => `<option value="${d}" ${Number((p[`s${ph}`] || {}).tbowFrom) === d ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : ''}</div>
+        <div class="mlab">Then</div>${rows}<button class="ghost sm" data-addp="${k}|${ph}" style="margin-top:6px">+ Add hit</button></div>`;
+    };
+    const colEnd = (p) => { const q = (p.s30 || { seq: [] }).seq, last = q[q.length - 1];
+      const fin = /^(fin|qfin|finz)/.test(String(last));
+      return `<div class="mcol"><div class="mhead"><b>${esc(p.name)}</b><span class="small muted prole">${esc(roleLine(p))}</span></div>
+        ${fin ? `<div class="mrow"><span class="pbox">Scythe</span></div><div class="pwhen">until their last swing before a crab reaches her</div><div class="mrow"><span class="pbox">${/finz/.test(String(last)) ? 'ZCB spec' : 'Halberd spec'}</span></div><div class="pwhen">that last swing - lands by the tick the crab reaches her (early when it likely kills her)</div>`
+          : `<div class="mrow"><span class="pbox">${esc(labOf(last))}</span></div><div class="pwhen">their last 30s line, until she dies</div>`}</div>`; };
+    const startCol = (p, k) => col(p, k).replace('<div class="mspells">', `${isProc() ? '' : `<label class="small muted mfrom" title="Which side of her they melee from (freezers cast from the east)">Stands <select data-side="${k}">${[['', 'Auto'], ['E', 'East'], ['N', 'North'], ['S', 'South']].map(([v, l]) => `<option value="${v}" ${(p.side || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}<div class="mspells">`);
+    const NOTE = {
+      start: 'Each hit goes as soon as their attack timer allows; their last hit repeats until the 70s proc. Lose 1 tick: their next hit goes a tick later. A hit they can\'t do (not in their Gear, or not enough spec) is skipped. Ranged gear on Rigour at 112 Ranged, melee gear on their prayer (Zeal unless set in the Gear tab) at 118; Vengeance up from the start.',
+      70: 'Each line goes as soon as their attack timer allows; their last line repeats until the next proc. A Scythe on a crab goes on her when the crab isn\'t worth it; a spec they can\'t do falls back on its own.',
+      50: 'A crab can be a wave (70s S2) or a clump (the 3s / the 4s). Their last line repeats until the next proc.',
+      30: 'End a list with Scythe then Halberd spec: they scythe until the halberd\'s time (the last swing before a crab reaches her, or earlier when it likely kills her). Their last line repeats until she dies.',
+      end: 'After their 30s list, until she dies. The room ends 8 ticks after the killing blow lands.' };
+    const TABS = [['start', 'Start', 'the prefires to her 70s proc'], ['70', '70s', WAVES[70]], ['50', '50s', WAVES[50]], ['30', '30s', WAVES[30]]];
+    const curTab = TABS.find(([k]) => k === PT) || TABS[1];
+    const body = curTab[0] === 'start' ? ps.map(col).join('') : ps.map(colPhase(Number(curTab[0]))).join('');
+    const phasesCard = sec('phases', `Phases <span class="muted small" style="font-weight:normal">- what each player does after each proc</span>`, `
+        <div class="ptabs">${TABS.map(([k, l]) => `<button class="ptab${k === curTab[0] ? ' on' : ''}" data-ptab="${k}">${l}</button>`).join('')}</div>
+        <div class="muted small" style="margin:-2px 0 10px"><b style="color:var(--ink)">${curTab[1]}${/^\d/.test(curTab[0]) ? ' proc' : ''}</b> - ${curTab[2]}</div>
+        <div class="mgrid" data-n="${ps.length}" style="--n:${ps.length}">${body}</div>
+        ${NOTE[curTab[0]] ? `<p class="muted small" style="margin:10px 0 0">${NOTE[curTab[0]]}</p>` : ''}`);
     { const bl = rep.querySelector('[data-rblurb]'); if (bl) bl.textContent = isProc() ? 'The whole room, prefires to her death: the freezes, leaks and her heals, the DPS, specs and cleave on every wave - what the lists say, with the sim taking over where the procedure calls for it. The report adds where it went off the list.' : true ? 'The whole room, prefires to her death: every list in order (Start, 70s, 50s, 30s), the freezes, leaks and her heals. The 70s / 50s proc details are under the charts.' : 'The prefires to her 70s proc, then the 70s crabs (Ice barrage freezes, leaks and her heals) to her 50s proc - damage carries over. Chinchompas, Dinh\'s, scythe cleave and the later phases come next.'; }
     cfg.innerHTML = `<style>
         .msec{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-top:10px}.msec>summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:8px}.msec>summary::-webkit-details-marker{display:none}
@@ -188,7 +339,7 @@ export function createMaiden(host, { getTeam }) {
         .mhead b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}@media (max-width:1000px){.mgrid[data-n="5"]{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (max-width:840px){.mgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:760px){.mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:460px){.mgrid{grid-template-columns:minmax(0,1fr)}}
         .mhead label{flex-direction:row;align-items:center;gap:4px}.mrow{display:flex;gap:6px;align-items:center;margin-top:4px}.mrow select{flex:1;width:100%;max-width:none;min-width:0;font-size:13px;padding-left:6px;padding-right:2px}
         .mrow select.bad{border-color:#d9534f}.mwhen{margin:2px 32px 0 3px;font-size:11.5px;color:var(--ink2)}.mwhen.same{color:var(--good)}.mwhen.skip{color:var(--warn)}.mhead .mfrom{width:100%}.mhead .mfrom select{font-size:12px;max-width:none}.mlab{font-size:11px;color:var(--ink2);margin-top:6px}
-        .mspells{display:grid;grid-template-columns:repeat(2,max-content);gap:2px 14px;font-size:12px}.mspells label{flex-direction:row;align-items:center;gap:4px;color:var(--ink2)}.mx{width:26px;flex:none;padding:2px 0}</style>
+        .mspells{display:grid;grid-template-columns:repeat(2,max-content);gap:2px 14px;font-size:12px}.mspells label{flex-direction:row;align-items:center;gap:4px;color:var(--ink2)}.mx{width:26px;flex:none;padding:2px 0}select.hspell,option.hspell{color:#8fd8ff}select.hspec,option.hspec{color:#e8a0ff}select option:not(.hspell):not(.hspec){color:var(--ink)}.ptabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}.ptab{border-radius:18px;padding:5px 16px;font-weight:600}.ptab:not(.on){background:transparent;color:var(--ink2);border:1px solid var(--line)}.prole{display:block;width:100%;font-size:11px;margin:0 0 4px}.psub{margin:3px 0 0 6px}.psub select{flex:1;width:auto;min-width:0;max-width:170px;font-size:12px}.psub span{font-size:12px}.pwhen{margin:2px 30px 0 3px;font-size:11.5px;color:var(--ink2)}.pwhen b{color:var(--good);font-weight:600}.pcond{font-size:11.5px;margin:4px 0 0 10px;line-height:1.6}.pcond .k{color:var(--warn);font-weight:600}.pnum{width:52px;padding:1px 4px;font-size:12px;text-align:center}.pbox{flex:1;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px}</style>
       <div class="row wrap" style="gap:10px;align-items:end;margin:0 0 10px">
         <div><div class="muted small">Copy set ${r0.cur} to</div>${SETS.filter((k) => k !== r0.cur).map((k) => `<button class="ghost sm" data-copyset="${k}" title="Replace set ${k} with a copy of set ${r0.cur}">Set ${k}</button>`).join(' ')}</div>
         <button class="ghost sm" data-clearset title="Start set ${r0.cur} over from the default plan (its Gear set stays)">Clear set ${r0.cur}</button>
@@ -218,16 +369,7 @@ export function createMaiden(host, { getTeam }) {
         <table class="small" style="border-collapse:collapse"><tr><th></th>${FAIL_IDS.map((id) => `<th style="padding:2px 6px">${id}</th>`).join('')}</tr>
           ${waves.map((w) => `<tr><td style="padding:2px 6px"><b>${w}s</b></td>${FAIL_IDS.map((id) => `<td style="text-align:center"><input type="checkbox" data-failcrab="${id}@${w}" ${(f.crabs || []).includes(`${id}@${w}`) ? 'checked' : ''}></td>`).join('')}</tr>`).join('')}</table>
         <p class="muted small" style="margin:8px 0 0">The report runs every raid, then shows the reset share and why - its times and stats are the raids that weren't reset.</p>`); })()}
-      ${sec('start', `Start <span class="muted small" style="font-weight:normal">- the prefires (Twisted bow tick ${PREFIRE_TICK.tbow}, ZCB tick ${PREFIRE_TICK.zcb}, Ralos tick ${PREFIRE_TICK.ralos} rapid / ${PREFIRE_TICK.ralosl} long range) to her 70s proc</span>`, `
-        <div class="mgrid" data-n="${ps.length}" style="--n:${ps.length}">${ps.map(col).join('')}</div>
-        <p class="muted small" style="margin:8px 0 0">Each hit goes as soon as their attack timer allows; their last hit repeats until the 70s proc. Lose 1 tick: their next hit goes a tick later.
-          A hit they can't do (not in their Gear, or not enough spec) is skipped. Ranged gear on Rigour at 112 Ranged, melee gear on their prayer (Zeal unless set in the Gear tab) at 118; Vengeance up from the start.</p>`)}
-      ${isProc() ? procSecs : sec('70s', `70s <span class="muted small" style="font-weight:normal">- from the 70s proc (10 crabs in a 5s) to her 50s proc</span>`, `
-        <div class="mgrid" data-n="${ps.length}" style="--n:${ps.length}">${ps.map(col70).join('')}</div>
-        <p class="muted small" style="margin:8px 0 0">From the proc each player's next hit is the first here, as soon as their attack timer allows (they can barrage on the spawn tick itself); the last repeats until the 50s proc.
-          Ice barrage → a crab: Kodai (max 34); every crab whose SW tile is in the 3x3 around the target's SW tile is frozen the moment it's cast (32 ticks, then 5 ticks immune) - the damage lands 1 + (1 + distance) / 3 ticks later (from 7 tiles east of her).
-          A crab that's never frozen (or walks once its freeze ends) leaks next to her and she heals twice its HP left.</p>`)}
-      ${later}`;
+      ${phasesCard}`;
   }
   cfg.addEventListener('toggle', (e) => {
     const d = e.target; if (!d.dataset || !d.dataset.sec) return;
@@ -236,6 +378,7 @@ export function createMaiden(host, { getTeam }) {
   cfg.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const st = cur();
+    if (b.dataset.ptab) { const o = openOf(); o.ptab = b.dataset.ptab; saveKey(OPEN, o); render(); return; }
     if (b.dataset.add) { const q = st.players[Number(b.dataset.add)].seq; q.push(q.length > 1 ? q[q.length - 1] : 'tbr'); persist(); render(); return; }
     if (b.dataset.del) { const [k, j] = b.dataset.del.split('|').map(Number); st.players[k].seq.splice(j, 1); persist(); render(); return; }
     if (b.dataset.addp) { const [k, ph] = b.dataset.addp.split('|').map(Number), q = st.players[k][`s${ph}`].seq; q.push(q[q.length - 1]); persist(); render(); return; }
@@ -293,7 +436,18 @@ export function createMaiden(host, { getTeam }) {
     else if (el.dataset.seq70) { const [k, j] = el.dataset.seq70.split('|').map(Number); st.players[k].s70.seq[j] = el.value; }
     else if (el.dataset.role) { const k = Number(el.dataset.role), d = roleDefault(team(), el.value); st.players[k] = { ...st.players[k], ...d, startSpec: st.players[k].startSpec }; }   // a role: its default lists and spells
     else if (el.dataset.pph) { const [k, ph] = el.dataset.pph.split('|').map(Number); st.players[k][`s${ph}`].tbowFrom = Number(el.value); }
-    else if (el.dataset.seqp) { const [k, ph, j] = el.dataset.seqp.split('|').map(Number); st.players[k][`s${ph}`].seq[j] = el.value; }
+    else if (el.dataset.seqp) { const [k, ph, j] = el.dataset.seqp.split('|').map(Number), q = st.players[k][`s${ph}`].seq, old = String(q[j] || ''); let v = el.value;
+      if (/^ib:/.test(v) && /^ibs:/.test(old)) v = `ibs:${v.slice(3)}`;   // a new target keeps the weapon it's cast with
+      q[j] = v; }
+    else if (el.dataset.patk || el.dataset.ptgt || el.dataset.pkind || el.dataset.wpn) {
+      const key = el.dataset.patk || el.dataset.ptgt || el.dataset.pkind || el.dataset.wpn, [k, ph, j] = key.split('|').map(Number), q = st.players[k][`s${ph}`].seq, five = !isProc(), P = lineParts(q[j]);
+      if (el.dataset.patk) { const tg = targetsOf(el.value, five); q[j] = lineCode({ atk: el.value, tgt: tg ? (tg.some(([v]) => v === P.tgt) ? P.tgt : tg[0][0]) : '', wpn: P.wpn || 'kodai' }, five); }
+      else if (el.dataset.pkind != null) q[j] = lineCode({ ...P, tgt: el.value === 'crab' ? CRAB_T(five)[0] : '' }, five);
+      else if (el.dataset.ptgt) q[j] = lineCode({ ...P, tgt: el.value }, five);
+      else q[j] = lineCode({ ...P, wpn: el.value }, five); }
+    else if (el.dataset.cond) { const [k, ph, j] = el.dataset.cond.split('|').map(Number), q = st.players[k][`s${ph}`].seq, n = String(Math.max(0, Math.round(Number(el.value) || 0))), a = String(q[j]);
+      q[j] = /^scyc:[^:]+:\d+\|/.test(a) ? a.replace(/:(\d+)\|/, `:${n}|`) : /^scyc:[^:]+:\d+$/.test(a) ? a.replace(/:\d+$/, `:${n}`) : /^s1if:/.test(a) ? `s1if:${n}` : /^fin:/.test(a) ? `fin:${n}` : a.replace(/\+\d+$/, `+${n}`); }
+    else if (el.dataset.side != null) { const k = Number(el.dataset.side); if (el.value) st.players[k].side = el.value; else delete st.players[k].side; }
     else if (el.dataset.spell) { const [k, sk] = el.dataset.spell.split('|'); st.players[Number(k)].spells[sk] = el.checked; }
     else if (el.dataset.seq) { const [k, j] = el.dataset.seq.split('|').map(Number); st.players[k].seq[j] = el.value; }
     persist(); render();

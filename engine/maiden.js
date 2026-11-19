@@ -356,13 +356,13 @@ const F5 = ['tfz', 'tfz', 'tfz', 'tfz', 'tfz'], F4 = ['qfz', 'qfz', 'qfz', 'qfz'
 const FRZ = { ancients: true, veng: false, thralls: false, dc: false }, DPSP = { ancients: false, veng: true, thralls: true, dc: true };
 const IBN = ['ib:S1', 'ib:N2', 'ib:3s', 'ib:4s'], IBS4 = ['ib:N1', 'ib:S2'], IBT = ['ibs:S1', 'ibs:S2', 'ibs:N2', 'ibs:3s', 'ibs:4s'], CH5 = ['chinp', 'chinp', 'chinp', 'chinp', 'chinp'];
 export const ROLE_DEFAULT = {
-  3: { mage: { seq: ['tbr', 'ralos', 'bp', 'tbr'], s70: [...IBT, 'surge', 'zcbs', 'tbr'], s50: [...IBT, 'ibs:pile'], s30: [...IBT, 'ibs:pile', 'scythe'], spells: FRZ },
-    range: { seq: ['tbr', 'ralos', 'scythe'], s70: ['scythe'], s50: ['scythe', 'surge', 'zcbs', 'scythe'], s30: ['finz'], spells: DPSP },
+  3: { mage: { seq: ['tbr', 'ralos', 'bp', 'tbr'], s70: [...IBT, 'surge', 'zcbs', 'tbr'], s50: [...IBT], s30: [...IBT, 'scythe'], spells: FRZ },
+    range: { seq: ['tbr', 'ralos', 'scythe'], s70: ['scythe'], s50: ['scythe', 'surge', 'zcbs', 'scythe'], s30: ['scythe'], spells: DPSP },
     melee: { seq: ['tbr', 'ralos', 'scythe'], s70: ['scythe'], s50: ['dinhs', 'surge', 'dinhs', 'scythe'], s30: ['scythe', 'zcbs', 'scythe'], spells: DPSP } },
   4: { north: { seq: ['tbr', 'ax', 'ralos', 'tbr'], s70: [...IBN, 'tbr'], s50: [...IBN, 'surge', 'zcbs', 'tbr'], s30: [...IBN, 'scythe'], spells: FRZ },
     south: { seq: ['tba', 'ax', 'ralos', 'tbr'], s70: [...IBS4, 'tbr'], s50: [...IBS4, 'tbr', 'tbr', 'surge', 'zcbs', 'tbr'], s30: [...IBS4, 'scythe'], spells: FRZ },
     range: { seq: ['tbr', 'maul', 'scythe'], s70: ['scythe'], s50: ['scyk:S1', ...CH5, 'surge', 'zcbs', 'scythe'], s30: ['scythe'], spells: DPSP },
-    melee: { seq: ['tbr', 'maul', 'scythe'], s70: ['scythe'], s50: ['dinhs', 'scythe'], s30: ['surge', 'zcbs', 'fin'], spells: DPSP } },
+    melee: { seq: ['tbr', 'maul', 'scythe'], s70: ['scythe'], s50: ['dinhs', 'scythe'], s30: ['surge', 'zcbs', 'scythe', 'chally'], spells: DPSP } },
 };
 export const PROC_DEFAULT = { 3: ['mage', 'range', 'melee'], 4: ['north', 'south', 'range', 'melee'] };
 /** A role's default player (structured copy). */
@@ -380,11 +380,11 @@ export const procedureOpts = (team) => (team === 3 ? { plain: true, trio: true, 
  *  barrages go out and get frozen again with the new wave. P1 / P2 freeze from the east, P3 freezes then melees north,
  *  P4 (south, the S1 player) bursts the 4s, P5 (north) halberds the 70s N1. */
 const FIVE_STACK = [
-  { seq: ['tbr', 'bp', 'ralos', 'tbr'], s70: ['ibs:S1', 'ibl:N3', 'tbr', 'tbr', 'zcbs', 'tbr'], s50: ['ibs:N1', 'ibs:N2', 'ibs:3s', 'tbr'], s30: ['ibs:N1', 'ibs:N2', 'ibs:3s', 'fin'] },
-  { seq: ['tbr', 'bp', 'ralos', 'tbr'], s70: ['ibl:S2', 'ibl:S3', 'tbr'], s50: ['ibs:S1', 'ibs:S2@70', 'tbr', 'zcbs', 'tbr'], s30: ['ibs:S1', 'ibs:S2', 'ibs:4s', 'fin'] },
-  { seq: ['tbr', 'maul', 'bp', 'tbr'], s70: ['ibl:N2', 'scyc:N1@70:25|scythe', 'tbr'], s50: ['tbr', 'tbr', 'ibs:4s+11', 'zcbs', 'scythe'], s30: ['fin'] },
-  { side: 'S', seq: ['zcbs', 'scythe'], s70: ['ibu:N4', 'ibu:4s', 'scythe', 's1if:58', 'scythe'], s50: ['chally:S1@70', 'scyc:S1@70:0', 'scythe'], s30: ['fin'] },
-  { side: 'N', seq: ['tba', 'scythe'], s70: ['chally:N1@70', 'scythe', 'scythe', 'tbr', 'scythe'], s50: ['scythe', 'scythe', 'scythe', 'zcbs', 'scythe'], s30: ['fin'] },
+  { seq: ['tbr', 'bp', 'ralos', 'tbr'], s70: ['ibs:S1', 'ibl:N3', 'tbr', 'tbr', 'zcbs', 'tbr'], s50: ['ibs:N1', 'ibs:N2', 'ibs:3s', 'tbr'], s30: ['ibs:N1', 'ibs:N2', 'ibs:3s', 'scythe', 'chally'] },
+  { seq: ['tbr', 'bp', 'ralos', 'tbr'], s70: ['ibl:S2', 'ibl:S3', 'tbr'], s50: ['ibs:S1', 'ibs:S2@70', 'tbr', 'zcbs', 'tbr'], s30: ['ibs:S1', 'ibs:S2', 'ibs:4s', 'scythe', 'chally'] },
+  { seq: ['tbr', 'maul', 'bp', 'tbr'], s70: ['ibl:N2', 'scyc:N1@70:25|scythe', 'tbr'], s50: ['tbr', 'tbr', 'ibs:4s+11', 'zcbs', 'scythe'], s30: ['scythe', 'chally'] },
+  { side: 'S', seq: ['zcbs', 'scythe'], s70: ['ibu:N4', 'ibu:4s', 'scythe', 's1if:58', 'scythe'], s50: ['chally:S1@70', 'scyc:S1@70:0', 'scythe'], s30: ['scythe', 'chally'] },
+  { side: 'N', seq: ['tba', 'scythe'], s70: ['chally:N1@70', 'scythe', 'scythe', 'tbr', 'scythe'], s50: ['scythe', 'scythe', 'scythe', 'zcbs', 'scythe'], s30: ['scythe', 'chally'] },
 ];
 export function defaultMaidenPlan(team) {
   if (team === 5) return { target: 4, players: FIVE_STACK.map((p) => ({ ...(p.side ? { side: p.side } : {}), seq: p.seq.slice(), s70: { seq: p.s70.slice() }, s50: { seq: p.s50.slice() }, s30: { seq: p.s30.slice() }, startSpec: 100 })) };
@@ -478,6 +478,10 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
       seq50: (Array.isArray((c.s50 || {}).seq) && c.s50.seq.filter((a) => atkOf(a)).length) ? c.s50.seq.filter((a) => atkOf(a)) : (seq70.length ? seq70 : [seq[seq.length - 1]]), from50: c.s50 ? tbowFromOf(c.s50) : tbowFromOf(s70), regenAt: 0, surged: false, dps: c.dps ?? null, fside: c.fside ?? null, noClaw: !!c.noClaw, noZcb30: !!c.noZcb30, dcLeft: trio ? 2 : 0 };
   });
   for (const p of ps) { const c = players[p.i]; p.seq30 = (Array.isArray((c.s30 || {}).seq) && c.s30.seq.filter((a) => atkOf(a)).length) ? c.s30.seq.filter((a) => atkOf(a)) : [p.seq50[p.seq50.length - 1]]; p.from30 = c.s30 ? tbowFromOf(c.s30) : p.from50; }
+  // a list ending in scythes then a Halberd spec (on her): scythe until the halberd's time - the last swing that lands
+  // before a crab reaches her, or earlier when it likely kills her (the 'fin' line)
+  const lastHit = (L) => { if (L[L.length - 1] !== 'chally') return L; let i = L.length - 1; while (i > 0 && L[i - 1] === 'scythe') i--; return i < L.length - 1 ? [...L.slice(0, i), 'fin'] : L; };
+  for (const p of ps) { p.seq70 = lastHit(p.seq70); p.seq50 = lastHit(p.seq50); p.seq30 = lastHit(p.seq30); }
   if (trio) for (const p of ps) {                     // (3s / 4s) the 5s-style lines as the procedure plays them
     const dps = p.dps != null; let din = 0;
     p.fzL = { 70: p.seq70.slice(), 50: p.seq50.slice(), 30: p.seq30.slice() };
@@ -494,6 +498,8 @@ export function runMaiden(players, team, rng, log = null, { target = team - 1, t
       return [a];
     });
     p.seq70 = tr(p.seq70, 70); p.seq50 = tr(p.seq50, 50); p.seq30 = tr(p.seq30, 30);
+    // the trio freezer's barrage on the leftover pile (50s / 30s) is the sim's call: right after their last freeze
+    if (!quad && !dps) for (const k of ['seq50', 'seq30']) { const L = p[k], i = L.reduce((m, a, j) => (a === 'tfz' ? j : m), -1); if (i >= 0 && !L.includes('tpile')) L.splice(i + 1, 0, 'tpile'); }
   }
   for (const p of ps) p.regenAt = rng.randint(1, REGEN_EVERY);
   // where each player stands on her (backend, from their lists): the Dinh's players on her north side (red zone), the
