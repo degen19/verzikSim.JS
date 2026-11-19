@@ -238,7 +238,9 @@ export function createBuilder(root, { onChange, store = STORE, libcur = LIBCUR, 
 
   function refreshDerived() {
     const ws = overlaySheet(tpl[team].ws, tpl[team].descs, state[team]);
-    const out = plan(readPlanInputs(ws, team, block));
+    const inp = readPlanInputs(ws, team, block), g = gearOfSet(team, block);
+    if (inp && g) inp.players.forEach((p, k) => { if (g[k] && !g[k].hasLB) p.lb = false; });   // the ring they'll really have on: no Lightbearer in their Gear set = Ultor
+    const out = plan(inp);
     const el = root.querySelector('#vz-plan');
     if (el) {
       el.innerHTML = `<table class="bt"><tr><th></th><th>End spec</th><th>Purple crab</th><th>Room Time</th><th>LB swings</th><th>West/East DC +</th><th>Time of regen</th></tr>${
