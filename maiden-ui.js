@@ -354,7 +354,7 @@ export function createMaiden(host, { getTeam }) {
       </div>
       <div class="row">
         <label>Gear<select data-s="gearSet">${GEAR_SETS.map((x) => `<option value="${x}" ${st.gearSet === x ? 'selected' : ''}>${esc(gearSetLabel(g, t, x))}</option>`).join('')}</select></label>
-        <label title="Who her attacks go at (for now one player all room - her real targeting comes later)">Maiden targets<select data-s="target">${ps.map((p, k) => `<option value="${k}" ${st.target === k ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+        
         <label class="pick" style="flex-direction:row;gap:6px;align-items:center" title="The player she attacks, with Vengeance up, stalls her attack so it lands on the tick their next scythe lands - its Vengeance can't proc her on a tick of its own. From the start to her 30s proc (team-wide)"><input type="checkbox" data-s="stall" ${st.stall ? 'checked' : ''}>Stall Veng to prevent troll procs</label>
         <span class="muted small">HP ${MAIDEN_HP[t].toLocaleString()} · 70s proc below ${(MAIDEN_HP[t] * 0.7).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
       </div>
